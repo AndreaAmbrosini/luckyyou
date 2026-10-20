@@ -1,0 +1,13 @@
+{
+  "plugins": ["stylelint-declaration-strict-value"],
+  "rules": {
+    "scale-unlimited/declaration-strict-value": [
+      ["/color$/", "fill", "stroke", "font-family", "font-size"],
+      {
+        "ignoreValues": ["currentColor", "transparent", "inherit", "initial", "unset", "none"],
+        "ignoreFunctions": false,
+        "expandShorthand": true
+      }
+    ]
+  }
+}
