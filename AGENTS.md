@@ -25,7 +25,7 @@ how it should feel.
 - 2 to 12 people per pick: [setup.feature](specs/setup.feature),
   [scenarios.feature](specs/scenarios.feature).
 - Readable over a screen share; CSS colours, fonts and font sizes only as
-  `var(--…)`: [.stylelintrc.json](.stylelintrc.json).
+  `var(--…)`: [styles.feature](specs/styles.feature).
 - A scenario touches only its own folder: [eslint.config.js](eslint.config.js),
   [scenarios.feature](specs/scenarios.feature).
 
@@ -41,7 +41,7 @@ how it should feel.
 - A scenario or the scenario kit: [scenarios.feature](specs/scenarios.feature),
   [0006](docs/decisions/0006-scenarios-are-self-contained-folders.md),
   [0007](docs/decisions/0007-scenario-timing-runs-on-gsaps-clock.md).
-- UI, copy, look: [PRODUCT.md](PRODUCT.md).
+- UI, copy, look: [PRODUCT.md](PRODUCT.md), [styles.feature](specs/styles.feature).
 - Docs: [docs.feature](specs/docs.feature),
   [0008](docs/decisions/0008-one-place-per-fact.md).
 - Tooling, CI, deploy: [0001](docs/decisions/0001-toolchain-versions.md),
