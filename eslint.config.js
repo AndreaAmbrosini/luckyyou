@@ -18,6 +18,11 @@ export default tseslint.config(
     languageOptions: { globals: globals.node },
   },
   {
+    // Specs drive the app in jsdom and read files from the repository.
+    files: ['specs/**/*.{ts,tsx}'],
+    languageOptions: { globals: { ...globals.browser, ...globals.node } },
+  },
+  {
     files: ['src/**/*.tsx'],
     ...reactHooks.configs.flat.recommended,
   },
