@@ -55,4 +55,12 @@ describeSpec(await loadFeature('./docs.feature'), ({ Rule }) => {
       });
     });
   });
+
+  Rule('CLAUDE.md only points to AGENTS.md', ({ RuleScenario }) => {
+    RuleScenario('CLAUDE.md holds nothing but the import', ({ Then }) => {
+      Then('CLAUDE.md contains exactly "@AGENTS.md"', () => {
+        expect(read('CLAUDE.md').trim()).toBe('@AGENTS.md');
+      });
+    });
+  });
 });

@@ -7,8 +7,10 @@ Feature: Docs stay short and plain
       Then <doc> has at most <budget> words
 
       Examples:
-        | doc       | budget |
-        | README.md | 400    |
+        | doc        | budget |
+        | AGENTS.md  | 400    |
+        | PRODUCT.md | 250    |
+        | README.md  | 400    |
 
     Scenario: Each decision record stays within 200 words
       Then every file in docs/decisions has at most 200 words
@@ -33,3 +35,8 @@ Feature: Docs stay short and plain
 
     Scenario: Every relative link resolves
       Then every relative link in the docs points to a file that exists
+
+  Rule: CLAUDE.md only points to AGENTS.md
+
+    Scenario: CLAUDE.md holds nothing but the import
+      Then CLAUDE.md contains exactly "@AGENTS.md"
