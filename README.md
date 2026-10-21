@@ -20,8 +20,9 @@ not only a race.
 
 ## Status
 
-The behaviour and the design are written down; the app isn't built yet. Its
-specs are all pending.
+Built: the team list, setup in two steps, the pick, one show (Shark Bait) and
+the result. A new show is a folder in [`src/scenarios/`](src/scenarios/),
+copied from [`_template`](src/scenarios/_template/).
 
 ## How it's built
 
