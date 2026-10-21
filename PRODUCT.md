@@ -35,4 +35,12 @@ These would be failures even if everything else worked:
 
 ## Anti-references
 
-Decided with the visual style.
+LuckyYou must never look or feel like:
+
+- the stopwatch race sites: clutter, upsell buttons and the same race every
+  time;
+- a classroom site: clip-art and rainbows everywhere;
+- a casino: flashing lights or anything that hints at gambling;
+- a corporate form: grey boxes and small text;
+- anything mean or gory: nobody gets hurt, and the joke is on the job, not
+  the person.

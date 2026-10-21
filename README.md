@@ -3,8 +3,7 @@
 Pick one unlucky person for a job nobody wants, with a silly 10–15 second show.
 
 In a video call, one person opens LuckyYou and shares their screen. They tick
-who's here, optionally type what's at stake (_"Who writes the release
-notes?"_), pick a show and start it. When it's over:
+who's here and click a show to start it. When it's over:
 
 > **Lucky you, Marco 🎉**
 >
@@ -21,14 +20,15 @@ not only a race.
 
 ## Status
 
-The behaviour is written down; the app isn't built yet. Its specs are all
-pending, and the screens come next.
+The behaviour and the design are written down; the app isn't built yet. Its
+specs are all pending.
 
 ## How it's built
 
-Spec first, with Claude Code: behaviour in [`specs/`](specs/), the reasons
-behind each choice in [`docs/decisions/`](docs/decisions/), and the rules
-every coding session follows in [AGENTS.md](AGENTS.md).
+Spec first, with Claude Code: behaviour in [`specs/`](specs/), the look in
+[DESIGN.md](DESIGN.md), the reasons behind each choice in
+[`docs/decisions/`](docs/decisions/), and the rules every coding session
+follows in [AGENTS.md](AGENTS.md).
 
 ## Run it locally
 

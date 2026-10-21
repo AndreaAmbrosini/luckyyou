@@ -33,15 +33,16 @@ how it should feel.
 
 - The people list: [people.feature](specs/people.feature),
   [0004](docs/decisions/0004-no-backend.md).
-- The setup screen: [setup.feature](specs/setup.feature).
+- Setup: [setup.feature](specs/setup.feature).
 - The pick: [pick.feature](specs/pick.feature),
   [0005](docs/decisions/0005-the-app-picks-before-the-show.md).
 - The show: [show.feature](specs/show.feature).
-- The result screen: [result.feature](specs/result.feature).
-- A scenario or the scenario kit: [scenarios.feature](specs/scenarios.feature),
+- The result: [result.feature](specs/result.feature).
+- A scenario or the kit: [scenarios.feature](specs/scenarios.feature),
   [0006](docs/decisions/0006-scenarios-are-self-contained-folders.md),
   [0007](docs/decisions/0007-scenario-timing-runs-on-gsaps-clock.md).
-- UI, copy, look: [PRODUCT.md](PRODUCT.md), [styles.feature](specs/styles.feature).
+- UI, copy, look: [DESIGN.md](DESIGN.md), [PRODUCT.md](PRODUCT.md),
+  [styles.feature](specs/styles.feature).
 - Docs: [docs.feature](specs/docs.feature),
   [0008](docs/decisions/0008-one-place-per-fact.md).
 - Tooling, CI, deploy: [0001](docs/decisions/0001-toolchain-versions.md),

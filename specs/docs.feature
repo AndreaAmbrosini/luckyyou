@@ -9,6 +9,7 @@ Feature: Docs stay short and plain
       Examples:
         | doc        | budget |
         | AGENTS.md  | 400    |
+        | DESIGN.md  | 1000   |
         | PRODUCT.md | 250    |
         | README.md  | 400    |
 
