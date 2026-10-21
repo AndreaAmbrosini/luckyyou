@@ -241,10 +241,15 @@ export async function playSharkBait(show: Show): Promise<void> {
     chopper.flyTo({ x: x + exit.x, y: HOVER_Y + exit.y }, flyOff, 1 - 2 * ARRIVE, 'power2.in');
   }
 
-  /** One at a time: the rope heads for each of the rescue's aims in turn, then lifts one. */
+  /**
+   * One at a time: the rope heads for each of the rescue's aims in turn, then
+   * lifts one. The rest of the beat is spread as holds over the aims it
+   * swings away from; over the last one, the lift is its hold.
+   */
   function rescueOne(rescue: Exclude<Rescue, { kind: 'group' }>, start: number, seconds: number) {
     const aims = AIMS[rescue.kind](rescue as never);
-    const hold = (seconds - ARRIVE - (aims.length - 1) * SWING - LIFT) / aims.length;
+    const spare = seconds - ARRIVE - (aims.length - 1) * SWING - LIFT;
+    const hold = spare / Math.max(1, aims.length - 1);
 
     let time = start;
     aims.forEach((name, index) => {
@@ -268,7 +273,7 @@ export async function playSharkBait(show: Show): Promise<void> {
       chopper.lower(hookAbove(target.place) - HOVER_Y, time, seconds);
       time += seconds;
       if (aims.length === 1) chopper.wobble(time, hold);
-      time += hold;
+      if (aims.length === 1 || index < aims.length - 1) time += hold;
     });
     const lifted = swimmers.get(rescue.lifted)!;
     chopper.lower(lifted.place.y - 0.68 * lifted.place.size - 10 - HOVER_Y, time, GRAB);

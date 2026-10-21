@@ -6,6 +6,7 @@ import { describeSpec, runShow, type ShowRecord } from '../../scenario-kit/testi
 import sharkBait from './index';
 import { fitTags, places, tagBottom, type Place } from './layout';
 import { planShow } from './plan';
+import { createRandom } from '../../scenario-kit/random';
 
 // Some steps play twenty shows. With every test file running at once they can
 // take three times as long as alone, past the usual 20 seconds.
@@ -35,6 +36,8 @@ interface Frame {
   readonly inWater: readonly string[];
   /** Who the rope is heading for, if anyone. */
   readonly aim: string | null;
+  /** Where the helicopter is across the stage. */
+  readonly helicopterX: number;
 }
 
 /** One person, or a group, leaving the water at the same moment. */
@@ -85,6 +88,24 @@ class Watched {
     return aims;
   }
 
+  /**
+   * For each time the rope headed for someone in a one-at-a-time rescue, the
+   * show seconds the helicopter spent still while it did: each frame it
+   * didn't move counts one frame's time.
+   */
+  get rests(): { aim: string; seconds: number }[] {
+    const rests: { aim: string; frames: number }[] = [];
+    this.frames.forEach((frame, index) => {
+      const before = this.frames[index - 1];
+      if (!frame.aim || !['four-left', 'fake-out', 'duel'].includes(frame.beat)) return;
+      if (frame.aim !== before?.aim) rests.push({ aim: frame.aim, frames: 0 });
+      const still = before && Math.abs(frame.helicopterX - before.helicopterX) < 0.5;
+      if (still) rests.at(-1)!.frames++;
+    });
+    const step = this.frames[1]!.time - this.frames[0]!.time;
+    return rests.map(({ aim, frames }) => ({ aim, seconds: frames * step }));
+  }
+
   /** Who was in the water when `beat` began. */
   inWaterAt(beat: string): readonly string[] {
     return this.frames.find((frame) => frame.beat === beat)?.inWater ?? [];
@@ -116,6 +137,7 @@ async function watch(
           .filter((swimmer) => swimmer.dataset.inWater === 'true')
           .map((swimmer) => swimmer.dataset.person!),
         aim: stage.querySelector<HTMLElement>('[data-part="rope"]')?.dataset.aim || null,
+        helicopterX: position(stage.querySelector('[data-part="helicopter"]')).x,
       });
     },
   });
@@ -417,6 +439,49 @@ describeSpec(await loadFeature('./shark-bait.feature'), ({ Rule }) => {
         );
         expect(elsewhere.length).toBeGreaterThan(0);
       });
+    });
+
+    RuleScenario('The rope stops over each person it heads for', ({ When, Then }) => {
+      const shows: { label: string; show: Watched }[] = [];
+      When(
+        'the show runs at every head count from 3 to 12, with both kinds of fake-out',
+        async () => {
+          for (let count = 3; count <= 12; count++) {
+            const names = TEAM.slice(0, count);
+            const unlucky = names[0]!;
+            for (const awayAndBack of [false, true]) {
+              // The first seed whose fake-out is of this kind.
+              let seed = 1;
+              let plan = planShow(names, unlucky, createRandom(seed));
+              const isKind = () =>
+                plan.rescues.some(
+                  (rescue) => rescue.kind === 'fake-out' && !!rescue.via === awayAndBack,
+                );
+              while (!isKind()) plan = planShow(names, unlucky, createRandom(++seed));
+              const { beats } = plan;
+              const until =
+                beats['splash-in'] +
+                beats['group-rescues'] +
+                beats['four-left'] +
+                beats['fake-out'] +
+                beats.duel;
+              const label = `${count} people, ${awayAndBack ? 'away and back' : 'to someone else'}`;
+              shows.push({ label, show: await watch(names, unlucky, { seed, until }) });
+            }
+          }
+        },
+      );
+      Then(
+        'the helicopter holds still over each person the rope heads for, for at least {number} seconds',
+        (_, seconds: number) => {
+          for (const { label, show } of shows) {
+            expect(show.rests.length, label).toBeGreaterThan(0);
+            for (const rest of show.rests) {
+              expect(rest.seconds, `${label}: ${rest.aim}`).toBeGreaterThanOrEqual(seconds - 1e-9);
+            }
+          }
+        },
+      );
     });
   });
 

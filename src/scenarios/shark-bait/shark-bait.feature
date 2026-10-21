@@ -71,6 +71,10 @@ Feature: Shark Bait
       Then in some runs a one-at-a-time rescue swings away and back to the same person
       And in some runs it swings to someone else
 
+    Scenario: The rope stops over each person it heads for
+      When the show runs at every head count from 3 to 12, with both kinds of fake-out
+      Then the helicopter holds still over each person the rope heads for, for at least 0.15 seconds
+
   Rule: The beats keep the show between 11 and 14 seconds
 
     Scenario: Each beat takes about this long

@@ -82,12 +82,14 @@ export function planShow(names: readonly string[], unlucky: string, random: () =
 
   // With 4 or fewer, the slow rescues open the show and take a little longer.
   const slower = count <= SLOW_FROM ? 0.2 : 0;
+  // A fake-out that swings away and back swings twice, so it takes longer too.
+  const twice = rescues.some((rescue) => rescue.kind === 'fake-out' && rescue.via) ? 0.25 : 0;
   const beats = fitBeats<Beat>(
     {
       'splash-in': { seconds: count === 2 ? 2.0 : 1.8 },
       'group-rescues': { seconds: swoops * 1.0 },
       'four-left': { seconds: count >= 4 ? 1.6 + slower : 0, flexible: true },
-      'fake-out': { seconds: count >= 3 ? 2.0 + slower : 0, flexible: true },
+      'fake-out': { seconds: count >= 3 ? 2.0 + slower + twice : 0, flexible: true },
       duel: { seconds: count === 2 ? 5.5 : 2.6 + slower, flexible: true },
       'sharks-run': { seconds: count === 2 ? 1.5 : 1.4 },
       'victory-lap': { seconds: count === 2 ? 2.5 : 2.0 },
