@@ -2,7 +2,7 @@ import { expect, test } from '@playwright/test';
 
 test('the site loads', async ({ page }) => {
   await page.goto('./');
-  await expect(page.getByRole('heading', { level: 1, name: 'LuckyYou' })).toBeVisible();
+  await expect(page.getByRole('heading', { level: 1, name: "Who's on the team?" })).toBeVisible();
 });
 
 test("every request stays on the site's own origin", async ({ page, baseURL }) => {

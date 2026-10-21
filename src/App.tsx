@@ -1,8 +1,7 @@
+import { usePeople } from './people/people';
+import { WhosIn } from './screens/WhosIn';
+
 export default function App() {
-  return (
-    <main>
-      <h1>LuckyYou</h1>
-      <p>Pick one unlucky person for a job nobody wants.</p>
-    </main>
-  );
+  const people = usePeople();
+  return <WhosIn people={people} />;
 }

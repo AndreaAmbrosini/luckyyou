@@ -9,6 +9,7 @@ export default defineConfig({
     environment: 'jsdom',
     setupFiles: ['src/test/setup.ts'],
     include: ['src/**/*.test.{ts,tsx}', 'specs/**/*.test.{ts,tsx}', 'scripts/**/*.test.ts'],
-    restoreMocks: true,
+    // Mocks are restored by src/test/setup.ts after each test, and after each
+    // Gherkin scenario rather than each of its steps.
   },
 });

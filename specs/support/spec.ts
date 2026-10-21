@@ -1,5 +1,6 @@
 import { describeFeature, type loadFeature } from '@amiceli/vitest-cucumber';
 import { describe, it } from 'vitest';
+import { resetTestState } from '../../src/test/reset';
 
 type Feature = Awaited<ReturnType<typeof loadFeature>>;
 type Implementation = Parameters<typeof describeFeature>[1];
@@ -13,6 +14,9 @@ const PENDING = 'pending';
  * feature that has nothing left to run. This keeps every pending scenario
  * visible in the test report, and still fails on any scenario that isn't
  * pending and has no steps.
+ *
+ * Each scenario starts from a clean page: the app, spies, fake timers and
+ * storage are reset when a scenario ends, not after each of its steps.
  */
 export function describeSpec(feature: Feature, implementation: Implementation = () => {}): void {
   const pendingRule = (rule: Feature['rules'][number]) => rule.tags.has(PENDING);
@@ -20,7 +24,12 @@ export function describeSpec(feature: Feature, implementation: Implementation = 
     ...feature.scenarii,
     ...feature.rules.filter((rule) => !pendingRule(rule)).flatMap((rule) => rule.scenarii),
   ].some((scenario) => !scenario.tags.has(PENDING));
-  if (runnable) describeFeature(feature, implementation);
+  if (runnable) {
+    describeFeature(feature, (options) => {
+      options.AfterEachScenario(resetTestState);
+      implementation(options);
+    });
+  }
 
   const todos = [
     ...feature.scenarii

@@ -2,7 +2,6 @@ Feature: The people list
   The team's names, kept in this browser only. Ticking chooses who is in
   today's pick.
 
-  @pending
   Rule: Names are tidied and must be unique
 
     Scenario: Extra spaces are removed
@@ -37,7 +36,6 @@ Feature: The people list
       When I add a name made of 30 flag emoji
       Then it is added, as 30 characters
 
-  @pending
   Rule: The list is in alphabetical order
 
     Scenario: Case doesn't change the order
@@ -50,7 +48,6 @@ Feature: The people list
       Then the list is "Anna", "Ben", "Carla"
       And "Ben" is ticked
 
-  @pending
   Rule: Ticking chooses who is in today's pick
 
     Scenario: Unticking keeps the person on the list
@@ -65,7 +62,6 @@ Feature: The people list
       When I untick everyone
       Then nobody is ticked
 
-  @pending
   Rule: Removing someone is a separate step
 
     Scenario: Ticking never removes anyone
@@ -87,7 +83,6 @@ Feature: The people list
       When I choose "Done"
       Then names can be ticked and added again
 
-  @pending
   Rule: The list is kept in this browser only
 
     Scenario: The list survives a reload
