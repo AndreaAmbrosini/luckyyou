@@ -30,6 +30,11 @@ Feature: Setting up a pick
       When I move on to the shows
       Then I see that 3 are in: "Anna", "Ben" and "Carla"
 
+    Scenario: Each name in the list keeps its own reading direction
+      Given "ليلى", "Anna" and "Ben" are ticked
+      When I move on to the shows
+      Then "ليلى", "Anna" and "Ben" each read in their own direction
+
     Scenario: Clicking a show starts it with today's people
       Given "Anna", "Ben" and "Carla" are ticked
       And I moved on to the shows

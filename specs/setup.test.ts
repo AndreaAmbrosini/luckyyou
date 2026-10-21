@@ -69,10 +69,28 @@ describeSpec(await loadFeature('./setup.feature'), ({ Rule }) => {
       });
       When('I move on to the shows', moveOnToShows);
       Then('I see that {int} are in: {any}', (_, count: number, names: string) => {
-        expect(screen.getByText(`${count} in`)).toBeInTheDocument();
-        expect(screen.getByText(quoted(names).join(', '))).toBeInTheDocument();
+        const line = screen.getByText(`${count} in`).parentElement!;
+        expect(line).toHaveTextContent(`${count} in ${quoted(names).join(', ')}`);
       });
     });
+
+    RuleScenario(
+      'Each name in the list keeps its own reading direction',
+      ({ Given, When, Then }) => {
+        Given('{any} are ticked', (_, names: string) => {
+          storeTicked(quoted(names), ['Dario']);
+          renderApp({ scenarios: [fakeScenario()] });
+        });
+        When('I move on to the shows', moveOnToShows);
+        Then('{any} each read in their own direction', (_, names: string) => {
+          const line = screen.getByText('3 in').parentElement!;
+          // dir="auto" sets each name's direction from its own first letter.
+          const isolated = [...line.querySelectorAll('[dir="auto"]')].map((el) => el.textContent);
+          expect(isolated.toSorted()).toEqual(quoted(names).toSorted());
+          expect(line.textContent).toBe(`3 in ${isolated.join(', ')}`);
+        });
+      },
+    );
 
     RuleScenario("Clicking a show starts it with today's people", ({ Given, And, When, Then }) => {
       const sharkBait = fakeScenario({ name: 'Shark Bait' });

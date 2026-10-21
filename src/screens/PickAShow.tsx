@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef } from 'react';
+import { Fragment, useEffect, useId, useRef } from 'react';
 import type { Scenario } from '../scenario-kit/contract';
 import { Button } from '../ui/Button';
 import { ArrowLeftIcon } from '../ui/icons';
@@ -48,7 +48,13 @@ export function PickAShow({ names, scenarios, lastScenario, onBack, onStart }: P
         </div>
       </div>
       <p className={styles.whoIsIn}>
-        <span className={layout.pill}>{count} in</span> <span dir="auto">{names.join(', ')}</span>
+        <span className={layout.pill}>{count} in</span>{' '}
+        {names.map((name, index) => (
+          <Fragment key={index}>
+            {index > 0 && ', '}
+            <span dir="auto">{name}</span>
+          </Fragment>
+        ))}
       </p>
 
       <ul className={styles.cards}>
