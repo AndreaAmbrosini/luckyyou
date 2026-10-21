@@ -153,6 +153,51 @@ describeSpec(await loadFeature('./kit.feature'), ({ Rule }) => {
         expect(startedAt).toBeGreaterThanOrEqual(0.5);
       });
     });
+
+    RuleScenario('A show loads the fonts its names are set in', ({ Given, When, Then }) => {
+      /** What the show asked to load, and for which text. */
+      const asked: [font: string, text: string | undefined][] = [];
+      let loaded: () => void;
+      let startedAt: number | null = null;
+      Given("the page hasn't used the stage's fonts yet", () => {
+        // Nothing is loading, so `ready` has nothing to wait for.
+        const done = new Promise<void>((resolve) => (loaded = resolve));
+        const fonts = {
+          ready: Promise.resolve(),
+          load(font: string, text?: string) {
+            asked.push([font, text]);
+            return done.then(() => []);
+          },
+        };
+        Object.defineProperty(document, 'fonts', { configurable: true, value: fonts });
+        onReset(() => Reflect.deleteProperty(document, 'fonts'));
+      });
+      When('a show is started', async () => {
+        let now = 0;
+        const scenario = fakeScenario({
+          play: async (show) => {
+            startedAt ??= now;
+            await show.wait(1);
+          },
+        });
+        await runShow(scenario, {
+          ...PICK,
+          onFrame: (time) => {
+            now = time;
+            if (time >= 0.5) loaded();
+          },
+        });
+      });
+      Then("it doesn't begin until the name tag and caption fonts are loaded for its names", () => {
+        expect(startedAt).toBeGreaterThanOrEqual(0.5);
+        const fonts = asked.map(([font]) => font);
+        expect(fonts.some((font) => /^900 .*Nunito/.test(font))).toBe(true);
+        expect(fonts.some((font) => /Lilita One/.test(font))).toBe(true);
+        for (const [, text] of asked) {
+          for (const name of PICK.names) expect(text).toContain(name);
+        }
+      });
+    });
   });
 
   Rule("Time runs on GSAP's clock", ({ RuleScenario, RuleScenarioOutline }) => {

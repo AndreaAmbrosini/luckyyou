@@ -25,6 +25,11 @@ Feature: The scenario kit
       When a show is started
       Then it doesn't begin until the fonts are ready
 
+    Scenario: A show loads the fonts its names are set in
+      Given the page hasn't used the stage's fonts yet
+      When a show is started
+      Then it doesn't begin until the name tag and caption fonts are loaded for its names
+
   Rule: Time runs on GSAP's clock
 
     Scenario: A wait lasts its show time

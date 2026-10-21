@@ -5,6 +5,7 @@ import { createSound } from './sound';
 import { buildStage } from './stage';
 import { createCaptions } from './text';
 import { play, wait } from './time';
+import { token } from './tokens';
 
 export type RunOutcome = 'finished' | 'failed' | 'cancelled';
 
@@ -55,7 +56,7 @@ export async function runScenario(scenario: Scenario, options: RunOptions): Prom
 
   try {
     // Shows measure their text, so the page's fonts must be in first.
-    await Promise.race([document.fonts?.ready, aborted]);
+    await Promise.race([stageFonts(options.names), aborted]);
     if (signal.aborted) return 'cancelled';
     const startedAt = gsap.globalTimeline.time();
     const playing = new Promise<void>((resolve) => resolve(scenario.play(show)));
@@ -75,6 +76,27 @@ export async function runScenario(scenario: Scenario, options: RunOptions): Prom
     sound.stop();
     frame.remove();
   }
+}
+
+/**
+ * Loads the fonts a stage sets names and captions in, for the characters in
+ * `names`, then waits for any other font still loading. A face the page
+ * hasn't used yet isn't loading, so waiting for `ready` alone would let a
+ * show measure its names in a fallback font.
+ */
+async function stageFonts(names: readonly string[]): Promise<void> {
+  const fonts = document.fonts;
+  if (!fonts) return;
+  const text = names.join(' ');
+  try {
+    await Promise.all([
+      fonts.load?.(`900 1em ${token('--font-body')}`, text),
+      fonts.load?.(`1em ${token('--font-display')}`, text),
+    ]);
+  } catch {
+    // A font that can't load leaves the fallback; the show still runs.
+  }
+  await fonts.ready;
 }
 
 const prefersReducedMotion = () =>
