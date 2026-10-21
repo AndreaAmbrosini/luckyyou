@@ -123,7 +123,6 @@ Feature: The scenario kit
       Then it reads "Woo-hoo!"
       And it points at 640, 300
 
-  @pending
   Rule: Characters
 
     Scenario: A head has five moods and one accessory
@@ -140,7 +139,6 @@ Feature: The scenario kit
       When looks are handed out to 12 people
       Then they use at least 4 skin tones
 
-  @pending
   Rule: Motion
 
     Scenario: Motion runs on the show's clock and ends with it
@@ -166,7 +164,6 @@ Feature: The scenario kit
         | ends         |
         | is cancelled |
 
-  @pending
   Rule: The lab runs any show in development
 
     Scenario: The lab lists every scenario

@@ -1,9 +1,16 @@
 import { loadFeature } from '@amiceli/vitest-cucumber';
+import { render, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import gsap from 'gsap';
+import { createElement } from 'react';
 import { expect, vi } from 'vitest';
-import type { Show } from '../src/scenario-kit/contract';
-import { eliminationOrder } from '../src/scenario-kit/order';
+import { discoverScenarios } from '../src/catalogue/discover';
+import { Lab } from '../src/lab/Lab';
 import { nameLength } from '../src/people/names';
+import { handOutLooks, head, type Look, type Mood } from '../src/scenario-kit/characters';
+import type { Scenario, Show } from '../src/scenario-kit/contract';
+import { bob, shake } from '../src/scenario-kit/motion';
+import { eliminationOrder } from '../src/scenario-kit/order';
 import { createRandom } from '../src/scenario-kit/random';
 import { spread } from '../src/scenario-kit/stage';
 import { runShow, type ShowRecord } from '../src/scenario-kit/testing';
@@ -33,6 +40,18 @@ function fontsStillLoading() {
   onReset(() => Reflect.deleteProperty(document, 'fonts'));
   return load;
 }
+
+const renderLab = (scenarios: readonly Scenario[]) => render(createElement(Lab, { scenarios }));
+
+const MOODS: Mood[] = ['calm', 'worried', 'scared', 'happy', 'party'];
+const ACCESSORIES = ['cap', 'goggles', 'snorkel'];
+const LOOK: Look = { skin: 3, accessory: 'snorkel', colour: 'mint', ring: 'tomato' };
+
+/** The parts of a head that are drawn, by name. */
+const visibleParts = (el: SVGSVGElement) =>
+  [...el.querySelectorAll<SVGElement>('[data-part]')]
+    .filter((part) => part.getAttribute('display') !== 'none')
+    .map((part) => part.dataset.part!);
 
 const expectNothingLeft = (record: ShowRecord) => {
   expect(record.stage?.childElementCount).toBe(0);
@@ -447,6 +466,176 @@ describeSpec(await loadFeature('./kit.feature'), ({ Rule }) => {
       });
       And('it points at 640, 300', () => {
         expect([speech.style.left, speech.style.top]).toEqual(['640px', '300px']);
+      });
+    });
+  });
+
+  Rule('Characters', ({ RuleScenario }) => {
+    RuleScenario('A head has five moods and one accessory', ({ When, Then, And }) => {
+      let heads: SVGSVGElement[];
+      When('a head is drawn calm, worried, scared, happy and party', () => {
+        heads = ACCESSORIES.flatMap((accessory) =>
+          MOODS.map((mood) => head({ ...LOOK, accessory } as Look, { mood }).el),
+        );
+      });
+      Then('each mood looks different', () => {
+        for (let start = 0; start < heads.length; start += MOODS.length) {
+          const looks = heads
+            .slice(start, start + MOODS.length)
+            .map((el) => visibleParts(el).join());
+          expect(new Set(looks).size).toBe(MOODS.length);
+        }
+      });
+      And('each head wears one accessory', () => {
+        for (const el of heads) {
+          const worn = ACCESSORIES.filter((accessory) =>
+            el.querySelector(`[data-part="${accessory}"]`),
+          );
+          expect(worn).toHaveLength(1);
+        }
+      });
+    });
+
+    RuleScenario('A head keeps its look when its mood changes', ({ Given, When, Then }) => {
+      let drawn: ReturnType<typeof head>;
+      Given('a head with skin tone 3 and a snorkel', () => {
+        drawn = head(LOOK, { mood: 'calm' });
+      });
+      When('its mood changes from calm to party', () => {
+        const before = visibleParts(drawn.el).join();
+        drawn.setMood('party');
+        expect(visibleParts(drawn.el).join()).not.toBe(before);
+      });
+      Then('it still has skin tone 3 and a snorkel', () => {
+        expect(drawn.el.style.getPropertyValue('--skin')).toBe('var(--color-skin-3)');
+        expect(visibleParts(drawn.el)).toContain('snorkel');
+      });
+    });
+
+    RuleScenario('Looks are varied', ({ When, Then }) => {
+      let looks: Map<string, Look>;
+      When('looks are handed out to 12 people', () => {
+        looks = handOutLooks(TEAM.slice(0, 12), createRandom(5));
+      });
+      Then('they use at least 4 skin tones', () => {
+        expect(looks.size).toBe(12);
+        expect(new Set([...looks.values()].map((look) => look.skin)).size).toBeGreaterThanOrEqual(
+          4,
+        );
+      });
+    });
+  });
+
+  Rule('Motion', ({ RuleScenario }) => {
+    RuleScenario("Motion runs on the show's clock and ends with it", ({ Given, When, Then }) => {
+      let scenario: ReturnType<typeof fakeScenario>;
+      let target: SVGSVGElement;
+      const heights = new Set<number>();
+      Given('a show that makes a head bob', () => {
+        scenario = fakeScenario({
+          play: async (show) => {
+            target = show.stage.appendChild(head(LOOK).el);
+            bob(target);
+            await show.wait(2);
+          },
+        });
+      });
+      When('the show ends', async () => {
+        await runShow(scenario, {
+          ...PICK,
+          onFrame: () => heights.add(Number(gsap.getProperty(target, 'y'))),
+        });
+      });
+      Then('the head stops bobbing', () => {
+        expect(heights.size).toBeGreaterThan(10);
+        expect(gsap.getTweensOf(target)).toEqual([]);
+      });
+    });
+
+    RuleScenario('With reduced motion, nothing shakes', ({ Given, When, Then }) => {
+      let target: SVGSVGElement;
+      const places = new Set<number>();
+      Given('the viewer prefers reduced motion', () => {
+        vi.stubGlobal('matchMedia', (query: string) => ({
+          matches: query === '(prefers-reduced-motion: reduce)',
+        }));
+      });
+      When('a show shakes a head', async () => {
+        const scenario = fakeScenario({
+          play: async (show) => {
+            expect(show.reducedMotion).toBe(true);
+            target = show.stage.appendChild(head(LOOK).el);
+            await show.play(shake(target, show));
+            await show.wait(1);
+          },
+        });
+        await runShow(scenario, {
+          ...PICK,
+          onFrame: () => places.add(Number(gsap.getProperty(target, 'x'))),
+        });
+      });
+      Then("the head doesn't move", () => {
+        expect([...places]).toEqual([0]);
+      });
+    });
+  });
+
+  Rule('The lab runs any show in development', ({ RuleScenario }) => {
+    RuleScenario('The lab lists every scenario', ({ Given, When, Then }) => {
+      const labRat = fakeScenario({ name: 'Lab Rat', developmentOnly: true });
+      const potato = fakeScenario({ name: 'Hot Potato' });
+      let scenarios: ReturnType<typeof discoverScenarios>;
+      Given('a scenario marked development-only', () => {
+        scenarios = discoverScenarios(
+          {
+            '../scenarios/lab-rat/index.ts': labRat,
+            '../scenarios/hot-potato/index.ts': potato,
+          },
+          { production: false },
+        );
+      });
+      When('the lab opens', () => {
+        renderLab(scenarios);
+      });
+      Then('it lists every scenario, the development-only one included', () => {
+        const options = screen.getAllByRole('option', { name: /Hot Potato|Lab Rat/ });
+        expect(options.map((option) => option.textContent)).toEqual(['Hot Potato', 'Lab Rat']);
+      });
+    });
+
+    RuleScenario('The lab runs a show as asked', ({ When, Then, And }) => {
+      const draws: number[] = [];
+      const sharkBait = fakeScenario({
+        name: 'Shark Bait',
+        play: (show) => void draws.push(show.random()),
+      });
+      When(
+        'I run "Shark Bait" in the lab with 5 people, the unlucky person last and seed 42',
+        async () => {
+          const user = userEvent.setup();
+          renderLab([fakeScenario({ name: 'Hot Potato' }), sharkBait]);
+          await user.selectOptions(screen.getByRole('combobox', { name: 'Show' }), 'Shark Bait');
+          await user.selectOptions(screen.getByRole('combobox', { name: 'People' }), '5');
+          await user.selectOptions(
+            screen.getByRole('combobox', { name: 'Unlucky person' }),
+            'Last',
+          );
+          await user.clear(screen.getByRole('spinbutton', { name: 'Seed' }));
+          await user.type(screen.getByRole('spinbutton', { name: 'Seed' }), '42');
+          await user.click(screen.getByRole('button', { name: 'Run' }));
+          await screen.findByText('Shark Bait finished.');
+        },
+      );
+      Then('the show plays with 5 people', () => {
+        expect(sharkBait.runs).toHaveLength(1);
+        expect(sharkBait.runs[0]!.names).toHaveLength(5);
+      });
+      And('the last of them is the unlucky person', () => {
+        const [run] = sharkBait.runs;
+        expect(run!.unlucky).toBe(run!.names.at(-1));
+      });
+      And('its random draws come from seed 42', () => {
+        expect(draws).toEqual([createRandom(42)()]);
       });
     });
   });

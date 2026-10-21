@@ -14,6 +14,6 @@ export type StageSize =
   | '--size-stage-fin-name';
 
 /** A size from tokens.css in stage pixels, for a show to compute with. */
-export function stagePx(name: StageSize | '--line-bold'): number {
+export function stagePx(name: StageSize | '--line' | '--line-bold'): number {
   return parseFloat(token(name));
 }

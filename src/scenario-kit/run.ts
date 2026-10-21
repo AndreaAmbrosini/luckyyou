@@ -19,11 +19,17 @@ export interface RunOptions {
   readonly signal: AbortSignal;
   /** Warns on the console when a show leaves 10–15 s. On in the dev server. */
   readonly development?: boolean;
+  /** Less motion; the browser's prefers-reduced-motion unless given. */
+  readonly reducedMotion?: boolean;
 }
 
 /** Plays one show of `scenario` in `host`, for a pick the app already made. */
 export async function runScenario(scenario: Scenario, options: RunOptions): Promise<RunOutcome> {
-  const { signal, development = import.meta.env.MODE === 'development' } = options;
+  const {
+    signal,
+    development = import.meta.env.MODE === 'development',
+    reducedMotion = prefersReducedMotion(),
+  } = options;
   const animations = claimAnimations();
   const frame = buildStage(options.host);
   const sound = createSound({ muted: options.muted });
@@ -34,6 +40,7 @@ export async function runScenario(scenario: Scenario, options: RunOptions): Prom
     unlucky: options.unlucky,
     random: createRandom(options.seed),
     signal,
+    reducedMotion,
     sound: sound.player,
     wait: (seconds) => wait(seconds, signal),
     play: (animation) => play(animation, signal),
@@ -69,6 +76,9 @@ export async function runScenario(scenario: Scenario, options: RunOptions): Prom
     frame.remove();
   }
 }
+
+const prefersReducedMotion = () =>
+  window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false;
 
 function warnIfOffTime(scenario: Scenario, seconds: number) {
   if (seconds >= SHOW_LENGTH.min && seconds <= SHOW_LENGTH.max) return;

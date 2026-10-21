@@ -3,7 +3,7 @@
 // Folders starting with `_` are skipped, so this one is never in the app.
 
 import { gsap } from 'gsap';
-import { defineScenario, eliminationOrder, fitBeats } from '../../scenario-kit';
+import { defineScenario, eliminationOrder, fitBeats, nameTag } from '../../scenario-kit';
 import styles from './template.module.css';
 
 export default defineScenario({
@@ -31,12 +31,9 @@ export default defineScenario({
     const tags = new Map(
       show.names.map((name) => {
         const tag = row.appendChild(document.createElement('li'));
-        tag.className = styles.tag;
         tag.dataset.person = name;
-        const text = tag.appendChild(document.createElement('span'));
-        text.dir = 'auto';
-        // Names are text, never HTML.
-        text.textContent = name;
+        // The kit's tags set names as text, at a size that reads on a shared screen.
+        tag.append(nameTag(name, { size: 48, maxWidth: 360 }));
         return [name, tag];
       }),
     );

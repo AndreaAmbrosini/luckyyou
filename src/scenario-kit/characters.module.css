@@ -1,0 +1,55 @@
+/* A head's colours. Its skin, accent and ring come in as --skin, --accent and --ring. */
+.head {
+  overflow: visible;
+}
+
+.line {
+  fill: none;
+  stroke: var(--color-ink);
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.skin {
+  fill: var(--skin);
+  stroke: var(--color-ink);
+}
+
+.accent {
+  fill: var(--accent);
+  stroke: var(--color-ink);
+  stroke-linejoin: round;
+}
+
+.accentLine {
+  fill: none;
+  stroke: var(--accent);
+  stroke-linecap: round;
+}
+
+.glass {
+  fill: var(--color-glass);
+  stroke: var(--color-ink);
+}
+
+.ink {
+  fill: var(--color-ink);
+  stroke: var(--color-ink);
+  stroke-linejoin: round;
+}
+
+.white {
+  fill: var(--color-paper);
+  stroke: var(--color-ink);
+}
+
+.ring {
+  fill: var(--ring);
+  stroke: var(--color-ink);
+}
+
+.shine {
+  fill: none;
+  stroke: var(--color-paper);
+  stroke-linecap: round;
+}

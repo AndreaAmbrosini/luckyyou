@@ -2,13 +2,15 @@
 .tag {
   box-sizing: border-box;
   width: max-content;
-  padding: 0.08em 0.3em;
-  border: var(--line-bold) solid var(--color-ink);
-  border-radius: var(--radius-tile);
+  padding: 0.05em 0.3em 0.1em;
+  border: var(--line) solid var(--color-ink);
+  border-radius: 12px;
   background-color: var(--color-paper);
+  box-shadow: var(--shadow-small);
   color: var(--color-ink);
-  font-family: var(--font-display);
+  font-family: var(--font-body);
   font-size: var(--tag-size);
+  font-weight: 900;
   line-height: 1.1;
   text-align: center;
   overflow-wrap: anywhere;
@@ -32,7 +34,7 @@
   font-size: var(--size-stage-caption);
   line-height: 1.15;
   text-align: center;
-  transform: translateX(-50%);
+  transform: translateX(-50%) rotate(-2deg);
 }
 
 /* A bubble sits at its anchor; the speech sits above it, its tail pointing down. */
@@ -59,7 +61,8 @@
   line-height: 1.1;
   text-align: center;
   overflow-wrap: anywhere;
-  transform: translateX(-50%);
+  box-shadow: var(--shadow);
+  transform: translateX(-50%) rotate(-2deg);
 }
 
 .speech::after {

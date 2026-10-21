@@ -38,6 +38,8 @@ export interface RunShowOptions {
   readonly limit?: number;
   /** Runs the show as the dev server would, with its warnings. */
   readonly development?: boolean;
+  /** Less motion; the browser's prefers-reduced-motion unless given. */
+  readonly reducedMotion?: boolean;
   /** Called after every frame with the show seconds so far and the stage. */
   onFrame?(time: number, stage: HTMLElement): void;
 }
@@ -87,6 +89,7 @@ export async function runShow(scenario: Scenario, options: RunShowOptions): Prom
       muted: true,
       signal: controller.signal,
       development: options.development,
+      reducedMotion: options.reducedMotion,
     }).then((result) => {
       outcome = result;
     });

@@ -1,15 +1,62 @@
 import { describe, expect, it, vi } from 'vitest';
-import { createSound } from './sound';
+import { createSound, type Cue } from './sound';
 
-/** The few parts of a Web Audio context the sound player touches. */
+const CUES: Cue[] = ['splash', 'rotor', 'whoosh', 'heartbeat', 'fanfare'];
+
+/** A Web Audio context whose nodes do nothing but count what was started and stopped. */
 function fakeAudio() {
-  const contexts: { closed: boolean }[] = [];
+  const contexts: { closed: boolean; started: number; stopped: number }[] = [];
+  class FakeParam {
+    value = 0;
+    setValueAtTime() {
+      return this;
+    }
+    linearRampToValueAtTime() {
+      return this;
+    }
+    exponentialRampToValueAtTime() {
+      return this;
+    }
+  }
   class FakeContext {
     currentTime = 0;
-    destination = {};
+    sampleRate = 8000;
     closed = false;
+    started = 0;
+    stopped = 0;
+    destination = this.node();
     constructor() {
       contexts.push(this);
+    }
+    node() {
+      const context = this as FakeContext;
+      return {
+        gain: new FakeParam(),
+        frequency: new FakeParam(),
+        Q: new FakeParam(),
+        type: '',
+        buffer: null as unknown,
+        loop: false,
+        connect: <T>(next: T) => next,
+        disconnect: () => undefined,
+        start: () => void context.started++,
+        stop: () => void context.stopped++,
+      };
+    }
+    createGain() {
+      return this.node();
+    }
+    createOscillator() {
+      return this.node();
+    }
+    createBiquadFilter() {
+      return this.node();
+    }
+    createBufferSource() {
+      return this.node();
+    }
+    createBuffer(_channels: number, length: number) {
+      return { getChannelData: () => new Float32Array(length) };
     }
     close() {
       this.closed = true;
@@ -34,6 +81,32 @@ describe('createSound', () => {
     const contexts = fakeAudio();
     createSound({ muted: true }).player.play('splash');
     expect(contexts).toHaveLength(0);
+  });
+
+  it('plays every cue', () => {
+    const contexts = fakeAudio();
+    const { player } = createSound({ muted: false });
+    for (const cue of CUES) {
+      const before = contexts[0]?.started ?? 0;
+      expect(() => player.play(cue), cue).not.toThrow();
+      expect(contexts[0]!.started, cue).toBeGreaterThan(before);
+    }
+  });
+
+  it('stops a sound when asked, and every sound at once', () => {
+    const contexts = fakeAudio();
+    const { player } = createSound({ muted: false });
+    // The rotor loops: nothing stops it but being told to.
+    const stopRotor = player.play('rotor');
+    const [context] = contexts;
+    expect(context!.stopped).toBe(0);
+    stopRotor();
+    const afterOne = context!.stopped;
+    expect(afterOne).toBeGreaterThan(0);
+    player.play('rotor');
+    expect(context!.stopped).toBe(afterOne);
+    player.stopAll();
+    expect(context!.stopped).toBe(2 * afterOne);
   });
 
   it('closes its output when the show is over', () => {

@@ -43,6 +43,8 @@ export interface Show {
   readonly random: () => number;
   /** Aborted when the show is cancelled or runs out of time. */
   readonly signal: AbortSignal;
+  /** The viewer asked for less motion: keep the story, drop shaking and speed lines. */
+  readonly reducedMotion: boolean;
   /** Plays a sound unless the app is muted. */
   readonly sound: SoundPlayer;
   /**

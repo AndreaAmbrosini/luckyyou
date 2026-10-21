@@ -16,14 +16,14 @@ const graphemes = new Intl.Segmenter('en', { granularity: 'grapheme' });
 let canvas: OffscreenCanvasRenderingContext2D | null | undefined;
 
 /**
- * How wide `text` is in the display font at `size`. Browsers measure it;
+ * How wide `text` is in a name tag's font at `size`. Browsers measure it;
  * where there is no canvas (jsdom), a character counts as 0.6 em.
  */
 function textWidth(text: string, size: number): number {
   canvas ??=
     typeof OffscreenCanvas === 'function' ? new OffscreenCanvas(1, 1).getContext('2d') : null;
   if (!canvas) return [...graphemes.segment(text)].length * 0.6 * size;
-  canvas.font = `${size}px ${token('--font-display')}`;
+  canvas.font = `900 ${size}px ${token('--font-body')}`;
   return canvas.measureText(text).width;
 }
 
@@ -69,7 +69,7 @@ export function nameTag(
   { size, maxWidth }: { size: number; maxWidth: number },
 ): HTMLElement {
   const min = stagePx('--size-stage-tag-min');
-  const borders = 2 * stagePx('--line-bold');
+  const borders = 2 * stagePx('--line');
   const fits = (at: number, width: number, lines: number) =>
     lineCount(name, at, width - borders - TAG_PADDING_EM * at - SLACK) <= lines;
 
