@@ -54,6 +54,11 @@ Feature: Shark Bait
       Then there are at most 2 group rescues
       And none lifts more than 4 people
 
+    Scenario: A group rescue flies off slowly enough to follow
+      Given 12 people
+      When the show runs
+      Then after each group rescue, the helicopter flies off for at least 0.4 seconds
+
     Scenario: The last two get a duel
       Given the last two in the water are "Marco", the unlucky person, and "Giulia"
       When the rope comes down for them

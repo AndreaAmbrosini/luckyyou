@@ -36,8 +36,8 @@ interface Frame {
   readonly inWater: readonly string[];
   /** Who the rope is heading for, if anyone. */
   readonly aim: string | null;
-  /** Where the helicopter is across the stage. */
-  readonly helicopterX: number;
+  /** Where the helicopter is on the stage. */
+  readonly helicopter: { readonly x: number; readonly y: number };
 }
 
 /** One person, or a group, leaving the water at the same moment. */
@@ -99,7 +99,7 @@ class Watched {
       const before = this.frames[index - 1];
       if (!frame.aim || !['four-left', 'fake-out', 'duel'].includes(frame.beat)) return;
       if (frame.aim !== before?.aim) rests.push({ aim: frame.aim, frames: 0 });
-      const still = before && Math.abs(frame.helicopterX - before.helicopterX) < 0.5;
+      const still = before && Math.abs(frame.helicopter.x - before.helicopter.x) < 0.5;
       if (still) rests.at(-1)!.frames++;
     });
     const step = this.frames[1]!.time - this.frames[0]!.time;
@@ -137,7 +137,7 @@ async function watch(
           .filter((swimmer) => swimmer.dataset.inWater === 'true')
           .map((swimmer) => swimmer.dataset.person!),
         aim: stage.querySelector<HTMLElement>('[data-part="rope"]')?.dataset.aim || null,
-        helicopterX: position(stage.querySelector('[data-part="helicopter"]')).x,
+        helicopter: position(stage.querySelector('[data-part="helicopter"]')),
       });
     },
   });
@@ -370,6 +370,35 @@ describeSpec(await loadFeature('./shark-bait.feature'), ({ Rule }) => {
       And('none lifts more than 4 people', () => {
         for (const lift of show.lifts) expect(lift.names.length).toBeLessThanOrEqual(4);
       });
+    });
+
+    RuleScenario('A group rescue flies off slowly enough to follow', ({ Given, When, Then }) => {
+      let show: Watched;
+      Given('12 people', () => {});
+      When('the show runs', async () => {
+        show = await watch(TEAM, 'Marco');
+      });
+      Then(
+        'after each group rescue, the helicopter flies off for at least {number} seconds',
+        (_, seconds: number) => {
+          const groups = show.lifts.filter((lift) => lift.beat === 'group-rescues');
+          expect(groups.length).toBeGreaterThan(0);
+          const step = show.frames[1]!.time - show.frames[0]!.time;
+          for (const lift of groups) {
+            // It flies off upwards, and comes down again for whatever comes next.
+            const after = show.frames.filter((frame) => frame.time >= lift.time);
+            const firstUp = after.findIndex(
+              (frame, index) => index > 0 && frame.helicopter.y < after[index - 1]!.helicopter.y,
+            );
+            let up = 0;
+            for (let index = firstUp; index < after.length; index++) {
+              if (after[index]!.helicopter.y >= after[index - 1]!.helicopter.y) break;
+              up++;
+            }
+            expect(up * step, `the swoop at ${lift.time}`).toBeGreaterThanOrEqual(seconds - 1e-9);
+          }
+        },
+      );
     });
 
     RuleScenario('The last two get a duel', ({ Given, When, Then, And }) => {

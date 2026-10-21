@@ -208,7 +208,10 @@ export async function playSharkBait(show: Show): Promise<void> {
 
   await show.play(timeline);
 
-  /** One swoop: the helicopter dives in, everyone in `group` grabs the rope, and off it goes. */
+  /**
+   * One swoop, in a second: the helicopter dives in, everyone in `group`
+   * reaches up and grabs the rope as it comes, and off it goes.
+   */
   function swoop(group: readonly Swimmer[], start: number) {
     const x = clamp(group.reduce((sum, swimmer) => sum + swimmer.place.x, 0) / group.length);
     const away = x < 640 ? -1 : 1;
@@ -216,8 +219,8 @@ export async function playSharkBait(show: Show): Promise<void> {
     chopper.phase('swooping', start);
     chopper.flyTo({ x, y: HOVER_Y, scale: 1 }, start, ARRIVE, 'power2.out');
     chopper.lower(SWOOP_HOOK_Y - HOVER_Y, start, ARRIVE);
-    const grab = start + ARRIVE;
-    const flyOff = grab + ARRIVE;
+    const flyOff = start + 1 - ARRIVE;
+    const grab = flyOff - ARRIVE;
     const exit = { x: 380 * away, y: -560 };
     group.forEach((swimmer, index) => {
       const slot = {
@@ -229,7 +232,7 @@ export async function playSharkBait(show: Show): Promise<void> {
       swimmer.glide(slot, grab, ARRIVE);
       timeline.to(
         swimmer.el,
-        { x: `+=${exit.x}`, y: `+=${exit.y}`, duration: 1 - 2 * ARRIVE, ease: 'power2.in' },
+        { x: `+=${exit.x}`, y: `+=${exit.y}`, duration: ARRIVE, ease: 'power2.in' },
         flyOff,
       );
       timeline.set(swimmer.el, { autoAlpha: 0 }, start + 1);
@@ -238,7 +241,7 @@ export async function playSharkBait(show: Show): Promise<void> {
     const left = inWater().length;
     if (left !== 4) caption(grab, `Whoosh! ${left} left`);
     settle(grab);
-    chopper.flyTo({ x: x + exit.x, y: HOVER_Y + exit.y }, flyOff, 1 - 2 * ARRIVE, 'power2.in');
+    chopper.flyTo({ x: x + exit.x, y: HOVER_Y + exit.y }, flyOff, ARRIVE, 'power2.in');
   }
 
   /**
