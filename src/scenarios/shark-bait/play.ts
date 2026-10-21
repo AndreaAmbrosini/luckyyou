@@ -82,9 +82,12 @@ export async function playSharkBait(show: Show): Promise<void> {
     const scale = scene.getBoundingClientRect().width / STAGE.width;
     if (!scale) return { tags, places: [...spots] };
     measuring.replaceChildren(...tags);
-    const widths = tags.map((tag) => tag.getBoundingClientRect().width / scale);
+    const boxes = tags.map((tag) => {
+      const { width, height } = tag.getBoundingClientRect();
+      return { width: width / scale, height: height / scale };
+    });
     measuring.replaceChildren();
-    return { tags, places: fitTags(spots, widths) };
+    return { tags, places: fitTags(spots, boxes) };
   };
 
   const start = tagged(plan.start, places(plan.start.length));
@@ -294,7 +297,10 @@ const AIMS: {
 const clamp = (x: number) => Math.min(1100, Math.max(180, x));
 
 /** Where the hook waits above someone: just over their name tag. */
-const hookAbove = ({ y, size, tag }: Place) => y + tagBottom(size) - 1.1 * tag.size - 40;
+const hookAbove = (place: Place) => labelY(place) + place.y - 1.1 * place.tag.size - 40;
+
+/** Where a person's name tag sits, from the middle of their swim ring. */
+const labelY = ({ size, lift = 0 }: Place) => tagBottom(size) - lift;
 
 /** A person in the water: their head, bobbing, with their name `tag` above it. */
 function createSwimmer(
@@ -319,7 +325,7 @@ function createSwimmer(
   label.append(tag);
   gsap.set(el, { x: place.x, y: place.y });
   gsap.set(figure, { scale: place.size / 100 });
-  gsap.set(label, { y: tagBottom(place.size) });
+  gsap.set(label, { y: labelY(place) });
 
   let current: Spot | Place = place;
   let lifted = false;
@@ -343,7 +349,9 @@ function createSwimmer(
     glide(next: Spot | Place, at: number, seconds: number, tag?: HTMLElement) {
       const from = current;
       current = next;
-      if (from.x === next.x && from.y === next.y && from.size === next.size) return;
+      const lifted = (spot: Spot | Place) => ('lift' in spot ? spot.lift : 0);
+      const same = from.x === next.x && from.y === next.y && from.size === next.size;
+      if (same && lifted(from) === lifted(next)) return;
       const ease = 'power2.inOut';
       timeline.to(el, { x: next.x, y: next.y, duration: seconds, ease }, at);
       timeline.to(figure, { scale: next.size / 100, duration: seconds, ease }, at);
@@ -352,7 +360,7 @@ function createSwimmer(
       timeline.fromTo(
         label,
         { scale: from.tag.size / next.tag.size },
-        { y: tagBottom(next.size), scale: 1, duration: seconds, ease, immediateRender: false },
+        { y: labelY(next), scale: 1, duration: seconds, ease, immediateRender: false },
         at,
       );
     },

@@ -22,6 +22,52 @@ test('a whole pick', async ({ page }) => {
   expect(team).toContain(unlucky);
 });
 
+test('long names never cover each other on stage', async ({ page }) => {
+  const team = [
+    'Wolfeschlegelsteinhausenberger',
+    'Bartholomew-Montgomery-Smit',
+    'Maria Giulia Bianchi-Rossi Jr.',
+    'Alexandra Konstantinopoulou',
+    'Jean-Baptiste de La Fontaine',
+    'Christopher Alexanderson',
+    'Oluwaseun Adebayo-Okafor',
+    'Konstantinos Papadopoulos',
+    'Anastasia Vasilievna Petrova',
+    'Maximilian von Hohenzollern',
+    'Siobhán Ní Mhaolagáin',
+    '🦄'.repeat(30),
+  ];
+  await page.goto('./');
+  await page.evaluate((names) => {
+    const people = names.map((name) => ({ name, ticked: true }));
+    localStorage.setItem('luckyyou:v1:people', JSON.stringify(people));
+  }, team);
+  await page.reload();
+  await page.getByRole('button', { name: 'Next: pick a show' }).click();
+  await page.getByRole('button', { name: 'Shark Bait' }).click();
+
+  // Heads pop in with a little overshoot, so look again until they have
+  // settled. Once someone leaves the water, twelve tags are no longer in it.
+  await expect(async () => {
+    const tags = await page
+      .locator('[data-in-water="true"] [style*="--tag-size"]')
+      .evaluateAll((elements) =>
+        elements.map((element) => {
+          const { left, right, top, bottom } = element.getBoundingClientRect();
+          return { name: element.textContent, left, right, top, bottom };
+        }),
+      );
+    expect(tags).toHaveLength(team.length);
+    tags.forEach((a, index) => {
+      for (const b of tags.slice(index + 1)) {
+        const apart =
+          a.right <= b.left || b.right <= a.left || a.bottom <= b.top || b.bottom <= a.top;
+        expect(apart, `${a.name} and ${b.name}`).toBe(true);
+      }
+    });
+  }).toPass({ intervals: [100], timeout: 5000 });
+});
+
 test("every request stays on the site's own origin", async ({ page, baseURL }) => {
   const origins = new Set<string>();
   page.on('request', (request) => origins.add(new URL(request.url()).origin));

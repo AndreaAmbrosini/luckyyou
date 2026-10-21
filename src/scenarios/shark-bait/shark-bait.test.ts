@@ -4,7 +4,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { stagePx, type Scenario } from '../../scenario-kit';
 import { describeSpec, runShow, type ShowRecord } from '../../scenario-kit/testing';
 import sharkBait from './index';
-import { fitTags, places } from './layout';
+import { fitTags, places, tagBottom, type Place } from './layout';
 import { planShow } from './plan';
 
 // Some steps play twenty shows. With every test file running at once they can
@@ -625,33 +625,61 @@ describeSpec(await loadFeature('./shark-bait.feature'), ({ Rule }) => {
 });
 
 describe('Shark Bait, beyond its feature', () => {
-  /** Long names on the back row at 12, as wide as their tags are drawn in a browser. */
-  const WIDE = [70, 230, 50, 180, 190, 215];
+  /** Long names on the back row at 12, as their tags are drawn in a browser. */
+  const WIDE = [70, 230, 50, 180, 190, 215].map((width) => ({ width, height: 58 }));
+  /** Where a tag is drawn on the stage, for `place`. */
+  const box = (place: Place, { width, height }: { width: number; height: number }) => {
+    const bottom = place.y + tagBottom(place.size) - (place.lift ?? 0);
+    return { left: place.x - width / 2, right: place.x + width / 2, top: bottom - height, bottom };
+  };
+  /** Checks that no two tags in `fitted` touch, no two heads touch, and every tag is on stage. */
+  const expectClear = (fitted: Place[], tags: { width: number; height: number }[]) => {
+    const boxes = fitted.map((place, index) => box(place, tags[index]!));
+    boxes.forEach((a, index) => {
+      expect(a.left).toBeGreaterThanOrEqual(10);
+      expect(a.right).toBeLessThanOrEqual(1270);
+      expect(a.top).toBeGreaterThan(120);
+      boxes.slice(index + 1).forEach((b, other) => {
+        const apart =
+          a.right <= b.left || b.right <= a.left || a.bottom <= b.top || b.bottom <= a.top;
+        expect(apart, `tags ${index} and ${index + other + 1}`).toBe(true);
+        const [p, q] = [fitted[index]!, fitted[index + other + 1]!];
+        if (p.y === q.y) {
+          expect(Math.abs(p.x - q.x), `heads ${index} and ${index + other + 1}`).toBeGreaterThan(
+            (p.size + q.size) / 2,
+          );
+        }
+      });
+    });
+  };
 
   it('spaces a row by its name tags, so no tag covers another', () => {
     const row = places(12).slice(0, 6);
     const fitted = fitTags(row, WIDE);
-    fitted.slice(1).forEach((place, index) => {
-      const gap = place.x - fitted[index]!.x;
-      expect(gap).toBeGreaterThanOrEqual((WIDE[index]! + WIDE[index + 1]!) / 2 + 10 - 1e-9);
-    });
-    expect(fitted[0]!.x - WIDE[0]! / 2).toBeGreaterThanOrEqual(10);
-    expect(fitted.at(-1)!.x + WIDE.at(-1)! / 2).toBeLessThanOrEqual(1270);
+    expectClear(fitted, WIDE);
+    expect(fitted.every((place) => !place.lift)).toBe(true);
     expect(fitted.map(({ y, size }) => ({ y, size }))).toEqual(
       row.map(({ y, size }) => ({ y, size })),
     );
   });
 
+  it("lifts every other tag a tier when a row's tags can't sit side by side", () => {
+    const widest = { width: 475, height: 58 };
+    const long = { width: 230, height: 58 };
+    for (const at of [0, 2, 5]) {
+      for (const row of [places(12).slice(0, 6), places(12).slice(6), places(6)]) {
+        const tags = row.map((_, index) => (index === at ? widest : long));
+        expectClear(fitTags(row, tags), tags);
+      }
+    }
+  });
+
   it('leaves rows as the storyboard draws them when their tags already fit', () => {
     const all = places(12);
-    const fitted = fitTags(all, [...WIDE, ...all.slice(6).map(() => 60)]);
+    const short = all.map(() => ({ width: 60, height: 30 }));
+    const fitted = fitTags(all, [...WIDE, ...short.slice(6)]);
     expect(fitted.slice(6)).toEqual(all.slice(6));
-    expect(
-      fitTags(
-        all,
-        all.map(() => 60),
-      ),
-    ).toEqual(all);
+    expect(fitTags(all, short)).toEqual(all);
   });
 
   it('plays a splash, the rotor while the helicopter is up, whooshes, a heartbeat and a fanfare', async () => {
