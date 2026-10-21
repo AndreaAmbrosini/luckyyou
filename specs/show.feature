@@ -25,13 +25,13 @@ Feature: The show
     Scenario: Esc cancels the show
       Given the show is playing
       When I press Esc
-      Then I'm back on the setup screen
+      Then I'm back to picking a show
       And no result is shown
 
     Scenario: Leaving fullscreen cancels the show
       Given the show is playing in fullscreen
       When the page leaves fullscreen
-      Then I'm back on the setup screen
+      Then I'm back to picking a show
       And no result is shown
 
   @pending

@@ -1,13 +1,13 @@
-Feature: The setup screen
-  Where the person sharing their screen chooses who is in, what is at stake
-  and which show to play.
+Feature: Setting up a pick
+  Two steps before the show: the person sharing their screen ticks who is in
+  today, then clicks the show to play.
 
   @pending
-  Rule: Starting needs 2 to 12 ticked people
+  Rule: Moving on needs 2 to 12 ticked people
 
-    Scenario Outline: Starting with <ticked> ticked
+    Scenario Outline: Moving on with <ticked> ticked
       Given <ticked> people are ticked
-      Then starting is <state>
+      Then moving on to the shows is <state>
 
       Examples:
         | ticked | state   |
@@ -16,15 +16,33 @@ Feature: The setup screen
         | 12     | allowed |
         | 13     | blocked |
 
-    Scenario: A blocked start says why
+    Scenario: Too few ticked says why
       Given 1 person is ticked
-      Then I'm told at least 2 people are needed, and that 1 is ticked
+      Then I'm told "At least 2 people are needed. 1 is ticked."
 
-    Scenario: While the head count is wrong, that is the only problem shown
+    Scenario: Too many ticked says why
       Given 13 people are ticked
-      Then I'm told at most 12 people can take part, and that 13 are ticked
-      And no other problem is shown
-      And every scenario card can still be selected
+      Then I'm told "At most 12 people can take part. 13 are ticked."
+
+  @pending
+  Rule: Clicking a show starts it
+
+    Scenario: The shows step names who is in
+      Given "Anna", "Ben" and "Carla" are ticked
+      When I move on to the shows
+      Then I see that 3 are in: "Anna", "Ben" and "Carla"
+
+    Scenario: Clicking a show starts it with today's people
+      Given "Anna", "Ben" and "Carla" are ticked
+      And I moved on to the shows
+      When I click "Shark Bait"
+      Then Shark Bait starts with "Anna", "Ben" and "Carla"
+
+    Scenario: Going back keeps the ticks
+      Given "Anna" and "Ben" are ticked
+      And I moved on to the shows
+      When I go back to who's in
+      Then "Anna" and "Ben" are still ticked
 
   @pending
   Rule: Scenario cards show whether they can run
@@ -37,50 +55,29 @@ Feature: The setup screen
       Given a scenario that takes 3 to 6 people
       And 8 people are ticked
       Then its card is disabled
-      And it says it takes at most 6 people
+      And it says "Takes at most 6 people"
 
   @pending
-  Rule: The selected scenario follows the last choice
+  Rule: The show played last time is ready to play again
 
-    Scenario: The scenario chosen last time is selected again
-      Given I chose "Hot Potato" on my last visit
-      When I open the app
-      Then "Hot Potato" is selected
+    Scenario: The show played last time is marked and has the focus
+      Given I played "Hot Potato" on my last visit
+      When I move on to the shows
+      Then "Hot Potato" is marked "Last time"
+      And it has the keyboard focus, so Enter plays it again
 
-    Scenario: If the last choice can't run today, the first one that can is selected
-      Given I chose "Hot Potato" on my last visit, and it takes at most 6 people
+    Scenario: If the last show can't run today, the first one that can has the focus
+      Given I played "Hot Potato" on my last visit, and it takes at most 6 people
       And 8 people are ticked
-      Then the first scenario that takes 8 people is selected
+      When I move on to the shows
+      Then the first scenario that takes 8 people has the keyboard focus
 
-    Scenario: If no scenario can run, starting is blocked with the reason
+    Scenario: If no show can run, the step says why
       Given no scenario takes 11 people
       And 11 people are ticked
-      Then starting is blocked
-      And I'm told no scenario can run with 11 people
-
-  @pending
-  Rule: The stake line is optional and lasts the visit
-
-    Scenario: The show can start without a stake line
-      Given 3 people are ticked
-      And the stake line is empty
-      Then starting is allowed
-
-    Scenario Outline: The stake line holds up to 80 characters
-      When I type a stake line of <typed> characters
-      Then it keeps <kept> characters
-
-      Examples:
-        | typed | kept |
-        | 80    | 80   |
-        | 81    | 80   |
-
-    Scenario: The stake line outlives a show, not a reload
-      Given the stake line is "Who writes the release notes?"
-      When a show ends and I go back to setup
-      Then the stake line is still "Who writes the release notes?"
-      When I reload the page
-      Then the stake line is empty
+      When I move on to the shows
+      Then every card is disabled
+      And I'm told no show can run with 11 people
 
   @pending
   Rule: Mute and fullscreen

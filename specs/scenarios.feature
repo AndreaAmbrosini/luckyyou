@@ -71,11 +71,6 @@ Feature: Scenarios
       Then every name appears on stage at some point
       And the unlucky name is on stage in the last 3 seconds
 
-    Scenario: The stake line is shown
-      Given the stake line "Who writes the release notes?"
-      When the show runs
-      Then "Who writes the release notes?" appears on stage
-
     Scenario: Names are shown as text
       Given a person named "<img src=x onerror=alert(1)>"
       When the show runs

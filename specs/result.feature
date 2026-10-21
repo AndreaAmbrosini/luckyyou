@@ -12,18 +12,13 @@ Feature: The result screen
       And below it says "Sorry for your win"
       And the heading has the keyboard focus
 
-    Scenario: The stake line is repeated
-      Given the stake line is "Who writes the release notes?"
-      When the show ends
-      Then the result shows "Who writes the release notes?"
-
   @pending
   Rule: What happens next
 
     Scenario: Run again plays the same show for the same people
       Given the result says "Lucky you, Ben 🎉"
       When I choose "Run again"
-      Then a new show starts with the same people, scenario and stake line
+      Then a new show starts with the same people and scenario
 
     Scenario: Run again without the unlucky person
       Given "Anna", "Ben" and "Carla" are ticked
@@ -38,7 +33,7 @@ Feature: The result screen
       Then "Run again without Ben" is disabled
       And I'm told the scenario needs at least 3 people
 
-    Scenario: Back to setup
+    Scenario: Change who's in
       Given the result is showing
-      When I choose "Back to setup"
-      Then I'm on the setup screen with the same people ticked
+      When I choose "Change who's in"
+      Then I'm on the who's-in step with the same people ticked
