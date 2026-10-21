@@ -6,16 +6,21 @@
 import { gsap } from 'gsap';
 import {
   bob,
+  bubble,
   handOutLooks,
   head,
   nameTag,
   popIn,
+  scroller,
+  STAGE,
+  stagePx,
+  type Cue,
   type Look,
   type Mood,
   type Show,
 } from '../../scenario-kit';
-import { HANGING_SIZE, places, tagBottom, tagFor, type Place } from './layout';
-import { fin, helicopter, sea } from './parts';
+import { fitTags, HANGING_SIZE, places, tagBottom, type Place, type Spot } from './layout';
+import { helicopter, sea, shark as drawShark } from './parts';
 import { BEATS, planShow, type Beat, type Rescue } from './plan';
 import styles from './shark-bait.module.css';
 
@@ -27,16 +32,27 @@ const SWING = 0.4;
 const LIFT = 0.7;
 /** Of a lift, the seconds before the person leaves the water. */
 const GRAB = 0.25;
-/** Where the rope hangs from: while hovering, and while swooping low. */
+/** Where the rope hangs from, low enough that the helicopter stays under the caption. */
 const HOVER_Y = 218;
-const SWOOP_Y = 138;
 /** Where the hook stops for a swoop, and how far apart the people hanging from it are. */
-const SWOOP_HOOK_Y = 372;
-const CHAIN_GAP = 48;
+const SWOOP_HOOK_Y = 400;
+const CHAIN_GAP = 40;
 /** Where the helicopter waits while people splash in, and how small it is far away. */
 const WAITING = { x: 1130, y: 185, scale: 0.6 };
+/** Where the helicopter flies off to at the end, and how long it takes. */
+const OFF = { x: -260, y: 120, seconds: 0.9 };
 /** The line the shark's fin patrols along. */
 const PATROL = { left: 200, right: 1080, y: 668, start: 640, legSeconds: 3 };
+/**
+ * The ending, in seconds before the show is over: the shark dives, the water
+ * stays still, the shark comes up with the last one riding it, and from
+ * `settled` on the name on its fin holds still.
+ */
+const ENDING = { dive: 2.7, still: 2.4, ride: 1.9, settled: 1.5 };
+/** How fast the sea scrolls past the riding shark, in stage pixels a second. */
+const RIDE_SPEED = 420;
+/** The widest the name on the fin may be. */
+const FIN_NAME_WIDTH = 560;
 
 type Timeline = gsap.core.Timeline;
 
@@ -44,16 +60,38 @@ export async function playSharkBait(show: Show): Promise<void> {
   const plan = planShow(show.names, show.unlucky, show.random);
   const looks = handOutLooks(show.names, show.random);
   const timeline = gsap.timeline({ paused: true });
+  const at = (time: number, run: () => void) => void timeline.call(run, [], time);
+  const caption = (time: number, text: string) => at(time, () => show.caption(text));
+  const cue = (time: number, sound: Cue) => at(time, () => void show.sound.play(sound));
 
-  const { scene } = sea();
+  const { scene, waves } = sea();
   show.stage.append(scene);
   const chopper = createHelicopter(timeline);
   scene.append(chopper.el);
-  const start = places(plan.start.length);
+
+  /**
+   * Name tags for `names` at `spots`, and places that keep the tags clear of
+   * each other. The tags are measured as the browser draws them; where
+   * nothing is drawn (in tests), the storyboard's places stand.
+   */
+  const measuring = scene.appendChild(document.createElement('div'));
+  measuring.className = styles.measuring;
+  const tagged = (names: readonly string[], spots: readonly Place[]) => {
+    const tags = names.map((name, index) => nameTag(name, spots[index]!.tag));
+    // Drawn sizes are scaled with the stage; a stage that isn't drawn has no scale.
+    const scale = scene.getBoundingClientRect().width / STAGE.width;
+    if (!scale) return { tags, places: [...spots] };
+    measuring.replaceChildren(...tags);
+    const widths = tags.map((tag) => tag.getBoundingClientRect().width / scale);
+    measuring.replaceChildren();
+    return { tags, places: fitTags(spots, widths) };
+  };
+
+  const start = tagged(plan.start, places(plan.start.length));
   const swimmers = new Map(
     plan.start.map((name, index) => [
       name,
-      createSwimmer(timeline, name, looks.get(name)!, start[index]!),
+      createSwimmer(timeline, name, looks.get(name)!, start.places[index]!, start.tags[index]!),
     ]),
   );
   for (const swimmer of swimmers.values()) {
@@ -61,9 +99,9 @@ export async function playSharkBait(show: Show): Promise<void> {
     // Each bobs at its own pace, so the water doesn't move in step.
     bob(swimmer.bobber, { distance: 6, seconds: 1.2 + show.random() * 0.6 });
   }
-  const shark = fin();
+  const shark = createShark(timeline, show, looks.get(show.unlucky)!);
   scene.append(shark.el);
-  gsap.set(shark.el, { x: PATROL.start, y: PATROL.y });
+  const woohoo = scene.appendChild(bubble('Woo-hoo!', { x: 330, y: 335 }, { colour: 'sun' }));
 
   /** When each beat starts, in show seconds. */
   const starts = {} as Record<Beat, number>;
@@ -73,14 +111,13 @@ export async function playSharkBait(show: Show): Promise<void> {
     total += plan.beats[beat];
   }
   for (const beat of BEATS) {
-    if (plan.beats[beat] > 0)
-      timeline.call(() => void (scene.dataset.beat = beat), [], starts[beat]);
+    if (plan.beats[beat] > 0) at(starts[beat], () => void (scene.dataset.beat = beat));
   }
   scene.dataset.beat = BEATS[0];
 
   const inWater = () => [...swimmers.values()].filter((swimmer) => !swimmer.lifted);
 
-  /** Everyone still in the water but `aimed` gets `mood`; `aimed` gets calm. */
+  /** Everyone still in the water but `aimed` looks worried, or scared if it's down to two. */
   const moods = (time: number, aimed: string | null) => {
     for (const swimmer of inWater()) {
       const scared = swimmer.name === show.unlucky && inWater().length === 2;
@@ -89,11 +126,31 @@ export async function playSharkBait(show: Show): Promise<void> {
     }
   };
 
+  /** Everyone still in the water glides to their places for how many are left. */
+  const settle = (time: number) => {
+    const spots = places(inWater().length);
+    const rows = spots.some((spot) => spot.y !== spots[0]!.y);
+    const water = inWater().sort(
+      (a, b) => (rows ? a.place.y - b.place.y : 0) || a.place.x - b.place.x,
+    );
+    const next = tagged(
+      water.map((swimmer) => swimmer.name),
+      spots,
+    );
+    water.forEach((swimmer, index) =>
+      swimmer.glide(next.places[index]!, time, ARRIVE, next.tags[index]),
+    );
+  };
+
   // Splash-in: everyone pops up in the water, and the helicopter waits far off.
+  caption(0, 'Last one in the water gets the job');
+  cue(0, 'splash');
+  let stopRotor = () => {};
+  at(0, () => (stopRotor = show.sound.play('rotor')));
   [...swimmers.values()].forEach((swimmer, index) => {
     timeline.add(popIn(swimmer.el), (index * 0.8) / swimmers.size);
   });
-  const finX = patrol(timeline, shark, starts['sharks-run']);
+  const finX = shark.patrol(starts['sharks-run']);
 
   // The rescues, in the plan's order.
   let groupAt = starts['group-rescues'];
@@ -108,42 +165,55 @@ export async function playSharkBait(show: Show): Promise<void> {
       continue;
     }
     const beat = BEAT_OF[rescue.kind];
+    if (rescue.kind === 'hover') caption(starts[beat], '4 left…');
     rescueOne(rescue, starts[beat], plan.beats[beat]);
   }
 
-  // The shark's run: the helicopter leaves, and the fin heads for the last one.
+  // The shark's run: the helicopter leaves, and the fin speeds at the last one.
   const last = swimmers.get(show.unlucky)!;
   const run = starts['sharks-run'];
-  chopper.phase('leaving', run);
-  chopper.lower(0, run, ARRIVE);
-  chopper.flyTo({ x: -260, y: 120 }, run, 0.9, 'power2.in');
-  timeline.call(() => void (chopper.rope.dataset.aim = ''), [], run);
-  last.glide(places(1)[0]!, run, ARRIVE);
-  last.mood('scared', run);
-  const alone = places(1)[0]!;
-  const fromLeft = finX < alone.x;
-  timeline.set(shark.shape, { scaleX: fromLeft ? -1 : 1 }, run);
-  timeline.to(
-    shark.el,
-    { x: alone.x + (fromLeft ? -160 : 160), duration: plan.beats['sharks-run'], ease: 'power2.in' },
+  const ending = {
     run,
-  );
+    dive: total - ENDING.dive,
+    still: total - ENDING.still,
+    ride: total - ENDING.ride,
+    settled: total - ENDING.settled,
+  };
+  caption(run, 'Uh-oh…');
+  last.mood('scared', run);
+  chopper.phase('leaving', run);
+  chopper.aim('', run);
+  chopper.lower(0, run, 0.3);
+  chopper.flyTo(OFF, run, OFF.seconds, 'power2.in');
+  chopper.phase('gone', run + OFF.seconds);
+  at(run + OFF.seconds, () => stopRotor());
+  shark.goFor(last.place, finX, ending);
 
-  // The victory lap.
-  last.mood('party', starts['victory-lap']);
+  // It dives and takes the last one under, the water stays still, and up they come.
+  cue(ending.dive, 'splash');
+  timeline.to(
+    last.el,
+    { y: '+=40', autoAlpha: 0, duration: ending.still - ending.dive, ease: 'power2.in' },
+    ending.dive,
+  );
+  caption(ending.ride, 'Last one in the water!');
+  cue(ending.ride, 'splash');
+  cue(ending.ride, 'fanfare');
+  at(ending.ride, () => void scroller(waves, { width: 1280, speed: RIDE_SPEED }));
+  timeline.add(popIn(woohoo), ending.settled);
   timeline.set({}, {}, total);
 
   await show.play(timeline);
 
   /** One swoop: the helicopter dives in, everyone in `group` grabs the rope, and off it goes. */
-  function swoop(group: readonly Swimmer[], at: number) {
+  function swoop(group: readonly Swimmer[], start: number) {
     const x = clamp(group.reduce((sum, swimmer) => sum + swimmer.place.x, 0) / group.length);
     const away = x < 640 ? -1 : 1;
-    timeline.call(() => void (chopper.rope.dataset.aim = ''), [], at);
-    chopper.phase('swooping', at);
-    chopper.flyTo({ x, y: SWOOP_Y, scale: 1 }, at, ARRIVE, 'power2.out');
-    chopper.lower(SWOOP_HOOK_Y - SWOOP_Y, at, ARRIVE);
-    const grab = at + ARRIVE;
+    chopper.aim('', start);
+    chopper.phase('swooping', start);
+    chopper.flyTo({ x, y: HOVER_Y, scale: 1 }, start, ARRIVE, 'power2.out');
+    chopper.lower(SWOOP_HOOK_Y - HOVER_Y, start, ARRIVE);
+    const grab = start + ARRIVE;
     const flyOff = grab + ARRIVE;
     const exit = { x: 380 * away, y: -560 };
     group.forEach((swimmer, index) => {
@@ -153,32 +223,43 @@ export async function playSharkBait(show: Show): Promise<void> {
         size: HANGING_SIZE,
       };
       swimmer.leave(grab);
-      swimmer.glide(slot, grab, ARRIVE, { label: false });
+      swimmer.glide(slot, grab, ARRIVE);
       timeline.to(
         swimmer.el,
         { x: `+=${exit.x}`, y: `+=${exit.y}`, duration: 1 - 2 * ARRIVE, ease: 'power2.in' },
         flyOff,
       );
-      timeline.set(swimmer.el, { autoAlpha: 0 }, at + 1);
+      timeline.set(swimmer.el, { autoAlpha: 0 }, start + 1);
     });
-    chopper.flyTo({ x: x + exit.x, y: SWOOP_Y + exit.y }, flyOff, 1 - 2 * ARRIVE, 'power2.in');
+    cue(grab, 'whoosh');
+    const left = inWater().length;
+    if (left !== 4) caption(grab, `Whoosh! ${left} left`);
+    settle(grab);
+    chopper.flyTo({ x: x + exit.x, y: HOVER_Y + exit.y }, flyOff, 1 - 2 * ARRIVE, 'power2.in');
   }
 
   /** One at a time: the rope heads for each of the rescue's aims in turn, then lifts one. */
-  function rescueOne(rescue: Exclude<Rescue, { kind: 'group' }>, at: number, seconds: number) {
+  function rescueOne(rescue: Exclude<Rescue, { kind: 'group' }>, start: number, seconds: number) {
     const aims = AIMS[rescue.kind](rescue as never);
     const hold = (seconds - ARRIVE - (aims.length - 1) * SWING - LIFT) / aims.length;
-    const water = inWater().sort((a, b) => a.place.x - b.place.x || a.place.y - b.place.y);
-    const settled = places(water.length);
-    water.forEach((swimmer, index) => swimmer.glide(settled[index]!, at, ARRIVE));
 
-    let time = at;
+    let time = start;
     aims.forEach((name, index) => {
       const target = swimmers.get(name)!;
       const seconds = index === 0 ? ARRIVE : SWING;
       chopper.aim(name, time);
       moods(time, name);
       chopper.phase('hovering', time);
+      if (rescue.kind === 'duel') cue(time, 'heartbeat');
+      if (rescue.kind === 'duel' && aims.length > 2) {
+        // With two people, the caption follows the rope: "Marco… Giulia… Marco… Giulia!"
+        const last = index === aims.length - 1;
+        caption(time, aims.slice(0, index + 1).join('… ') + (last ? '!' : '…'));
+      } else if (index === 1) {
+        caption(time, `It's going for ${aims[0]}… nope, ${name}!`);
+      } else if (index === 2) {
+        caption(time, `…${name} after all!`);
+      }
       if (index > 0) chopper.swing(target.place.x, time, seconds);
       chopper.flyTo({ x: target.place.x, y: HOVER_Y, scale: 1 }, time, seconds, 'power2.inOut');
       chopper.lower(hookAbove(target.place) - HOVER_Y, time, seconds);
@@ -188,8 +269,11 @@ export async function playSharkBait(show: Show): Promise<void> {
     });
     const lifted = swimmers.get(rescue.lifted)!;
     chopper.lower(lifted.place.y - 0.68 * lifted.place.size - 10 - HOVER_Y, time, GRAB);
-    lifted.leave(time + GRAB);
-    lifted.rise(time + GRAB, chopper);
+    const out = time + GRAB;
+    lifted.leave(out);
+    lifted.rise(out, chopper);
+    cue(out, 'whoosh');
+    settle(out);
   }
 }
 
@@ -210,29 +294,16 @@ const AIMS: {
 const clamp = (x: number) => Math.min(1100, Math.max(180, x));
 
 /** Where the hook waits above someone: just over their name tag. */
-const hookAbove = ({ y, size }: Place) => y + tagBottom(size) - 1.1 * tagFor({ size }).size - 40;
+const hookAbove = ({ y, size, tag }: Place) => y + tagBottom(size) - 1.1 * tag.size - 40;
 
-/**
- * The fin swims to and fro along the bottom until the shark's run at `until`.
- * Returns where it ends up.
- */
-function patrol(timeline: Timeline, shark: ReturnType<typeof fin>, until: number): number {
-  const legs = Math.max(1, Math.round(until / PATROL.legSeconds));
-  const seconds = until / legs;
-  for (let leg = 0; leg < legs; leg++) {
-    const left = leg % 2 === 0;
-    timeline.set(shark.shape, { scaleX: left ? 1 : -1 }, leg * seconds);
-    timeline.to(
-      shark.el,
-      { x: left ? PATROL.left : PATROL.right, duration: seconds, ease: 'sine.inOut' },
-      leg * seconds,
-    );
-  }
-  return legs % 2 === 1 ? PATROL.left : PATROL.right;
-}
-
-/** A person in the water: their head, bobbing, with their name tag above it. */
-function createSwimmer(timeline: Timeline, name: string, look: Look, place: Place) {
+/** A person in the water: their head, bobbing, with their name `tag` above it. */
+function createSwimmer(
+  timeline: Timeline,
+  name: string,
+  look: Look,
+  place: Place,
+  tag: HTMLElement,
+) {
   const el = document.createElement('div');
   el.className = styles.swimmer;
   el.dataset.person = name;
@@ -245,19 +316,19 @@ function createSwimmer(timeline: Timeline, name: string, look: Look, place: Plac
   figure.append(face.el);
   const label = bobber.appendChild(document.createElement('div'));
   label.className = styles.label;
-  label.append(nameTag(name, tagFor(place)));
+  label.append(tag);
   gsap.set(el, { x: place.x, y: place.y });
   gsap.set(figure, { scale: place.size / 100 });
   gsap.set(label, { y: tagBottom(place.size) });
 
-  let current = place;
+  let current: Spot | Place = place;
   let lifted = false;
   return {
     name,
     el,
     bobber,
-    get place() {
-      return current;
+    get place(): Place {
+      return current as Place;
     },
     get lifted() {
       return lifted;
@@ -265,19 +336,25 @@ function createSwimmer(timeline: Timeline, name: string, look: Look, place: Plac
     mood(mood: Mood, at: number) {
       timeline.call(() => face.setMood(mood), [], at);
     },
-    /** Glides to `next`; their tag grows or shrinks with them unless `label` is false. */
-    glide(next: Place, at: number, seconds: number, { label: keepLabel = true } = {}) {
+    /**
+     * Glides to `next`. In the water, their `tag` for the new place is set
+     * from the start, and grows or shrinks to its size on the way.
+     */
+    glide(next: Spot | Place, at: number, seconds: number, tag?: HTMLElement) {
       const from = current;
       current = next;
       if (from.x === next.x && from.y === next.y && from.size === next.size) return;
       const ease = 'power2.inOut';
       timeline.to(el, { x: next.x, y: next.y, duration: seconds, ease }, at);
       timeline.to(figure, { scale: next.size / 100, duration: seconds, ease }, at);
-      if (!keepLabel) return;
-      const grow = tagFor(next).size / tagFor(from).size;
-      timeline.to(label, { y: tagBottom(next.size), scale: grow, duration: seconds, ease }, at);
-      timeline.call(() => label.replaceChildren(nameTag(name, tagFor(next))), [], at + seconds);
-      timeline.set(label, { scale: 1 }, at + seconds);
+      if (!tag || !('tag' in next) || !('tag' in from)) return;
+      timeline.call(() => label.replaceChildren(tag), [], at);
+      timeline.fromTo(
+        label,
+        { scale: from.tag.size / next.tag.size },
+        { y: tagBottom(next.size), scale: 1, duration: seconds, ease, immediateRender: false },
+        at,
+      );
     },
     /** Grabs the rope and leaves the water: happy, with no swim ring and no tag. */
     leave(at: number) {
@@ -300,6 +377,109 @@ function createSwimmer(timeline: Timeline, name: string, look: Look, place: Plac
       timeline.to(el, { y: `-=${climb}`, duration: seconds, ease: 'power2.in' }, at);
       timeline.to(el, { autoAlpha: 0, duration: 0.15 }, at + seconds - 0.15);
       chopper.lower(40, at, seconds, 'power2.in');
+    },
+  };
+}
+
+/**
+ * The shark: a fin that patrols, then speeds at the last one, dives, and
+ * comes up as the whole shark with the last one riding it, celebrating, and
+ * their name on its fin.
+ */
+function createShark(timeline: Timeline, show: Show, look: Look) {
+  const parts = drawShark({ speedLines: !show.reducedMotion });
+  parts.el.dataset.phase = 'circling';
+  gsap.set(parts.fin, { x: PATROL.start, y: PATROL.y });
+  if (parts.finLines) gsap.set(parts.finLines, { autoAlpha: 0 });
+  gsap.set(parts.ride, { y: 360, autoAlpha: 0 });
+  gsap.set(parts.front, { autoAlpha: 0 });
+
+  const rider = parts.ride.appendChild(document.createElement('div'));
+  rider.className = styles.rider;
+  rider.dataset.part = 'rider';
+  rider.dataset.rider = show.unlucky;
+  rider.append(head(look, { mood: 'party', ring: false }).el);
+  const finName = nameTag(show.unlucky, {
+    size: stagePx('--size-stage-fin-name'),
+    maxWidth: FIN_NAME_WIDTH,
+  });
+  finName.dataset.part = 'fin-name';
+  finName.classList.add(styles.finName);
+  parts.ride.append(finName);
+
+  const phase = (name: string, time: number) =>
+    timeline.call(() => void (parts.el.dataset.phase = name), [], time);
+
+  return {
+    el: parts.el,
+    /**
+     * The fin swims to and fro along the bottom until the shark's run at
+     * `until`. Returns where it ends up.
+     */
+    patrol(until: number): number {
+      const legs = Math.max(1, Math.round(until / PATROL.legSeconds));
+      const seconds = until / legs;
+      for (let leg = 0; leg < legs; leg++) {
+        const left = leg % 2 === 0;
+        // Drawn, the fin swims left.
+        timeline.set(parts.finShape, { scaleX: left ? 1 : -1 }, leg * seconds);
+        timeline.to(
+          parts.fin,
+          { x: left ? PATROL.left : PATROL.right, duration: seconds, ease: 'sine.inOut' },
+          leg * seconds,
+        );
+      }
+      return legs % 2 === 1 ? PATROL.left : PATROL.right;
+    },
+    /** From `from`, the fin speeds straight at `target`, dives, and the shark comes up for the ride. */
+    goFor(
+      target: Spot,
+      from: number,
+      times: { run: number; dive: number; still: number; ride: number; settled: number },
+    ) {
+      const fromLeft = from < target.x;
+      phase('run', times.run);
+      timeline.set(parts.finShape, { scaleX: fromLeft ? -1 : 1 }, times.run);
+      timeline.to(
+        parts.fin,
+        {
+          x: target.x + (fromLeft ? -100 : 100),
+          duration: times.dive - times.run,
+          ease: 'power2.in',
+        },
+        times.run,
+      );
+      if (parts.finLines) {
+        timeline.set(parts.finLines, { autoAlpha: 1 }, times.run);
+        timeline.set(parts.finLines, { autoAlpha: 0 }, times.dive);
+      }
+
+      phase('dive', times.dive);
+      timeline.to(
+        parts.fin,
+        { y: '+=50', autoAlpha: 0, duration: times.still - times.dive, ease: 'power2.in' },
+        times.dive,
+      );
+      phase('still', times.still);
+
+      phase('ride', times.ride);
+      timeline.set([parts.ride, parts.front], { autoAlpha: 1 }, times.ride);
+      timeline.to(
+        parts.ride,
+        { y: 0, duration: times.settled - times.ride, ease: 'back.out(1.4)' },
+        times.ride,
+      );
+      timeline.call(
+        () => void scroller(parts.front, { width: 1280, speed: RIDE_SPEED }),
+        [],
+        times.ride,
+      );
+      // The rider bounces for joy; the name on the fin holds still.
+      timeline.to(
+        rider,
+        { y: -16, duration: 0.25, ease: 'sine.inOut', yoyo: true, repeat: 3 },
+        times.settled,
+      );
     },
   };
 }
@@ -331,6 +511,7 @@ function createHelicopter(timeline: Timeline) {
     phase(phase: string, time: number) {
       timeline.call(() => void (parts.el.dataset.phase = phase), [], time);
     },
+    /** Who the rope heads for; nobody when `name` is empty. */
     aim(name: string, time: number) {
       timeline.call(() => void (parts.rope.dataset.aim = name), [], time);
     },

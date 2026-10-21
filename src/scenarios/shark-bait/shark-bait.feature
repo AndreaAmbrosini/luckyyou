@@ -89,7 +89,6 @@ Feature: Shark Bait
       When the show runs at every head count from 2 to 12
       Then each run lasts between 11 and 14 seconds
 
-  @pending
   Rule: The ending is a victory lap
 
     Scenario: The shark goes for the last one, who rides off on it
@@ -105,7 +104,6 @@ Feature: Shark Bait
       When the show runs
       Then "Marco" is on the shark's fin, not moving, for the last 1.5 seconds
 
-  @pending
   Rule: It reads without sound
 
     Scenario: Captions tell the story

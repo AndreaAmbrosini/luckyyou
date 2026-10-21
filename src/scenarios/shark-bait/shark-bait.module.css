@@ -46,16 +46,27 @@
   background-color: var(--color-sea);
 }
 
-.waves {
+/* Waves are drawn twice, side by side, so they scroll without a seam. */
+.waves,
+.front {
   position: absolute;
   top: 0;
   left: 0;
 }
 
-.waves svg {
-  display: block;
+.waves svg,
+.front svg {
+  position: absolute;
+  top: 0;
+  left: 0;
   width: 1280px;
   height: 720px;
+  overflow: visible;
+}
+
+.waves svg + svg,
+.front svg + svg {
+  left: 1280px;
 }
 
 .wave {
@@ -68,6 +79,7 @@
 /* Things placed by GSAP's x and y, from the stage's top left corner. */
 .helicopter,
 .swimmer,
+.shark,
 .fin {
   position: absolute;
   top: 0;
@@ -175,6 +187,14 @@
   height: 100%;
 }
 
+/* Where name tags are measured before they are placed. */
+.measuring {
+  position: absolute;
+  top: 0;
+  left: 0;
+  visibility: hidden;
+}
+
 /* The tag's bottom middle sits on the label's point. */
 .label {
   position: absolute;
@@ -200,16 +220,78 @@
 }
 
 .finShape svg {
-  display: block;
+  position: absolute;
+  top: 0;
+  left: 0;
   width: 100%;
   height: 100%;
   overflow: visible;
 }
 
-.shark {
+/* Speed lines trail behind the fin: drawn, it swims left. */
+.finShape .finLines {
+  top: 10px;
+  left: 100px;
+  width: 160px;
+  height: 60px;
+}
+
+/* The ride is drawn on the whole stage, as the canvas draws it. */
+.ride {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 1280px;
+  height: 720px;
+}
+
+.ride > svg {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 1280px;
+  height: 720px;
+  overflow: visible;
+}
+
+/* The last one, on the shark's back, as the canvas places them. */
+.rider {
+  position: absolute;
+  top: 347px;
+  left: 325px;
+  width: 210px;
+  height: 210px;
+}
+
+.rider svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+/* The name on the shark's fin: a sticker, tilted. */
+.finName {
+  position: absolute;
+  top: 404px;
+  left: 578px;
+  border-width: var(--line-bold);
+  border-radius: 16px;
+  box-shadow: var(--shadow);
+  transform: rotate(-2deg);
+}
+
+.sharkSkin {
   fill: var(--color-shark);
   stroke: var(--color-ink);
   stroke-linejoin: round;
+}
+
+.inkFill {
+  fill: var(--color-ink);
+}
+
+.seaFill {
+  fill: var(--color-sea);
 }
 
 .wake {
