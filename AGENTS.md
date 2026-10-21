@@ -13,8 +13,7 @@ how it should feel.
    with `Enforced by …`. Records are never rewritten: when a newer one
    replaces a record, only its status line changes, to `Superseded by NNNN`.
 3. Plans and design notes go in the pull request, not the repo.
-4. Run `npm run check` before every commit. Other scripts are in
-   `package.json`.
+4. Run `npm run check` before every commit.
 
 ## Rules
 
@@ -39,6 +38,7 @@ how it should feel.
 - The show: [show.feature](specs/show.feature).
 - The result: [result.feature](specs/result.feature).
 - A scenario or the kit: [scenarios.feature](specs/scenarios.feature),
+  [kit.feature](specs/kit.feature),
   [0006](docs/decisions/0006-scenarios-are-self-contained-folders.md),
   [0007](docs/decisions/0007-scenario-timing-runs-on-gsaps-clock.md).
 - UI, copy, look: [DESIGN.md](DESIGN.md), [PRODUCT.md](PRODUCT.md),
