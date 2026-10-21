@@ -3,9 +3,9 @@ Feature: The scenario kit
   it needs, runs it on one clock and cleans up after it, so a new scenario
   keeps the contract in specs/scenarios.feature without extra work.
 
-  @pending
   Rule: A show is handed what it needs
 
+    @pending
     Scenario: The stage is 1280 by 720 stage pixels
       When a show starts
       Then its stage is 1280 by 720 stage pixels
@@ -21,12 +21,12 @@ Feature: The scenario kit
       Then they draw the same random numbers
       And a show with another seed draws different ones
 
+    @pending
     Scenario: A show waits for the page's fonts
       Given the page's fonts are still loading
       When a show is started
       Then it doesn't begin until the fonts are ready
 
-  @pending
   Rule: Time runs on GSAP's clock
 
     Scenario: A wait lasts its show time
@@ -69,7 +69,6 @@ Feature: The scenario kit
         | 12      | stays quiet                   |
         | 16      | warns that it left 10 to 15 s |
 
-  @pending
   Rule: Who leaves when
 
     Scenario: Everyone leaves once, the unlucky person last
@@ -158,7 +157,6 @@ Feature: The scenario kit
       When a show shakes a head
       Then the head doesn't move
 
-  @pending
   Rule: Nothing is left after a show
 
     Scenario Outline: A show that <ends> leaves nothing behind

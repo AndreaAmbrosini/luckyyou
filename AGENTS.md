@@ -40,7 +40,7 @@ how it should feel.
 - A scenario or the kit: [scenarios.feature](specs/scenarios.feature),
   [kit.feature](specs/kit.feature),
   [0006](docs/decisions/0006-scenarios-are-self-contained-folders.md),
-  [0007](docs/decisions/0007-scenario-timing-runs-on-gsaps-clock.md).
+  [0010](docs/decisions/0010-shows-are-tested-on-a-hand-driven-clock.md).
 - UI, copy, look: [DESIGN.md](DESIGN.md), [PRODUCT.md](PRODUCT.md),
   [styles.feature](specs/styles.feature).
 - Docs: [docs.feature](specs/docs.feature),

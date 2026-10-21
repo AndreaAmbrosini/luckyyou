@@ -14,5 +14,8 @@ export default defineConfig({
     // Mocks are cleared and restored by src/test/setup.ts after each test, and
     // after each Gherkin scenario rather than each of its steps.
     clearMocks: false,
+    // A step that plays whole shows on the hand-driven clock can take seconds
+    // when every test file runs at once.
+    testTimeout: 20_000,
   },
 });

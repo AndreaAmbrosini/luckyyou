@@ -1,6 +1,6 @@
 # 0007 Scenario timing runs on GSAP's clock
 
-Accepted 2026-10-21
+Superseded by 0010
 
 A show has a fixed time limit and must stop at once when it is cancelled. So
 scenario timing runs on one clock, GSAP's. The kit's `wait` and `play`

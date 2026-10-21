@@ -1,0 +1,65 @@
+// The starting point for a new scenario. Copy this folder to
+// src/scenarios/<id>/, give the scenario that id, and change the show.
+// Folders starting with `_` are skipped, so this one is never in the app.
+
+import { gsap } from 'gsap';
+import { defineScenario, eliminationOrder, fitBeats } from '../../scenario-kit';
+import styles from './template.module.css';
+
+export default defineScenario({
+  id: 'template',
+  name: 'Template',
+  description: 'Everyone leaves one at a time. The last one left gets the job.',
+  card: { emoji: '📋' },
+  people: { min: 2, max: 12 },
+
+  async play(show) {
+    const order = eliminationOrder(show.names, show.unlucky, show.random);
+    const leaving = order.slice(0, -1);
+    // The leaving stretches so the show lasts 13 seconds at any head count.
+    const beats = fitBeats(
+      {
+        arrive: { seconds: 1.5 },
+        leave: { seconds: 0.6 * leaving.length, flexible: true },
+        end: { seconds: 2.5 },
+      },
+      13,
+    );
+
+    const row = show.stage.appendChild(document.createElement('ul'));
+    row.className = styles.people;
+    const tags = new Map(
+      show.names.map((name) => {
+        const tag = row.appendChild(document.createElement('li'));
+        tag.className = styles.tag;
+        tag.dataset.person = name;
+        const text = tag.appendChild(document.createElement('span'));
+        text.dir = 'auto';
+        // Names are text, never HTML.
+        text.textContent = name;
+        return [name, tag];
+      }),
+    );
+
+    // One timeline for the whole show, played on the show's clock.
+    const timeline = gsap.timeline();
+    timeline.from([...tags.values()], {
+      y: 60,
+      autoAlpha: 0,
+      duration: 0.6,
+      stagger: 0.9 / show.names.length,
+    });
+    const each = beats.leave / leaving.length;
+    leaving.forEach((name, index) => {
+      const tag = tags.get(name)!;
+      const at = beats.arrive + index * each;
+      timeline.call(() => void (tag.dataset.left = ''), [], at);
+      timeline.to(tag, { y: -80, autoAlpha: 0, duration: 0.5 }, at);
+    });
+    const end = beats.arrive + beats.leave;
+    timeline.to(tags.get(show.unlucky)!, { scale: 1.4, duration: 0.6, ease: 'back.out(2)' }, end);
+    timeline.set({}, {}, end + beats.end);
+
+    await show.play(timeline);
+  },
+});

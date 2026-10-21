@@ -13,3 +13,19 @@ export function createRandom(seed: number): () => number {
     return ((t ^ (t >>> 14)) >>> 0) / 2 ** 32;
   };
 }
+
+/** A shuffled copy of `items` (Fisher–Yates), drawn from `random`. */
+export function shuffle<T>(items: readonly T[], random: () => number): T[] {
+  const shuffled = [...items];
+  for (let i = shuffled.length - 1; i > 0; i--) {
+    const j = Math.floor(random() * (i + 1));
+    [shuffled[i], shuffled[j]] = [shuffled[j]!, shuffled[i]!];
+  }
+  return shuffled;
+}
+
+/** One of `items`, drawn from `random`. */
+export function pickOne<T>(items: readonly T[], random: () => number): T {
+  if (items.length === 0) throw new RangeError('pickOne needs at least one item.');
+  return items[Math.floor(random() * items.length)]!;
+}

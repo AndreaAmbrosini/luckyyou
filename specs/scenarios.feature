@@ -2,7 +2,6 @@ Feature: Scenarios
   A scenario is one folder in src/scenarios/. The app finds it by itself, and
   every scenario passes the same contract.
 
-  @pending
   Rule: Scenarios are found by folder
 
     Scenario: A new folder shows up as a scenario
@@ -23,7 +22,6 @@ Feature: Scenarios
       Then it is listed in development and test builds
       And it is not listed in the production build
 
-  @pending
   Rule: Metadata is checked
 
     Scenario Outline: A scenario with <problem> is skipped
@@ -46,7 +44,6 @@ Feature: Scenarios
         | a minimum above its maximum               |
         | a development-only flag that isn't yes/no |
 
-  @pending
   Rule: Every show keeps the contract
 
     Scenario: Its metadata is valid

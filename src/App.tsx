@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { catalogue } from './catalogue/catalogue';
 import { usePeople } from './people/people';
 import { newSeed, pickUnlucky } from './pick/pick';
 import type { Scenario } from './scenario-kit/contract';
@@ -20,7 +21,7 @@ export interface AppProps {
   scenarios?: readonly Scenario[];
 }
 
-export default function App({ scenarios = [] }: AppProps) {
+export default function App({ scenarios = catalogue }: AppProps) {
   const people = usePeople();
   const [settings, changeSettings] = useSettings();
   const [screen, setScreen] = useState<Screen>({ name: 'whos-in' });

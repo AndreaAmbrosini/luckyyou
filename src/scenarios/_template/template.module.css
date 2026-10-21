@@ -1,0 +1,24 @@
+.people {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-wrap: wrap;
+  place-content: center;
+  gap: 32px 40px;
+  margin: 0;
+  padding: 80px;
+  list-style: none;
+}
+
+.tag {
+  max-width: 400px;
+  padding: 8px 20px;
+  border: var(--line-bold) solid var(--color-ink);
+  border-radius: var(--radius-tile);
+  background-color: var(--color-paper);
+  color: var(--color-ink);
+  font-family: var(--font-display);
+  font-size: var(--size-stage-tag-duel);
+  text-align: center;
+  overflow-wrap: anywhere;
+}

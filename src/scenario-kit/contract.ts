@@ -7,6 +7,9 @@ import type { SoundPlayer } from './sound';
 /** How many people a pick can have, and so any scenario's limits. */
 export const HEAD_COUNT = { min: 2, max: 12 } as const;
 
+/** How long a show lasts, in seconds, at every head count it accepts. */
+export const SHOW_LENGTH = { min: 10, max: 15 } as const;
+
 /** How a scenario shows up in the picker. */
 export interface ScenarioMeta {
   /** Kebab-case, and the same as the scenario's folder name. */
@@ -42,6 +45,16 @@ export interface Show {
   readonly signal: AbortSignal;
   /** Plays a sound unless the app is muted. */
   readonly sound: SoundPlayer;
+  /**
+   * Resolves after `seconds` of show time. Rejects with an AbortError the
+   * moment the show is cancelled. Use it instead of timers of your own.
+   */
+  wait(seconds: number): Promise<void>;
+  /**
+   * Plays `animation` and resolves when it completes. Cancelling the show
+   * kills it and rejects at once.
+   */
+  play(animation: gsap.core.Animation): Promise<void>;
 }
 
 /** Gives a scenario its types; it returns the scenario unchanged. */

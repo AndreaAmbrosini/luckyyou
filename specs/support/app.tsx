@@ -123,6 +123,18 @@ export function showCard(name: string): HTMLElement {
   return screen.getByRole('button', { name });
 }
 
+/** The names of the show cards on the "Pick a show" step, in order. */
+export function pickerNames(): string[] {
+  return within(screen.getByRole('main'))
+    .queryAllByRole('listitem')
+    .map((item) => computeName(within(item).getByRole('button')));
+}
+
+function computeName(element: HTMLElement): string {
+  const id = element.getAttribute('aria-labelledby');
+  return (id ? document.getElementById(id)?.textContent : element.textContent) ?? '';
+}
+
 /** localStorage as a browser shows it when site data is blocked. */
 export function blockStorage(): void {
   vi.spyOn(window, 'localStorage', 'get').mockImplementation(() => {
