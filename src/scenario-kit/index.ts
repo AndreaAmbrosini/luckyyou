@@ -5,4 +5,7 @@ export { defineScenario, type Scenario, type ScenarioMeta, type Show } from './c
 export { eliminationOrder } from './order';
 export { pickOne, shuffle } from './random';
 export type { Cue } from './sound';
+export { spread, STAGE } from './stage';
+export { bubble, nameTag } from './text';
 export { fitBeats, type Beat } from './time';
+export { stagePx } from './tokens';

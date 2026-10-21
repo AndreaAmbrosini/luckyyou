@@ -3,9 +3,13 @@ import gsap from 'gsap';
 import { expect, vi } from 'vitest';
 import type { Show } from '../src/scenario-kit/contract';
 import { eliminationOrder } from '../src/scenario-kit/order';
+import { nameLength } from '../src/people/names';
 import { createRandom } from '../src/scenario-kit/random';
+import { spread } from '../src/scenario-kit/stage';
 import { runShow, type ShowRecord } from '../src/scenario-kit/testing';
+import { bubble, nameTag } from '../src/scenario-kit/text';
 import { fitBeats } from '../src/scenario-kit/time';
+import { onReset } from '../src/test/reset';
 import { TEAM } from './support/app';
 import { fakeScenario } from './support/fake-scenarios';
 import { describeSpec } from './support/spec';
@@ -18,6 +22,18 @@ const PICK = { names: ['Anna', 'Ben', 'Carla'], unlucky: 'Ben' };
 /** Show seconds since `start` on GSAP's clock. */
 const since = (start: number) => gsap.globalTimeline.time() - start;
 
+/** The size a name tag is set at, in stage pixels. */
+const tagSize = (tag: HTMLElement) => parseFloat(tag.style.getPropertyValue('--tag-size'));
+
+/** Stands in for the browser's font loading: `ready` resolves when `load` is called. */
+function fontsStillLoading() {
+  let load!: () => void;
+  const ready = new Promise<void>((resolve) => (load = resolve));
+  Object.defineProperty(document, 'fonts', { configurable: true, value: { ready } });
+  onReset(() => Reflect.deleteProperty(document, 'fonts'));
+  return load;
+}
+
 const expectNothingLeft = (record: ShowRecord) => {
   expect(record.stage?.childElementCount).toBe(0);
   expect(record.stage?.isConnected).toBe(false);
@@ -26,6 +42,22 @@ const expectNothingLeft = (record: ShowRecord) => {
 
 describeSpec(await loadFeature('./kit.feature'), ({ Rule }) => {
   Rule('A show is handed what it needs', ({ RuleScenario }) => {
+    RuleScenario('The stage is 1280 by 720 stage pixels', ({ When, Then }) => {
+      let stage: HTMLElement;
+      When('a show starts', async () => {
+        const scenario = fakeScenario({
+          play: (show) => {
+            stage = show.stage;
+          },
+        });
+        await runShow(scenario, PICK);
+      });
+      Then('its stage is 1280 by 720 stage pixels', () => {
+        const style = getComputedStyle(stage);
+        expect([style.width, style.height]).toEqual(['1280px', '720px']);
+      });
+    });
+
     RuleScenario('The names are a frozen copy', ({ Given, When, Then, And }) => {
       let names: string[];
       let handed: readonly string[];
@@ -73,6 +105,33 @@ describeSpec(await loadFeature('./kit.feature'), ({ Rule }) => {
       });
       And('a show with another seed draws different ones', async () => {
         expect(await draws(43)).not.toEqual(first);
+      });
+    });
+
+    RuleScenario("A show waits for the page's fonts", ({ Given, When, Then }) => {
+      let load: () => void;
+      let startedAt: number | null = null;
+      Given("the page's fonts are still loading", () => {
+        load = fontsStillLoading();
+      });
+      When('a show is started', async () => {
+        let now = 0;
+        const scenario = fakeScenario({
+          play: async (show) => {
+            startedAt ??= now;
+            await show.wait(1);
+          },
+        });
+        await runShow(scenario, {
+          ...PICK,
+          onFrame: (time) => {
+            now = time;
+            if (time >= 0.5) load();
+          },
+        });
+      });
+      Then("it doesn't begin until the fonts are ready", () => {
+        expect(startedAt).toBeGreaterThanOrEqual(0.5);
       });
     });
   });
@@ -240,6 +299,154 @@ describeSpec(await loadFeature('./kit.feature'), ({ Rule }) => {
       });
       Then("the others don't always leave in the same order", () => {
         expect(orders.size).toBeGreaterThan(1);
+      });
+    });
+  });
+
+  Rule('People are spread out', ({ RuleScenario }) => {
+    RuleScenario('People are spread evenly and centred', ({ When, Then, And }) => {
+      let places: { x: number; size: number }[];
+      When('4 people are spread across 100 to 1180 stage pixels', () => {
+        places = spread(4, { left: 100, right: 1180 });
+      });
+      Then('they are evenly spaced', () => {
+        const gaps = places.slice(1).map((place, index) => place.x - places[index]!.x);
+        expect(gaps).toHaveLength(3);
+        for (const gap of gaps) expect(gap).toBeCloseTo(gaps[0]!, 9);
+      });
+      And('they are centred on 640', () => {
+        expect((places[0]!.x + places.at(-1)!.x) / 2).toBeCloseTo(640, 9);
+      });
+    });
+
+    RuleScenario('Fewer people are bigger, up to a cap', ({ When, Then, And }) => {
+      let sizes: number[];
+      When(
+        '12, then 6, then 2 people are spread across the stage, at most 200 stage pixels each',
+        () => {
+          sizes = [12, 6, 2].map(
+            (count) => spread(count, { left: 0, right: 1280 }, { maxSize: 200 })[0]!.size,
+          );
+        },
+      );
+      Then('the 6 are bigger than the 12', () => {
+        expect(sizes[1]).toBeGreaterThan(sizes[0]!);
+      });
+      And('the 2 are 200 stage pixels', () => {
+        expect(sizes[2]).toBe(200);
+      });
+    });
+  });
+
+  Rule('Text is safe and readable', ({ RuleScenario }) => {
+    RuleScenario('A name tag shows a name as typed', ({ Given, When, Then, And }) => {
+      let name: string;
+      let tag: HTMLElement;
+      Given('a person named {string}', (_, given: string) => {
+        name = given;
+      });
+      When('their name tag is made', () => {
+        tag = nameTag(name, { size: 48, maxWidth: 400 });
+      });
+      Then('it reads {string}', (_, text: string) => {
+        expect(tag.textContent).toBe(text);
+      });
+      And('no element is created from it', () => {
+        expect(tag.querySelector('b')).toBeNull();
+      });
+    });
+
+    RuleScenario('A name tag is never too small', ({ When, Then }) => {
+      let tag: HTMLElement;
+      When('a name tag is asked for at 10 stage pixels', () => {
+        tag = nameTag('Anna', { size: 10, maxWidth: 400 });
+      });
+      Then('it is set at 22 stage pixels', () => {
+        expect(tagSize(tag)).toBe(22);
+      });
+    });
+
+    RuleScenario(
+      'A long name takes at most two lines, shrinking first',
+      ({ Given, When, Then, And }) => {
+        let name: string;
+        let tag: HTMLElement;
+        Given('a person named {string}, 30 characters with no space', (_, given: string) => {
+          name = given;
+          expect(nameLength(name)).toBe(30);
+        });
+        When('their name tag is made at 48 stage pixels, at most 240 stage pixels wide', () => {
+          tag = nameTag(name, { size: 48, maxWidth: 240 });
+        });
+        Then('it takes at most two lines', () => {
+          expect(Number(tag.dataset.lines)).toBeLessThanOrEqual(2);
+          // jsdom has no text layout; the kit estimates 0.6 em per character there.
+          expect(0.6 * tagSize(tag) * 30).toBeLessThanOrEqual(2 * parseFloat(tag.style.maxWidth));
+          expect(getComputedStyle(tag).overflowWrap).toBe('anywhere');
+        });
+        And('it is set smaller than 48 stage pixels, and at 22 or more', () => {
+          expect(tagSize(tag)).toBeLessThan(48);
+          expect(tagSize(tag)).toBeGreaterThanOrEqual(22);
+        });
+      },
+    );
+
+    RuleScenario('A caption stays up for at least a second', ({ When, Then, And }) => {
+      let record: ShowRecord;
+      When('a show captions "One", and "Two" half a second later', async () => {
+        const scenario = fakeScenario({
+          play: async (show) => {
+            show.caption('One');
+            await show.wait(0.5);
+            show.caption('Two');
+            await show.wait(2);
+          },
+        });
+        record = await runShow(scenario, PICK);
+      });
+      Then('"One" is on screen for 1 second', () => {
+        const [one] = record.captions;
+        expect(one?.text).toBe('One');
+        expect(one!.to - one!.from).toBeGreaterThan(1 - 1e-6);
+      });
+      And('"Two" comes after it', () => {
+        expect(record.captions.map(({ text }) => text)).toEqual(['One', 'Two']);
+        expect(record.captions[1]!.from).toBeCloseTo(record.captions[0]!.to, 6);
+      });
+    });
+
+    RuleScenario('Captions are read out', ({ When, Then }) => {
+      let said: string | null = null;
+      When('a show captions "Whoosh! 8 left"', async () => {
+        const scenario = fakeScenario({
+          play: async (show) => {
+            show.caption('Whoosh! 8 left');
+            await show.wait(0.5);
+          },
+        });
+        await runShow(scenario, {
+          ...PICK,
+          onFrame: (_, stage) => {
+            const frame = stage.closest('[data-kit="frame"]');
+            said ??= frame?.querySelector('[aria-live="polite"]')?.textContent || null;
+          },
+        });
+      });
+      Then('a polite live region says "Whoosh! 8 left"', () => {
+        expect(said).toBe('Whoosh! 8 left');
+      });
+    });
+
+    RuleScenario('A bubble shows its text at its anchor', ({ When, Then, And }) => {
+      let speech: HTMLElement;
+      When('a bubble says "Woo-hoo!" at 640, 300', () => {
+        speech = bubble('Woo-hoo!', { x: 640, y: 300 });
+      });
+      Then('it reads "Woo-hoo!"', () => {
+        expect(speech.textContent).toBe('Woo-hoo!');
+      });
+      And('it points at 640, 300', () => {
+        expect([speech.style.left, speech.style.top]).toEqual(['640px', '300px']);
       });
     });
   });

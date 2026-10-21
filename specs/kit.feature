@@ -5,7 +5,6 @@ Feature: The scenario kit
 
   Rule: A show is handed what it needs
 
-    @pending
     Scenario: The stage is 1280 by 720 stage pixels
       When a show starts
       Then its stage is 1280 by 720 stage pixels
@@ -21,7 +20,6 @@ Feature: The scenario kit
       Then they draw the same random numbers
       And a show with another seed draws different ones
 
-    @pending
     Scenario: A show waits for the page's fonts
       Given the page's fonts are still loading
       When a show is started
@@ -81,7 +79,6 @@ Feature: The scenario kit
       When the order 12 people leave in is drawn with 20 different seeds
       Then the others don't always leave in the same order
 
-  @pending
   Rule: People are spread out
 
     Scenario: People are spread evenly and centred
@@ -94,7 +91,6 @@ Feature: The scenario kit
       Then the 6 are bigger than the 12
       And the 2 are 200 stage pixels
 
-  @pending
   Rule: Text is safe and readable
 
     Scenario: A name tag shows a name as typed

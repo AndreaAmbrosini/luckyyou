@@ -2,12 +2,14 @@ import { gsap } from 'gsap';
 import { SHOW_LENGTH, type Scenario, type Show } from './contract';
 import { createRandom } from './random';
 import { createSound } from './sound';
+import { buildStage } from './stage';
+import { createCaptions } from './text';
 import { play, wait } from './time';
 
 export type RunOutcome = 'finished' | 'failed' | 'cancelled';
 
 export interface RunOptions {
-  /** The element the show draws in; the run adds its stage here and takes it away after. */
+  /** The element the show fills; the run adds its stage here and takes it away after. */
   readonly host: HTMLElement;
   readonly names: readonly string[];
   readonly unlucky: string;
@@ -23,14 +25,11 @@ export interface RunOptions {
 export async function runScenario(scenario: Scenario, options: RunOptions): Promise<RunOutcome> {
   const { signal, development = import.meta.env.MODE === 'development' } = options;
   const animations = claimAnimations();
-  const startedAt = gsap.globalTimeline.time();
-  const stage = document.createElement('div');
-  stage.dataset.kit = 'stage';
-  options.host.append(stage);
+  const frame = buildStage(options.host);
   const sound = createSound({ muted: options.muted });
 
   const show: Show = {
-    stage,
+    stage: frame.stage,
     names: Object.freeze([...options.names]),
     unlucky: options.unlucky,
     random: createRandom(options.seed),
@@ -38,6 +37,7 @@ export async function runScenario(scenario: Scenario, options: RunOptions): Prom
     sound: sound.player,
     wait: (seconds) => wait(seconds, signal),
     play: (animation) => play(animation, signal),
+    caption: createCaptions(frame.overlay, frame.live, signal),
   };
 
   // A scenario may ignore the signal; the run doesn't wait for it once aborted.
@@ -45,11 +45,16 @@ export async function runScenario(scenario: Scenario, options: RunOptions): Prom
     if (signal.aborted) resolve();
     else signal.addEventListener('abort', () => resolve(), { once: true });
   });
-  const playing = new Promise<void>((resolve) => resolve(scenario.play(show)));
-  // Once cancelled, whatever the show does next is no longer anyone's concern.
-  playing.catch(() => undefined);
 
   try {
+    // Shows measure their text, so the page's fonts must be in first.
+    await Promise.race([document.fonts?.ready, aborted]);
+    if (signal.aborted) return 'cancelled';
+    const startedAt = gsap.globalTimeline.time();
+    const playing = new Promise<void>((resolve) => resolve(scenario.play(show)));
+    // Once cancelled, whatever the show does next is no longer anyone's concern.
+    playing.catch(() => undefined);
+
     await Promise.race([playing, aborted]);
     if (signal.aborted) return 'cancelled';
     if (development) warnIfOffTime(scenario, gsap.globalTimeline.time() - startedAt);
@@ -61,8 +66,7 @@ export async function runScenario(scenario: Scenario, options: RunOptions): Prom
   } finally {
     animations.release();
     sound.stop();
-    stage.replaceChildren();
-    stage.remove();
+    frame.remove();
   }
 }
 

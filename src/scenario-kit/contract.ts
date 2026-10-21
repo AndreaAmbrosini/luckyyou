@@ -55,6 +55,12 @@ export interface Show {
    * kills it and rejects at once.
    */
   play(animation: gsap.core.Animation): Promise<void>;
+  /**
+   * Shows `text` as the caption at the top of the stage, or clears it with
+   * null, and has it read out. Each caption stays up at least a second; one
+   * that comes sooner waits its turn.
+   */
+  caption(text: string | null): void;
 }
 
 /** Gives a scenario its types; it returns the scenario unchanged. */

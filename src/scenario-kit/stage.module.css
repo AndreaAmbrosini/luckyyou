@@ -1,0 +1,39 @@
+/* The window around the stage: ink bars wherever its shape differs. */
+.frame {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  background-color: var(--color-ink);
+}
+
+/* 1280 by 720 stage pixels, scaled to fit and centred. */
+.box {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 1280px;
+  height: 720px;
+  overflow: hidden;
+  transform: translate(-50%, -50%) scale(var(--stage-scale, 1));
+}
+
+.layer {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 1280px;
+  height: 720px;
+}
+
+.overlay {
+  pointer-events: none;
+}
+
+.live {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}

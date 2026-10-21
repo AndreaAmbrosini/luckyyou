@@ -1,0 +1,80 @@
+/* A name tag. Its horizontal padding is TAG_PADDING_EM in text.ts. */
+.tag {
+  box-sizing: border-box;
+  width: max-content;
+  padding: 0.08em 0.3em;
+  border: var(--line-bold) solid var(--color-ink);
+  border-radius: var(--radius-tile);
+  background-color: var(--color-paper);
+  color: var(--color-ink);
+  font-family: var(--font-display);
+  font-size: var(--tag-size);
+  line-height: 1.1;
+  text-align: center;
+  overflow-wrap: anywhere;
+}
+
+.caption {
+  position: absolute;
+  top: 28px;
+  left: 50%;
+  box-sizing: border-box;
+  width: max-content;
+  max-width: 1160px;
+  margin: 0;
+  padding: 8px 28px;
+  border: var(--line-bold) solid var(--color-ink);
+  border-radius: var(--radius-card);
+  background-color: var(--color-paper);
+  box-shadow: var(--shadow);
+  color: var(--color-ink);
+  font-family: var(--font-display);
+  font-size: var(--size-stage-caption);
+  line-height: 1.15;
+  text-align: center;
+  transform: translateX(-50%);
+}
+
+/* A bubble sits at its anchor; the speech sits above it, its tail pointing down. */
+.bubble {
+  position: absolute;
+  width: 0;
+  height: 0;
+}
+
+.speech {
+  position: absolute;
+  bottom: 22px;
+  left: 0;
+  box-sizing: border-box;
+  width: max-content;
+  max-width: 480px;
+  padding: 6px 22px;
+  border: var(--line-bold) solid var(--color-ink);
+  border-radius: var(--radius-card);
+  background-color: var(--color-paper);
+  color: var(--color-ink);
+  font-family: var(--font-display);
+  font-size: var(--size-stage-caption);
+  line-height: 1.1;
+  text-align: center;
+  overflow-wrap: anywhere;
+  transform: translateX(-50%);
+}
+
+.speech::after {
+  position: absolute;
+  bottom: -15px;
+  left: 50%;
+  width: 24px;
+  height: 24px;
+  border: solid var(--color-ink);
+  border-width: 0 var(--line-bold) var(--line-bold) 0;
+  background-color: inherit;
+  content: '';
+  transform: translateX(-50%) rotate(45deg);
+}
+
+.sun {
+  background-color: var(--color-sun);
+}

@@ -13,8 +13,10 @@ export interface ShowRecord {
   readonly error: unknown;
   /** Show seconds from the start until the show was over. */
   readonly duration: number;
-  /** The stage the show drew on, or null if it never started. */
+  /** The stage the show drew on. */
   readonly stage: HTMLElement | null;
+  /** Each caption the stage showed, and the show seconds it was up from and to. */
+  readonly captions: readonly { text: string; from: number; to: number }[];
   /** What the show left behind that wasn't there before it started. */
   readonly leftovers: {
     readonly elements: number;
@@ -49,12 +51,22 @@ export async function runShow(scenario: Scenario, options: RunShowOptions): Prom
   const counters = countTimersAndListeners();
   const host = document.body.appendChild(document.createElement('div'));
   const controller = new AbortController();
-  const seen: { stage: HTMLElement | null; error: unknown } = { stage: null, error: undefined };
+  const seen: { error: unknown } = { error: undefined };
+  const captions: { text: string; from: number; to: number }[] = [];
+  let caption: { text: string; from: number } | null = null;
+
+  /** Notes when the caption on screen changes. */
+  const readCaption = (time: number) => {
+    const sticker = host.querySelector<HTMLElement>('[data-kit="caption"]');
+    const text = sticker && !sticker.hidden ? sticker.textContent : null;
+    if (caption?.text === text) return;
+    if (caption) captions.push({ ...caption, to: time });
+    caption = text ? { text, from: time } : null;
+  };
 
   const watched: Scenario = {
     ...scenario,
     async play(show: Show) {
-      seen.stage = show.stage;
       try {
         await scenario.play(show);
       } catch (error) {
@@ -78,7 +90,9 @@ export async function runShow(scenario: Scenario, options: RunShowOptions): Prom
     }).then((result) => {
       outcome = result;
     });
+    const stage = host.querySelector<HTMLElement>('[data-kit="stage"]');
     await settle();
+    readCaption(time);
 
     for (let frame = 1; outcome === null; frame++) {
       const due = (seconds = Infinity) => time > seconds - 1e-9;
@@ -90,7 +104,8 @@ export async function runShow(scenario: Scenario, options: RunShowOptions): Prom
       time = frame * step;
       clock.moveTo(time);
       await settle();
-      if (seen.stage) options.onFrame?.(time, seen.stage);
+      readCaption(time);
+      if (stage) options.onFrame?.(time, stage);
     }
     await running;
 
@@ -98,7 +113,8 @@ export async function runShow(scenario: Scenario, options: RunShowOptions): Prom
       outcome: outcome as RunOutcome,
       error: seen.error,
       duration: time,
-      stage: seen.stage,
+      stage,
+      captions,
       leftovers: {
         elements: document.body.querySelectorAll('*').length - elementsBefore - 1,
         animations: allAnimations().filter((animation) => !animationsBefore.has(animation)).length,
