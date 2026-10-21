@@ -1,6 +1,6 @@
 import { loadFeature } from '@amiceli/vitest-cucumber';
 import { expect, vi } from 'vitest';
-import { catalogue } from '../src/catalogue/catalogue';
+import { catalogue, scenarioModules } from '../src/catalogue/catalogue';
 import { discoverScenarios, validateScenario } from '../src/catalogue/discover';
 import { nameLength } from '../src/people/names';
 import type { Scenario } from '../src/scenario-kit/contract';
@@ -142,7 +142,7 @@ describeSpec(await loadFeature('./scenarios.feature'), ({ Rule }) => {
       });
     });
 
-    RuleScenario('Folders starting with an underscore are skipped', ({ Given, Then }) => {
+    RuleScenario('Folders starting with an underscore are skipped', ({ Given, Then, And }) => {
       Given('a scenario in src/scenarios/_template/', () => {
         expect(Object.keys(folders)).toContain('../src/scenarios/_template/index.ts');
       });
@@ -150,6 +150,10 @@ describeSpec(await loadFeature('./scenarios.feature'), ({ Rule }) => {
         await startApp(catalogue);
         expect(pickerNames()).not.toContain(template.name);
         expect(catalogue).not.toContain(template);
+      });
+      And("the app doesn't load it, so the production build leaves it out", () => {
+        expect(Object.keys(scenarioModules).map(folderOf)).not.toContain('_template');
+        expect(Object.keys(scenarioModules).map(folderOf)).toContain('shark-bait');
       });
     });
 

@@ -12,6 +12,7 @@ Feature: Scenarios
     Scenario: Folders starting with an underscore are skipped
       Given a scenario in src/scenarios/_template/
       Then it is not in the scenario picker
+      And the app doesn't load it, so the production build leaves it out
 
     Scenario: Scenarios are listed by name
       Given scenarios named "Snail Race", "Hot Potato" and "Shark Bait"
