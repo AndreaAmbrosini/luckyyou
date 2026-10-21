@@ -43,6 +43,7 @@ export function savePeople(people: readonly Person[]): void {
 type Action =
   | { type: 'add'; name: string }
   | { type: 'toggle'; name: string }
+  | { type: 'untick'; name: string }
   | { type: 'tick-all'; ticked: boolean }
   | { type: 'remove'; name: string };
 
@@ -53,6 +54,10 @@ function reduce(people: readonly Person[], action: Action): readonly Person[] {
     case 'toggle':
       return people.map((person) =>
         sameName(person.name, action.name) ? { ...person, ticked: !person.ticked } : person,
+      );
+    case 'untick':
+      return people.map((person) =>
+        sameName(person.name, action.name) ? { ...person, ticked: false } : person,
       );
     case 'tick-all':
       return people.map((person) => ({ ...person, ticked: action.ticked }));
@@ -66,6 +71,7 @@ export interface People {
   /** Adds a name that `checkNewName` accepted, ticked, in its place. */
   add(name: string): void;
   toggle(name: string): void;
+  untick(name: string): void;
   tickAll(ticked: boolean): void;
   remove(name: string): void;
 }
@@ -81,6 +87,7 @@ export function usePeople(): People {
       list,
       add: (name) => dispatch({ type: 'add', name }),
       toggle: (name) => dispatch({ type: 'toggle', name }),
+      untick: (name) => dispatch({ type: 'untick', name }),
       tickAll: (ticked) => dispatch({ type: 'tick-all', ticked }),
       remove: (name) => dispatch({ type: 'remove', name }),
     }),

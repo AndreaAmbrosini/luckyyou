@@ -115,6 +115,15 @@ export function FullscreenIcon({ active, ...props }: IconProps & { active: boole
   );
 }
 
+export function RunAgainIcon(props: IconProps) {
+  return (
+    <Icon weight={3.2} {...props}>
+      <path d="M20 12a8 8 0 1 1-2.3-5.6" />
+      <path d="M20 4v5h-5" />
+    </Icon>
+  );
+}
+
 export function TrashIcon(props: IconProps) {
   return (
     <Icon weight={2.8} {...props}>

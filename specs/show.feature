@@ -2,7 +2,6 @@ Feature: The show
   A scenario acts out the pick. The app hands it the window and stays out of
   its way.
 
-  @pending
   Rule: The show has the whole window
 
     Scenario: Nothing but the scenario is on screen
@@ -11,7 +10,6 @@ Feature: The show
       And the app draws nothing on top of it
       And the mouse pointer is hidden
 
-  @pending
   Rule: Sound follows the mute switch
 
     Scenario: A muted show makes no sound
@@ -19,7 +17,6 @@ Feature: The show
       When the show plays a sound
       Then nothing is heard
 
-  @pending
   Rule: Esc or leaving fullscreen cancels
 
     Scenario: Esc cancels the show
@@ -34,7 +31,6 @@ Feature: The show
       Then I'm back to picking a show
       And no result is shown
 
-  @pending
   Rule: A broken show still gives a result
 
     Scenario: A scenario that fails still leads to the result

@@ -2,6 +2,8 @@
 // lives in src/scenarios/<id>/index.ts and default-exports defineScenario(…)
 // (decision 0006). specs/scenarios.feature is the contract every one keeps.
 
+import type { SoundPlayer } from './sound';
+
 /** How many people a pick can have, and so any scenario's limits. */
 export const HEAD_COUNT = { min: 2, max: 12 } as const;
 
@@ -38,6 +40,8 @@ export interface Show {
   readonly random: () => number;
   /** Aborted when the show is cancelled or runs out of time. */
   readonly signal: AbortSignal;
+  /** Plays a sound unless the app is muted. */
+  readonly sound: SoundPlayer;
 }
 
 /** Gives a scenario its types; it returns the scenario unchanged. */

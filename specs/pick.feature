@@ -2,7 +2,6 @@ Feature: The pick
   The app chooses the unlucky person before the show starts. The show only
   acts it out.
 
-  @pending
   Rule: The app picks before the show
 
     Scenario: The unlucky person is chosen as the show starts
@@ -16,7 +15,6 @@ Feature: The pick
       When the app picks 30000 times
       Then each of them is picked about a third of the time
 
-  @pending
   Rule: The show cannot change the pick
 
     Scenario: The result names the app's pick, whatever the show did
@@ -31,7 +29,6 @@ Feature: The pick
       When the show ends and I run again
       Then "Anna" is still in the pick
 
-  @pending
   Rule: Every run is a fresh pick
 
     Scenario: The person picked last time can be picked again

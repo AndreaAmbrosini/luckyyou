@@ -2,7 +2,6 @@ Feature: The result screen
   Winning is losing: the person picked gets the job, and a sarcastic
   congratulation.
 
-  @pending
   Rule: The result names the unlucky person
 
     Scenario: The unlucky person is congratulated
@@ -12,7 +11,6 @@ Feature: The result screen
       And below it says "Sorry for your win"
       And the heading has the keyboard focus
 
-  @pending
   Rule: What happens next
 
     Scenario: Run again plays the same show for the same people

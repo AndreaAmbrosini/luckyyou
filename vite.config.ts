@@ -7,9 +7,12 @@ export default defineConfig({
   plugins: [react()],
   test: {
     environment: 'jsdom',
+    // Apply the styles, so a spec can check what a stylesheet decides.
+    css: true,
     setupFiles: ['src/test/setup.ts'],
     include: ['src/**/*.test.{ts,tsx}', 'specs/**/*.test.{ts,tsx}', 'scripts/**/*.test.ts'],
-    // Mocks are restored by src/test/setup.ts after each test, and after each
-    // Gherkin scenario rather than each of its steps.
+    // Mocks are cleared and restored by src/test/setup.ts after each test, and
+    // after each Gherkin scenario rather than each of its steps.
+    clearMocks: false,
   },
 });

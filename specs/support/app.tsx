@@ -169,3 +169,27 @@ export function fakeFullscreen(supported: boolean): void {
     Reflect.deleteProperty(root, 'requestFullscreen');
   });
 }
+
+/**
+ * Makes every draw from the browser's random source return `value`, so the
+ * app's pick is the person at that index in today's list.
+ */
+export function stubDraws(value: number): void {
+  vi.spyOn(crypto, 'getRandomValues').mockImplementation((array) => {
+    if (array instanceof Uint32Array) array.fill(value);
+    return array;
+  });
+}
+
+/** Ticks `names`, opens the shows step with `scenarios`, and clicks the first one. */
+export async function startShow(names: readonly string[], ...scenarios: Scenario[]): Promise<void> {
+  storeTicked(names, ['Zoe']);
+  renderApp({ scenarios });
+  await moveOnToShows();
+  await user.click(showCard(scenarios[0]!.name));
+}
+
+/** The result's heading, once the show is over. */
+export function resultHeading(): Promise<HTMLElement> {
+  return screen.findByRole('heading', { level: 1, name: /^Lucky you,/ });
+}

@@ -13,6 +13,8 @@ export function resetTestState(): void {
   cleanup();
   while (undos.length > 0) undos.pop()!();
   vi.restoreAllMocks();
+  vi.clearAllMocks();
+  vi.unstubAllGlobals();
   vi.useRealTimers();
   localStorage.clear();
 }
