@@ -3,9 +3,12 @@ import { createSound, type Cue } from './sound';
 
 const CUES: Cue[] = ['splash', 'rotor', 'whoosh', 'heartbeat', 'fanfare'];
 
-/** A Web Audio context whose nodes do nothing but count what was started and stopped. */
-function fakeAudio() {
-  const contexts: { closed: boolean; started: number; stopped: number }[] = [];
+/**
+ * A Web Audio context whose nodes do nothing but count what was started and
+ * stopped. It starts in `state`, as a browser may hand one back suspended.
+ */
+function fakeAudio({ state = 'running' }: { state?: AudioContextState } = {}) {
+  const contexts: { closed: boolean; started: number; stopped: number; state: string }[] = [];
   class FakeParam {
     value = 0;
     setValueAtTime() {
@@ -22,6 +25,7 @@ function fakeAudio() {
     currentTime = 0;
     sampleRate = 8000;
     closed = false;
+    state = state;
     started = 0;
     stopped = 0;
     destination = this.node();
@@ -62,6 +66,10 @@ function fakeAudio() {
       this.closed = true;
       return Promise.resolve();
     }
+    resume() {
+      this.state = 'running';
+      return Promise.resolve();
+    }
   }
   vi.stubGlobal('AudioContext', FakeContext);
   return contexts;
@@ -75,6 +83,12 @@ describe('createSound', () => {
     sound.player.play('splash');
     sound.player.play('whoosh');
     expect(contexts).toHaveLength(1);
+  });
+
+  it('resumes an output the browser hands back suspended', () => {
+    const contexts = fakeAudio({ state: 'suspended' });
+    createSound({ muted: false }).player.play('splash');
+    expect(contexts[0]!.state).toBe('running');
   });
 
   it('never opens one while muted', () => {

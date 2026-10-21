@@ -36,6 +36,8 @@ export function createSound({ muted }: { muted: boolean }): { player: SoundPlaye
       if (muted || typeof AudioContext === 'undefined') return () => undefined;
       try {
         context ??= new AudioContext();
+        // Safari can hand one back suspended, and it plays nothing until resumed.
+        if (context.state === 'suspended') context.resume().catch(() => undefined);
         const sources = CUES[cue](context);
         for (const source of sources) {
           playing.add(source);
