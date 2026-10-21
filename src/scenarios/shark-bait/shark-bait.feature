@@ -4,7 +4,6 @@ Feature: Shark Bait
   gets the job, and rides off on the shark. The contract in
   specs/scenarios.feature applies as well.
 
-  @pending
   Rule: Its card
 
     Scenario: The picker shows Shark Bait
@@ -13,7 +12,6 @@ Feature: Shark Bait
       And its picture is 🦈
       And it takes 2 to 12 people
 
-  @pending
   Rule: The unlucky person is the last one left in the water
 
     Scenario Outline: <count> people, the unlucky person <position> in the list
@@ -34,7 +32,6 @@ Feature: Shark Bait
       When the show runs with 20 different random seeds
       Then the unlucky person starts in at least 5 different places
 
-  @pending
   Rule: Rescues start fast and slow down from 4 left
 
     Scenario Outline: <count> people
@@ -74,7 +71,6 @@ Feature: Shark Bait
       Then in some runs a one-at-a-time rescue swings away and back to the same person
       And in some runs it swings to someone else
 
-  @pending
   Rule: The beats keep the show between 11 and 14 seconds
 
     Scenario: Each beat takes about this long

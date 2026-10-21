@@ -1,0 +1,219 @@
+/* Shark Bait's stage, in stage pixels. Drawn as in the Design canvas's storyboard. */
+.scene {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 1280px;
+  height: 720px;
+  overflow: hidden;
+  background-color: var(--color-sky);
+}
+
+.cloud {
+  position: absolute;
+  height: 46px;
+  border-radius: var(--radius-pill);
+  background-color: var(--color-paper);
+  opacity: 0.75;
+}
+
+.cloud1 {
+  top: 150px;
+  left: 90px;
+  width: 170px;
+}
+
+.cloud2 {
+  top: 128px;
+  left: 150px;
+  width: 90px;
+}
+
+.cloud3 {
+  top: 46px;
+  left: 930px;
+  width: 200px;
+  height: 50px;
+}
+
+.water {
+  position: absolute;
+  top: 250px;
+  left: 0;
+  width: 1280px;
+  height: 470px;
+  border-top: var(--line-bold) solid var(--color-ink);
+  background-color: var(--color-sea);
+}
+
+.waves {
+  position: absolute;
+  top: 0;
+  left: 0;
+}
+
+.waves svg {
+  display: block;
+  width: 1280px;
+  height: 720px;
+}
+
+.wave {
+  fill: none;
+  stroke: var(--color-paper);
+  stroke-linecap: round;
+  stroke-width: 5;
+}
+
+/* Things placed by GSAP's x and y, from the stage's top left corner. */
+.helicopter,
+.swimmer,
+.fin {
+  position: absolute;
+  top: 0;
+  left: 0;
+}
+
+/* The helicopter's rope hangs from its own top left corner. */
+.body {
+  position: absolute;
+  top: -108px;
+  left: -86px;
+  width: 200px;
+  height: 118px;
+  transform-origin: 86px 108px;
+}
+
+.body svg {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+
+.body .rotor {
+  transform-origin: 86px 15px;
+}
+
+.line {
+  position: absolute;
+  top: 0;
+  left: 0;
+}
+
+.rope {
+  position: absolute;
+  top: 0;
+  left: -3px;
+  width: 6px;
+  border-radius: 3px;
+  background-color: var(--color-ink);
+}
+
+.hook {
+  position: absolute;
+  top: -14px;
+  left: -14px;
+  box-sizing: border-box;
+  width: 28px;
+  height: 28px;
+  border: var(--line-bold) solid var(--color-ink);
+  border-radius: 50%;
+  background-color: var(--color-sun);
+}
+
+.ink {
+  fill: none;
+  stroke: var(--color-ink);
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.sunLine {
+  fill: none;
+  stroke: var(--color-sun);
+  stroke-linecap: round;
+}
+
+.paper {
+  fill: var(--color-paper);
+  stroke: var(--color-ink);
+}
+
+.sun {
+  fill: var(--color-sun);
+  stroke: var(--color-ink);
+}
+
+.glass {
+  fill: var(--color-glass);
+  stroke: var(--color-ink);
+  stroke-linejoin: round;
+}
+
+/* A swimmer is placed by the middle of their swim ring. */
+.bobber {
+  position: absolute;
+  top: 0;
+  left: 0;
+}
+
+.figure {
+  position: absolute;
+  top: -80px;
+  left: -50px;
+  width: 100px;
+  height: 100px;
+  transform-origin: 50px 80px;
+}
+
+.figure svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+/* The tag's bottom middle sits on the label's point. */
+.label {
+  position: absolute;
+  top: 0;
+  left: 0;
+}
+
+.label > * {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  transform: translateX(-50%);
+}
+
+/* The fin is placed by the middle of its base, on the water. */
+.finShape {
+  position: absolute;
+  top: -58px;
+  left: -46px;
+  width: 100px;
+  height: 67px;
+  transform-origin: 46px 58px;
+}
+
+.finShape svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+
+.shark {
+  fill: var(--color-shark);
+  stroke: var(--color-ink);
+  stroke-linejoin: round;
+}
+
+.wake {
+  fill: none;
+  stroke: var(--color-paper);
+  stroke-linecap: round;
+}
