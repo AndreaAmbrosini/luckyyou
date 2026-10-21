@@ -108,6 +108,11 @@ Feature: Shark Bait
       And the water stays still for half a second
       And "Marco" comes up riding the shark, celebrating
 
+    Scenario: A long name on the fin stays as big as the duel's
+      Given the unlucky person is "Wolfeschlegelsteinhausenberger"
+      When the show runs
+      Then the name on the shark's fin is set at 48 pixels or more, on at most two lines
+
     Scenario: The name holds still at the end
       Given the unlucky person is "Marco"
       When the show runs

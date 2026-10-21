@@ -455,6 +455,33 @@ describeSpec(await loadFeature('./kit.feature'), ({ Rule }) => {
       },
     );
 
+    RuleScenario(
+      'A long name can take two lines before it shrinks past a size',
+      ({ Given, When, Then, And }) => {
+        let name: string;
+        let tag: HTMLElement;
+        Given('a person named {string}, 30 characters with no space', (_, given: string) => {
+          name = given;
+          expect(nameLength(name)).toBe(30);
+        });
+        When(
+          'their name tag is made at 72 stage pixels, at most 560 wide, wrapping below 48',
+          () => {
+            tag = nameTag(name, { size: 72, maxWidth: 560, wrapBelow: 48 });
+          },
+        );
+        Then('it takes two lines', () => {
+          expect(tag.dataset.lines).toBe('2');
+          // jsdom has no text layout; the kit estimates 0.6 em per character there.
+          expect(0.6 * tagSize(tag) * 30).toBeLessThanOrEqual(2 * parseFloat(tag.style.maxWidth));
+        });
+        And('it is set at 48 stage pixels or more', () => {
+          expect(tagSize(tag)).toBeGreaterThanOrEqual(48);
+          expect(tagSize(tag)).toBeLessThanOrEqual(72);
+        });
+      },
+    );
+
     RuleScenario('A caption stays up for at least a second', ({ When, Then, And }) => {
       let record: ShowRecord;
       When('a show captions "One", and "Two" half a second later', async () => {

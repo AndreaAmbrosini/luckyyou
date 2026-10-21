@@ -61,36 +61,44 @@ function lineCount(name: string, size: number, width: number): number {
 /**
  * A paper name tag for `name`, set at `size` stage pixels and at most
  * `maxWidth` wide. A name too long for one line shrinks first, down to
- * `--size-stage-tag-min`; past that it wraps onto two lines, and the tag
- * widens if two lines need it. Never smaller, never three lines.
+ * `wrapBelow` (`--size-stage-tag-min` unless given); past that it wraps onto
+ * two lines at that size, shrinking again only if two lines need it, and at
+ * `--size-stage-tag-min` the tag widens instead. Never smaller, never three
+ * lines.
  */
 export function nameTag(
   name: string,
-  { size, maxWidth }: { size: number; maxWidth: number },
+  { size, maxWidth, wrapBelow = 0 }: { size: number; maxWidth: number; wrapBelow?: number },
 ): HTMLElement {
   const min = stagePx('--size-stage-tag-min');
   const borders = 2 * stagePx('--line');
   const fits = (at: number, width: number, lines: number) =>
     lineCount(name, at, width - borders - TAG_PADDING_EM * at - SLACK) <= lines;
+  /** The biggest size from `low` up to `high` that fits on `lines`, if `low` does. */
+  const biggest = (low: number, high: number, lines: number) => {
+    while (high - low > 1) {
+      const middle = Math.floor((low + high) / 2);
+      if (fits(middle, maxWidth, lines)) low = middle;
+      else high = middle;
+    }
+    return low;
+  };
 
   let chosen = Math.max(min, Math.floor(size));
+  const wrapAt = Math.min(chosen, Math.max(min, Math.floor(wrapBelow)));
   let lines = 1;
   let width = maxWidth;
   if (!fits(chosen, width, 1)) {
-    if (fits(min, width, 1)) {
-      // The biggest size that keeps it on one line.
-      let low = min;
-      let high = chosen;
-      while (high - low > 1) {
-        const middle = Math.floor((low + high) / 2);
-        if (fits(middle, width, 1)) low = middle;
-        else high = middle;
-      }
-      chosen = low;
+    if (fits(wrapAt, width, 1)) {
+      chosen = biggest(wrapAt, chosen, 1);
     } else {
-      chosen = min;
       lines = 2;
-      while (!fits(min, width, 2)) width += 4;
+      if (fits(min, width, 2)) {
+        chosen = fits(wrapAt, width, 2) ? wrapAt : biggest(min, wrapAt, 2);
+      } else {
+        chosen = min;
+        while (!fits(min, width, 2)) width += 4;
+      }
     }
   }
 

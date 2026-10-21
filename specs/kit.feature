@@ -114,6 +114,12 @@ Feature: The scenario kit
       Then it takes at most two lines
       And it is set smaller than 48 stage pixels, and at 22 or more
 
+    Scenario: A long name can take two lines before it shrinks past a size
+      Given a person named "Wolfeschlegelsteinhausenberger", 30 characters with no space
+      When their name tag is made at 72 stage pixels, at most 560 wide, wrapping below 48
+      Then it takes two lines
+      And it is set at 48 stage pixels or more
+
     Scenario: A caption stays up for at least a second
       When a show captions "One", and "Two" half a second later
       Then "One" is on screen for 1 second

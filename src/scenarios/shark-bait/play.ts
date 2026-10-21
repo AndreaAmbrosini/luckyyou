@@ -418,6 +418,7 @@ function createShark(timeline: Timeline, show: Show, look: Look) {
   const finName = nameTag(show.unlucky, {
     size: stagePx('--size-stage-fin-name'),
     maxWidth: FIN_NAME_WIDTH,
+    wrapBelow: stagePx('--size-stage-tag-duel'),
   });
   finName.dataset.part = 'fin-name';
   finName.classList.add(styles.finName);

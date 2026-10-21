@@ -181,7 +181,12 @@ interface EndFrame {
   readonly gap: number;
   readonly lastShown: boolean;
   readonly rider: { readonly name: string; readonly parts: readonly string[] } | null;
-  readonly finName: { readonly text: string; readonly size: string; readonly at: string } | null;
+  readonly finName: {
+    readonly text: string;
+    readonly size: string;
+    readonly lines: string;
+    readonly at: string;
+  } | null;
 }
 
 /** Runs Shark Bait and notes, every frame, what its ending is made of. */
@@ -226,6 +231,7 @@ async function watchEnding(names: readonly string[], unlucky: string) {
             ? {
                 text: finName.textContent ?? '',
                 size: finName.style.getPropertyValue('--tag-size'),
+                lines: finName.dataset.lines ?? '',
                 at: placement(finName, stage),
               }
             : null,
@@ -607,6 +613,29 @@ describeSpec(await loadFeature('./shark-bait.feature'), ({ Rule }) => {
         });
       },
     );
+
+    RuleScenario("A long name on the fin stays as big as the duel's", ({ Given, When, Then }) => {
+      let unlucky: string;
+      let show: Awaited<ReturnType<typeof watchEnding>>;
+      Given('the unlucky person is {string}', (_, name: string) => {
+        unlucky = name;
+      });
+      When('the show runs', async () => {
+        show = await watchEnding(['Anna', unlucky], unlucky);
+      });
+      Then(
+        "the name on the shark's fin is set at {int} pixels or more, on at most two lines",
+        (_, pixels: number) => {
+          const shown = show.frames.filter((frame) => frame.finName);
+          expect(shown.length).toBeGreaterThan(0);
+          for (const { finName } of shown) {
+            expect(finName!.text).toBe(unlucky);
+            expect(parseFloat(finName!.size)).toBeGreaterThanOrEqual(pixels);
+            expect(Number(finName!.lines)).toBeLessThanOrEqual(2);
+          }
+        },
+      );
+    });
 
     RuleScenario('The name holds still at the end', ({ Given, When, Then }) => {
       let unlucky: string;
