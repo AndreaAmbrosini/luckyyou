@@ -1,9 +1,55 @@
+import { useFullscreen } from '../ui/fullscreen';
+import { FullscreenIcon, SoundIcon } from '../ui/icons';
 import styles from './Header.module.css';
 
-export function Header() {
+const STEPS = ["1 · Who's in", '2 · Pick a show'];
+
+export interface HeaderProps {
+  step: 1 | 2;
+  muted: boolean;
+  onMutedChange(muted: boolean): void;
+}
+
+export function Header({ step, muted, onMutedChange }: HeaderProps) {
+  const fullscreen = useFullscreen();
+
   return (
     <header className={styles.header}>
       <span className={styles.logo}>LuckyYou</span>
+      <ol className={styles.steps} aria-label="Steps">
+        {STEPS.map((label, index) => (
+          <li
+            key={label}
+            className={styles.step}
+            aria-current={index + 1 === step ? 'step' : undefined}
+          >
+            {label}
+          </li>
+        ))}
+      </ol>
+      <div className={styles.controls}>
+        <button
+          type="button"
+          role="switch"
+          className={styles.control}
+          aria-label="Sound"
+          aria-checked={!muted}
+          onClick={() => onMutedChange(!muted)}
+        >
+          <SoundIcon on={!muted} />
+        </button>
+        {fullscreen.supported && (
+          <button
+            type="button"
+            className={styles.control}
+            aria-label="Fullscreen"
+            aria-pressed={fullscreen.active}
+            onClick={fullscreen.toggle}
+          >
+            <FullscreenIcon active={fullscreen.active} />
+          </button>
+        )}
+      </div>
     </header>
   );
 }

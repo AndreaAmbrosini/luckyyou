@@ -56,6 +56,65 @@ export function PlusIcon(props: IconProps) {
   );
 }
 
+export function ArrowLeftIcon(props: IconProps) {
+  return (
+    <Icon weight={3.2} {...props}>
+      <path d="M19 12H5" />
+      <path d="M11 6l-6 6 6 6" />
+    </Icon>
+  );
+}
+
+export function ArrowRightIcon(props: IconProps) {
+  return (
+    <Icon weight={3.2} {...props}>
+      <path d="M5 12h14" />
+      <path d="M13 6l6 6-6 6" />
+    </Icon>
+  );
+}
+
+export function SoundIcon({ on, ...props }: IconProps & { on: boolean }) {
+  return (
+    <Icon weight={2.6} {...props}>
+      <path d="M4 9.5h3.5L12 5.5v13l-4.5-4H4z" />
+      {on ? (
+        <>
+          <path d="M16 9a4 4 0 0 1 0 6" />
+          <path d="M18.5 6.5a7.5 7.5 0 0 1 0 11" />
+        </>
+      ) : (
+        <>
+          <path d="M16 9.5l5 5" />
+          <path d="M21 9.5l-5 5" />
+        </>
+      )}
+    </Icon>
+  );
+}
+
+export function FullscreenIcon({ active, ...props }: IconProps & { active: boolean }) {
+  return (
+    <Icon weight={2.6} {...props}>
+      {active ? (
+        <>
+          <path d="M9 4v5H4" />
+          <path d="M15 4v5h5" />
+          <path d="M9 20v-5H4" />
+          <path d="M15 20v-5h5" />
+        </>
+      ) : (
+        <>
+          <path d="M4 9V4h5" />
+          <path d="M20 9V4h-5" />
+          <path d="M4 15v5h5" />
+          <path d="M20 15v5h-5" />
+        </>
+      )}
+    </Icon>
+  );
+}
+
 export function TrashIcon(props: IconProps) {
   return (
     <Icon weight={2.8} {...props}>

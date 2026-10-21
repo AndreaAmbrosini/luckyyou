@@ -62,6 +62,16 @@
   flex-grow: 1;
 }
 
+/* The right end of a row. Short of room, its items wrap onto lines of their own, still on the right. */
+.end {
+  display: flex;
+  flex: 1 1 auto;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.875rem;
+}
+
 .note {
   margin: 0;
   padding: 0.5rem 1rem;

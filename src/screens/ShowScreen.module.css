@@ -1,0 +1,7 @@
+.host {
+  position: fixed;
+  inset: 0;
+  overflow: hidden;
+  background-color: var(--color-ink);
+  cursor: none;
+}

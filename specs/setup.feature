@@ -2,7 +2,6 @@ Feature: Setting up a pick
   Two steps before the show: the person sharing their screen ticks who is in
   today, then clicks the show to play.
 
-  @pending
   Rule: Moving on needs 2 to 12 ticked people
 
     Scenario Outline: Moving on with <ticked> ticked
@@ -24,7 +23,6 @@ Feature: Setting up a pick
       Given 13 people are ticked
       Then I'm told "At most 12 people can take part. 13 are ticked."
 
-  @pending
   Rule: Clicking a show starts it
 
     Scenario: The shows step names who is in
@@ -44,7 +42,6 @@ Feature: Setting up a pick
       When I go back to who's in
       Then "Anna" and "Ben" are still ticked
 
-  @pending
   Rule: Scenario cards show whether they can run
 
     Scenario: A card shows the scenario's name, description and picture
@@ -57,7 +54,6 @@ Feature: Setting up a pick
       Then its card is disabled
       And it says "Takes at most 6 people"
 
-  @pending
   Rule: The show played last time is ready to play again
 
     Scenario: The show played last time is marked and has the focus
@@ -79,7 +75,6 @@ Feature: Setting up a pick
       Then every card is disabled
       And I'm told no show can run with 11 people
 
-  @pending
   Rule: Mute and fullscreen
 
     Scenario: Mute is remembered in this browser

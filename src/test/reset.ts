@@ -1,9 +1,17 @@
 import { cleanup } from '@testing-library/react';
 import { vi } from 'vitest';
 
+const undos: (() => void)[] = [];
+
+/** Runs `undo` when the test, or the scenario, ends. */
+export function onReset(undo: () => void): void {
+  undos.push(undo);
+}
+
 /** Puts the page back as a test found it: no app, no spies, real timers, empty storage. */
 export function resetTestState(): void {
   cleanup();
+  while (undos.length > 0) undos.pop()!();
   vi.restoreAllMocks();
   vi.useRealTimers();
   localStorage.clear();
