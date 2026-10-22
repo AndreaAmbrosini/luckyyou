@@ -216,6 +216,10 @@ Feature: The scenario kit
       When the lab opens
       Then it lists every scenario, the development-only one included
 
+    Scenario: The lab starts at the usual head count
+      When the lab opens
+      Then it is set to 8 people
+
     Scenario: The lab runs a show as asked
       When I run "Shark Bait" in the lab with 5 people, the unlucky person last and seed 42
       Then the show plays with 5 people

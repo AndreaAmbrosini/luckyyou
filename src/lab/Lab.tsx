@@ -56,6 +56,9 @@ type NameSet = keyof typeof NAME_SETS;
 const MOODS: Mood[] = ['calm', 'worried', 'scared', 'happy', 'party'];
 const ACCESSORIES: Accessory[] = ['cap', 'goggles', 'snorkel'];
 
+/** Most picks have 7 or 8 people (PRODUCT.md). */
+const USUAL_HEAD_COUNT = 8;
+
 /**
  * A development-only page that runs any scenario at any head count, with
  * the unlucky person first or last and a fixed seed, so a show can be
@@ -65,7 +68,7 @@ export function Lab({ scenarios }: { scenarios: readonly Scenario[] }) {
   const id = useId();
   const [chosen, setChosen] = useState(scenarios[0]?.id ?? '');
   const scenario = scenarios.find((each) => each.id === chosen) ?? scenarios[0];
-  const [count, setCount] = useState(scenario?.people.max ?? 2);
+  const [count, setCount] = useState(USUAL_HEAD_COUNT);
   const [position, setPosition] = useState<'first' | 'last'>('last');
   const [nameSet, setNameSet] = useState<NameSet>('Short');
   const [seed, setSeed] = useState('1');

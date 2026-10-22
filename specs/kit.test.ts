@@ -760,6 +760,15 @@ describeSpec(await loadFeature('./kit.feature'), ({ Rule }) => {
       });
     });
 
+    RuleScenario('The lab starts at the usual head count', ({ When, Then }) => {
+      When('the lab opens', () => {
+        renderLab([fakeScenario({ name: 'Hot Potato' })]);
+      });
+      Then('it is set to 8 people', () => {
+        expect(screen.getByRole('combobox', { name: 'People' })).toHaveValue('8');
+      });
+    });
+
     RuleScenario('The lab runs a show as asked', ({ When, Then, And }) => {
       const draws: number[] = [];
       const sharkBait = fakeScenario({
