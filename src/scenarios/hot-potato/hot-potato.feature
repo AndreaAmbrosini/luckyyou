@@ -13,9 +13,9 @@ Feature: Hot Potato
       And its picture is 🥔
       And it takes 2 to 12 people
 
-  @pending
   Rule: It pops in the unlucky person's hands
 
+    @pending
     Scenario Outline: <count> people, the unlucky person <position> in the list
       Given <count> people, with the unlucky person <position> in the list
       When the show runs
@@ -37,7 +37,6 @@ Feature: Hot Potato
       Then the potato drops into at least 5 different people's hands first
       And in some runs the unlucky person catches it before the showdown, and in some runs not
 
-  @pending
   Rule: Throws speed up, then slow down for a showdown
 
     Scenario Outline: <count> people
@@ -54,6 +53,7 @@ Feature: Hot Potato
         | 3     | 3       |
         | 2     | 2       |
 
+    @pending
     Scenario: Everyone else steps back
       Given 8 people
       When the showdown starts
@@ -85,7 +85,6 @@ Feature: Hot Potato
         | 8     |
         | 12    |
 
-  @pending
   Rule: The last throw can twist
 
     Scenario Outline: The last throw, with <count> people
@@ -116,7 +115,6 @@ Feature: Hot Potato
       When the show runs
       Then "Luca" is on stage, not moving, for the last 1.5 seconds
 
-  @pending
   Rule: The beats keep the show between 14 and 18 seconds
 
     Scenario: Each beat takes about this long
