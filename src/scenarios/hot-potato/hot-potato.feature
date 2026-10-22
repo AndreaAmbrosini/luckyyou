@@ -1,8 +1,9 @@
 Feature: Hot Potato
   People stand in a ring and throw a potato with a lit sparkler, faster and
   faster. The sparkler burns down, seems to go out, relights, and the throws
-  slow to a showdown between three. The potato pops in the unlucky person's
-  hands, and they get a paper crown. The contract in specs/scenarios.feature
+  slow to a showdown between three, then a duel between two. In the last
+  second it could still go either way. The potato pops in the unlucky
+  person's hands, and they get a paper crown. The contract in specs/scenarios.feature
   applies as well.
 
   Rule: Its card
@@ -63,12 +64,59 @@ Feature: Hot Potato
       When the show runs with 20 different random seeds
       Then the unlucky person is the first to catch it in the showdown in some runs, and not in others
 
+    @pending
+    Scenario Outline: Three become two, with <count> people
+      Given <count> people
+      When the show runs
+      Then each throw before the showdown is quicker than the one before
+      And 3 people are left in play for the showdown, the unlucky person among them
+      And after two catches, one of the three who isn't holding it says "Phew!" and steps back
+      And the other two face each other in the duel, the unlucky person among them
+      And each throw from the start of the showdown to the end of the duel takes longer than the one before
+
+      Examples:
+        | count |
+        | 12    |
+        | 8     |
+        | 3     |
+
+    @pending
+    Scenario: With 2 people it is a duel from the start
+      Given 2 people
+      When the show runs
+      Then each throw before the duel is quicker than the one before
+      And there is no showdown, and nobody says "Phew!"
+      And the duel has 5 throws, each longer than the one before
+
+    @pending
+    Scenario: The duel
+      Given 8 people
+      When the duel starts
+      Then the last two step into the middle and face each other, drawn big, their name tags at 40 pixels or more
+      And the other 6 shrink back behind them and watch, worried
+      And the potato only goes between the two until it pops
+      And the sparkler is a short stub that flickers, never more than 3 times a second
+      And the heartbeat comes quicker and quicker until the pop
+
+    @pending
+    Scenario: Who says "Phew!" gives nothing away
+      Given 8 people, with the same unlucky person every time
+      When the show runs with 20 different random seeds
+      Then at least 2 different people say "Phew!", and never the unlucky person
+      And the unlucky person is holding it when the duel ends in some runs, and not in others
+
   Rule: The sparkler is the clock everyone watches
 
     Scenario: It burns down to the pop
       When the show runs
       Then the sparkler is shorter at each throw than at the one before, except when it relights
       And it is at its last spark only while the unlucky person holds the potato, just before the pop
+
+    @pending
+    Scenario: It burns down to the last second
+      When the show runs
+      Then the sparkler is shorter at each throw than at the one before, except when it relights
+      And it reaches its last spark only in the last second, and burns until the pop
 
     Scenario Outline: Sometimes it seems to go out, with <count> people
       Given <count> people
@@ -96,6 +144,33 @@ Feature: Hot Potato
         | 2     |
         | 8     |
 
+  @pending
+  Rule: The last second could go either way
+
+    Scenario Outline: The last second, with <count> people
+      Given <count> people
+      When the show runs with 30 different random seeds
+      Then in some runs it gets too hot: the sparkler reaches its last spark in the other one's hands, everyone gasps, they fling it away, and it pops as it lands on the unlucky person
+      And in some runs it hangs in the air: the last throw floats up slowly, high between the two, then drops onto the unlucky person and pops
+      And in some runs the unlucky person holds on: they wind up to throw, hesitate, and it pops just before they let go
+
+      Examples:
+        | count |
+        | 2     |
+        | 8     |
+        | 12    |
+
+    Scenario: A moment of stillness, then the pop
+      When the show runs with each ending
+      Then in the last second the potato barely moves for at least half a second: in the other one's hands, at the top of its flight, or in the unlucky person's raised hands
+      And it pops at the end of the last second, on the unlucky person
+
+    Scenario: Hanging in the air gives nothing away
+      Given 8 people, with the same unlucky person every time
+      When the show runs with 30 different random seeds, and the potato hangs in the air
+      Then the last throw comes from the unlucky person in some runs, and from the other one in others
+      And at the top of its flight the potato is about halfway between the two
+
   Rule: The ending is a pop and a paper crown
 
     Scenario: A freeze, then the pop
@@ -103,6 +178,14 @@ Feature: Hot Potato
       When the potato reaches "Luca" for the last time
       Then everything holds still for at least half a second, the sparkler at its last spark
       And the potato pops into confetti
+      And "Luca" gets a paper crown and celebrates
+      And everyone else cheers
+
+    @pending
+    Scenario: The pop
+      Given the unlucky person is "Luca"
+      When the potato pops on "Luca"
+      Then it pops into confetti
       And "Luca" gets a paper crown and celebrates
       And everyone else cheers
 
@@ -142,6 +225,27 @@ Feature: Hot Potato
       When the show runs at every head count from 2 to 12, with and without the sparkler going out
       Then each run lasts between 14 and 18 seconds
 
+  @pending
+  Rule: The beats keep every show a second or more inside the limit
+
+    Scenario: Each beat takes about this long now
+      When the show runs at 12, 8 and 2 people, with the sparkler going out
+      Then its beats take these seconds, give or take 0.3:
+        | beat            | 12 people | 8 people | 2 people |
+        | plop            | 1.6       | 1.6      | 1.6      |
+        | hot hands       | 3.4       | 3.2      | 3.0      |
+        | a dud           | 1.8       | 1.8      | 1.8      |
+        | it relights     | 1.0       | 1.0      | 1.0      |
+        | the showdown    | 2.6       | 2.6      | 0        |
+        | the duel        | 4.1       | 4.1      | 6.7      |
+        | the last second | 2.0       | 2.0      | 2.0      |
+        | the pop         | 2.6       | 2.6      | 2.6      |
+
+    Scenario: Every head count lands inside the new limits
+      When the show runs at every head count from 2 to 12, with and without the sparkler going out
+      Then each run with the sparkler going out lasts between 18.5 and 19.5 seconds
+      And each run without it lasts between 15.8 and 16.5 seconds
+
   Rule: It reads without sound
 
     Scenario: Captions tell the story
@@ -166,6 +270,31 @@ Feature: Hot Potato
       When the show runs with 20 different random seeds
       Then every thrown-back last throw is captioned "<name>… nope, back to Luca!"
       And every last throw that curves back is captioned "It's coming back!"
+
+    @pending
+    Scenario: Captions tell the story to the end
+      Given 8 people, the unlucky person is "Luca", the sparkler goes out once, and it gets too hot at the end
+      When the show runs
+      Then the captions include, in this order:
+        | caption                           |
+        | Don't be holding it when it pops! |
+        | Faster… faster…                   |
+        | …a dud?                           |
+        | Nope! Still lit!                  |
+        | Uh-oh…                            |
+        | Too hot!                          |
+        | It popped on Luca!                |
+
+    @pending
+    Scenario: The duel names each catch
+      Given 8 people, and the duel's catches go to "Priya", "Tom" and "Priya"
+      When the show runs
+      Then the duel is captioned "Priya…", "Tom…" and "Priya…"
+
+    @pending
+    Scenario: Each ending has its caption
+      When the show runs with each ending
+      Then a second before the pop the caption is "Too hot!", "Which way…?" or "Throw it!", for each ending in turn
 
     Scenario: Each caption stays up long enough to read
       When the show runs
