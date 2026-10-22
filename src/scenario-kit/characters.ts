@@ -68,7 +68,7 @@ const PARTS: readonly Part[] = [
     // From the shoulders, for a person standing.
     name: 'land-arms',
     body: 'land',
-    moods: ['happy', 'party'],
+    moods: ['party'],
     raised: true,
     shapes: [
       ['path', styles.line, { d: 'M22 86 L2 6 M78 86 L98 6', 'stroke-width': 7 }],

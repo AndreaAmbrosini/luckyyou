@@ -618,14 +618,32 @@ describeSpec(await loadFeature('./kit.feature'), ({ Rule }) => {
 
     RuleScenario('On land, raised arms start at the shoulders', ({ When, Then }) => {
       let drawn: ReturnType<typeof head>;
-      When('a happy head is drawn on land', () => {
-        drawn = head(LOOK, { land: true, mood: 'happy' });
+      When('a party head is drawn on land', () => {
+        drawn = head(LOOK, { land: true, mood: 'party' });
       });
       Then('its arms rise from its shoulders, not from its cheeks', () => {
         expect(visibleParts(drawn.el)).toContain('land-arms');
         expect(visibleParts(drawn.el)).not.toContain('arms');
       });
     });
+
+    RuleScenario(
+      'On land, a happy head keeps its arms down unless raised',
+      ({ When, Then, And }) => {
+        let drawn: ReturnType<typeof head>;
+        When('a happy head is drawn on land', () => {
+          drawn = head(LOOK, { land: true, mood: 'happy' });
+        });
+        Then('its arms are down', () => {
+          expect(visibleParts(drawn.el)).not.toContain('land-arms');
+          expect(visibleParts(drawn.el)).not.toContain('arms');
+        });
+        And('it raises them when asked', () => {
+          drawn.setRaised(true);
+          expect(visibleParts(drawn.el)).toContain('land-arms');
+        });
+      },
+    );
 
     RuleScenario('A head can raise its arms in any mood', ({ Given, When, Then, And }) => {
       let drawn: ReturnType<typeof head>;

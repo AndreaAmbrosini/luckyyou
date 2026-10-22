@@ -157,8 +157,13 @@ Feature: The scenario kit
       And it has no swim ring
 
     Scenario: On land, raised arms start at the shoulders
-      When a happy head is drawn on land
+      When a party head is drawn on land
       Then its arms rise from its shoulders, not from its cheeks
+
+    Scenario: On land, a happy head keeps its arms down unless raised
+      When a happy head is drawn on land
+      Then its arms are down
+      And it raises them when asked
 
     Scenario: A head can raise its arms in any mood
       Given a scared head on land
