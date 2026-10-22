@@ -156,7 +156,7 @@ Feature: The scenario kit
       Then it wears a shirt in its look's second colour
       And it has no swim ring
 
-    Scenario: On land, raised arms start at the shoulders
+    Scenario: On land, a party head's arms start at the shoulders
       When a party head is drawn on land
       Then its arms rise from its shoulders, not from its cheeks
 

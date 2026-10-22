@@ -220,8 +220,9 @@ export interface Head {
 /**
  * A cartoon head with `look`, in `mood` (calm unless given), with a swim
  * ring unless `ring` is false. On `land` it wears a shirt instead of a ring
- * and its arms start at the shoulders. Happy and party raise the arms, as
- * does `raised`; party swaps the eyes for sunglasses. `sweat` adds drops.
+ * and its arms start at the shoulders. Party raises the arms, happy does
+ * too in the water, and `raised` does in any mood; party swaps the eyes for
+ * sunglasses. `sweat` adds drops.
  */
 export function head(
   look: Look,

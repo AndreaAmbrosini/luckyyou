@@ -616,7 +616,7 @@ describeSpec(await loadFeature('./kit.feature'), ({ Rule }) => {
       });
     });
 
-    RuleScenario('On land, raised arms start at the shoulders', ({ When, Then }) => {
+    RuleScenario("On land, a party head's arms start at the shoulders", ({ When, Then }) => {
       let drawn: ReturnType<typeof head>;
       When('a party head is drawn on land', () => {
         drawn = head(LOOK, { land: true, mood: 'party' });
