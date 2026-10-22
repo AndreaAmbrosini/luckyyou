@@ -229,6 +229,12 @@ function inOrder(texts: readonly string[], lines: readonly string[]): boolean {
 const dudSeed = (count: number, unlucky: string) =>
   plans(count, unlucky).findIndex((plan) => plan.dud) + 1;
 
+/** The lab runs, shared by the scenarios at the pop and the lab check below. */
+let lab: LabRun[];
+beforeAll(async () => {
+  lab = await labRuns();
+}, 60_000);
+
 describeSpec(await loadFeature('./hot-potato.feature'), ({ Rule }) => {
   Rule('Its card', ({ RuleScenario }) => {
     RuleScenario('The picker shows Hot Potato', ({ Then, And }) => {
@@ -571,6 +577,68 @@ describeSpec(await loadFeature('./hot-potato.feature'), ({ Rule }) => {
         for (const each of last) expect(each.luca).toBe(last[0]!.luca);
       });
     });
+
+    RuleScenario('The unlucky person stands out at the pop', ({ Given, When, Then, And }) => {
+      Given('the unlucky person is "Luca"', () => {
+        for (const { label, unlucky } of lab) expect(unlucky, label).toBe('Luca');
+      });
+      When('the potato pops', () => {});
+      Then('"Luca" grows to 1.3 times their size, in front of everyone', () => {
+        for (const { label, inFront, grownScale } of lab) {
+          expect(inFront, label).toBe(true);
+          expect(grownScale, label).toBeCloseTo(1.3, 3);
+        }
+      });
+      And(
+        'the burst is behind everyone, and "Pop!" covers neither Luca\'s head nor the crown',
+        () => {
+          for (const { label, burstBehind, bubbles, unlucky, plan } of lab) {
+            expect(burstBehind, label).toBe(true);
+            const spot = ring(plan.ring.length)[plan.ring.indexOf(unlucky)]!;
+            const pop = bubbles.find((each) => each.text === 'Pop!')!;
+            expect(pop, label).toBeDefined();
+            expect(overlap(pop.box, headBox(spot)), label).toBe(false);
+            expect(overlap(pop.box, crowned(spot).head), label).toBe(false);
+          }
+        },
+      );
+      And('"It popped on Luca!" is up within 0.2 seconds of the pop', () => {
+        for (const { label, plan, record } of lab) {
+          const pop = total(plan) - plan.beats.pop;
+          const popped = record.captions.find((each) => each.text === 'It popped on Luca!');
+          expect(popped, label).toBeDefined();
+          // Frames are 1/30 s apart.
+          expect(popped!.from - pop, label).toBeLessThanOrEqual(0.2 + 1 / 30 + 1e-9);
+        }
+      });
+    });
+
+    RuleScenario('Everyone watches the freeze', ({ Given, When, Then }) => {
+      let runs: LabRun[];
+      Given('8 people', () => {
+        runs = lab.filter((run) => run.plan.ring.length === 8);
+        expect(runs).toHaveLength(3);
+      });
+      When('the showdown reaches the freeze', () => {
+        for (const { label, frames } of runs) {
+          expect(
+            frames.some((frame) => frame.beat === 'freeze'),
+            label,
+          ).toBe(true);
+        }
+      });
+      Then('those out of play look worried, not relieved', () => {
+        for (const { label, plan, frames } of runs) {
+          const outside = plan.ring.filter((name) => !plan.showdown.includes(name));
+          expect(outside, label).toHaveLength(5);
+          for (const frame of frames.filter((each) => each.beat === 'freeze')) {
+            for (const name of outside) {
+              expect(frame.moods[name], `${label}: ${name}`).toBe('worried');
+            }
+          }
+        }
+      });
+    });
   });
 
   Rule('The beats keep the show between 14 and 18 seconds', ({ RuleScenario }) => {
@@ -892,13 +960,15 @@ function drawnTag(tag: HTMLElement, stage: HTMLElement): number {
   return size;
 }
 
-/** Hot Potato at 2, 8 and 12 people, the unlucky person last, once with each twist. */
+/** Hot Potato at 2, 8 and 12 people, Luca unlucky and last, once with each twist. */
 async function labRuns(): Promise<LabRun[]> {
   const runs: LabRun[] = [];
   for (const count of [2, 8, 12]) {
-    const team = names(count);
-    const unlucky = team.at(-1)!;
-    const all = plans(count, unlucky, 40);
+    const unlucky = 'Luca';
+    const team = [...TEAM.filter((name) => name !== unlucky).slice(0, count - 1), unlucky];
+    const all = Array.from({ length: 40 }, (_, index) =>
+      planShow(team, unlucky, createRandom(index + 1)),
+    );
     for (const twist of ['straight', 'back', 'boomerang'] as const) {
       const seed = all.findIndex((plan) => plan.twist === twist) + 1;
       expect(seed, `${count} people, ${twist}`).toBeGreaterThan(0);
@@ -966,13 +1036,8 @@ async function labRuns(): Promise<LabRun[]> {
 }
 
 describe('The lab check', () => {
-  let runs: LabRun[];
-  beforeAll(async () => {
-    runs = await labRuns();
-  }, 60_000);
-
   it('bubbles appear inside the stage and off the potato', () => {
-    for (const { label, bubbles } of runs) {
+    for (const { label, bubbles } of lab) {
       expect(bubbles.length, label).toBeGreaterThan(2);
       for (const { text, box, potato } of bubbles) {
         expect(box.left, `${label}: ${text}`).toBeGreaterThanOrEqual(0);
@@ -985,17 +1050,13 @@ describe('The lab check', () => {
   });
 
   it('every name tag is drawn at 22 px or more on every frame', () => {
-    for (const { label, smallestTag } of runs) {
+    for (const { label, smallestTag } of lab) {
       expect(smallestTag, label).toBeGreaterThanOrEqual(22);
     }
   });
 
-  it('those out of play watch the freeze, worried, and everyone cheers at the end', () => {
-    for (const { label, plan, unlucky, frames, raised } of runs) {
-      const outside = plan.ring.filter((name) => !plan.showdown.includes(name));
-      for (const frame of frames.filter((each) => each.beat === 'freeze')) {
-        for (const name of outside) expect(frame.moods[name], `${label}: ${name}`).toBe('worried');
-      }
+  it('everyone cheers at the end, arms up', () => {
+    for (const { label, plan, unlucky, frames, raised } of lab) {
       for (const name of plan.ring) {
         expect(frames.at(-1)!.moods[name], `${label}: ${name}`).toBe(
           name === unlucky ? 'party' : 'happy',
@@ -1005,24 +1066,8 @@ describe('The lab check', () => {
     }
   });
 
-  it('the burst is behind the people, and Pop! is off the unlucky head and crown', () => {
-    for (const { label, burstBehind, bubbles, unlucky, plan } of runs) {
-      expect(burstBehind, label).toBe(true);
-      const spot = ring(plan.ring.length)[plan.ring.indexOf(unlucky)]!;
-      const pop = bubbles.find((each) => each.text === 'Pop!')!;
-      expect(pop, label).toBeDefined();
-      expect(overlap(pop.box, headBox(spot)), label).toBe(false);
-      expect(overlap(pop.box, crowned(spot).head), label).toBe(false);
-    }
-  });
-
-  it('"It popped on …" goes up within 0.2 s of the pop, every caption up 1 s or more', () => {
-    for (const { label, plan, unlucky, record } of runs) {
-      const pop = total(plan) - plan.beats.pop;
-      const popped = record.captions.find((each) => each.text === `It popped on ${unlucky}!`);
-      expect(popped, label).toBeDefined();
-      // Frames are 1/30 s apart.
-      expect(popped!.from - pop, label).toBeLessThanOrEqual(0.2 + 1 / 30 + 1e-9);
+  it('every caption is up 1 s or more', () => {
+    for (const { label, record } of lab) {
       for (const caption of record.captions) {
         expect(caption.to - caption.from, `${label}: ${caption.text}`).toBeGreaterThanOrEqual(
           1 - 1e-9,
@@ -1031,10 +1076,8 @@ describe('The lab check', () => {
     }
   });
 
-  it('the unlucky person ends 1.3 times their size, in front of everyone, still for 1.5 s', () => {
-    for (const { label, record, inFront, grownScale, placed } of runs) {
-      expect(inFront, label).toBe(true);
-      expect(grownScale, label).toBeCloseTo(1.3, 3);
+  it('the unlucky person holds still for the last 1.5 s', () => {
+    for (const { label, record, placed } of lab) {
       const last = placed.filter((each) => each.time >= record.duration - 1.5);
       expect(last.length, label).toBeGreaterThan(30);
       for (const each of last) expect(each.at, label).toBe(last[0]!.at);

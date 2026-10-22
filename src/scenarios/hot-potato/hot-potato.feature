@@ -111,6 +111,18 @@ Feature: Hot Potato
       When the show runs
       Then "Luca" is on stage, not moving, for the last 1.5 seconds
 
+    Scenario: The unlucky person stands out at the pop
+      Given the unlucky person is "Luca"
+      When the potato pops
+      Then "Luca" grows to 1.3 times their size, in front of everyone
+      And the burst is behind everyone, and "Pop!" covers neither Luca's head nor the crown
+      And "It popped on Luca!" is up within 0.2 seconds of the pop
+
+    Scenario: Everyone watches the freeze
+      Given 8 people
+      When the showdown reaches the freeze
+      Then those out of play look worried, not relieved
+
   Rule: The beats keep the show between 14 and 18 seconds
 
     Scenario: Each beat takes about this long
