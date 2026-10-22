@@ -34,6 +34,7 @@ import {
   ring,
   speechAt,
   throwPath,
+  windUp,
   type Box,
   type Path,
   type Point,
@@ -63,6 +64,8 @@ const SHAKE = 0.4;
 const DRIFT = 16;
 /** How far the unlucky person leans into the throw they never make. */
 const LEAN = 50;
+/** Seconds into the last second when the unlucky person starts to wind up. */
+const WIND_UP = 0.2;
 /** The caption a second before the pop. */
 const ENDING_CAPTION: Readonly<Record<Ending, string>> = {
   'too-hot': 'Too hot!',
@@ -460,11 +463,12 @@ export async function playHotPotato(show: Show): Promise<void> {
       timeline.add(shake(potato.el, show), time);
     }
   }
+  /** Where the potato is when it pops: landed in the unlucky person's hands, or held up. */
+  let heart: Point = over(show.unlucky, true);
   if (plan.ending === 'holding-on') {
     // Holding on: they wind up, holding it over their head, hesitate, and
     // lean into the throw; it pops before they let go.
     const L = starts['last-second'];
-    const hand = over(show.unlucky, true);
     const up = raised(inDuel(show.unlucky), scale);
     const towards = over(partner, true);
     const away = Math.hypot(towards.x - up.x, towards.y - up.y);
@@ -472,14 +476,14 @@ export async function playHotPotato(show: Show): Promise<void> {
       x: up.x + (LEAN * (towards.x - up.x)) / away,
       y: up.y + (LEAN * (towards.y - up.y)) / away,
     };
-    follow(straight(hand, up), L + 0.2, plan.still.from, 'power2.inOut');
+    follow(windUp(inDuel(show.unlucky), scale), L + WIND_UP, plan.still.from, 'power2.inOut');
     follow(straight(up, lean), plan.still.to, starts.pop, 'power2.in');
+    heart = lean;
   }
 
-  // The pop: a burst behind the people where the potato was, confetti out
+  // The pop: a burst behind the people where the potato is, confetti out
   // and down, and the unlucky person in front of everyone, growing, with a
   // paper crown; everyone else cheers.
-  const heart = over(show.unlucky, true);
   const star = burst();
   star.setAttribute('width', '300');
   star.setAttribute('height', '300');
@@ -532,7 +536,7 @@ export async function playHotPotato(show: Show): Promise<void> {
     },
     starts.pop,
   );
-  say(starts.pop, 'Pop!', inHands(show.unlucky, true), [headBox(final), grown.head], 'sun');
+  say(starts.pop, 'Pop!', potatoBox(heart, scale), [headBox(final), grown.head], 'sun');
   timeline.set(star, { autoAlpha: 1 }, starts.pop);
   timeline.to(star, { scale: 1.1, duration: 0.25, ease: 'power2.out' }, starts.pop);
   timeline.to(star, { autoAlpha: 0, duration: 0.3 }, starts.pop + 0.3);

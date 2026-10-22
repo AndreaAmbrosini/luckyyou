@@ -370,6 +370,13 @@ export function raised(spot: Spot, scale = 1): Point {
   };
 }
 
+/** The wind-up: the potato from where `spot` holds it, straight to where they hold it up. */
+export function windUp(spot: Spot, scale = 1): Path {
+  const from = held(spot, scale);
+  const to = raised(spot, scale);
+  return [from, from, to, to];
+}
+
 /** How much bigger the unlucky person stands at the pop. */
 export const CROWNED = 1.3;
 /** How close to the stage's edge a grown name tag or a speech bubble may come. */

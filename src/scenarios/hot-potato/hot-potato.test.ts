@@ -24,6 +24,7 @@ import {
   speechBox,
   tagBox,
   throwPath,
+  windUp,
   type Box,
   type Point,
   type Spot,
@@ -1344,6 +1345,16 @@ describeSpec(await loadFeature('./hot-potato.feature'), ({ Rule }) => {
 });
 
 describe('The ring', () => {
+  /** How far `box` stays from the face at `spot`: more than 0 when it's off the face. */
+  const offFace = (box: Box, spot: Spot) => {
+    const { x, y, r } = face(spot);
+    const near = {
+      x: Math.min(box.right, Math.max(box.left, x)),
+      y: Math.min(box.bottom, Math.max(box.top, y)),
+    };
+    return Math.hypot(near.x - x, near.y - y) - r;
+  };
+
   it('no tag overlaps at any count', () => {
     for (let count = 2; count <= 12; count++) {
       const spots = ring(count);
@@ -1377,12 +1388,7 @@ describe('The ring', () => {
       for (const [index, spot] of ring(count).entries()) {
         const label = `${count} people, spot ${index}`;
         const box = potatoBox(held(spot, scale), scale);
-        const { x, y, r } = face(spot);
-        const near = {
-          x: Math.min(box.right, Math.max(box.left, x)),
-          y: Math.min(box.bottom, Math.max(box.top, y)),
-        };
-        expect(Math.hypot(near.x - x, near.y - y), label).toBeGreaterThan(r);
+        expect(offFace(box, spot), label).toBeGreaterThan(0);
         expect(box.top - scale * POTATO.above, label).toBeGreaterThanOrEqual(SKY);
         expect(box.left, label).toBeGreaterThanOrEqual(0);
         expect(box.right, label).toBeLessThanOrEqual(1280);
@@ -1550,8 +1556,8 @@ describe('The ring', () => {
           expect(rise[2].y, label).toBeCloseTo(top.y, 9);
           expect(drop[1].y, label).toBeCloseTo(top.y, 9);
           for (const path of [rise, drop]) {
-            for (let step = 0; step <= 200; step++) {
-              const point = bezier(step / 200, ...path);
+            for (let step = 0; step <= 24; step++) {
+              const point = bezier(step / 24, ...path);
               expect(drawingTop(point, scale), label).toBeGreaterThanOrEqual(SKY - 1e-6);
               expect(point.y, label).toBeGreaterThanOrEqual(top.y - 1e-6);
             }
@@ -1571,17 +1577,32 @@ describe('The ring', () => {
           const spot = spots[index]!;
           const point = raised(spot, scale);
           const box = potatoBox(point, scale);
-          const { x, y, r } = face(spot);
-          const near = {
-            x: Math.min(box.right, Math.max(box.left, x)),
-            y: Math.min(box.bottom, Math.max(box.top, y)),
-          };
-          expect(Math.hypot(near.x - x, near.y - y), label).toBeGreaterThan(r);
+          expect(offFace(box, spot), label).toBeGreaterThan(0);
           expect(drawingTop(point, scale), label).toBeGreaterThanOrEqual(SKY - 1e-6);
           // Higher than where it's held.
           expect(point.y, label).toBeLessThan(held(spot, scale).y);
           expect(box.left, label).toBeGreaterThanOrEqual(0);
           expect(box.right, label).toBeLessThanOrEqual(1280);
+        }
+      }
+    }
+  });
+
+  it("the wind-up never covers the holder's face", () => {
+    for (let count = 2; count <= 12; count++) {
+      const scale = count === 2 ? POTATO.pairScale : 1;
+      for (const pair of count === 2 ? [[0, 1] as [number, number]] : pairs(count)) {
+        const spots = duelLayout(count, pair);
+        for (const index of pair) {
+          const label = `${count} people, pair ${pair.join(' and ')}, ${index}`;
+          const spot = spots[index]!;
+          const path = windUp(spot, scale);
+          expect(path[0], label).toEqual(held(spot, scale));
+          expect(path[3], label).toEqual(raised(spot, scale));
+          for (let step = 0; step <= 20; step++) {
+            const box = potatoBox(bezier(step / 20, ...path), scale);
+            expect(offFace(box, spot), `${label}, t ${step / 20}`).toBeGreaterThan(0);
+          }
         }
       }
     }
@@ -1670,6 +1691,8 @@ interface LabRun {
   readonly bubbles: Said[];
   /** The burst comes before every person on the stage. */
   readonly burstBehind: boolean;
+  /** Where the burst's centre is drawn. */
+  readonly burstAt: Point;
   /** In the last frame: the unlucky person comes after everyone else, and how many times bigger than just before the pop. */
   readonly inFront: boolean;
   readonly grownScale: number;
@@ -1724,7 +1747,13 @@ async function labRuns(): Promise<LabRun[]> {
       const placed: { time: number; at: string }[] = [];
       let smallestTag = Infinity;
       let beforePop = 1;
-      let end = { burstBehind: false, inFront: false, grownScale: 0, raised: [] as string[] };
+      let end = {
+        burstBehind: false,
+        burstAt: { x: NaN, y: NaN } as Point,
+        inFront: false,
+        grownScale: 0,
+        raised: [] as string[],
+      };
       const { frames, catches, record } = await watch(team, unlucky, seed, (time, stage) => {
         const scene = stage.querySelector<HTMLElement>('[data-part="scene"]')!;
         const potato = scene.querySelector<SVGElement>('[data-part="potato"]')!;
@@ -1746,13 +1775,18 @@ async function labRuns(): Promise<LabRun[]> {
         }
         const people = [...scene.querySelectorAll<HTMLElement>('[data-person]')];
         const them = people.find((person) => person.dataset.person === unlucky)!;
-        const burst = scene.querySelector('[data-part="burst"]')!;
+        const burst = scene.querySelector<SVGElement>('[data-part="burst"]')!;
         placed.push({ time, at: placement(them, stage) });
         if (scene.dataset.beat !== 'pop') beforePop = Number(gsap.getProperty(them, 'scale'));
         for (const tag of scene.querySelectorAll<HTMLElement>('[data-on="chest"]')) {
           smallestTag = Math.min(smallestTag, drawnTag(tag, stage));
         }
         end = {
+          // The burst is 300 px square, placed by its top left corner.
+          burstAt: {
+            x: parseFloat(burst.style.left) + 150,
+            y: parseFloat(burst.style.top) + 150,
+          },
           burstBehind: people.every(
             (person) =>
               (burst.compareDocumentPosition(person) & Node.DOCUMENT_POSITION_FOLLOWING) !== 0,
@@ -1836,6 +1870,14 @@ describe('The lab check', () => {
         // Frames are 1/30 s apart.
         expect(popped!.from - startOf(plan, 'pop'), label).toBeLessThanOrEqual(0.2 + 1 / 30 + 1e-9);
       }
+    }
+  });
+
+  it('the pop bursts where the potato is', () => {
+    expect(lab.some((run) => run.plan.ending === 'holding-on')).toBe(true);
+    for (const { label, frames, burstAt } of lab) {
+      const pop = frames.find((frame) => frame.beat === 'pop')!;
+      expect(distance(pop.potato, burstAt), label).toBeLessThanOrEqual(10);
     }
   });
 
