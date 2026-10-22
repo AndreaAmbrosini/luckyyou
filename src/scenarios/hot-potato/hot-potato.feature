@@ -5,7 +5,6 @@ Feature: Hot Potato
   hands, and they get a paper crown. The contract in specs/scenarios.feature
   applies as well.
 
-  @pending
   Rule: Its card
 
     Scenario: The picker shows Hot Potato
