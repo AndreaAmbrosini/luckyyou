@@ -1,14 +1,18 @@
-.people {
+.person {
   position: absolute;
-  inset: 0;
-  display: flex;
-  flex-wrap: wrap;
-  place-content: center;
-  gap: 32px 40px;
-  margin: 0;
-  padding: 80px;
-  background-color: var(--color-sky);
-  list-style: none;
+  transform-origin: 50% 80%;
+}
+
+.person > svg {
+  display: block;
+}
+
+.potato {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 120px;
+  height: 110px;
 }
 
 .scene {

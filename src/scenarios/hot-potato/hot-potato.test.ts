@@ -1,6 +1,7 @@
 import { loadFeature } from '@amiceli/vitest-cucumber';
+import { gsap } from 'gsap';
 import { describe, expect, it } from 'vitest';
-import { describeSpec } from '../../scenario-kit/testing';
+import { describeSpec, runShow } from '../../scenario-kit/testing';
 import { createRandom } from '../../scenario-kit/random';
 import hotPotato from './index';
 import { held, outOfPlay, ring, type Spot } from './layout';
@@ -80,6 +81,107 @@ function everyPlan(): { label: string; plan: Plan; unlucky: string }[] {
   return all;
 }
 
+/** What the stage showed in one frame. */
+interface Frame {
+  readonly time: number;
+  readonly beat: string;
+  /** Who holds the potato; '' while it flies. */
+  readonly holder: string;
+  readonly sparkler: number;
+  readonly lit: boolean;
+  readonly inPlay: readonly string[];
+  readonly moods: Readonly<Record<string, string>>;
+  /** How big each person is drawn, 1 their spot's size. */
+  readonly scales: Readonly<Record<string, number>>;
+}
+
+/** Someone catching the potato: who, and what the stage showed in that frame. */
+interface Caught {
+  readonly holder: string;
+  readonly sparkler: number;
+  readonly beat: string;
+}
+
+/**
+ * Runs Hot Potato and notes what the stage showed every frame, and every
+ * catch. In hot hands a catch is thrown on at once, so frames alone can miss
+ * it: the catches are read from each change of the potato's holder.
+ */
+async function watch(
+  team: readonly string[],
+  unlucky: string,
+  seed = 1,
+): Promise<{ frames: Frame[]; catches: Caught[] }> {
+  const frames: Frame[] = [];
+  const catches: Caught[] = [];
+  /** What each frame reads, found once: looking it up every frame is slow in jsdom. */
+  let parts: { scene: HTMLElement; people: HTMLElement[]; potato: SVGElement } | undefined;
+  let holder = '';
+  const holders = new MutationObserver((changes) => {
+    const { scene, potato } = parts!;
+    changes.forEach((change, index) => {
+      // Each change names the holder before it; the last one's is the holder now.
+      const next = changes[index + 1]?.oldValue ?? potato.dataset.holder ?? '';
+      if (next === holder) return;
+      holder = next;
+      if (next) {
+        catches.push({
+          holder: next,
+          sparkler: Number(potato.dataset.sparkler),
+          beat: scene.dataset.beat!,
+        });
+      }
+    });
+  });
+  const record = await runShow(hotPotato, {
+    names: team,
+    unlucky,
+    seed,
+    onFrame(time, stage) {
+      if (!parts) {
+        parts = {
+          scene: stage.querySelector<HTMLElement>('[data-part="scene"]')!,
+          people: [...stage.querySelectorAll<HTMLElement>('[data-person]')],
+          potato: stage.querySelector<SVGElement>('[data-part="potato"]')!,
+        };
+        holders.observe(parts.potato, {
+          attributeFilter: ['data-holder'],
+          attributeOldValue: true,
+        });
+      }
+      const { scene, people, potato } = parts;
+      // Once the show is over, the run empties the stage.
+      if (!scene.isConnected) return;
+      frames.push({
+        time,
+        beat: scene.dataset.beat!,
+        holder: potato.dataset.holder!,
+        sparkler: Number(potato.dataset.sparkler),
+        lit: potato.dataset.lit === 'true',
+        inPlay: people
+          .filter((person) => person.dataset.inPlay === 'true')
+          .map((person) => person.dataset.person!),
+        moods: Object.fromEntries(
+          people.map((person) => [person.dataset.person!, person.dataset.mood!]),
+        ),
+        scales: Object.fromEntries(
+          people.map((person) => [
+            person.dataset.person!,
+            Number(gsap.getProperty(person, 'scale')),
+          ]),
+        ),
+      });
+    },
+  });
+  holders.disconnect();
+  expect(record.outcome).toBe('finished');
+  return { frames, catches };
+}
+
+/** The first seed whose plan has the sparkler going out. */
+const dudSeed = (count: number, unlucky: string) =>
+  plans(count, unlucky).findIndex((plan) => plan.dud) + 1;
+
 describeSpec(await loadFeature('./hot-potato.feature'), ({ Rule }) => {
   Rule('Its card', ({ RuleScenario }) => {
     RuleScenario('The picker shows Hot Potato', ({ Then, And }) => {
@@ -98,7 +200,32 @@ describeSpec(await loadFeature('./hot-potato.feature'), ({ Rule }) => {
     });
   });
 
-  Rule("It pops in the unlucky person's hands", ({ RuleScenario }) => {
+  Rule("It pops in the unlucky person's hands", ({ RuleScenario, RuleScenarioOutline }) => {
+    RuleScenarioOutline(
+      '<count> people, the unlucky person <position> in the list',
+      ({ Given, When, Then, And }, variables) => {
+        let team: string[];
+        let unlucky: string;
+        let frames: Frame[];
+        Given('<count> people, with the unlucky person <position> in the list', () => {
+          team = names(Number(variables.count));
+          unlucky = variables.position === 'first' ? team[0]! : team.at(-1)!;
+        });
+        When('the show runs', async () => {
+          ({ frames } = await watch(team, unlucky));
+        });
+        Then("the potato pops in the unlucky person's hands", () => {
+          expect(frames.some((frame) => frame.beat === 'pop')).toBe(true);
+          expect(frames.filter((frame) => frame.beat !== 'pop').at(-1)!.holder).toBe(unlucky);
+        });
+        And('nobody else is holding it when it pops', () => {
+          const freeze = frames.filter((frame) => frame.beat === 'freeze');
+          expect(freeze.length).toBeGreaterThan(0);
+          for (const frame of freeze) expect(frame.holder).toBe(unlucky);
+        });
+      },
+    );
+
     RuleScenario('Who catches it first gives nothing away', ({ Given, When, Then, And }) => {
       let runs: Plan[];
       Given('8 people, with the same unlucky person every time', () => {});
@@ -154,6 +281,36 @@ describeSpec(await loadFeature('./hot-potato.feature'), ({ Rule }) => {
         });
       });
 
+      RuleScenario('Everyone else steps back', ({ Given, When, Then, And }) => {
+        const team = names(8);
+        let plan: Plan;
+        let showdown: Frame[];
+        Given('8 people', () => {
+          plan = planShow(team, 'Luca', createRandom(1));
+        });
+        When('the showdown starts', async () => {
+          const { frames } = await watch(team, 'Luca');
+          showdown = frames.slice(frames.findIndex((frame) => frame.beat === 'showdown'));
+        });
+        Then('the 5 people out of play step back, smaller and relieved', () => {
+          const outside = team.filter((name) => !plan.showdown.includes(name));
+          expect(outside).toHaveLength(5);
+          const start = showdown[0]!.time;
+          for (const frame of showdown) {
+            expect([...frame.inPlay].sort()).toEqual([...plan.showdown].sort());
+            for (const name of outside) {
+              expect(frame.moods[name], name).toBe('happy');
+              if (frame.time >= start + 0.4) expect(frame.scales[name], name).toBeCloseTo(0.88, 3);
+            }
+          }
+        });
+        And('the potato only goes to the 3 in play until it pops', () => {
+          const holders = showdown.map((frame) => frame.holder).filter(Boolean);
+          expect(holders.length).toBeGreaterThan(0);
+          for (const holder of holders) expect(plan.showdown).toContain(holder);
+        });
+      });
+
       RuleScenario('Who is in the showdown gives nothing away', ({ Given, When, Then }) => {
         let runs: Plan[];
         Given('8 people, with the same unlucky person every time', () => {});
@@ -171,6 +328,82 @@ describeSpec(await loadFeature('./hot-potato.feature'), ({ Rule }) => {
       });
     },
   );
+
+  Rule('The sparkler is the clock everyone watches', ({ RuleScenario, RuleScenarioOutline }) => {
+    RuleScenario('It burns down to the pop', ({ When, Then, And }) => {
+      const team = names(8);
+      let frames: Frame[];
+      let catches: Caught[];
+      When('the show runs', async () => {
+        ({ frames, catches } = await watch(team, 'Luca', dudSeed(8, 'Luca')));
+      });
+      Then(
+        'the sparkler is shorter at each throw than at the one before, except when it relights',
+        () => {
+          expect(catches.length).toBeGreaterThan(5);
+          expect(frames.some((frame) => frame.beat === 'relight')).toBe(true);
+          const relight = BEATS.indexOf('relight');
+          const order = (each: Caught) => BEATS.indexOf(each.beat as Beat);
+          catches.slice(1).forEach((each, k) => {
+            const previous = catches[k]!;
+            const relit = order(previous) < relight && order(each) >= relight;
+            if (!relit) {
+              expect(each.sparkler, `catch ${k + 1}, ${each.holder}`).toBeLessThan(
+                previous.sparkler,
+              );
+            }
+          });
+        },
+      );
+      And(
+        'it is at its last spark only while the unlucky person holds the potato, just before the pop',
+        () => {
+          const last = frames.filter((frame) => frame.sparkler === 0);
+          expect(last.length).toBeGreaterThan(0);
+          for (const frame of last) {
+            expect(frame.holder, `at ${frame.time}`).toBe('Luca');
+            expect(['last-throw', 'freeze', 'pop']).toContain(frame.beat);
+          }
+          for (const frame of frames.filter((each) => each.beat === 'freeze')) {
+            expect(frame.sparkler).toBe(0);
+          }
+        },
+      );
+    });
+
+    RuleScenarioOutline(
+      'Sometimes it seems to go out, with <count> people',
+      ({ Given, When, Then, And }, variables) => {
+        let runs: Plan[];
+        let frames: Frame[];
+        Given('<count> people', () => {});
+        When('the show runs with 20 different random seeds', async () => {
+          const team = names(Number(variables.count));
+          runs = plans(team.length, team[0]!);
+          ({ frames } = await watch(team, team[0]!, dudSeed(team.length, team[0]!)));
+        });
+        Then(
+          'in some runs the sparkler goes out before the showdown, everyone relaxes, and it relights shorter',
+          () => {
+            expect(runs.some((plan) => plan.dud)).toBe(true);
+            const dud = frames.filter((frame) => frame.beat === 'dud');
+            expect(dud.length).toBeGreaterThan(0);
+            for (const frame of dud) {
+              expect(frame.lit).toBe(false);
+              expect(Object.values(frame.moods)).toHaveLength(Number(variables.count));
+              for (const mood of Object.values(frame.moods)) expect(mood).toBe('happy');
+            }
+            const relight = frames.find((frame) => frame.beat === 'relight')!;
+            expect(relight.lit).toBe(true);
+            expect(relight.sparkler).toBeLessThan(dud[0]!.sparkler);
+          },
+        );
+        And('in some runs it never goes out', () => {
+          expect(runs.some((plan) => plan.dud === null)).toBe(true);
+        });
+      },
+    );
+  });
 
   Rule('The last throw can twist', ({ RuleScenarioOutline }) => {
     RuleScenarioOutline(
@@ -321,6 +554,19 @@ describe('The ring', () => {
   it('held is 35 px over the head', () => {
     const spot = ring(8)[0]!;
     expect(held(spot)).toEqual({ x: spot.x, y: spot.y - 0.8 * spot.size - 35 });
+  });
+});
+
+describe('The stage', () => {
+  it('plays the plan for its seed', async () => {
+    const team = names(8);
+    for (const twist of ['straight', 'back', 'boomerang'] as const) {
+      const seed = plans(8, 'Luca').findIndex((plan) => plan.twist === twist) + 1;
+      const plan = planShow(team, 'Luca', createRandom(seed));
+      const { catches } = await watch(team, 'Luca', seed);
+      const holders = catches.map((each) => each.holder);
+      expect(holders, `${twist}, seed ${seed}`).toEqual(plan.catches.map((each) => each.by));
+    }
   });
 });
 

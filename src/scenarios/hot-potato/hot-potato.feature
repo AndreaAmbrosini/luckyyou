@@ -15,7 +15,6 @@ Feature: Hot Potato
 
   Rule: It pops in the unlucky person's hands
 
-    @pending
     Scenario Outline: <count> people, the unlucky person <position> in the list
       Given <count> people, with the unlucky person <position> in the list
       When the show runs
@@ -53,7 +52,6 @@ Feature: Hot Potato
         | 3     | 3       |
         | 2     | 2       |
 
-    @pending
     Scenario: Everyone else steps back
       Given 8 people
       When the showdown starts
@@ -65,7 +63,6 @@ Feature: Hot Potato
       When the show runs with 20 different random seeds
       Then the unlucky person is the first to catch it in the showdown in some runs, and not in others
 
-  @pending
   Rule: The sparkler is the clock everyone watches
 
     Scenario: It burns down to the pop
