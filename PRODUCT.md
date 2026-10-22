@@ -5,7 +5,8 @@
 A team in a video call needs one person for a job nobody wants: taking
 notes, running the retro, writing the release notes. One person opens
 LuckyYou and shares their screen, everyone watches a short, silly show, and
-the app names who gets the job. The app's text is in English.
+the app names who gets the job. Most picks have 7 or 8 people. The app's
+text is in English.
 
 ## The joke
 
@@ -27,7 +28,7 @@ quick to follow.
 
 ## Anti-goals
 
-These would be failures even if everything else worked:
+Failures even if everything else works:
 
 - A pick that isn't truly random, or a scenario that can influence it.
 - A new scenario that needs edits outside its own folder.

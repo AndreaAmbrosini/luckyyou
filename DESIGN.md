@@ -96,6 +96,8 @@ buttons, and a disabled button's reason under the row.
 
 Every scenario follows these so the shows look like one app:
 
+- Each show is drawn first for the usual head count in
+  [PRODUCT.md](PRODUCT.md), then checked at its smallest and largest.
 - The stage is 1280×720 stage pixels, scaled to fit the window.
 - Drawings use flat fills and ink outlines of 4 to 5 stage pixels.
 - Name tags are paper stickers with an ink outline and ink text, straight
