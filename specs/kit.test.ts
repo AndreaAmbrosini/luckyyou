@@ -856,15 +856,29 @@ describeSpec(await loadFeature('./kit.feature'), ({ Rule }) => {
     };
 
     RuleScenario('A show can ask for every sound', ({ Then }) => {
-      Then('a show can play splash, rotor, whoosh, heartbeat, fanfare, sizzle and pop', () => {
-        const counts = fakeAudio();
-        const { player } = createSound({ muted: false });
-        for (const cue of ['splash', 'rotor', 'whoosh', 'heartbeat', 'fanfare', 'sizzle', 'pop']) {
-          const before = counts.started;
-          expect(() => player.play(cue as Cue), cue).not.toThrow();
-          expect(counts.started, cue).toBeGreaterThan(before);
-        }
-      });
+      Then(
+        'a show can play splash, rotor, whoosh, heartbeat, fanfare, sizzle, pop, thunk, creak and tumble',
+        () => {
+          const counts = fakeAudio();
+          const { player } = createSound({ muted: false });
+          for (const cue of [
+            'splash',
+            'rotor',
+            'whoosh',
+            'heartbeat',
+            'fanfare',
+            'sizzle',
+            'pop',
+            'thunk',
+            'creak',
+            'tumble',
+          ]) {
+            const before = counts.started;
+            expect(() => player.play(cue as Cue), cue).not.toThrow();
+            expect(counts.started, cue).toBeGreaterThan(before);
+          }
+        },
+      );
     });
 
     RuleScenario('The sizzle loops until it is stopped', ({ When, Then }) => {

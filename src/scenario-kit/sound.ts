@@ -3,7 +3,17 @@
 // sound off (DESIGN.md).
 
 /** The sounds a show can ask for. */
-export type Cue = 'splash' | 'rotor' | 'whoosh' | 'heartbeat' | 'fanfare' | 'sizzle' | 'pop';
+export type Cue =
+  | 'splash'
+  | 'rotor'
+  | 'whoosh'
+  | 'heartbeat'
+  | 'fanfare'
+  | 'sizzle'
+  | 'pop'
+  | 'thunk'
+  | 'creak'
+  | 'tumble';
 
 export interface SoundPlayer {
   /**
@@ -144,6 +154,36 @@ const CUES: Record<Cue, (context: AudioContext) => AudioScheduledSourceNode[]> =
     return start(context, [burst, thump], 0.15);
   },
 
+  thunk(context) {
+    return knock(context, 0, 120, 0.6);
+  },
+
+  creak(context) {
+    // A slow, rasping squeal that climbs, with a ragged wobble so it is no pulse.
+    const rasp = noise(context, 0.6);
+    const squeal = filter(context, 'bandpass', 380);
+    squeal.Q.setValueAtTime(12, context.currentTime);
+    squeal.frequency.exponentialRampToValueAtTime(900, context.currentTime + 0.55);
+    rasp
+      .connect(squeal)
+      .connect(envelope(context, 0.5, 0.2, 0.4))
+      .connect(context.destination);
+    return start(context, [rasp], 0.6);
+  },
+
+  tumble(context) {
+    // Blocks landing one after another, each lower than the last, then a rumble.
+    const knocks = [0, 0.13, 0.29, 0.5].flatMap((delay, index) =>
+      knock(context, delay, 130 - index * 20, 0.5 - index * 0.08),
+    );
+    const rumble = noise(context, 1);
+    rumble
+      .connect(filter(context, 'lowpass', 300))
+      .connect(envelope(context, 0.35, 0.3, 0.6, 0.3))
+      .connect(context.destination);
+    return [...knocks, ...start(context, [rumble], 1)];
+  },
+
   fanfare(context) {
     const notes = [523.25, 659.25, 783.99, 1046.5];
     return notes.flatMap((pitch, index) => {
@@ -155,6 +195,20 @@ const CUES: Record<Cue, (context: AudioContext) => AudioScheduledSourceNode[]> =
     });
   },
 };
+
+/** A foam block landing: a low sine knock under a soft tap of noise. */
+function knock(context: AudioContext, delay: number, pitch: number, level: number) {
+  const body = tone(context, 'sine', pitch);
+  body.frequency.setValueAtTime(pitch, context.currentTime + delay);
+  body.frequency.exponentialRampToValueAtTime(pitch * 0.5, context.currentTime + delay + 0.12);
+  body.connect(envelope(context, level, 0.004, 0.12, delay)).connect(context.destination);
+  const tap = noise(context, 0.05);
+  tap
+    .connect(filter(context, 'lowpass', 600))
+    .connect(envelope(context, level * 0.4, 0.002, 0.04, delay))
+    .connect(context.destination);
+  return start(context, [body, tap], 0.15, delay);
+}
 
 function noise(context: AudioContext, seconds: number, { loop = false } = {}) {
   const buffer = context.createBuffer(
