@@ -43,11 +43,15 @@ const GRAB = 0.25;
 const DUEL = {
   many: { moves: [ARRIVE, 0.3, 0.35, 0.5], holds: [2, 1, 1.2, 3] },
   manyOnce: { moves: [ARRIVE, 0.5], holds: [1, 1.8] },
+  manySlip: { moves: [ARRIVE, 0.45], holds: [1, 2] },
   two: { moves: [ARRIVE, 0.4, 0.45, 0.6], holds: [1, 1, 1.2, 2.5] },
   twoFeint: { moves: [ARRIVE, 0.4, 0.45, 0.6], holds: [1, 1, 1, 1.6] },
+  twoSlip: { moves: [ARRIVE, 0.4, 0.45, 0.6], holds: [1.1, 1.1, 0.6, 1.4] },
 };
 /** A feint: how far towards the other one the helicopter gets, and the seconds out and back. */
 const FEINT = { reach: 0.45, out: 0.3, back: 0.35 };
+/** A slip: how far up the rope they get, and the seconds up and back down into the water. */
+const SLIP = { reach: 0.4, up: 0.45, down: 0.45 };
 /** How far the hook creeps down while the rope hangs over the last one in a duel. */
 const CREEP = 24;
 /** Where the rope hangs from, low enough that the helicopter stays under the caption. */
@@ -271,14 +275,16 @@ export async function playSharkBait(show: Show): Promise<void> {
   function rescueOne(rescue: Exclude<Rescue, { kind: 'group' }>, start: number, seconds: number) {
     const aims = AIMS[rescue.kind](rescue as never);
     const feint = rescue.kind === 'duel' ? rescue.feint : null;
+    const slip = rescue.kind === 'duel' ? rescue.slip : null;
     const pace =
-      rescue.kind === 'duel' ? DUEL[duelPace(show.names.length === 2, aims, feint)] : null;
-    const two = pace === DUEL.two || pace === DUEL.twoFeint;
+      rescue.kind === 'duel' ? DUEL[duelPace(show.names.length === 2, aims, feint, slip)] : null;
+    const two = pace === DUEL.two || pace === DUEL.twoFeint || pace === DUEL.twoSlip;
     const moves = pace?.moves ?? aims.map((_, index) => (index === 0 ? ARRIVE : SWING));
     const shares =
       pace?.holds ?? aims.map((_, index) => (aims.length === 1 || index < aims.length - 1 ? 1 : 0));
     const feinting = feint === null ? 0 : FEINT.out + FEINT.back;
-    const spare = seconds - sum(moves) - feinting - LIFT;
+    const slipping = slip === null ? 0 : GRAB + SLIP.up + SLIP.down;
+    const spare = seconds - sum(moves) - feinting - slipping - LIFT;
     const holds = shares.map((share) => (spare * share) / sum(shares));
 
     let time = start;
@@ -290,7 +296,7 @@ export async function playSharkBait(show: Show): Promise<void> {
       moods(time, name);
       chopper.phase('hovering', time);
       if (rescue.kind === 'duel') cue(time, 'heartbeat');
-      if (two) {
+      if (two && (slip === null || index <= slip)) {
         // With two people, the caption follows the rope: "Marco… Giulia… Marco… Giulia!"
         caption(time, aims.slice(0, index + 1).join('… ') + (last ? '!' : '…'));
       } else if (pace) {
@@ -304,7 +310,8 @@ export async function playSharkBait(show: Show): Promise<void> {
       chopper.flyTo({ x: target.place.x, y: HOVER_Y, scale: 1 }, time, seconds, 'power2.inOut');
       chopper.lower(hookAbove(target.place) - HOVER_Y, time, seconds);
       time += seconds;
-      const hold = holds[index]! + (index === feint ? feinting : 0);
+      const hold =
+        holds[index]! + (index === feint ? feinting : 0) + (index === slip ? slipping : 0);
       // A feint swings the rope itself, so it doesn't sway as well.
       if (aims.length === 1 || (pace && last && index !== feint)) chopper.wobble(time, hold);
       // In a duel, the hook creeps down over the last one before it drops.
@@ -325,10 +332,21 @@ export async function playSharkBait(show: Show): Promise<void> {
         chopper.swing(target.place.x, back, FEINT.back);
         chopper.flyTo({ x: target.place.x, y: HOVER_Y }, back, FEINT.back, 'power2.inOut');
       }
+      if (index === slip) {
+        // Halfway through the hold, the hook catches them, and they slip off.
+        const grab = time + holds[index]! / 2;
+        const fall = grab + GRAB + SLIP.up;
+        chopper.lower(hookDown(target.place) - HOVER_Y, grab, GRAB);
+        target.slip(grab + GRAB, chopper);
+        cue(grab + GRAB, 'whoosh');
+        caption(fall, `Whoops! ${name} slipped!`);
+        chopper.lower(hookAbove(target.place) - HOVER_Y, fall, SLIP.down);
+        cue(fall + SLIP.down, 'splash');
+      }
       time += hold;
     });
     const lifted = swimmers.get(rescue.lifted)!;
-    chopper.lower(lifted.place.y - 0.68 * lifted.place.size - 10 - HOVER_Y, time, GRAB);
+    chopper.lower(hookDown(lifted.place) - HOVER_Y, time, GRAB);
     const out = time + GRAB;
     lifted.leave(out);
     lifted.rise(out, chopper);
@@ -351,8 +369,16 @@ const AIMS: {
 };
 
 /** Which of the duel's paces fits its shape. */
-const duelPace = (pair: boolean, aims: readonly string[], feint: number | null) =>
-  pair ? (feint === null ? 'two' : 'twoFeint') : aims.length === 2 ? 'manyOnce' : 'many';
+function duelPace(
+  pair: boolean,
+  aims: readonly string[],
+  feint: number | null,
+  slip: number | null,
+): keyof typeof DUEL {
+  if (pair) return slip !== null ? 'twoSlip' : feint !== null ? 'twoFeint' : 'two';
+  if (slip !== null) return 'manySlip';
+  return aims.length === 2 ? 'manyOnce' : 'many';
+}
 
 const sum = (seconds: readonly number[]) => seconds.reduce((total, each) => total + each, 0);
 
@@ -361,6 +387,9 @@ const clamp = (x: number) => Math.min(1100, Math.max(180, x));
 
 /** Where the hook waits above someone: just over their name tag. */
 const hookAbove = (place: Place) => labelY(place) + place.y - 1.1 * place.tag.size - 40;
+
+/** Where the hook comes down to, to catch someone. */
+const hookDown = (place: Place) => place.y - 0.68 * place.size - 10;
 
 /** Where a person's name tag sits, from the middle of their swim ring. */
 const labelY = ({ size, lift = 0 }: Place) => tagBottom(size) - lift;
@@ -440,6 +469,32 @@ function createSwimmer(
         at,
       );
       timeline.to(label, { autoAlpha: 0, duration: 0.2 }, at);
+    },
+    /** Pulled partway up the rope, then slips off and falls back into the water. */
+    slip(at: number, chopper: Helicopter) {
+      const climb = SLIP.reach * (chopper.length - 40);
+      const fall = at + SLIP.up;
+      timeline.call(
+        () => {
+          el.dataset.slip = 'true';
+          face.setMood('happy');
+          face.setRing(false);
+        },
+        [],
+        at,
+      );
+      timeline.to(el, { y: `-=${climb}`, duration: SLIP.up, ease: 'power2.out' }, at);
+      chopper.lower(chopper.length - climb, at, SLIP.up);
+      timeline.call(() => face.setMood('scared'), [], fall);
+      timeline.to(el, { y: current.y, duration: SLIP.down, ease: 'power2.in' }, fall);
+      timeline.call(
+        () => {
+          el.dataset.slip = 'false';
+          face.setRing(true);
+        },
+        [],
+        fall + SLIP.down,
+      );
     },
     /** Goes up the rope into the helicopter. */
     rise(at: number, chopper: Helicopter) {

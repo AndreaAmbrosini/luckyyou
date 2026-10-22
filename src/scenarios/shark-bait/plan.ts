@@ -36,12 +36,14 @@ export type Rescue =
    * The last two: the rope swings back and forth between them, starting with
    * the unlucky person, and hangs over the one it lifts before the hook comes
    * down. While it holds over `aims[feint]`, the helicopter sets off towards
-   * the other one and turns back halfway.
+   * the other one and turns back halfway. While it holds over `aims[slip]`,
+   * always the unlucky person, the hook catches them, and they slip off.
    */
   | {
       readonly kind: 'duel';
       readonly aims: readonly string[];
       readonly feint: number | null;
+      readonly slip: number | null;
       readonly lifted: string;
     };
 
@@ -62,22 +64,25 @@ const SHORTEST = 11.5;
 
 /**
  * The duel takes one of a few shapes, at random. With two people: straight
- * back and forth, or the same with a feint in the hang over the one it
- * lifts. With more: straight back and forth, or across once, with a feint
- * over either of the two.
+ * back and forth, the same with a feint in the hang over the one it lifts,
+ * or the same with a slip the second time over the unlucky person. With
+ * more: straight back and forth, or across once, with a feint over either
+ * of the two or a slip over the unlucky person.
  */
 function duel(unlucky: string, lifted: string, pair: boolean, random: () => number): Rescue {
   const across = [unlucky, lifted, unlucky, lifted];
   const once = [unlucky, lifted];
   const shapes = pair
     ? [
-        { aims: across, feint: null },
-        { aims: across, feint: 3 },
+        { aims: across, feint: null, slip: null },
+        { aims: across, feint: 3, slip: null },
+        { aims: across, feint: null, slip: 2 },
       ]
     : [
-        { aims: across, feint: null },
-        { aims: once, feint: 0 },
-        { aims: once, feint: 1 },
+        { aims: across, feint: null, slip: null },
+        { aims: once, feint: 0, slip: null },
+        { aims: once, feint: 1, slip: null },
+        { aims: once, feint: null, slip: 0 },
       ];
   return { kind: 'duel', lifted, ...pickOne(shapes, random) };
 }
@@ -113,6 +118,8 @@ export function planShow(names: readonly string[], unlucky: string, random: () =
 
   // With 4 or fewer, the slow rescues open the show and take a little longer.
   const slower = count <= SLOW_FROM ? 0.2 : 0;
+  // A slip in the duel takes longer.
+  const slip = rescues.some((rescue) => rescue.kind === 'duel' && rescue.slip !== null);
   // A fake-out that swings away and back swings twice, so it takes longer too.
   const twice = rescues.some((rescue) => rescue.kind === 'fake-out' && rescue.via) ? 0.25 : 0;
   const beats = fitBeats<Beat>(
@@ -121,7 +128,10 @@ export function planShow(names: readonly string[], unlucky: string, random: () =
       'group-rescues': { seconds: swoops * 1.0 },
       'four-left': { seconds: count >= 4 ? 1.4 + 2 * slower : 0, flexible: true },
       'fake-out': { seconds: count >= 3 ? 2.0 + slower + twice : 0, flexible: true },
-      duel: { seconds: count === 2 ? 6.0 : 3.6 + slower, flexible: true },
+      duel: {
+        seconds: (count === 2 ? 6.0 : 3.6 + slower) + (slip ? (count === 2 ? 0.3 : 0.25) : 0),
+        flexible: true,
+      },
       'sharks-run': { seconds: count === 2 ? 1.5 : 1.4 },
       'victory-lap': { seconds: count === 2 ? 2.5 : 2.0 },
     },

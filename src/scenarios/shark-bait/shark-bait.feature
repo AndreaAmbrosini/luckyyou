@@ -69,12 +69,24 @@ Feature: Shark Bait
       Given <count> people
       When the show runs
       Then the helicopter swings back and forth at least 3 times before it lifts one
-      And it holds still longest over the one it lifts, before the hook comes down
+      And it holds still longest over the one it lifts, before the hook comes down, leaving out any slip
 
       Examples:
         | count |
         | 2     |
         | 3     |
+        | 12    |
+
+    Scenario Outline: Sometimes the unlucky person slips off the hook, with <count> people
+      Given <count> people, and the unlucky person is "Marco"
+      When the show runs with 20 different random seeds
+      Then in some runs the hook catches "Marco" in the duel, and "Marco" slips off and falls back in
+      And in those runs it is captioned "Whoops! Marco slipped!", and the rope then lifts the other one
+      And in some runs nobody slips
+
+      Examples:
+        | count |
+        | 2     |
         | 12    |
 
     Scenario Outline: Sometimes the helicopter changes its mind, with <count> people
@@ -98,7 +110,7 @@ Feature: Shark Bait
       When the show runs at every head count from 3 to 12, with both kinds of fake-out
       Then the helicopter holds still over each person the rope heads for, for at least 0.15 seconds
 
-  Rule: The beats keep the show between 11 and 14.5 seconds
+  Rule: The beats keep the show between 11 and 15 seconds
 
     Scenario: Each beat takes about this long
       When the show runs at 12, 4 and 2 people
@@ -112,9 +124,9 @@ Feature: Shark Bait
         | the shark's run          | 1.4       | 1.4      | 1.5      |
         | the victory lap          | 2.0       | 2.0      | 2.5      |
 
-    Scenario: Every head count lands in the middle of the time limit
+    Scenario: Every head count lands inside the time limit
       When the show runs at every head count from 2 to 12
-      Then each run lasts between 11 and 14.5 seconds
+      Then each run lasts between 11 and 15 seconds
 
   Rule: The ending is a victory lap
 
