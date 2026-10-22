@@ -56,6 +56,8 @@ interface Part {
   readonly body?: 'water' | 'land';
   /** Also shown whenever the arms are raised, in any mood. */
   readonly raised?: boolean;
+  /** Only shown while the head sweats. */
+  readonly sweat?: boolean;
 }
 
 const ALL_BUT_PARTY: readonly Mood[] = ['calm', 'worried', 'scared', 'happy'];
@@ -184,6 +186,21 @@ const PARTS: readonly Part[] = [
       ['path', styles.shine, { d: 'M17 76 Q28 70 44 69', 'stroke-width': 4 }],
     ],
   },
+  {
+    name: 'sweat',
+    sweat: true,
+    shapes: [
+      [
+        'path',
+        styles.glass,
+        {
+          d: 'M84 24 Q90 34 84 38 Q78 34 84 24 Z M16 24 Q22 34 16 38 Q10 34 16 24 Z',
+          'stroke-width': 3,
+          'stroke-linejoin': 'round',
+        },
+      ],
+    ],
+  },
 ];
 
 const SVG = 'http://www.w3.org/2000/svg';
@@ -196,13 +213,15 @@ export interface Head {
   setRing(on: boolean): void;
   /** Raises or lowers the arms, whatever the mood. */
   setRaised(on: boolean): void;
+  /** Shows or hides sweat drops, whatever the mood. */
+  setSweat(on: boolean): void;
 }
 
 /**
  * A cartoon head with `look`, in `mood` (calm unless given), with a swim
  * ring unless `ring` is false. On `land` it wears a shirt instead of a ring
  * and its arms start at the shoulders. Happy and party raise the arms, as
- * does `raised`; party swaps the eyes for sunglasses.
+ * does `raised`; party swaps the eyes for sunglasses. `sweat` adds drops.
  */
 export function head(
   look: Look,
@@ -211,7 +230,8 @@ export function head(
     ring = true,
     land = false,
     raised = false,
-  }: { mood?: Mood; ring?: boolean; land?: boolean; raised?: boolean } = {},
+    sweat = false,
+  }: { mood?: Mood; ring?: boolean; land?: boolean; raised?: boolean; sweat?: boolean } = {},
 ): Head {
   const el = document.createElementNS(SVG, 'svg');
   el.setAttribute('viewBox', '0 0 100 100');
@@ -226,26 +246,24 @@ export function head(
   const drawn = PARTS.filter(
     (part) =>
       (!part.accessory || part.accessory === look.accessory) && (!part.body || part.body === body),
-  ).map(
-    (part) => {
-      const group = el.appendChild(document.createElementNS(SVG, 'g'));
-      group.dataset.part = part.name;
-      for (const [tag, className, attributes] of part.shapes) {
-        const shape = group.appendChild(document.createElementNS(SVG, tag));
-        shape.setAttribute('class', className);
-        for (const [key, value] of Object.entries(attributes))
-          shape.setAttribute(key, String(value));
-      }
-      return { part, group };
-    },
-  );
+  ).map((part) => {
+    const group = el.appendChild(document.createElementNS(SVG, 'g'));
+    group.dataset.part = part.name;
+    for (const [tag, className, attributes] of part.shapes) {
+      const shape = group.appendChild(document.createElementNS(SVG, tag));
+      shape.setAttribute('class', className);
+      for (const [key, value] of Object.entries(attributes)) shape.setAttribute(key, String(value));
+    }
+    return { part, group };
+  });
 
-  let current = { mood, ring, raised };
+  let current = { mood, ring, raised, sweat };
   const draw = () => {
     for (const { part, group } of drawn) {
       const shown =
         ((part.moods?.includes(current.mood) ?? true) || (part.raised && current.raised)) &&
-        (part.name !== 'ring' || current.ring);
+        (part.name !== 'ring' || current.ring) &&
+        (!part.sweat || current.sweat);
       if (shown) group.removeAttribute('display');
       else group.setAttribute('display', 'none');
     }
@@ -264,6 +282,10 @@ export function head(
     },
     setRaised(on) {
       current = { ...current, raised: on };
+      draw();
+    },
+    setSweat(on) {
+      current = { ...current, sweat: on };
       draw();
     },
   };

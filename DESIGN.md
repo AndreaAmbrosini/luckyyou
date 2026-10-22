@@ -108,7 +108,7 @@ Every scenario follows these so the shows look like one app:
   `--size-stage-caption` on a paper sticker, each for at least a second.
 - People are cartoon heads with a mood (calm, worried, scared, happy, party)
   and a cap, goggles or snorkel, handed out per run. On land they wear a
-  shirt and raise their arms from the shoulders.
+  shirt and raise their arms from the shoulders, and sweat when nervous.
 - Movement that matters lasts at least 0.4 seconds, and nothing flashes more
   than three times a second. With `prefers-reduced-motion`, a show keeps its
   story and drops shaking and speed lines.

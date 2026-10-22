@@ -643,6 +643,31 @@ describeSpec(await loadFeature('./kit.feature'), ({ Rule }) => {
       });
     });
 
+    RuleScenario('A head can sweat in any mood', ({ When, Then, And }) => {
+      let worried: ReturnType<typeof head>;
+      let scared: ReturnType<typeof head>;
+      When('a worried head and a scared head start sweating', () => {
+        worried = head(LOOK, { land: true, mood: 'worried' });
+        scared = head(LOOK, { land: true, mood: 'scared' });
+        expect(visibleParts(worried.el)).not.toContain('sweat');
+        worried.setSweat(true);
+        scared.setSweat(true);
+      });
+      Then('each shows two sweat drops', () => {
+        for (const drawn of [worried, scared]) {
+          expect(visibleParts(drawn.el)).toContain('sweat');
+          const d = drawn.el.querySelector('[data-part="sweat"] path')?.getAttribute('d') ?? '';
+          expect(d.match(/M/g)).toHaveLength(2);
+        }
+      });
+      And('each keeps its mood', () => {
+        expect(visibleParts(worried.el)).toContain('frown');
+        expect(visibleParts(scared.el)).toContain('scream');
+        worried.setSweat(false);
+        expect(visibleParts(worried.el)).not.toContain('sweat');
+      });
+    });
+
     RuleScenario('Looks are varied', ({ When, Then }) => {
       let looks: Map<string, Look>;
       When('looks are handed out to 12 people', () => {

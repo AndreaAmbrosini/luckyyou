@@ -166,6 +166,11 @@ Feature: The scenario kit
       Then its arms are up
       And it still looks scared
 
+    Scenario: A head can sweat in any mood
+      When a worried head and a scared head start sweating
+      Then each shows two sweat drops
+      And each keeps its mood
+
     Scenario: Looks are varied
       When looks are handed out to 12 people
       Then they use at least 4 skin tones
