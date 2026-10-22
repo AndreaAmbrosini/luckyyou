@@ -342,12 +342,13 @@ describeSpec(await loadFeature('./hot-potato.feature'), ({ Rule }) => {
           const outside = team.filter((name) => !plan.showdown.includes(name));
           expect(outside).toHaveLength(5);
           const start = showdown[0]!.time;
-          // Until the freeze, when they watch the potato too.
-          const freeze = showdown.findIndex((frame) => frame.beat === 'freeze');
-          for (const frame of showdown.slice(0, freeze)) {
+          for (const frame of showdown) {
             expect([...frame.inPlay].sort()).toEqual([...plan.showdown].sort());
+            if (frame.holder) expect(plan.showdown).toContain(frame.holder);
+            // Relieved until the freeze, when they watch the potato too.
+            const relieved = frame.beat !== 'freeze' && frame.beat !== 'pop';
             for (const name of outside) {
-              expect(frame.moods[name], name).toBe('happy');
+              if (relieved) expect(frame.moods[name], name).toBe('happy');
               if (frame.time >= start + 0.4) expect(frame.scales[name], name).toBeCloseTo(0.88, 3);
             }
           }

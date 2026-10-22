@@ -369,6 +369,7 @@ export async function playHotPotato(show: Show): Promise<void> {
   cue(starts.pop + 0.3, 'fanfare');
   timeline.set(potato.el, { autoAlpha: 0 }, starts.pop);
   enter(starts.pop, 'ending');
+  // Forward only: the show never rewinds, so nothing moves them back.
   at(starts.pop, () => potato.el.before(unlucky.el));
   timeline.to(
     unlucky.el,
