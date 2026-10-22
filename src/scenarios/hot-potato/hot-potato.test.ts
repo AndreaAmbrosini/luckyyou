@@ -122,7 +122,7 @@ async function watch(
   const note = (changes: MutationRecord[]) => {
     if (!parts) return;
     const { scene, potato } = parts;
-    changes.forEach((change, index) => {
+    changes.forEach((_, index) => {
       // Each change names the holder before it; the last one's is the holder now.
       const next = changes[index + 1]?.oldValue ?? potato.dataset.holder ?? '';
       if (next === holder) return;
