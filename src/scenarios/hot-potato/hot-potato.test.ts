@@ -638,10 +638,14 @@ describeSpec(await loadFeature('./hot-potato.feature'), ({ Rule }) => {
     RuleScenario('Captions tell the story', ({ Given, When, Then }) => {
       let seed: number;
       let record: ShowRecord;
-      Given('8 people, the unlucky person is "Luca", and the sparkler goes out once', () => {
-        seed = dudSeed(8, 'Luca');
-        expect(seed, 'a seed with a dud').toBeGreaterThan(0);
-      });
+      Given(
+        '8 people, the unlucky person is "Luca", the sparkler goes out once, and the last throw lands straight',
+        () => {
+          seed =
+            plans(8, 'Luca', 200).findIndex((plan) => plan.dud && plan.twist === 'straight') + 1;
+          expect(seed, 'no seed up to 200 has a dud and a straight last throw').toBeGreaterThan(0);
+        },
+      );
       When('the show runs', async () => {
         ({ record } = await watch(names(8), 'Luca', seed));
       });

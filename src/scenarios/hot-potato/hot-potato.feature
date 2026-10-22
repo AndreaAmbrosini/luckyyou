@@ -133,7 +133,7 @@ Feature: Hot Potato
   Rule: It reads without sound
 
     Scenario: Captions tell the story
-      Given 8 people, the unlucky person is "Luca", and the sparkler goes out once
+      Given 8 people, the unlucky person is "Luca", the sparkler goes out once, and the last throw lands straight
       When the show runs
       Then the captions include, in this order:
         | caption                           |
