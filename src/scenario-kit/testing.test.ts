@@ -93,6 +93,23 @@ describe('runShow', () => {
     expect(record.captions).toEqual([{ text: 'Hi', from: 0, to: record.duration }]);
   });
 
+  it('keeps time for every show after one that seeks a running animation', async () => {
+    // Seeking past the root timeline's time gives the tween a negative start,
+    // and GSAP moves the root's start time to make up for it.
+    const seeking = fakeScenario({
+      play: async (show) => {
+        const head = show.stage.appendChild(document.createElement('div'));
+        gsap.to(head, { y: 10, duration: 0.5, yoyo: true, repeat: -1 }).seek(30);
+        await show.wait(1);
+      },
+    });
+    const durations = [];
+    for (const scenario of [seeking, seeking, fakeScenario({ play: (show) => show.wait(2) })]) {
+      durations.push((await runShow(scenario, PICK)).duration);
+    }
+    expect(durations.map((seconds) => Number(seconds.toFixed(6)))).toEqual([1, 1, 2]);
+  });
+
   it('stops a show that runs past its limit', async () => {
     const record = await runShow(fakeScenario({ play: (show) => show.wait(60) }), {
       ...PICK,
