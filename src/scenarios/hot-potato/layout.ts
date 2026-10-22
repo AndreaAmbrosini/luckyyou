@@ -300,34 +300,19 @@ export function apex(...path: readonly Point[]): number {
 
 /** How high a throw rises over the higher of its two ends, plus a share of its length. */
 const ARC = { rise: 120, share: 0.25 };
-/** How far the boomerang swings out towards the middle of the ring, and how high. */
-const BOOMERANG = { reach: 420, rise: 300 };
-/** The middle of the ring, for which way the boomerang swings. */
-const MIDDLE = { x: 640, y: 450 };
 
-type Path = [Point, Point, Point, Point];
+/** A cubic Bézier curve: its start, two control points, and its end. */
+export type Path = [Point, Point, Point, Point];
 
 /**
- * A throw from `from` to `to` as a cubic Bézier curve: an arc over the ring,
- * or, when they're the same, the boomerang's loop out towards the middle and
- * back. Flattened just enough that a potato drawn at `scale` stays out of the sky.
+ * A throw from `from` to `to` as a cubic Bézier curve, an arc over the ring,
+ * flattened just enough that a potato drawn at `scale` stays out of the sky.
  */
 export function throwPath(from: Point, to: Point, scale: number): Path {
-  let c1: Point;
-  let c2: Point;
-  if (from.x === to.x && from.y === to.y) {
-    const dx = MIDDLE.x - from.x;
-    const dy = MIDDLE.y - from.y;
-    const length = Math.hypot(dx, dy) || 1;
-    const reach = { x: (BOOMERANG.reach * dx) / length, y: (BOOMERANG.reach * dy) / length };
-    c1 = { x: from.x + reach.x, y: from.y + reach.y - BOOMERANG.rise };
-    c2 = { x: from.x + reach.x, y: from.y + reach.y + BOOMERANG.rise / 3 };
-  } else {
-    const top =
-      Math.min(from.y, to.y) - ARC.rise - ARC.share * Math.hypot(to.x - from.x, to.y - from.y);
-    c1 = { x: from.x, y: top };
-    c2 = { x: to.x, y: top };
-  }
+  const top =
+    Math.min(from.y, to.y) - ARC.rise - ARC.share * Math.hypot(to.x - from.x, to.y - from.y);
+  const c1 = { x: from.x, y: top };
+  const c2 = { x: to.x, y: top };
   const lowered = (by: number): Path => [
     from,
     { x: c1.x, y: c1.y + by },
@@ -345,6 +330,44 @@ export function throwPath(from: Point, to: Point, scale: number): Path {
     else low = middle;
   }
   return lowered(high);
+}
+
+/** The hang's top is this far below the highest a potato may go. */
+const HANG_BELOW = 20;
+
+/**
+ * The hang-time throw: up to a top halfway between the pair, high under the
+ * sky, then down onto `to`. Level at the top, and never higher than it.
+ */
+export function hang(
+  from: Point,
+  to: Point,
+  pair: readonly [Point, Point],
+  scale: number,
+): { rise: Path; top: Point; drop: Path } {
+  const top = { x: (pair[0].x + pair[1].x) / 2, y: highest(scale) + HANG_BELOW };
+  return {
+    rise: [
+      from,
+      { x: from.x, y: (from.y + top.y) / 2 },
+      { x: (from.x + top.x) / 2, y: top.y },
+      top,
+    ],
+    top,
+    drop: [top, { x: (top.x + to.x) / 2, y: top.y }, { x: to.x, y: (top.y + to.y) / 2 }, to],
+  };
+}
+
+/** How much higher than just over the head a potato is held up for a throw. */
+const RAISE = 40;
+
+/** Where the potato is held up for a throw: above the head, below the sky. */
+export function raised(spot: Spot, scale = 1): Point {
+  const top = spot.y - 0.8 * spot.size;
+  return {
+    x: spot.x,
+    y: Math.max(highest(scale), top - HOLD_GAP - (scale * POTATO.height) / 2 - RAISE),
+  };
 }
 
 /** How much bigger the unlucky person stands at the pop. */

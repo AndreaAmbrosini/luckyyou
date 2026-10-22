@@ -24,19 +24,23 @@ import {
   duelGrowth,
   duelLayout,
   duelMove,
+  hang,
   headBox,
   held,
   outOfPlay,
   POTATO,
   potatoBox,
+  raised,
   ring,
   speechAt,
   throwPath,
   type Box,
+  type Path,
+  type Point,
   type Spot,
 } from './layout';
 import { burst, confetti, crown, field, potato as drawPotato } from './parts';
-import { BEATS, planShow, type Beat, type Catch } from './plan';
+import { BEATS, planShow, type Beat, type Catch, type Ending } from './plan';
 import styles from './hot-potato.module.css';
 
 /** Where the plop drops in from, above the stage. */
@@ -53,8 +57,20 @@ const CONFETTI = { count: 36, out: 0.45, fall: 1.4 };
 const GROW = 0.5;
 /** In the duel the spark dims to `low` and back, `half` seconds each way. */
 const FLICKER = { low: 0.45, half: 0.2 };
+/** Seconds of the kit's shake. */
+const SHAKE = 0.4;
+/** How far the control points of the hang's drift reach above its top: it floats up 3/4 of this. */
+const DRIFT = 16;
+/** How far the unlucky person leans into the throw they never make. */
+const LEAN = 50;
+/** The caption a second before the pop. */
+const ENDING_CAPTION: Readonly<Record<Ending, string>> = {
+  'too-hot': 'Too hot!',
+  'hang-time': 'Which way…?',
+  'holding-on': 'Throw it!',
+};
 
-type Phase = 'throws' | 'dud' | 'relight' | 'showdown' | 'duel' | 'ending';
+type Phase = 'throws' | 'dud' | 'relight' | 'showdown' | 'duel' | 'gasp' | 'ending';
 
 interface Person {
   readonly name: string;
@@ -131,16 +147,18 @@ export async function playHotPotato(show: Show): Promise<void> {
         ? name === show.unlucky
           ? 'party'
           : 'happy'
-        : phase === 'dud' || (!inPlay && phase !== 'duel')
-          ? 'happy'
-          : phase === 'relight' || (inPlay && braced)
-            ? 'scared'
-            : 'worried';
+        : phase === 'gasp'
+          ? 'scared'
+          : phase === 'dud' || (!inPlay && phase !== 'duel')
+            ? 'happy'
+            : phase === 'relight' || (inPlay && braced)
+              ? 'scared'
+              : 'worried';
       el.dataset.inPlay = String(inPlay);
       el.dataset.mood = mood;
       face.setMood(mood);
       face.setRaised(ending || braced);
-      face.setSweat(!ending && inPlay && (braced || phase === 'showdown' || phase === 'duel'));
+      face.setSweat(!ending && inPlay && (braced || ['showdown', 'duel', 'gasp'].includes(phase)));
     }
   };
   /** From `time` it's in `name`'s hands, or flying to them when `flying`. */
@@ -184,18 +202,16 @@ export async function playHotPotato(show: Show): Promise<void> {
   /** With 3 or more, the two step in before the duel's first throw. */
   const stepIn = duelThrows[0]!.thrown - starts.duel;
 
-  /** One throw, in an arc over the ring, or between the two in the duel. */
-  function fly(each: Catch) {
-    const duel = each.thrown >= starts.duel + stepIn - 1e-9;
-    const path = throwPath(over(each.from!, duel), over(each.by, duel), scale);
+  /** The potato along `path`, from `from` to `to` show seconds. */
+  function follow(path: Path, from: number, to: number, ease = 'power1.inOut') {
     const along = { t: 0 };
     timeline.fromTo(
       along,
       { t: 0 },
       {
         t: 1,
-        duration: each.at - each.thrown,
-        ease: 'power1.inOut',
+        duration: to - from,
+        ease,
         immediateRender: false,
         onUpdate: () => {
           const point = bezier(along.t, ...path);
@@ -203,8 +219,30 @@ export async function playHotPotato(show: Show): Promise<void> {
           setY(place(point).y);
         },
       },
-      each.thrown,
+      from,
     );
+  }
+
+  /** A straight path from `from` to `to`. */
+  const straight = (from: Point, to: Point): Path => [from, from, to, to];
+
+  /** One throw, in an arc over the ring, or between the two in the duel. */
+  function fly(each: Catch) {
+    const duel = each.thrown >= starts.duel + stepIn - 1e-9;
+    follow(throwPath(over(each.from!, duel), over(each.by, duel), scale), each.thrown, each.at);
+  }
+
+  /**
+   * The hang-time throw: it floats up to between the two, hangs there while
+   * it's still, drifting up a little and back, then drops onto the catcher.
+   */
+  function hangUp(each: Catch) {
+    const two = plan.duel.map((name) => over(name, true)) as [Point, Point];
+    const { rise, top, drop } = hang(over(each.from!, true), over(each.by, true), two, scale);
+    const up = { x: top.x, y: top.y - DRIFT };
+    follow(rise, each.thrown, plan.still.from, 'power2.out');
+    follow([top, up, up, top], plan.still.from, plan.still.to, 'sine.inOut');
+    follow(drop, plan.still.to, each.at, 'power1.in');
   }
 
   // The plop: it drops in from above onto the first catcher, shocked.
@@ -223,7 +261,8 @@ export async function playHotPotato(show: Show): Promise<void> {
     }
     hold(each.thrown, each.by, true);
     cue(each.thrown, 'whoosh');
-    fly(each);
+    if (each.beat === 'last-second' && plan.ending === 'hang-time') hangUp(each);
+    else fly(each);
     hold(each.at, each.by);
     if (each.beat === 'hot-hands') timeline.add(shake(people.get(each.by)!.el, show), each.at);
     previous = each;
@@ -357,7 +396,8 @@ export async function playHotPotato(show: Show): Promise<void> {
 
   // Captions, one at each moment; the kit holds each long enough to read and
   // queues the next. The duel's last name goes up as the last second starts,
-  // 2 s before the pop, so the pop's caption goes up on time.
+  // 2 s before the pop, and the ending's caption 1 s before it, so each has
+  // its second and the pop's caption goes up on time.
   caption(0, "Don't be holding it when it pops!");
   caption(starts['hot-hands'], 'Faster… faster…');
   if (plan.dud) {
@@ -367,6 +407,7 @@ export async function playHotPotato(show: Show): Promise<void> {
   // With 2 people the showdown takes no time, so this is the duel's start.
   caption(starts.showdown, 'Uh-oh…');
   for (const each of during('duel')) caption(each.at, `${each.by}…`);
+  caption(starts.pop - 1, ENDING_CAPTION[plan.ending]);
   caption(starts.pop, `It popped on ${show.unlucky}!`);
 
   // Gags, in bubbles beside the potato, or beside someone's head and clear
@@ -409,6 +450,31 @@ export async function playHotPotato(show: Show): Promise<void> {
   // squeezes shut.
   burn(starts['last-second'], plan.lastSpark, 0);
   at(plan.lastSpark, () => potato.setFace('squeezed'));
+  const partner = plan.duel.find((name) => name !== show.unlucky)!;
+  if (plan.ending === 'too-hot') {
+    // Too hot: it reaches its last spark in the other one's hands, everyone
+    // gasps, and they shake with it until they fling it (above, with the throws).
+    enter(plan.lastSpark, 'gasp');
+    for (let time = plan.still.from; time + SHAKE <= plan.still.to + 1e-9; time += SHAKE) {
+      timeline.add(shake(people.get(partner)!.el, show), time);
+      timeline.add(shake(potato.el, show), time);
+    }
+  }
+  if (plan.ending === 'holding-on') {
+    // Holding on: they wind up, holding it over their head, hesitate, and
+    // lean into the throw; it pops before they let go.
+    const L = starts['last-second'];
+    const hand = over(show.unlucky, true);
+    const up = raised(inDuel(show.unlucky), scale);
+    const towards = over(partner, true);
+    const away = Math.hypot(towards.x - up.x, towards.y - up.y);
+    const lean = {
+      x: up.x + (LEAN * (towards.x - up.x)) / away,
+      y: up.y + (LEAN * (towards.y - up.y)) / away,
+    };
+    follow(straight(hand, up), L + 0.2, plan.still.from, 'power2.inOut');
+    follow(straight(up, lean), plan.still.to, starts.pop, 'power2.in');
+  }
 
   // The pop: a burst behind the people where the potato was, confetti out
   // and down, and the unlucky person in front of everyone, growing, with a

@@ -106,7 +106,6 @@ Feature: Hot Potato
         | 8     |
         | 12    |
 
-  @pending
   Rule: The last second could go either way
 
     Scenario Outline: The last second, with <count> people
@@ -176,7 +175,6 @@ Feature: Hot Potato
 
   Rule: It reads without sound
 
-    @pending
     Scenario: Captions tell the story to the end
       Given 8 people, the unlucky person is "Luca", the sparkler goes out once, and it gets too hot at the end
       When the show runs
@@ -195,7 +193,6 @@ Feature: Hot Potato
       When the show runs
       Then the duel is captioned "Priya…", "Tom…" and "Priya…"
 
-    @pending
     Scenario: Each ending has its caption
       When the show runs with each ending
       Then a second before the pop the caption is "Too hot!", "Which way…?" or "Throw it!", for each ending in turn

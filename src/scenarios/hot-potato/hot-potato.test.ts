@@ -10,12 +10,15 @@ import {
   duelLayout,
   duelMove,
   face,
+  hang,
   headBox,
   held,
+  highest,
   outOfPlay,
   overlap,
   POTATO,
   potatoBox,
+  raised,
   ring,
   SKY,
   speechBox,
@@ -108,6 +111,8 @@ interface Frame {
   readonly potato: Point;
   /** How opaque the sparkler's spark is drawn, 1 fully. */
   readonly spark: number;
+  /** Whose arms are up. */
+  readonly raised: readonly string[];
 }
 
 /** Someone catching the potato: who, and what the stage showed in that frame. */
@@ -135,7 +140,13 @@ async function watch(
   const catches: Caught[] = [];
   /** What each frame reads, found once: looking it up every frame is slow in jsdom. */
   let parts:
-    | { scene: HTMLElement; people: HTMLElement[]; potato: SVGElement; spark: SVGElement }
+    | {
+        scene: HTMLElement;
+        people: HTMLElement[];
+        arms: (Element | null)[];
+        potato: SVGElement;
+        spark: SVGElement;
+      }
     | undefined;
   let holder = '';
   /** The last frame's show seconds: a catch is noted while the next frame is drawn. */
@@ -167,9 +178,11 @@ async function watch(
       seed,
       onFrame(time, stage) {
         if (!parts) {
+          const people = [...stage.querySelectorAll<HTMLElement>('[data-person]')];
           parts = {
             scene: stage.querySelector<HTMLElement>('[data-part="scene"]')!,
-            people: [...stage.querySelectorAll<HTMLElement>('[data-person]')],
+            people,
+            arms: people.map((person) => person.querySelector('[data-part="land-arms"]')),
             potato: stage.querySelector<SVGElement>('[data-part="potato"]')!,
             spark: stage.querySelector<SVGElement>('[data-part="potato"] [data-part="spark"]')!,
           };
@@ -178,7 +191,7 @@ async function watch(
             attributeOldValue: true,
           });
         }
-        const { scene, people, potato, spark } = parts;
+        const { scene, people, arms, potato, spark } = parts;
         // Once the show is over, the run empties the stage.
         if (!scene.isConnected) return;
         frames.push({
@@ -205,6 +218,9 @@ async function watch(
             y: Number(gsap.getProperty(potato, 'y')) + POTATO.height / 2,
           },
           spark: Number(spark.style.opacity || 1),
+          raised: people
+            .filter((_, index) => arms[index] && arms[index].getAttribute('display') !== 'none')
+            .map((person) => person.dataset.person!),
         });
         extra?.(time, stage);
         last = time;
@@ -326,6 +342,52 @@ function inOrder(texts: readonly string[], lines: readonly string[]): boolean {
 /** The first seed whose plan has the sparkler going out. */
 const dudSeed = (count: number, unlucky: string) =>
   plans(count, unlucky).findIndex((plan) => plan.dud) + 1;
+
+const distance = (one: Point, two: Point) => Math.hypot(one.x - two.x, one.y - two.y);
+
+/** Where `name` stands in `plan`'s duel, the potato's scale, and where they hold it. */
+function inDuel(plan: Plan, name: string): { spot: Spot; scale: number; held: Point } {
+  const count = plan.ring.length;
+  const pair = plan.duel.map((each) => plan.ring.indexOf(each)) as [number, number];
+  const spot = duelLayout(count, pair)[plan.ring.indexOf(name)]!;
+  const scale = count === 2 ? POTATO.pairScale : 1;
+  return { spot, scale, held: held(spot, scale) };
+}
+
+/** The frames of `plan`'s last second, from just after it starts to just before the pop. */
+const lastSecond = (plan: Plan, frames: readonly Frame[]) =>
+  frames.filter(
+    (frame) =>
+      frame.time > startOf(plan, 'last-second') + 1e-6 && frame.time < startOf(plan, 'pop') - 1e-9,
+  );
+
+/**
+ * The longest run of `frames` in which the potato stays inside a box `reach`
+ * px across, corner to corner.
+ */
+function stillest(frames: readonly Frame[], reach = 20): Frame[] {
+  let best: Frame[] = [];
+  frames.forEach((_, start) => {
+    const box = { left: Infinity, right: -Infinity, top: Infinity, bottom: -Infinity };
+    for (let end = start; end < frames.length; end++) {
+      const { x, y } = frames[end]!.potato;
+      box.left = Math.min(box.left, x);
+      box.right = Math.max(box.right, x);
+      box.top = Math.min(box.top, y);
+      box.bottom = Math.max(box.bottom, y);
+      if (Math.hypot(box.right - box.left, box.bottom - box.top) > reach) break;
+      if (end + 1 - start > best.length) best = frames.slice(start, end + 1);
+    }
+  });
+  return best;
+}
+
+/** The caption a second before the pop, for each ending. */
+const ENDING_CAPTION: Readonly<Record<Ending, string>> = {
+  'too-hot': 'Too hot!',
+  'hang-time': 'Which way…?',
+  'holding-on': 'Throw it!',
+};
 
 /** The lab runs, shared by the scenarios at the pop and the lab check below. */
 let lab: LabRun[];
@@ -833,6 +895,196 @@ describeSpec(await loadFeature('./hot-potato.feature'), ({ Rule }) => {
     );
   });
 
+  Rule('The last second could go either way', ({ RuleScenario, RuleScenarioOutline }) => {
+    RuleScenarioOutline(
+      'The last second, with <count> people',
+      ({ Given, When, Then, And }, variables) => {
+        let count: number;
+        let runs: Plan[];
+        /** The lab's run with `ending`: the first of the 30 seeds that has it. */
+        const runWith = (ending: Ending) => {
+          const seed = runs.findIndex((plan) => plan.ending === ending) + 1;
+          expect(seed, `no ${ending} in 30 seeds`).toBeGreaterThan(0);
+          const run = endingRun(count, ending);
+          expect(run.seed, run.label).toBe(seed);
+          return run;
+        };
+        Given('<count> people', () => {
+          count = Number(variables.count);
+        });
+        When('the show runs with 30 different random seeds', () => {
+          runs = Array.from({ length: 30 }, (_, index) =>
+            planShow(labTeam(count), 'Luca', createRandom(index + 1)),
+          );
+        });
+        Then(
+          "in some runs it gets too hot: the sparkler reaches its last spark in the other one's hands, everyone gasps, they fling it away, and it pops as it lands on the unlucky person",
+          () => {
+            const { label, plan, frames, catches, unlucky } = runWith('too-hot');
+            const partner = plan.duel.find((name) => name !== unlucky)!;
+            const P = startOf(plan, 'pop');
+            const out = frames.find((frame) => frame.sparkler === 0)!;
+            expect(out.holder, label).toBe(partner);
+            const gasp = frames.filter(
+              (frame) => frame.time > plan.lastSpark + 1e-6 && frame.time < plan.still.to - 1e-6,
+            );
+            expect(gasp.length, label).toBeGreaterThan(10);
+            for (const frame of gasp) {
+              expect(frame.holder, `${label} at ${frame.time}`).toBe(partner);
+              expect(frame.sparkler, `${label} at ${frame.time}`).toBe(0);
+              for (const [name, mood] of Object.entries(frame.moods)) {
+                expect(mood, `${label}: ${name} at ${frame.time}`).toBe('scared');
+              }
+            }
+            const flung = frames.filter(
+              (frame) => frame.time > plan.still.to + 1e-6 && frame.time < P - 1e-9,
+            );
+            expect(flung.length, label).toBeGreaterThan(10);
+            for (const frame of flung) expect(frame.holder, `${label} at ${frame.time}`).toBe('');
+            const last = catches.at(-1)!;
+            expect(last.holder, label).toBe(unlucky);
+            expect(Math.abs(last.time - P), label).toBeLessThanOrEqual(1 / 30 + 1e-9);
+            expect(distance(flung.at(-1)!.potato, inDuel(plan, unlucky).held), label).toBeLessThan(
+              40,
+            );
+          },
+        );
+        And(
+          'in some runs it hangs in the air: the last throw floats up slowly, high between the two, then drops onto the unlucky person and pops',
+          () => {
+            const { label, plan, frames, catches, unlucky } = runWith('hang-time');
+            const P = startOf(plan, 'pop');
+            const flying = lastSecond(plan, frames);
+            expect(flying.length, label).toBeGreaterThan(50);
+            for (const frame of flying) expect(frame.holder, `${label} at ${frame.time}`).toBe('');
+            const [one, two] = plan.duel.map((name) => inDuel(plan, name).held);
+            const { scale } = inDuel(plan, unlucky);
+            const top = flying.reduce((high, frame) =>
+              frame.potato.y < high.potato.y ? frame : high,
+            );
+            expect(Math.abs(top.potato.x - (one!.x + two!.x) / 2), label).toBeLessThanOrEqual(100);
+            expect(top.potato.y, label).toBeLessThanOrEqual(highest(scale) + 40);
+            expect(top.potato.y, label).toBeGreaterThanOrEqual(highest(scale) - 1e-6);
+            // Slowly: it reaches the top no sooner than 0.5 s in.
+            expect(top.time - startOf(plan, 'last-second'), label).toBeGreaterThanOrEqual(0.5);
+            const last = catches.at(-1)!;
+            expect(last.holder, label).toBe(unlucky);
+            expect(Math.abs(last.time - P), label).toBeLessThanOrEqual(1 / 30 + 1e-9);
+            expect(distance(flying.at(-1)!.potato, inDuel(plan, unlucky).held), label).toBeLessThan(
+              40,
+            );
+          },
+        );
+        And(
+          'in some runs the unlucky person holds on: they wind up to throw, hesitate, and it pops just before they let go',
+          () => {
+            const { label, plan, frames, catches, unlucky } = runWith('holding-on');
+            const L = startOf(plan, 'last-second');
+            const partner = plan.duel.find((name) => name !== unlucky)!;
+            const holding = lastSecond(plan, frames);
+            expect(holding.length, label).toBeGreaterThan(50);
+            for (const frame of holding) {
+              expect(frame.holder, `${label} at ${frame.time}`).toBe(unlucky);
+              expect(frame.raised, `${label} at ${frame.time}`).toContain(unlucky);
+            }
+            // Nobody throws in the last second.
+            expect(catches.at(-1)!.time, label).toBeLessThanOrEqual(L + 1 / 30 + 1e-9);
+            // Wound up: held up over their head while they hesitate.
+            const { spot, scale } = inDuel(plan, unlucky);
+            const up = raised(spot, scale);
+            const hesitating = holding.filter(
+              (frame) => frame.time > plan.still.from + 1e-6 && frame.time < plan.still.to - 1e-6,
+            );
+            expect(hesitating.length, label).toBeGreaterThan(10);
+            for (const frame of hesitating) {
+              expect(distance(frame.potato, up), `${label} at ${frame.time}`).toBeLessThan(1);
+            }
+            // About to let go: leaning towards the other one when it pops.
+            const end = holding.at(-1)!.potato;
+            const towards = inDuel(plan, partner).held;
+            expect(distance(end, up), label).toBeGreaterThan(20);
+            expect(distance(end, up), label).toBeLessThanOrEqual(60);
+            expect(distance(end, towards), label).toBeLessThan(distance(up, towards));
+          },
+        );
+      },
+    );
+
+    RuleScenario('A moment of stillness, then the pop', ({ When, Then, And }) => {
+      let runs: LabRun[];
+      When('the show runs with each ending', () => {
+        runs = lab;
+        for (const ending of ENDINGS) {
+          expect(runs.some((run) => run.plan.ending === ending)).toBe(true);
+        }
+      });
+      Then(
+        "in the last second the potato barely moves for at least half a second: in the other one's hands, at the top of its flight, or in the unlucky person's raised hands",
+        () => {
+          for (const { label, plan, frames, unlucky } of runs) {
+            const partner = plan.duel.find((name) => name !== unlucky)!;
+            const holder = { 'too-hot': partner, 'hang-time': '', 'holding-on': unlucky };
+            const last = lastSecond(plan, frames);
+            const where = last.filter((frame) => frame.holder === holder[plan.ending]);
+            const still = stillest(where);
+            expect(still.length, label).toBeGreaterThan(0);
+            expect(still.at(-1)!.time - still[0]!.time, label).toBeGreaterThanOrEqual(0.5 - 1e-9);
+            if (plan.ending === 'hang-time') {
+              const top = Math.min(...last.map((frame) => frame.potato.y));
+              expect(
+                still.some((frame) => frame.potato.y === top),
+                label,
+              ).toBe(true);
+            }
+            if (plan.ending === 'holding-on') {
+              for (const frame of still) expect(frame.raised, label).toContain(unlucky);
+            }
+          }
+        },
+      );
+      And('it pops at the end of the last second, on the unlucky person', () => {
+        for (const { label, plan, frames, unlucky } of runs) {
+          const pop = frames.filter((frame) => frame.beat === 'pop');
+          expect(pop[0]!.time - startOf(plan, 'pop'), label).toBeLessThanOrEqual(1 / 30 + 1e-9);
+          for (const frame of pop) expect(frame.holder, label).toBe(unlucky);
+        }
+      });
+    });
+
+    RuleScenario('Hanging in the air gives nothing away', ({ Given, When, Then, And }) => {
+      let hanging: Plan[];
+      Given('8 people, with the same unlucky person every time', () => {});
+      When('the show runs with 30 different random seeds, and the potato hangs in the air', () => {
+        hanging = plans(8, 'Luca', 30).filter((plan) => plan.ending === 'hang-time');
+      });
+      Then(
+        'the last throw comes from the unlucky person in some runs, and from the other one in others',
+        () => {
+          const from = hanging.map((plan) => {
+            const partner = plan.duel.find((name) => name !== 'Luca')!;
+            const last = plan.catches.at(-1)!;
+            expect(last.beat).toBe('last-second');
+            expect([partner, 'Luca']).toContain(last.from);
+            return last.from === 'Luca';
+          });
+          expect(from).toContain(true);
+          expect(from).toContain(false);
+        },
+      );
+      And('at the top of its flight the potato is about halfway between the two', () => {
+        const runs = lab.filter((run) => run.plan.ending === 'hang-time');
+        expect(runs.some((run) => run.plan.ring.length === 8)).toBe(true);
+        for (const { label, plan, frames } of runs) {
+          const [one, two] = plan.duel.map((name) => inDuel(plan, name).held);
+          const top = lastSecond(plan, frames).reduce((high, frame) =>
+            frame.potato.y < high.potato.y ? frame : high,
+          );
+          expect(Math.abs(top.potato.x - (one!.x + two!.x) / 2), label).toBeLessThanOrEqual(100);
+        }
+      });
+    });
+  });
+
   Rule('The ending is a pop and a paper crown', ({ RuleScenario }) => {
     RuleScenario('The pop', ({ Given, When, Then, And }) => {
       const team = names(8);
@@ -981,6 +1233,50 @@ describeSpec(await loadFeature('./hot-potato.feature'), ({ Rule }) => {
   });
 
   Rule('It reads without sound', ({ RuleScenario }) => {
+    RuleScenario('Captions tell the story to the end', ({ Given, When, Then }) => {
+      let seed: number;
+      let record: ShowRecord;
+      Given(
+        '8 people, the unlucky person is "Luca", the sparkler goes out once, and it gets too hot at the end',
+        () => {
+          seed =
+            plans(8, 'Luca', 40).findIndex((plan) => plan.dud && plan.ending === 'too-hot') + 1;
+          expect(seed).toBeGreaterThan(0);
+        },
+      );
+      When('the show runs', async () => {
+        ({ record } = await watch(names(8), 'Luca', seed));
+      });
+      Then('the captions include, in this order:', (_, table: { caption: string }[]) => {
+        const lines = table.map((row) => row.caption);
+        expect(inOrder(said(record), lines), said(record).join(' / ')).toBe(true);
+      });
+    });
+
+    RuleScenario('Each ending has its caption', ({ When, Then }) => {
+      let runs: LabRun[];
+      When('the show runs with each ending', () => {
+        runs = lab;
+        for (const ending of ENDINGS) {
+          expect(runs.some((run) => run.plan.ending === ending)).toBe(true);
+        }
+      });
+      Then(
+        'a second before the pop the caption is "Too hot!", "Which way…?" or "Throw it!", for each ending in turn',
+        () => {
+          for (const { label, plan, record } of runs) {
+            const text = ENDING_CAPTION[plan.ending];
+            const up = record.captions.find((caption) => caption.text === text);
+            expect(up, `${label}: ${said(record).join(' / ')}`).toBeDefined();
+            // Frames are 1/30 s apart, and the caption before it may be up a frame late.
+            const due = startOf(plan, 'pop') - 1;
+            expect(up!.from, label).toBeGreaterThanOrEqual(due - 1e-9);
+            expect(up!.from, label).toBeLessThanOrEqual(due + 2 / 30 + 1e-9);
+          }
+        },
+      );
+    });
+
     RuleScenario('The duel names each catch', ({ Given, When, Then }) => {
       // The duel is between the unlucky person and one other, so one of the
       // two named has to be the unlucky person.
@@ -1113,6 +1409,8 @@ describe('The ring', () => {
       }
       for (const [i, from] of points.entries()) {
         for (const [j, to] of points.entries()) {
+          // Nobody throws to themselves: a throw that comes back hangs (below).
+          if (i === j) continue;
           const path = throwPath(from, to, scale);
           for (let step = 0; step <= 200; step++) {
             const point = bezier(step / 200, ...path);
@@ -1228,6 +1526,67 @@ describe('The ring', () => {
     }
   });
 
+  it('the hang stays out of the sky', () => {
+    for (let count = 2; count <= 12; count++) {
+      const scale = count === 2 ? POTATO.pairScale : 1;
+      for (const pair of count === 2 ? [[0, 1] as [number, number]] : pairs(count)) {
+        const spots = duelLayout(count, pair);
+        const two = pair.map((index) => held(spots[index]!, scale)) as [Point, Point];
+        const middle = (two[0].x + two[1].x) / 2;
+        for (const [from, to] of [
+          [two[0], two[1]],
+          [two[1], two[0]],
+          [two[0], two[0]],
+          [two[1], two[1]],
+        ] as const) {
+          const label = `${count} people, pair ${pair.join(' and ')}, ${from.x} to ${to.x}`;
+          const { rise, top, drop } = hang(from, to, two, scale);
+          expect(Math.abs(top.x - middle), label).toBeLessThanOrEqual(100);
+          expect(rise[0], label).toEqual(from);
+          expect(rise[3], label).toEqual(top);
+          expect(drop[0], label).toEqual(top);
+          expect(drop[3], label).toEqual(to);
+          // Level at the top.
+          expect(rise[2].y, label).toBeCloseTo(top.y, 9);
+          expect(drop[1].y, label).toBeCloseTo(top.y, 9);
+          for (const path of [rise, drop]) {
+            for (let step = 0; step <= 200; step++) {
+              const point = bezier(step / 200, ...path);
+              expect(drawingTop(point, scale), label).toBeGreaterThanOrEqual(SKY - 1e-6);
+              expect(point.y, label).toBeGreaterThanOrEqual(top.y - 1e-6);
+            }
+          }
+        }
+      }
+    }
+  });
+
+  it('raised stays out of the sky and off the face', () => {
+    for (let count = 2; count <= 12; count++) {
+      const scale = count === 2 ? POTATO.pairScale : 1;
+      for (const pair of count === 2 ? [[0, 1] as [number, number]] : pairs(count)) {
+        const spots = duelLayout(count, pair);
+        for (const index of pair) {
+          const label = `${count} people, pair ${pair.join(' and ')}, ${index}`;
+          const spot = spots[index]!;
+          const point = raised(spot, scale);
+          const box = potatoBox(point, scale);
+          const { x, y, r } = face(spot);
+          const near = {
+            x: Math.min(box.right, Math.max(box.left, x)),
+            y: Math.min(box.bottom, Math.max(box.top, y)),
+          };
+          expect(Math.hypot(near.x - x, near.y - y), label).toBeGreaterThan(r);
+          expect(drawingTop(point, scale), label).toBeGreaterThanOrEqual(SKY - 1e-6);
+          // Higher than where it's held.
+          expect(point.y, label).toBeLessThan(held(spot, scale).y);
+          expect(box.left, label).toBeGreaterThanOrEqual(0);
+          expect(box.right, label).toBeLessThanOrEqual(1280);
+        }
+      }
+    }
+  });
+
   it("the duel's pair is big", () => {
     expect(duelLayout(2, [0, 1])).toEqual(ring(2));
     expect(duelMove(2, [0, 1], 0.5).map((each) => each.spot)).toEqual(ring(2));
@@ -1302,10 +1661,12 @@ interface Said {
 /** One run of the lab check: its plan, captions, bubbles, and the stage near the end. */
 interface LabRun {
   readonly label: string;
+  readonly seed: number;
   readonly plan: Plan;
   readonly unlucky: string;
   readonly record: ShowRecord;
   readonly frames: Frame[];
+  readonly catches: Caught[];
   readonly bubbles: Said[];
   /** The burst comes before every person on the stage. */
   readonly burstBehind: boolean;
@@ -1333,12 +1694,25 @@ function drawnTag(tag: HTMLElement, stage: HTMLElement): number {
   return size;
 }
 
+/** `count` of the team, Luca last. */
+const labTeam = (count: number) => [
+  ...TEAM.filter((name) => name !== 'Luca').slice(0, count - 1),
+  'Luca',
+];
+
+/** The lab's run at `count` people with `ending`. */
+function endingRun(count: number, ending: Ending): LabRun {
+  const run = lab.find((each) => each.plan.ring.length === count && each.plan.ending === ending);
+  expect(run, `${count} people, ${ending}`).toBeDefined();
+  return run!;
+}
+
 /** Hot Potato at 2, 8 and 12 people, Luca unlucky and last, once with each ending. */
 async function labRuns(): Promise<LabRun[]> {
   const runs: LabRun[] = [];
   for (const count of [2, 8, 12]) {
     const unlucky = 'Luca';
-    const team = [...TEAM.filter((name) => name !== unlucky).slice(0, count - 1), unlucky];
+    const team = labTeam(count);
     const all = Array.from({ length: 40 }, (_, index) =>
       planShow(team, unlucky, createRandom(index + 1)),
     );
@@ -1351,7 +1725,7 @@ async function labRuns(): Promise<LabRun[]> {
       let smallestTag = Infinity;
       let beforePop = 1;
       let end = { burstBehind: false, inFront: false, grownScale: 0, raised: [] as string[] };
-      const { frames, record } = await watch(team, unlucky, seed, (time, stage) => {
+      const { frames, catches, record } = await watch(team, unlucky, seed, (time, stage) => {
         const scene = stage.querySelector<HTMLElement>('[data-part="scene"]')!;
         const potato = scene.querySelector<SVGElement>('[data-part="potato"]')!;
         for (const bubble of scene.querySelectorAll<HTMLElement>('[data-part="bubble"]')) {
@@ -1396,10 +1770,12 @@ async function labRuns(): Promise<LabRun[]> {
       });
       runs.push({
         label: `${count} people, ${ending}, seed ${seed}`,
+        seed,
         plan: all[seed - 1]!,
         unlucky,
         record,
         frames,
+        catches,
         bubbles,
         placed,
         smallestTag,
@@ -1447,6 +1823,18 @@ describe('The lab check', () => {
         expect(caption.to - caption.from, `${label}: ${caption.text}`).toBeGreaterThanOrEqual(
           1 - 1e-9,
         );
+      }
+    }
+  });
+
+  it('the pop caption is on time with every ending', () => {
+    for (const ending of ENDINGS) {
+      for (const count of [2, 8, 12]) {
+        const { label, plan, record, unlucky } = endingRun(count, ending);
+        const popped = record.captions.find((each) => each.text === `It popped on ${unlucky}!`);
+        expect(popped, label).toBeDefined();
+        // Frames are 1/30 s apart.
+        expect(popped!.from - startOf(plan, 'pop'), label).toBeLessThanOrEqual(0.2 + 1 / 30 + 1e-9);
       }
     }
   });
@@ -1533,18 +1921,5 @@ describe('The plan', () => {
         }
       });
     }
-  });
-
-  it('a hanging last throw comes from either of the two', () => {
-    const hanging = plans(8, 'Luca', 30).filter((plan) => plan.ending === 'hang-time');
-    const from = hanging.map((plan) => {
-      const partner = plan.duel.find((name) => name !== 'Luca')!;
-      const last = plan.catches.at(-1)!;
-      expect(last.beat).toBe('last-second');
-      expect([partner, 'Luca']).toContain(last.from);
-      return last.from === 'Luca';
-    });
-    expect(from).toContain(true);
-    expect(from).toContain(false);
   });
 });
