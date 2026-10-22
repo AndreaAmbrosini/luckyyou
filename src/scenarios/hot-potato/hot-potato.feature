@@ -50,7 +50,6 @@ Feature: Hot Potato
       When the show runs with 20 different random seeds
       Then the unlucky person is the first to catch it in the showdown in some runs, and not in others
 
-    @pending
     Scenario Outline: Three become two, with <count> people
       Given <count> people
       When the show runs
@@ -73,7 +72,6 @@ Feature: Hot Potato
       And there is no showdown, and nobody says "Phew!"
       And the duel has 5 throws, each longer than the one before
 
-    @pending
     Scenario: The duel
       Given 8 people
       When the duel starts

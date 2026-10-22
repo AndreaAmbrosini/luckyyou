@@ -54,6 +54,8 @@ export type Face = 'calm' | 'nervous' | 'relieved' | 'shocked' | 'squeezed' | 's
 export interface Potato {
   /** 120 × 110 grid, overflow visible; data-part="potato", data-face, data-sparkler, data-lit. */
   readonly el: SVGSVGElement;
+  /** The spark at the sparkler's tip; data-part="spark". */
+  readonly spark: SVGGElement;
   setFace(face: Face): void;
   /** 1 full … 0 the last spark; data-sparkler is the value rounded to 3 decimals. */
   setSparkler(left: number): void;
@@ -179,6 +181,7 @@ export function potato(): Potato {
 
   const api: Potato = {
     el,
+    spark,
     setFace(face) {
       el.dataset.face = face;
       for (const [name, g] of faces) show(g, name === face);

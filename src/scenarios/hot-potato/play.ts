@@ -21,6 +21,9 @@ import {
   bezier,
   crowned,
   CROWNED,
+  duelGrowth,
+  duelLayout,
+  duelMove,
   headBox,
   held,
   outOfPlay,
@@ -48,8 +51,10 @@ const HOT_GAP = 1.0;
 const CONFETTI = { count: 36, out: 0.45, fall: 1.4 };
 /** Seconds the unlucky person takes to grow at the pop. */
 const GROW = 0.5;
+/** In the duel the spark dims to `low` and back, `half` seconds each way. */
+const FLICKER = { low: 0.45, half: 0.2 };
 
-type Phase = 'throws' | 'dud' | 'relight' | 'showdown' | 'ending';
+type Phase = 'throws' | 'dud' | 'relight' | 'showdown' | 'duel' | 'ending';
 
 interface Person {
   readonly name: string;
@@ -86,7 +91,13 @@ export async function playHotPotato(show: Show): Promise<void> {
     x: point.x - POTATO.width / 2,
     y: point.y - POTATO.height / 2,
   });
-  const over = (name: string) => held(people.get(name)!.spot, scale);
+  // In the duel the two stand big in front, and the rest watch from the back.
+  const pair = plan.duel.map((name) => plan.ring.indexOf(name)) as [number, number];
+  const duelSpots = duelLayout(plan.ring.length, pair);
+  const inDuel = (name: string) => duelSpots[plan.ring.indexOf(name)]!;
+  /** Where `name` holds the potato: in the duel, or before it. */
+  const over = (name: string, duel = false) =>
+    held(duel ? inDuel(name) : people.get(name)!.spot, scale);
   const first = plan.catches[0]!;
   gsap.set(potato.el, { ...place({ x: over(first.by).x, y: DROP_Y }), scale });
   const setX = gsap.quickSetter(potato.el, 'x', 'px') as (value: number) => void;
@@ -120,16 +131,16 @@ export async function playHotPotato(show: Show): Promise<void> {
         ? name === show.unlucky
           ? 'party'
           : 'happy'
-        : phase === 'dud' || !inPlay
+        : phase === 'dud' || (!inPlay && phase !== 'duel')
           ? 'happy'
-          : phase === 'relight' || braced
+          : phase === 'relight' || (inPlay && braced)
             ? 'scared'
             : 'worried';
       el.dataset.inPlay = String(inPlay);
       el.dataset.mood = mood;
       face.setMood(mood);
       face.setRaised(ending || braced);
-      face.setSweat(!ending && inPlay && (braced || phase === 'showdown'));
+      face.setSweat(!ending && inPlay && (braced || phase === 'showdown' || phase === 'duel'));
     }
   };
   /** From `time` it's in `name`'s hands, or flying to them when `flying`. */
@@ -168,9 +179,15 @@ export async function playHotPotato(show: Show): Promise<void> {
       from,
     );
 
-  /** One throw, in an arc over the ring. */
+  const during = (beat: Beat) => plan.catches.filter((each) => each.beat === beat);
+  const duelThrows = during('duel');
+  /** With 3 or more, the two step in before the duel's first throw. */
+  const stepIn = duelThrows[0]!.thrown - starts.duel;
+
+  /** One throw, in an arc over the ring, or between the two in the duel. */
   function fly(each: Catch) {
-    const path = throwPath(over(each.from!), over(each.by), scale);
+    const duel = each.thrown >= starts.duel + stepIn - 1e-9;
+    const path = throwPath(over(each.from!, duel), over(each.by, duel), scale);
     const along = { t: 0 };
     timeline.fromTo(
       along,
@@ -259,7 +276,83 @@ export async function playHotPotato(show: Show): Promise<void> {
     );
   }
 
-  const during = (beat: Beat) => plan.catches.filter((each) => each.beat === beat);
+  // After the showdown's two catches, the one of the three left without it
+  // says "Phew!" and steps back, relieved (the bubble is below, with the gags).
+  const showdownThrows = during('showdown');
+  const phewAt = showdownThrows.at(-1)?.at ?? starts.duel;
+  if (plan.phew) {
+    const { phew } = plan;
+    const person = people.get(phew)!;
+    at(phewAt, () => {
+      out.add(phew);
+      refresh();
+    });
+    timeline.to(
+      person.face.el,
+      {
+        scale: outOfPlay(person.spot).size / person.spot.size,
+        duration: STEP_BACK,
+        ease: 'power2.out',
+      },
+      phewAt,
+    );
+  }
+
+  // The duel: the two step into the middle and grow, facing each other, while
+  // everyone else fades out and back in watching from the back, worried. The
+  // potato goes with whoever has it.
+  enter(starts.duel, 'duel');
+  if (stepIn > 0) {
+    const opener = plan.ring.indexOf(duelThrows[0]!.from!);
+    const two = plan.duel.map((name) => people.get(name)!.el);
+    at(starts.duel, () => potato.el.before(...two));
+    const move = { t: 0 };
+    timeline.to(
+      move,
+      {
+        t: 1,
+        duration: stepIn,
+        ease: 'none',
+        onUpdate: () => {
+          const moved = duelMove(plan.ring.length, pair, move.t);
+          plan.ring.forEach((name, index) => {
+            const person = people.get(name)!;
+            const { spot, shown } = moved[index]!;
+            const x = spot.x - person.spot.x;
+            const y = spot.y - person.spot.y;
+            if (!pair.includes(index)) {
+              gsap.set(person.el, { x, y, autoAlpha: shown });
+              return;
+            }
+            // The whole of them grows as their tag does; the head makes up the rest.
+            const growth = spot.tag.size / person.spot.tag.size;
+            gsap.set(person.el, { x, y, scale: growth });
+            gsap.set(person.face.el, { scale: spot.size / (person.spot.size * growth) });
+          });
+          const point = place(held(moved[opener]!.spot, scale));
+          setX(point.x);
+          setY(point.y);
+        },
+      },
+      starts.duel,
+    );
+  }
+  // The spark flickers from the duel to the pop, ending lit.
+  if (!show.reducedMotion) {
+    const flickers = Math.floor((starts.pop - starts.duel) / (2 * FLICKER.half));
+    timeline.to(
+      potato.spark,
+      {
+        opacity: FLICKER.low,
+        duration: FLICKER.half,
+        ease: 'sine.inOut',
+        yoyo: true,
+        repeat: 2 * flickers - 1,
+      },
+      starts.duel,
+    );
+  }
+
   const before = plan.catches.filter((each) => each.beat === 'plop' || each.beat === 'hot-hands');
 
   // Captions, one at each moment; the kit holds each long enough to read and
@@ -278,15 +371,16 @@ export async function playHotPotato(show: Show): Promise<void> {
 
   // Gags, in bubbles beside the potato, or beside someone's head and clear
   // of the potato.
-  const inHands = (name: string) => potatoBox(over(name), scale);
+  const inHands = (name: string, duel = false) => potatoBox(over(name, duel), scale);
   const say = (
     time: number,
     text: string,
     beside: Box,
     avoid: Box[] = [],
     colour: 'paper' | 'sun' = 'paper',
+    close = false,
   ) => {
-    const speech = bubble(text, speechAt(text, beside, avoid), { colour });
+    const speech = bubble(text, speechAt(text, beside, avoid, { close }), { colour });
     speech.dataset.part = 'bubble';
     scene.append(speech);
     timeline.add(popIn(speech), time);
@@ -305,6 +399,11 @@ export async function playHotPotato(show: Show): Promise<void> {
   if (steppingBack) {
     say(starts.showdown, 'Not me!', headBox(people.get(steppingBack)!.spot), [inHands(lastHolder)]);
   }
+  if (plan.phew) {
+    const holding = showdownThrows.at(-1)!.by;
+    // Close by, so it's plainly theirs.
+    say(phewAt, 'Phew!', headBox(people.get(plan.phew)!.spot), [inHands(holding)], 'paper', true);
+  }
 
   // The last second: the sparkler burns to its last spark, and the face
   // squeezes shut.
@@ -314,7 +413,7 @@ export async function playHotPotato(show: Show): Promise<void> {
   // The pop: a burst behind the people where the potato was, confetti out
   // and down, and the unlucky person in front of everyone, growing, with a
   // paper crown; everyone else cheers.
-  const heart = over(show.unlucky);
+  const heart = over(show.unlucky, true);
   const star = burst();
   star.setAttribute('width', '300');
   star.setAttribute('height', '300');
@@ -330,17 +429,24 @@ export async function playHotPotato(show: Show): Promise<void> {
     gsap.set(bit, { x: heart.x, y: heart.y, autoAlpha: 0 });
     scene.append(bit);
   }
+  // Where they stand at the pop, how much bigger all of them is drawn there,
+  // and how much bigger still their head: the crown sits on the head.
   const unlucky = people.get(show.unlucky)!;
+  const final = inDuel(show.unlucky);
+  const growth = stepIn > 0 ? duelGrowth(unlucky.spot) : 1;
+  const headSize = final.size / growth;
   const paperCrown = crown();
-  paperCrown.setAttribute('width', String(unlucky.spot.size));
-  paperCrown.setAttribute('height', String(unlucky.spot.size));
+  paperCrown.setAttribute('width', String(headSize));
+  paperCrown.setAttribute('height', String(headSize));
   paperCrown.style.position = 'absolute';
-  paperCrown.style.left = '0px';
-  paperCrown.style.top = '0px';
+  paperCrown.style.left = `${(unlucky.spot.size - headSize) / 2}px`;
+  paperCrown.style.top = `${0.8 * (unlucky.spot.size - headSize)}px`;
   gsap.set(paperCrown, { transformOrigin: '50% 100%' });
   unlucky.el.append(paperCrown);
-  const grown = crowned(unlucky.spot);
-  gsap.set(unlucky.el, { transformOrigin: '50% 100%' });
+  // crowned() grows them about their feet; they're drawn about the spot
+  // they stand on, 0.2 of a head above the feet, so that moves up the rest.
+  const grown = crowned(final);
+  const lift = (1 - CROWNED) * 0.2 * final.size;
 
   sizzle(starts.pop, false);
   cue(starts.pop, 'pop');
@@ -351,10 +457,16 @@ export async function playHotPotato(show: Show): Promise<void> {
   at(starts.pop, () => potato.el.before(unlucky.el));
   timeline.to(
     unlucky.el,
-    { scale: CROWNED, x: grown.x, y: grown.y, duration: GROW, ease: 'back.out(1.4)' },
+    {
+      scale: growth * CROWNED,
+      x: final.x - unlucky.spot.x + grown.x,
+      y: final.y - unlucky.spot.y + grown.y + lift,
+      duration: GROW,
+      ease: 'back.out(1.4)',
+    },
     starts.pop,
   );
-  say(starts.pop, 'Pop!', inHands(show.unlucky), [headBox(unlucky.spot), grown.head], 'sun');
+  say(starts.pop, 'Pop!', inHands(show.unlucky, true), [headBox(final), grown.head], 'sun');
   timeline.set(star, { autoAlpha: 1 }, starts.pop);
   timeline.to(star, { scale: 1.1, duration: 0.25, ease: 'power2.out' }, starts.pop);
   timeline.to(star, { autoAlpha: 0, duration: 0.3 }, starts.pop + 0.3);

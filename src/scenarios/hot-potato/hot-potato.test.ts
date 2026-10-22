@@ -7,6 +7,8 @@ import hotPotato from './index';
 import {
   bezier,
   crowned,
+  duelLayout,
+  duelMove,
   face,
   headBox,
   held,
@@ -102,6 +104,10 @@ interface Frame {
   readonly moods: Readonly<Record<string, string>>;
   /** How big each head is drawn, 1 their spot's size. */
   readonly scales: Readonly<Record<string, number>>;
+  /** Where the potato's centre is drawn. */
+  readonly potato: Point;
+  /** How opaque the sparkler's spark is drawn, 1 fully. */
+  readonly spark: number;
 }
 
 /** Someone catching the potato: who, and what the stage showed in that frame. */
@@ -109,6 +115,8 @@ interface Caught {
   readonly holder: string;
   readonly sparkler: number;
   readonly beat: string;
+  /** The show seconds of the frame it was caught in. */
+  readonly time: number;
 }
 
 /**
@@ -126,8 +134,12 @@ async function watch(
   const frames: Frame[] = [];
   const catches: Caught[] = [];
   /** What each frame reads, found once: looking it up every frame is slow in jsdom. */
-  let parts: { scene: HTMLElement; people: HTMLElement[]; potato: SVGElement } | undefined;
+  let parts:
+    | { scene: HTMLElement; people: HTMLElement[]; potato: SVGElement; spark: SVGElement }
+    | undefined;
   let holder = '';
+  /** The last frame's show seconds: a catch is noted while the next frame is drawn. */
+  let last = 0;
   const note = (changes: MutationRecord[]) => {
     if (!parts) return;
     const { scene, potato } = parts;
@@ -141,6 +153,7 @@ async function watch(
           holder: next,
           sparkler: Number(potato.dataset.sparkler),
           beat: scene.dataset.beat!,
+          time: last + 1 / 30,
         });
       }
     });
@@ -158,13 +171,14 @@ async function watch(
             scene: stage.querySelector<HTMLElement>('[data-part="scene"]')!,
             people: [...stage.querySelectorAll<HTMLElement>('[data-person]')],
             potato: stage.querySelector<SVGElement>('[data-part="potato"]')!,
+            spark: stage.querySelector<SVGElement>('[data-part="potato"] [data-part="spark"]')!,
           };
           holders.observe(parts.potato, {
             attributeFilter: ['data-holder'],
             attributeOldValue: true,
           });
         }
-        const { scene, people, potato } = parts;
+        const { scene, people, potato, spark } = parts;
         // Once the show is over, the run empties the stage.
         if (!scene.isConnected) return;
         frames.push({
@@ -186,8 +200,14 @@ async function watch(
                 Number(gsap.getProperty(person.querySelector('svg')!, 'scale')),
             ]),
           ),
+          potato: {
+            x: Number(gsap.getProperty(potato, 'x')) + POTATO.width / 2,
+            y: Number(gsap.getProperty(potato, 'y')) + POTATO.height / 2,
+          },
+          spark: Number(spark.style.opacity || 1),
         });
         extra?.(time, stage);
+        last = time;
       },
     });
   } finally {
@@ -305,104 +325,339 @@ describeSpec(await loadFeature('./hot-potato.feature'), ({ Rule }) => {
     });
   });
 
-  Rule('Throws speed up, then slow down for a showdown', ({ RuleScenario }) => {
-    RuleScenario('Everyone else steps back', ({ Given, When, Then, And }) => {
-      const team = names(8);
-      let plan: Plan;
-      let showdown: Frame[];
-      Given('8 people', () => {
-        plan = planShow(team, 'Luca', createRandom(1));
-      });
-      When('the showdown starts', async () => {
-        const { frames } = await watch(team, 'Luca');
-        showdown = frames.slice(frames.findIndex((frame) => frame.beat === 'showdown'));
-      });
-      Then('the 5 people out of play step back, smaller and relieved', () => {
-        const outside = team.filter((name) => !plan.showdown.includes(name));
-        expect(outside).toHaveLength(5);
-        const start = showdown[0]!.time;
-        for (const frame of showdown) {
-          expect([...frame.inPlay].sort()).toEqual([...plan.showdown].sort());
-          if (frame.holder) expect(plan.showdown).toContain(frame.holder);
-          for (const name of outside) {
-            expect(frame.moods[name], name).toBe('happy');
-            if (frame.time >= start + 0.4) expect(frame.scales[name], name).toBeCloseTo(0.88, 3);
+  Rule(
+    'Throws speed up, then slow down for a showdown',
+    ({ RuleScenario, RuleScenarioOutline }) => {
+      RuleScenario('Everyone else steps back', ({ Given, When, Then, And }) => {
+        const team = names(8);
+        let plan: Plan;
+        let showdown: Frame[];
+        Given('8 people', () => {
+          plan = planShow(team, 'Luca', createRandom(1));
+        });
+        When('the showdown starts', async () => {
+          const { frames } = await watch(team, 'Luca');
+          showdown = frames.slice(frames.findIndex((frame) => frame.beat === 'showdown'));
+        });
+        Then('the 5 people out of play step back, smaller and relieved', () => {
+          const outside = team.filter((name) => !plan.showdown.includes(name));
+          expect(outside).toHaveLength(5);
+          const start = showdown[0]!.time;
+          // Until the second catch, when one of the three says "Phew!" and steps back too.
+          const phew = during(plan, 'showdown')[1]!.at;
+          for (const frame of showdown) {
+            if (frame.time < phew)
+              expect([...frame.inPlay].sort()).toEqual([...plan.showdown].sort());
+            if (frame.holder) expect(plan.showdown).toContain(frame.holder);
+            for (const name of outside) {
+              if (frame.beat === 'showdown') expect(frame.moods[name], name).toBe('happy');
+              if (frame.time >= start + 0.4) expect(frame.scales[name], name).toBeCloseTo(0.88, 3);
+            }
           }
-        }
-      });
-      And('the potato only goes to the 3 in play until it pops', () => {
-        const holders = showdown.map((frame) => frame.holder).filter(Boolean);
-        expect(holders.length).toBeGreaterThan(0);
-        for (const holder of holders) expect(plan.showdown).toContain(holder);
-      });
-    });
-
-    RuleScenario('Who is in the showdown gives nothing away', ({ Given, When, Then }) => {
-      let runs: Plan[];
-      Given('8 people, with the same unlucky person every time', () => {});
-      When('the show runs with 20 different random seeds', () => {
-        runs = plans(8, 'Luca');
-      });
-      Then(
-        'the unlucky person is the first to catch it in the showdown in some runs, and not in others',
-        () => {
-          const first = runs.map((plan) => during(plan, 'showdown')[0]!.by === 'Luca');
-          expect(first).toContain(true);
-          expect(first).toContain(false);
-        },
-      );
-    });
-
-    RuleScenario('With 2 people it is a duel from the start', ({ Given, When, Then, And }) => {
-      let plan: Plan;
-      Given('2 people', () => {});
-      When('the show runs', () => {
-        plan = planShow(names(2), names(2)[0]!, createRandom(1));
-      });
-      Then('each throw before the duel is quicker than the one before', () => {
-        const throws = during(plan, 'hot-hands').map(flight);
-        expect(throws.length).toBeGreaterThan(1);
-        throws.slice(1).forEach((length, index) => {
-          expect(length).toBeLessThan(throws[index]!);
+        });
+        And('the potato only goes to the 3 in play until it pops', () => {
+          const holders = showdown.map((frame) => frame.holder).filter(Boolean);
+          expect(holders.length).toBeGreaterThan(0);
+          for (const holder of holders) expect(plan.showdown).toContain(holder);
         });
       });
-      And('there is no showdown, and nobody says "Phew!"', () => {
-        expect(plan.beats.showdown).toBe(0);
-        expect(during(plan, 'showdown')).toHaveLength(0);
-        expect(plan.phew).toBeNull();
-      });
-      And('the duel has 5 throws, each longer than the one before', () => {
-        const throws = during(plan, 'duel').map(flight);
-        expect(throws).toHaveLength(5);
-        throws.slice(1).forEach((length, index) => {
-          expect(length).toBeGreaterThan(throws[index]!);
-        });
-      });
-    });
 
-    RuleScenario('Who says "Phew!" gives nothing away', ({ Given, When, Then, And }) => {
-      let runs: Plan[];
-      Given('8 people, with the same unlucky person every time', () => {});
-      When('the show runs with 20 different random seeds', () => {
-        runs = plans(8, 'Luca');
+      RuleScenario('Who is in the showdown gives nothing away', ({ Given, When, Then }) => {
+        let runs: Plan[];
+        Given('8 people, with the same unlucky person every time', () => {});
+        When('the show runs with 20 different random seeds', () => {
+          runs = plans(8, 'Luca');
+        });
+        Then(
+          'the unlucky person is the first to catch it in the showdown in some runs, and not in others',
+          () => {
+            const first = runs.map((plan) => during(plan, 'showdown')[0]!.by === 'Luca');
+            expect(first).toContain(true);
+            expect(first).toContain(false);
+          },
+        );
       });
-      Then('at least 2 different people say "Phew!", and never the unlucky person', () => {
-        expect(new Set(runs.map((plan) => plan.phew)).size).toBeGreaterThanOrEqual(2);
-        for (const plan of runs) {
-          expect(plan.phew).not.toBeNull();
-          expect(plan.phew).not.toBe('Luca');
-        }
-      });
-      And(
-        'the unlucky person is holding it when the duel ends in some runs, and not in others',
-        () => {
-          const holding = runs.map((plan) => during(plan, 'duel').at(-1)!.by === 'Luca');
-          expect(holding).toContain(true);
-          expect(holding).toContain(false);
+
+      RuleScenarioOutline(
+        'Three become two, with <count> people',
+        ({ Given, When, Then, And }, variables) => {
+          let team: string[];
+          let unlucky: string;
+          let plan: Plan;
+          let frames: Frame[];
+          let catches: Caught[];
+          const bubbles: { text: string; time: number; box: Box }[] = [];
+          Given('<count> people', () => {
+            team = names(Number(variables.count));
+            unlucky = team.at(-1)!;
+            plan = planShow(team, unlucky, createRandom(1));
+          });
+          When('the show runs', async () => {
+            ({ frames, catches } = await watch(team, unlucky, 1, (time, stage) => {
+              for (const bubble of stage.querySelectorAll<HTMLElement>('[data-part="bubble"]')) {
+                const text = bubble.textContent!;
+                if (bubbles.some((each) => each.text === text)) continue;
+                if (bubble.style.visibility === 'hidden') continue;
+                if (Number(bubble.style.opacity || 1) === 0) continue;
+                const anchor = {
+                  x: parseFloat(bubble.style.left),
+                  y: parseFloat(bubble.style.top),
+                };
+                bubbles.push({ text, time, box: speechBox(text, anchor) });
+              }
+            }));
+          });
+          Then('each throw before the showdown is quicker than the one before', () => {
+            const throws = during(plan, 'hot-hands').map(flight);
+            expect(throws.length).toBeGreaterThan(1);
+            throws.slice(1).forEach((length, index) => {
+              expect(length).toBeLessThan(throws[index]!);
+            });
+          });
+          And('3 people are left in play for the showdown, the unlucky person among them', () => {
+            const S = startOf(plan, 'showdown');
+            const showdown = frames.filter((frame) => frame.time >= S - 1e-9);
+            expect(showdown[0]!.beat).toBe('showdown');
+            expect(showdown[0]!.inPlay).toHaveLength(3);
+            expect([...showdown[0]!.inPlay].sort()).toEqual([...plan.showdown].sort());
+            expect(showdown[0]!.inPlay).toContain(unlucky);
+          });
+          And(
+            'after two catches, one of the three who isn\'t holding it says "Phew!" and steps back',
+            () => {
+              const at = startOf(plan, 'showdown') + 1.7;
+              const phew = plan.phew!;
+              expect(plan.showdown).toContain(phew);
+              const said = bubbles.find((each) => each.text === 'Phew!');
+              expect(said).toBeDefined();
+              // Frames are 1/30 s apart, and the bubble grows in from nothing.
+              expect(said!.time).toBeGreaterThanOrEqual(at - 1e-9);
+              expect(said!.time).toBeLessThanOrEqual(at + 2 / 30 + 1e-9);
+              // Beside the head, or just over it where the potato is in the way: close, not on it.
+              const head = headBox(ring(team.length)[plan.ring.indexOf(phew)]!);
+              const { box } = said!;
+              expect(overlap(box, head)).toBe(false);
+              const across = Math.max(box.left - head.right, head.left - box.right);
+              const down = Math.max(box.top - head.bottom, head.top - box.bottom);
+              expect(Math.max(across, down)).toBeLessThanOrEqual(60);
+              for (const frame of frames.filter((each) => each.time > at + 1e-9)) {
+                expect(frame.inPlay, `at ${frame.time}`).not.toContain(phew);
+                expect(frame.holder, `at ${frame.time}`).not.toBe(phew);
+                if (frame.time >= at + 0.4) {
+                  expect(frame.scales[phew], `at ${frame.time}`).toBeCloseTo(0.88, 3);
+                }
+                if (frame.beat === 'showdown') expect(frame.moods[phew]).toBe('happy');
+              }
+            },
+          );
+          And('the other two face each other in the duel, the unlucky person among them', () => {
+            expect(plan.duel).toContain(unlucky);
+            const D = startOf(plan, 'duel');
+            const duel = frames.filter((frame) => frame.time >= D - 1e-9);
+            expect(duel.length).toBeGreaterThan(0);
+            for (const frame of duel) {
+              expect([...frame.inPlay].sort(), `at ${frame.time}`).toEqual([...plan.duel].sort());
+              if (frame.holder) expect(plan.duel).toContain(frame.holder);
+            }
+          });
+          And(
+            'each throw from the start of the showdown to the end of the duel takes longer than the one before',
+            () => {
+              // From the run: each throw lasts from the first frame with the potato in
+              // the air after the catch before it, to its own catch.
+              const first = before(plan).length;
+              const throws = catches.slice(first - 1, first + 5);
+              expect(throws.slice(1).map((each) => each.holder)).toEqual(
+                [...during(plan, 'showdown'), ...during(plan, 'duel')].map((each) => each.by),
+              );
+              const flights = throws.slice(1).map((each, index) => {
+                const caught = throws[index]!.time;
+                const thrown = frames.find((frame) => frame.time >= caught && frame.holder === '')!;
+                return each.time - thrown.time;
+              });
+              expect(flights).toHaveLength(5);
+              flights.slice(1).forEach((length, index) => {
+                expect(length).toBeGreaterThan(flights[index]!);
+              });
+            },
+          );
         },
       );
-    });
-  });
+
+      RuleScenario('The duel', ({ Given, When, Then, And }) => {
+        const team = names(8);
+        const unlucky = 'Luca';
+        let plan: Plan;
+        let frames: Frame[];
+        /** The pair's name tags as drawn, where they stand, and whether they're in front of everyone else. */
+        const pair: { time: number; tags: number[]; x: number[]; inFront: boolean }[] = [];
+        Given('8 people', () => {
+          plan = planShow(team, unlucky, createRandom(1));
+        });
+        When('the duel starts', async () => {
+          ({ frames } = await watch(team, unlucky, 1, (time, stage) => {
+            const people = [...stage.querySelectorAll<HTMLElement>('[data-person]')];
+            const two = plan.duel.map((name) =>
+              people.find((each) => each.dataset.person === name)!,
+            );
+            const spots = ring(8);
+            pair.push({
+              time,
+              tags: two.map((el) =>
+                drawnTag(el.querySelector<HTMLElement>('[data-on="chest"]')!, stage),
+              ),
+              x: two.map(
+                (el) =>
+                  spots[plan.ring.indexOf(el.dataset.person!)]!.x +
+                  Number(gsap.getProperty(el, 'x')),
+              ),
+              inFront: people.every(
+                (el) =>
+                  two.includes(el) ||
+                  two.every(
+                    (one) =>
+                      (el.compareDocumentPosition(one) & Node.DOCUMENT_POSITION_FOLLOWING) !== 0,
+                  ),
+              ),
+            });
+          }));
+        });
+        Then(
+          'the last two step into the middle and face each other, drawn big, their name tags at 40 pixels or more',
+          () => {
+            const D = startOf(plan, 'duel');
+            const P = startOf(plan, 'pop');
+            const big = pair.filter((each) => each.time >= D + 0.5 - 1e-9 && each.time < P);
+            expect(big.length).toBeGreaterThan(30);
+            for (const each of big) {
+              for (const tag of each.tags)
+                expect(tag, `at ${each.time}`).toBeGreaterThanOrEqual(40);
+              expect(each.inFront, `at ${each.time}`).toBe(true);
+              // One on each side of the middle, facing each other.
+              const [left, right] = [...each.x].sort((a, b) => a - b);
+              expect(left, `at ${each.time}`).toBeCloseTo(320, 3);
+              expect(right, `at ${each.time}`).toBeCloseTo(960, 3);
+            }
+            const spots = ring(8);
+            for (const frame of frames.filter((each) => each.time >= D + 0.5 && each.time < P)) {
+              for (const name of plan.duel) {
+                const size = spots[plan.ring.indexOf(name)]!.size;
+                expect(frame.scales[name]! * size, `${name} at ${frame.time}`).toBeCloseTo(180, 1);
+              }
+            }
+          },
+        );
+        And('the other 6 shrink back behind them and watch, worried', () => {
+          const D = startOf(plan, 'duel');
+          const P = startOf(plan, 'pop');
+          const others = team.filter((name) => !plan.duel.includes(name));
+          expect(others).toHaveLength(6);
+          const watching = frames.filter((frame) => frame.time >= D - 1e-9 && frame.time < P);
+          expect(watching.length).toBeGreaterThan(30);
+          for (const frame of watching) {
+            for (const name of others) {
+              expect(frame.moods[name], `${name} at ${frame.time}`).toBe('worried');
+              expect(frame.scales[name], `${name} at ${frame.time}`).toBeLessThan(1);
+            }
+          }
+        });
+        And('the potato only goes between the two until it pops', () => {
+          const D = startOf(plan, 'duel');
+          const holders = frames
+            .filter((frame) => frame.time >= D - 1e-9)
+            .map((frame) => frame.holder)
+            .filter(Boolean);
+          expect(holders.length).toBeGreaterThan(0);
+          for (const holder of holders) expect(plan.duel).toContain(holder);
+        });
+        And('the sparkler is a short stub that flickers, never more than 3 times a second', () => {
+          const D = startOf(plan, 'duel');
+          const P = startOf(plan, 'pop');
+          for (const frame of frames.filter((each) => each.time < D - 1e-9)) {
+            expect(frame.spark, `at ${frame.time}`).toBe(1);
+          }
+          const duel = frames.filter((each) => each.time >= D - 1e-9 && each.time < P);
+          for (const frame of duel) {
+            expect(frame.sparkler, `at ${frame.time}`).toBeLessThanOrEqual(0.25);
+          }
+          // A dip: the spark goes from over halfway to under halfway between 1 and 0.45.
+          const dips: number[] = [];
+          duel.forEach((frame, index) => {
+            const before = duel[index - 1];
+            if (before && before.spark >= 0.725 && frame.spark < 0.725) dips.push(frame.time);
+          });
+          expect(dips.length).toBeGreaterThan(3);
+          for (const dip of dips) {
+            expect(dips.filter((each) => each >= dip && each < dip + 1).length).toBeLessThanOrEqual(
+              3,
+            );
+          }
+        });
+        And('the heartbeat comes quicker and quicker until the pop', () => {
+          // Sound isn't recorded: play.ts cues a heartbeat at each of these.
+          const { heartbeats } = plan;
+          expect(heartbeats.length).toBeGreaterThan(3);
+          expect(heartbeats[0]).toBeCloseTo(startOf(plan, 'duel'), 9);
+          expect(heartbeats.at(-1)!).toBeLessThan(startOf(plan, 'pop'));
+          const gaps = heartbeats.slice(1).map((time, index) => time - heartbeats[index]!);
+          expect(gaps.at(-1)!).toBeLessThan(gaps[0]!);
+          gaps.slice(1).forEach((gap, index) => {
+            expect(gap).toBeLessThanOrEqual(gaps[index]! + 1e-9);
+          });
+        });
+      });
+
+      RuleScenario('With 2 people it is a duel from the start', ({ Given, When, Then, And }) => {
+        let plan: Plan;
+        Given('2 people', () => {});
+        When('the show runs', () => {
+          plan = planShow(names(2), names(2)[0]!, createRandom(1));
+        });
+        Then('each throw before the duel is quicker than the one before', () => {
+          const throws = during(plan, 'hot-hands').map(flight);
+          expect(throws.length).toBeGreaterThan(1);
+          throws.slice(1).forEach((length, index) => {
+            expect(length).toBeLessThan(throws[index]!);
+          });
+        });
+        And('there is no showdown, and nobody says "Phew!"', () => {
+          expect(plan.beats.showdown).toBe(0);
+          expect(during(plan, 'showdown')).toHaveLength(0);
+          expect(plan.phew).toBeNull();
+        });
+        And('the duel has 5 throws, each longer than the one before', () => {
+          const throws = during(plan, 'duel').map(flight);
+          expect(throws).toHaveLength(5);
+          throws.slice(1).forEach((length, index) => {
+            expect(length).toBeGreaterThan(throws[index]!);
+          });
+        });
+      });
+
+      RuleScenario('Who says "Phew!" gives nothing away', ({ Given, When, Then, And }) => {
+        let runs: Plan[];
+        Given('8 people, with the same unlucky person every time', () => {});
+        When('the show runs with 20 different random seeds', () => {
+          runs = plans(8, 'Luca');
+        });
+        Then('at least 2 different people say "Phew!", and never the unlucky person', () => {
+          expect(new Set(runs.map((plan) => plan.phew)).size).toBeGreaterThanOrEqual(2);
+          for (const plan of runs) {
+            expect(plan.phew).not.toBeNull();
+            expect(plan.phew).not.toBe('Luca');
+          }
+        });
+        And(
+          'the unlucky person is holding it when the duel ends in some runs, and not in others',
+          () => {
+            const holding = runs.map((plan) => during(plan, 'duel').at(-1)!.by === 'Luca');
+            expect(holding).toContain(true);
+            expect(holding).toContain(false);
+          },
+        );
+      });
+    },
+  );
 
   Rule('The sparkler is the clock everyone watches', ({ RuleScenario, RuleScenarioOutline }) => {
     RuleScenario('It burns down to the last second', ({ When, Then, And }) => {
@@ -547,7 +802,9 @@ describeSpec(await loadFeature('./hot-potato.feature'), ({ Rule }) => {
         () => {
           for (const { label, burstBehind, bubbles, unlucky, plan } of lab) {
             expect(burstBehind, label).toBe(true);
-            const spot = ring(plan.ring.length)[plan.ring.indexOf(unlucky)]!;
+            // Where they stand at the pop: in the duel.
+            const pair = plan.duel.map((name) => plan.ring.indexOf(name)) as [number, number];
+            const spot = duelLayout(plan.ring.length, pair)[plan.ring.indexOf(unlucky)]!;
             const pop = bubbles.find((each) => each.text === 'Pop!')!;
             expect(pop, label).toBeDefined();
             expect(overlap(pop.box, headBox(spot)), label).toBe(false);
@@ -796,6 +1053,100 @@ describe('The ring', () => {
       }
     }
   });
+
+  /** Every pair of ring indices at `count`. */
+  const pairs = (count: number): [number, number][] =>
+    Array.from({ length: count }, (_, i) =>
+      Array.from({ length: count - i - 1 }, (_, k): [number, number] => [i, i + k + 1]),
+    ).flat();
+
+  it("nobody's tag crosses another on the way into the duel", () => {
+    for (let count = 3; count <= 12; count++) {
+      for (const pair of pairs(count)) {
+        for (let step = 0; step <= 20; step++) {
+          const t = step / 20;
+          const label = `${count} people, pair ${pair.join(' and ')}, t ${t}`;
+          const moved = duelMove(count, pair, t);
+          expect(moved, label).toHaveLength(count);
+          for (const index of pair) expect(moved[index]!.shown, label).toBe(1);
+          const seen = moved.filter((each) => each.shown > 0).map((each) => each.spot);
+          expect(overlapping(seen), label).toBe(false);
+          for (const spot of seen) {
+            const tag = tagBox(spot);
+            expect(tag.left, label).toBeGreaterThanOrEqual(0);
+            expect(tag.right, label).toBeLessThanOrEqual(1280);
+            expect(tag.top, label).toBeGreaterThanOrEqual(0);
+            expect(tag.bottom, label).toBeLessThanOrEqual(720);
+            expect(headBox(spot).top, label).toBeGreaterThanOrEqual(SKY);
+          }
+        }
+      }
+    }
+  });
+
+  it('the watchers fade out at their ring spot and back in watching, quickly', () => {
+    // t is a share of the 0.5 s step-in.
+    const seconds = (t: number) => 0.5 * t;
+    for (let count = 3; count <= 12; count++) {
+      for (const pair of pairs(count)) {
+        const spots = ring(count);
+        const end = duelLayout(count, pair);
+        const steps = Array.from({ length: 201 }, (_, step) => step / 200);
+        const moves = steps.map((t) => duelMove(count, pair, t));
+        expect(moves[0]!.map((each) => each.spot)).toEqual(
+          spots.map((spot, index) => (pair.includes(index) ? spot : outOfPlay(spot))),
+        );
+        expect(moves.at(-1)!.map((each) => each.spot)).toEqual(end);
+        for (let index = 0; index < count; index++) {
+          if (pair.includes(index)) continue;
+          const label = `${count} people, pair ${pair.join(' and ')}, watcher ${index}`;
+          const shown = moves.map((move) => move[index]!.shown);
+          const fading = steps.filter((_, k) => shown[k]! > 0 && shown[k]! < 1);
+          const hidden = steps.filter((_, k) => shown[k] === 0);
+          expect(hidden.length, label).toBeGreaterThan(0);
+          const [gone, back] = [hidden[0]!, hidden.at(-1)!];
+          expect(seconds(back - gone), label).toBeLessThanOrEqual(0.3 + 1e-9);
+          const out = fading.filter((t) => t < gone);
+          const into = fading.filter((t) => t > back);
+          expect(seconds(gone - (out[0] ?? gone)), label).toBeLessThanOrEqual(0.2 + 1e-9);
+          expect(seconds((into.at(-1) ?? back) - back), label).toBeLessThanOrEqual(0.2 + 1e-9);
+          moves.forEach((move, k) => {
+            if (shown[k] === 0) return;
+            const want = steps[k]! < gone ? outOfPlay(spots[index]!) : end[index]!;
+            expect(move[index]!.spot, `${label}, t ${steps[k]}`).toEqual(want);
+          });
+        }
+      }
+    }
+  });
+
+  it("the duel's pair is big", () => {
+    expect(duelLayout(2, [0, 1])).toEqual(ring(2));
+    expect(duelMove(2, [0, 1], 0.5).map((each) => each.spot)).toEqual(ring(2));
+    for (let count = 3; count <= 12; count++) {
+      const spots = ring(count);
+      for (const [i, j] of pairs(count)) {
+        const label = `${count} people, pair ${i} and ${j}`;
+        const end = duelLayout(count, [i, j]);
+        for (const index of [i, j]) {
+          expect(end[index]!.size, label).toBe(180);
+          expect(end[index]!.tag.size, label).toBeGreaterThanOrEqual(40);
+        }
+        const [left, right] = spots[i]!.x <= spots[j]!.x ? [i, j] : [j, i];
+        expect(end[left]!.x, label).toBeLessThan(end[right]!.x);
+        // At the pop either one may grow: their tag stays on stage and off the watchers'.
+        for (const index of [i, j]) {
+          const { tag } = crowned(end[index]!);
+          expect(tag.left, label).toBeGreaterThanOrEqual(0);
+          expect(tag.right, label).toBeLessThanOrEqual(1280);
+          expect(tag.bottom, label).toBeLessThanOrEqual(720);
+          end.forEach((other, k) => {
+            if (k !== index) expect(overlap(tag, tagBox(other)), `${label}, ${k}`).toBe(false);
+          });
+        }
+      }
+    }
+  });
 });
 
 describe('The stage', () => {
@@ -816,6 +1167,21 @@ describe('The stage', () => {
       }
     }
   });
+
+  it("with reduced motion the spark doesn't flicker", async () => {
+    const opacity = new Set<string>();
+    const record = await runShow(hotPotato, {
+      names: names(8),
+      unlucky: 'Luca',
+      reducedMotion: true,
+      onFrame(_, stage) {
+        const spark = stage.querySelector<SVGElement>('[data-part="potato"] [data-part="spark"]');
+        if (spark) opacity.add(spark.style.opacity);
+      },
+    });
+    expect(record.outcome).toBe('finished');
+    expect([...opacity].filter((each) => each !== '' && Number(each) !== 1)).toEqual([]);
+  });
 });
 
 /** A bubble as it appeared: what it said, its box, and the potato's box then (null while hidden). */
@@ -835,7 +1201,7 @@ interface LabRun {
   readonly bubbles: Said[];
   /** The burst comes before every person on the stage. */
   readonly burstBehind: boolean;
-  /** In the last frame: the unlucky person comes after everyone else, and how big they are. */
+  /** In the last frame: the unlucky person comes after everyone else, and how many times bigger than just before the pop. */
   readonly inFront: boolean;
   readonly grownScale: number;
   /** In the last frame: whose arms are up. */
@@ -875,6 +1241,7 @@ async function labRuns(): Promise<LabRun[]> {
       const seen = new Set<Element>();
       const placed: { time: number; at: string }[] = [];
       let smallestTag = Infinity;
+      let beforePop = 1;
       let end = { burstBehind: false, inFront: false, grownScale: 0, raised: [] as string[] };
       const { frames, record } = await watch(team, unlucky, seed, (time, stage) => {
         const scene = stage.querySelector<HTMLElement>('[data-part="scene"]')!;
@@ -899,6 +1266,7 @@ async function labRuns(): Promise<LabRun[]> {
         const them = people.find((person) => person.dataset.person === unlucky)!;
         const burst = scene.querySelector('[data-part="burst"]')!;
         placed.push({ time, at: placement(them, stage) });
+        if (scene.dataset.beat !== 'pop') beforePop = Number(gsap.getProperty(them, 'scale'));
         for (const tag of scene.querySelectorAll<HTMLElement>('[data-on="chest"]')) {
           smallestTag = Math.min(smallestTag, drawnTag(tag, stage));
         }
@@ -912,7 +1280,7 @@ async function labRuns(): Promise<LabRun[]> {
               person === them ||
               (them.compareDocumentPosition(person) & Node.DOCUMENT_POSITION_PRECEDING) !== 0,
           ),
-          grownScale: Number(gsap.getProperty(them, 'scale')),
+          grownScale: Number(gsap.getProperty(them, 'scale')) / beforePop,
           raised: people
             .filter((person) => shown(person.querySelector('[data-part="land-arms"]'), stage))
             .map((person) => person.dataset.person!),

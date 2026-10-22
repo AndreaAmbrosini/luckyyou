@@ -94,6 +94,110 @@ export function outOfPlay(spot: Spot): Spot {
   return { ...spot, size: spot.size * 0.88 };
 }
 
+/** The duel's two, big in front and facing each other: their head size, name tag size and spots. */
+const DUEL = { size: 180, tag: 40, left: { x: 320, y: 580 }, right: { x: 960, y: 580 } };
+
+/**
+ * How many times bigger someone from `spot` is drawn in the duel, name tag
+ * and all, so the tag comes to DUEL.tag: a hair over rather than under, for
+ * the drawing's rounding. The head makes up the rest to DUEL.size.
+ */
+export function duelGrowth(spot: Spot): number {
+  return Math.ceil((DUEL.tag / spot.tag.size) * 1e4) / 1e4;
+}
+
+/**
+ * Shares of the step-in: the watchers fade out from its start to `out`,
+ * are moved while hidden, and fade back in from `in` to its end.
+ */
+const FADE = { out: 0.25, in: 0.8 };
+
+/**
+ * The pair's walk eases in and out, and they grow later still, so they're
+ * still small while the watchers fade out and full size once they're back.
+ */
+const walking = (t: number) => (t < 0.5 ? 4 * t ** 3 : 1 - 4 * (1 - t) ** 3);
+const growing = (t: number) => (t < 0.5 ? 8 * t ** 4 : 1 - 8 * (1 - t) ** 4);
+
+/** How finely the watchers' arc is narrowed, in radians. */
+const ARC_STEP = 0.005;
+
+/** Who in the pair stands on the left, and where each watcher watches from. */
+function duelPlan(count: number, pair: readonly [number, number]) {
+  const spots = ring(count);
+  const { cx, cy, rx, ry } = shape(count);
+  const [one, two] = pair;
+  const oneLeft = spots[one]!.x < spots[two]!.x || (spots[one]!.x === spots[two]!.x && one < two);
+  const [left, right] = oneLeft ? [one, two] : [two, one];
+  // In ring order from the front-left, round the back, to the front-right.
+  const angle = (index: number) => {
+    const a = (2 * Math.PI * index) / count;
+    return a > Math.PI ? a - 2 * Math.PI : a;
+  };
+  const watchers = spots
+    .map((_, index) => index)
+    .filter((index) => index !== left && index !== right)
+    .sort((a, b) => angle(a) - angle(b));
+  /** The watchers evenly spaced over an arc `width` wide, centred on the back. */
+  const spread = (width: number): Spot[] =>
+    watchers.map((index, k) => {
+      const a = watchers.length === 1 ? 0 : -width / 2 + (width * k) / (watchers.length - 1);
+      return { ...outOfPlay(spots[index]!), x: cx + rx * Math.sin(a), y: cy - ry * Math.cos(a) };
+    });
+  const apart = (placed: Spot[]) =>
+    placed.every((spot, k) =>
+      placed.slice(k + 1).every((other) => !overlap(tagBox(spot), tagBox(other))),
+    );
+  let width = 0;
+  while (!apart(spread(width))) width += ARC_STEP;
+  const watching = new Map(spread(width).map((spot, k) => [watchers[k]!, spot]));
+  return { spots, left, right, watching };
+}
+
+const duelPlans = new Map<string, ReturnType<typeof duelPlan>>();
+
+/**
+ * Everyone's spot a fraction `t` (0…1) of the way through the step-in, from
+ * the showdown (the pair at their ring spots, everyone else out of play) to
+ * the duel, and how visible they are (0…1). The pair walk in a straight line,
+ * growing; the watchers fade out where they stand and back in on the upper
+ * arc of the ring, in ring order.
+ */
+export function duelMove(
+  count: number,
+  pair: readonly [number, number],
+  t: number,
+): { spot: Spot; shown: number }[] {
+  if (count === 2) return ring(2).map((spot) => ({ spot, shown: 1 }));
+  const key = `${count} ${pair[0]} ${pair[1]}`;
+  if (!duelPlans.has(key)) duelPlans.set(key, duelPlan(count, pair));
+  const { spots, left, right, watching } = duelPlans.get(key)!;
+  const walked = walking(t);
+  const grown = growing(t);
+  const shown = t <= FADE.out ? 1 - t / FADE.out : t >= FADE.in ? (t - FADE.in) / (1 - FADE.in) : 0;
+  return spots.map((spot, index) => {
+    const end = index === left ? DUEL.left : index === right ? DUEL.right : null;
+    if (!end) {
+      return { spot: t < FADE.out ? outOfPlay(spot) : watching.get(index)!, shown };
+    }
+    const growth = 1 + grown * (duelGrowth(spot) - 1);
+    return {
+      spot: {
+        x: spot.x + walked * (end.x - spot.x),
+        y: spot.y + walked * (end.y - spot.y),
+        size: spot.size + grown * (DUEL.size - spot.size),
+        tag: { size: spot.tag.size * growth, maxWidth: spot.tag.maxWidth * growth },
+      },
+      shown: 1,
+    };
+  });
+}
+
+/** Everyone's spot in the duel, by ring index: the pair big in front, facing each other, the rest watching. */
+export function duelLayout(count: number, pair: readonly [number, number]): Spot[] {
+  return duelMove(count, pair, 1).map((each) => each.spot);
+}
+
 /** The gap between a held potato's box and the holder's face. */
 const HOLD_GAP = 6;
 
@@ -296,8 +400,16 @@ const SPEECH_GAP = 12;
  * Where to anchor a speech bubble saying `text`: level with `beside` and
  * next to it on the side towards the stage's middle, or the other side when
  * that has no room; clear of `beside` and everything in `avoid`, inside the stage.
+ * When `close`, it isn't pushed further out past something in the way: a side
+ * that's in the way doesn't count as room, and with neither side it goes over
+ * `beside` if that's clear.
  */
-export function speechAt(text: string, beside: Box, avoid: readonly Box[] = []): Point {
+export function speechAt(
+  text: string,
+  beside: Box,
+  avoid: readonly Box[] = [],
+  { close = false } = {},
+): Point {
   const size = speechBox(text, { x: 0, y: 0 });
   const half = size.right;
   const height = -size.top;
@@ -309,14 +421,22 @@ export function speechAt(text: string, beside: Box, avoid: readonly Box[] = []):
     const past = (box: Box) =>
       side > 0 ? box.right + SPEECH_GAP + half : box.left - SPEECH_GAP - half;
     let x = past(beside);
+    let pushed = false;
     for (let moved = true; moved;) {
       const blocking = inTheWay.find((box) => overlap(speechBox(text, { x, y }), box));
       moved = blocking !== undefined;
       if (blocking) x = past(blocking);
+      pushed ||= moved;
     }
+    if (close && pushed) continue;
     if (x - half >= EDGE && x + half <= STAGE.width - EDGE) return { x, y };
   }
   // Neither side has room: over it instead.
-  const x = (beside.left + beside.right) / 2;
-  return { x: Math.min(STAGE.width - EDGE - half, Math.max(EDGE + half, x)), y: beside.top };
+  const middle = (beside.left + beside.right) / 2;
+  const x = Math.min(STAGE.width - EDGE - half, Math.max(EDGE + half, middle));
+  const overIt = { x, y: beside.top };
+  if (close && avoid.some((box) => overlap(speechBox(text, overIt), box))) {
+    return speechAt(text, beside, avoid);
+  }
+  return overIt;
 }
