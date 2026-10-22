@@ -5,9 +5,11 @@
 
 import { gsap } from 'gsap';
 import {
+  bubble,
   handOutLooks,
   head,
   nameTag,
+  popIn,
   shake,
   type Cue,
   type Head,
@@ -16,7 +18,7 @@ import {
   type Show,
 } from '../../scenario-kit';
 import { held, outOfPlay, POTATO, ring, type Spot } from './layout';
-import { field, potato as drawPotato } from './parts';
+import { burst, confetti, crown, field, potato as drawPotato } from './parts';
 import { BEATS, planShow, type Beat, type Catch } from './plan';
 import styles from './hot-potato.module.css';
 
@@ -30,8 +32,14 @@ const BOOMERANG = { reach: 420, rise: 300 };
 const MIDDLE = { x: 640, y: 450 };
 /** Seconds for those out of play to step back. */
 const STEP_BACK = 0.4;
+/** Seconds a gag bubble stays up. */
+const BUBBLE = 0.8;
+/** The fewest seconds between two "Hot! Hot! Hot!" bubbles. */
+const HOT_GAP = 1.0;
+/** Bits of confetti in the pop, and seconds they fly out and then fall. */
+const CONFETTI = { count: 36, out: 0.45, fall: 1.4 };
 
-type Phase = 'throws' | 'dud' | 'relight' | 'showdown';
+type Phase = 'throws' | 'dud' | 'relight' | 'showdown' | 'ending';
 
 interface Person {
   readonly name: string;
@@ -46,6 +54,7 @@ export async function playHotPotato(show: Show): Promise<void> {
   const timeline = gsap.timeline({ paused: true });
   const at = (time: number, run: () => void) => void timeline.call(run, [], time);
   const cue = (time: number, sound: Cue) => at(time, () => void show.sound.play(sound));
+  const caption = (time: number, text: string) => at(time, () => show.caption(text));
 
   const scene = field();
   show.stage.append(scene);
@@ -97,13 +106,21 @@ export async function playHotPotato(show: Show): Promise<void> {
     for (const { name, el, face } of people.values()) {
       const inPlay = !out.has(name);
       const braced = name === holder || name === coming;
-      const mood: Mood =
-        phase === 'dud' || !inPlay ? 'happy' : phase === 'relight' || braced ? 'scared' : 'worried';
+      const ending = phase === 'ending';
+      const mood: Mood = ending
+        ? name === show.unlucky
+          ? 'party'
+          : 'happy'
+        : phase === 'dud' || !inPlay
+          ? 'happy'
+          : phase === 'relight' || braced
+            ? 'scared'
+            : 'worried';
       el.dataset.inPlay = String(inPlay);
       el.dataset.mood = mood;
       face.setMood(mood);
-      face.setRaised(braced);
-      face.setSweat(inPlay && (braced || phase === 'showdown'));
+      face.setRaised(ending || braced);
+      face.setSweat(!ending && inPlay && (braced || phase === 'showdown'));
     }
   };
   /** From `time` it's in `name`'s hands, or flying to them when `flying`. */
@@ -141,6 +158,44 @@ export async function playHotPotato(show: Show): Promise<void> {
       },
       from,
     );
+
+  /** One throw, in an arc over the ring, or the boomerang's loop out and back. */
+  function fly(each: Catch) {
+    const from = over(each.from!);
+    const to = over(each.by);
+    let c1: { x: number; y: number };
+    let c2: { x: number; y: number };
+    if (each.from === each.by) {
+      const dx = MIDDLE.x - from.x;
+      const dy = MIDDLE.y - from.y;
+      const length = Math.hypot(dx, dy) || 1;
+      const reach = { x: (BOOMERANG.reach * dx) / length, y: (BOOMERANG.reach * dy) / length };
+      c1 = { x: from.x + reach.x, y: from.y + reach.y - BOOMERANG.rise };
+      c2 = { x: from.x + reach.x, y: from.y + reach.y + BOOMERANG.rise / 3 };
+    } else {
+      const top =
+        Math.min(from.y, to.y) - ARC.rise - ARC.share * Math.hypot(to.x - from.x, to.y - from.y);
+      c1 = { x: from.x, y: top };
+      c2 = { x: to.x, y: top };
+    }
+    const path = { t: 0 };
+    timeline.fromTo(
+      path,
+      { t: 0 },
+      {
+        t: 1,
+        duration: each.at - each.thrown,
+        ease: 'power1.inOut',
+        immediateRender: false,
+        onUpdate: () => {
+          const point = bezier(path.t, from, c1, c2, to);
+          setX(place(point).x);
+          setY(place(point).y);
+        },
+      },
+      each.thrown,
+    );
+  }
 
   // The plop: it drops in from above onto the first catcher, shocked.
   at(0, () => potato.setFace('shocked'));
@@ -210,57 +265,126 @@ export async function playHotPotato(show: Show): Promise<void> {
   // The boomerang leaves the unlucky person smug.
   if (plan.twist === 'boomerang') at(starts['last-throw'], () => potato.setFace('smug'));
 
-  // The freeze: nothing moves but the face, squeezed shut on the last spark.
-  at(starts.freeze, () => potato.setFace('squeezed'));
+  const during = (beat: Beat) => plan.catches.filter((each) => each.beat === beat);
+  const before = plan.catches.filter((each) => each.beat === 'plop' || each.beat === 'hot-hands');
 
-  // The pop (a stand-in for now): the sizzle stops and the potato is gone.
+  // Captions, one at each moment; the kit holds each long enough to read and queues the next.
+  caption(0, "Don't be holding it when it pops!");
+  caption(starts['hot-hands'], 'Faster… faster…');
+  if (plan.dud) {
+    caption(starts.dud, '…a dud?');
+    caption(starts.relight, 'Nope! Still lit!');
+  }
+  const named: string[] = [];
+  for (const each of during('showdown')) {
+    named.push(each.by);
+    caption(each.at, `${named.join('… ')}…`);
+  }
+  if (plan.twist === 'back') {
+    const away = plan.catches.at(-2)!;
+    caption(away.at, `${away.by}… nope, back to ${show.unlucky}!`);
+  } else if (plan.twist === 'boomerang') {
+    caption(plan.catches.at(-1)!.thrown, "It's coming back!");
+  }
+  caption(starts.freeze, 'Uh-oh…');
+  caption(starts.pop, `It popped on ${show.unlucky}!`);
+
+  // Gags, in bubbles beside the head of whoever says them.
+  const say = (time: number, text: string, name: string, colour: 'paper' | 'sun' = 'paper') => {
+    const { spot } = people.get(name)!;
+    const speech = bubble(
+      text,
+      {
+        x: Math.min(1130, Math.max(150, spot.x + 0.55 * spot.size)),
+        y: spot.y - 0.8 * spot.size + 8,
+      },
+      { colour },
+    );
+    scene.append(speech);
+    timeline.add(popIn(speech), time);
+    timeline.set(speech, { autoAlpha: 0 }, time + BUBBLE);
+  };
+  say(first.at, 'Fzzzt!', first.by);
+  let lastHot = first.at;
+  for (const each of during('hot-hands')) {
+    if (each.at - lastHot < HOT_GAP) continue;
+    say(each.at, 'Hot! Hot! Hot!', each.by);
+    lastHot = each.at;
+  }
+  if (plan.dud) say(starts.relight, 'Psssst!', before.at(-1)!.by, 'sun');
+  const steppingBack = plan.ring.find((name) => !plan.showdown.includes(name));
+  if (steppingBack) say(starts.showdown, 'Not me!', steppingBack);
+  if (plan.twist === 'back') say(plan.catches.at(-2)!.at, 'Nope!', plan.catches.at(-2)!.by);
+
+  // The freeze: nothing moves but the face, squeezed shut on the last spark.
+  at(starts.freeze, () => {
+    potato.setFace('squeezed');
+    potato.setSparkler(0);
+  });
+
+  // The pop: a burst where the potato was, confetti out and down, a paper
+  // crown for the unlucky person and cheers from everyone else.
+  const heart = over(show.unlucky);
+  const star = burst();
+  star.setAttribute('width', '300');
+  star.setAttribute('height', '300');
+  star.style.position = 'absolute';
+  star.style.left = `${heart.x - 150}px`;
+  star.style.top = `${heart.y - 150}px`;
+  gsap.set(star, { autoAlpha: 0, scale: 0.3 });
+  scene.append(star);
+  const bits = confetti(show.random, CONFETTI.count);
+  for (const bit of bits) {
+    bit.style.left = '0px';
+    bit.style.top = '0px';
+    gsap.set(bit, { x: heart.x, y: heart.y, autoAlpha: 0 });
+    scene.append(bit);
+  }
+  const unlucky = people.get(show.unlucky)!;
+  const paperCrown = crown();
+  paperCrown.setAttribute('width', String(unlucky.spot.size));
+  paperCrown.setAttribute('height', String(unlucky.spot.size));
+  paperCrown.style.position = 'absolute';
+  paperCrown.style.left = '0px';
+  paperCrown.style.top = '0px';
+  gsap.set(paperCrown, { transformOrigin: '50% 100%' });
+  unlucky.el.append(paperCrown);
+
   sizzle(starts.pop, false);
   cue(starts.pop, 'pop');
+  cue(starts.pop + 0.3, 'fanfare');
   timeline.set(potato.el, { autoAlpha: 0 }, starts.pop);
+  enter(starts.pop, 'ending');
+  say(starts.pop, 'Pop!', show.unlucky, 'sun');
+  timeline.set(star, { autoAlpha: 1 }, starts.pop);
+  timeline.to(star, { scale: 1.1, duration: 0.25, ease: 'power2.out' }, starts.pop);
+  timeline.to(star, { autoAlpha: 0, duration: 0.3 }, starts.pop + 0.3);
+  bits.forEach((bit) => {
+    const angle = Math.PI * (1.1 + 0.8 * show.random());
+    const reach = 160 + 240 * show.random();
+    const x = heart.x + reach * Math.cos(angle);
+    const y = heart.y + reach * Math.sin(angle);
+    const turn = 360 * (show.random() - 0.5);
+    timeline.set(bit, { autoAlpha: 1 }, starts.pop);
+    timeline.to(
+      bit,
+      { x, y, rotation: `+=${turn}`, duration: CONFETTI.out, ease: 'power2.out' },
+      starts.pop,
+    );
+    timeline.to(
+      bit,
+      { x: x + 120 * (show.random() - 0.5), y: 780, duration: CONFETTI.fall, ease: 'power1.in' },
+      starts.pop + CONFETTI.out,
+    );
+    timeline.set(bit, { autoAlpha: 0 }, starts.pop + CONFETTI.out + CONFETTI.fall);
+  });
+  timeline.add(popIn(paperCrown), starts.pop + 0.3);
   timeline.set({}, {}, total);
 
   try {
     await show.play(timeline);
   } finally {
     stopSizzle();
-  }
-
-  /** One throw, in an arc over the ring, or the boomerang's loop out and back. */
-  function fly(each: Catch) {
-    const from = over(each.from!);
-    const to = over(each.by);
-    let c1: { x: number; y: number };
-    let c2: { x: number; y: number };
-    if (each.from === each.by) {
-      const dx = MIDDLE.x - from.x;
-      const dy = MIDDLE.y - from.y;
-      const length = Math.hypot(dx, dy) || 1;
-      const reach = { x: (BOOMERANG.reach * dx) / length, y: (BOOMERANG.reach * dy) / length };
-      c1 = { x: from.x + reach.x, y: from.y + reach.y - BOOMERANG.rise };
-      c2 = { x: from.x + reach.x, y: from.y + reach.y + BOOMERANG.rise / 3 };
-    } else {
-      const top =
-        Math.min(from.y, to.y) - ARC.rise - ARC.share * Math.hypot(to.x - from.x, to.y - from.y);
-      c1 = { x: from.x, y: top };
-      c2 = { x: to.x, y: top };
-    }
-    const path = { t: 0 };
-    timeline.fromTo(
-      path,
-      { t: 0 },
-      {
-        t: 1,
-        duration: each.at - each.thrown,
-        ease: 'power1.inOut',
-        immediateRender: false,
-        onUpdate: () => {
-          const point = bezier(path.t, from, c1, c2, to);
-          setX(point.x - POTATO.width / 2);
-          setY(point.y - POTATO.height / 2);
-        },
-      },
-      each.thrown,
-    );
   }
 }
 

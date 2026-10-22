@@ -1,7 +1,7 @@
 import { loadFeature } from '@amiceli/vitest-cucumber';
 import { gsap } from 'gsap';
 import { describe, expect, it } from 'vitest';
-import { describeSpec, runShow } from '../../scenario-kit/testing';
+import { describeSpec, runShow, type ShowRecord } from '../../scenario-kit/testing';
 import { createRandom } from '../../scenario-kit/random';
 import hotPotato from './index';
 import { held, outOfPlay, ring, type Spot } from './layout';
@@ -111,14 +111,17 @@ async function watch(
   team: readonly string[],
   unlucky: string,
   seed = 1,
-): Promise<{ frames: Frame[]; catches: Caught[] }> {
+  /** Called after every frame as well, for what the frames don't hold. */
+  extra?: (time: number, stage: HTMLElement) => void,
+): Promise<{ frames: Frame[]; catches: Caught[]; record: ShowRecord }> {
   const frames: Frame[] = [];
   const catches: Caught[] = [];
   /** What each frame reads, found once: looking it up every frame is slow in jsdom. */
   let parts: { scene: HTMLElement; people: HTMLElement[]; potato: SVGElement } | undefined;
   let holder = '';
-  const holders = new MutationObserver((changes) => {
-    const { scene, potato } = parts!;
+  const note = (changes: MutationRecord[]) => {
+    if (!parts) return;
+    const { scene, potato } = parts;
     changes.forEach((change, index) => {
       // Each change names the holder before it; the last one's is the holder now.
       const next = changes[index + 1]?.oldValue ?? potato.dataset.holder ?? '';
@@ -132,50 +135,89 @@ async function watch(
         });
       }
     });
-  });
-  const record = await runShow(hotPotato, {
-    names: team,
-    unlucky,
-    seed,
-    onFrame(time, stage) {
-      if (!parts) {
-        parts = {
-          scene: stage.querySelector<HTMLElement>('[data-part="scene"]')!,
-          people: [...stage.querySelectorAll<HTMLElement>('[data-person]')],
-          potato: stage.querySelector<SVGElement>('[data-part="potato"]')!,
-        };
-        holders.observe(parts.potato, {
-          attributeFilter: ['data-holder'],
-          attributeOldValue: true,
+  };
+  const holders = new MutationObserver(note);
+  let record: ShowRecord;
+  try {
+    record = await runShow(hotPotato, {
+      names: team,
+      unlucky,
+      seed,
+      onFrame(time, stage) {
+        if (!parts) {
+          parts = {
+            scene: stage.querySelector<HTMLElement>('[data-part="scene"]')!,
+            people: [...stage.querySelectorAll<HTMLElement>('[data-person]')],
+            potato: stage.querySelector<SVGElement>('[data-part="potato"]')!,
+          };
+          holders.observe(parts.potato, {
+            attributeFilter: ['data-holder'],
+            attributeOldValue: true,
+          });
+        }
+        const { scene, people, potato } = parts;
+        // Once the show is over, the run empties the stage.
+        if (!scene.isConnected) return;
+        frames.push({
+          time,
+          beat: scene.dataset.beat!,
+          holder: potato.dataset.holder!,
+          sparkler: Number(potato.dataset.sparkler),
+          lit: potato.dataset.lit === 'true',
+          inPlay: people
+            .filter((person) => person.dataset.inPlay === 'true')
+            .map((person) => person.dataset.person!),
+          moods: Object.fromEntries(
+            people.map((person) => [person.dataset.person!, person.dataset.mood!]),
+          ),
+          scales: Object.fromEntries(
+            people.map((person) => [
+              person.dataset.person!,
+              Number(gsap.getProperty(person, 'scale')),
+            ]),
+          ),
         });
-      }
-      const { scene, people, potato } = parts;
-      // Once the show is over, the run empties the stage.
-      if (!scene.isConnected) return;
-      frames.push({
-        time,
-        beat: scene.dataset.beat!,
-        holder: potato.dataset.holder!,
-        sparkler: Number(potato.dataset.sparkler),
-        lit: potato.dataset.lit === 'true',
-        inPlay: people
-          .filter((person) => person.dataset.inPlay === 'true')
-          .map((person) => person.dataset.person!),
-        moods: Object.fromEntries(
-          people.map((person) => [person.dataset.person!, person.dataset.mood!]),
-        ),
-        scales: Object.fromEntries(
-          people.map((person) => [
-            person.dataset.person!,
-            Number(gsap.getProperty(person, 'scale')),
-          ]),
-        ),
-      });
-    },
-  });
-  holders.disconnect();
+        extra?.(time, stage);
+      },
+    });
+  } finally {
+    // The last catch can still be waiting to be reported.
+    note(holders.takeRecords());
+    holders.disconnect();
+  }
   expect(record.outcome).toBe('finished');
-  return { frames, catches };
+  return { frames, catches, record };
+}
+
+/** Whether `element` is drawn: neither it nor anything around it on `stage` is hidden. */
+function shown(element: Element | null, stage: HTMLElement): boolean {
+  for (let at = element; at && at !== stage; at = at.parentElement) {
+    const { visibility, display } = (at as HTMLElement).style;
+    if (visibility === 'hidden' || display === 'none' || at.getAttribute('display') === 'none') {
+      return false;
+    }
+  }
+  return element !== null;
+}
+
+/** Where `element` is drawn on `stage`: the styles that place it and everything around it. */
+function placement(element: Element, stage: HTMLElement): string {
+  const styles: string[] = [];
+  for (let at: Element | null = element; at && at !== stage; at = at.parentElement) {
+    const { transform, left, top, opacity, visibility } = (at as HTMLElement).style;
+    styles.push([transform, left, top, opacity, visibility].join(' '));
+  }
+  return styles.join(' / ');
+}
+
+/** The captions of one run, in order. */
+const said = (record: ShowRecord) => record.captions.map((caption) => caption.text);
+
+/** Whether `lines` appear in `texts` in this order, not necessarily next to each other. */
+function inOrder(texts: readonly string[], lines: readonly string[]): boolean {
+  let next = 0;
+  for (const text of texts) if (text === lines[next]) next++;
+  return next === lines.length;
 }
 
 /** The first seed whose plan has the sparkler going out. */
@@ -450,6 +492,79 @@ describeSpec(await loadFeature('./hot-potato.feature'), ({ Rule }) => {
     );
   });
 
+  Rule('The ending is a pop and a paper crown', ({ RuleScenario }) => {
+    RuleScenario('A freeze, then the pop', ({ Given, When, Then, And }) => {
+      const team = names(8);
+      let frames: Frame[];
+      const freeze: { potato: string; people: string }[] = [];
+      const pop: { potato: boolean; confetti: number; crown: boolean }[] = [];
+      Given('the unlucky person is "Luca"', () => {});
+      When('the potato reaches "Luca" for the last time', async () => {
+        ({ frames } = await watch(team, 'Luca', 1, (_, stage) => {
+          const beat = stage.querySelector<HTMLElement>('[data-part="scene"]')?.dataset.beat;
+          if (beat === 'freeze') {
+            freeze.push({
+              potato: placement(stage.querySelector('[data-part="potato"]')!, stage),
+              people: [...stage.querySelectorAll('[data-person]')]
+                .map((person) => placement(person, stage))
+                .join(' | '),
+            });
+          }
+          if (beat === 'pop') {
+            pop.push({
+              potato: shown(stage.querySelector('[data-part="potato"]'), stage),
+              confetti: [...stage.querySelectorAll('[data-part="confetti"]')].filter((bit) =>
+                shown(bit, stage),
+              ).length,
+              crown: shown(stage.querySelector('[data-person="Luca"] [data-part="crown"]'), stage),
+            });
+          }
+        }));
+      });
+      Then(
+        'everything holds still for at least half a second, the sparkler at its last spark',
+        () => {
+          const still = frames.filter((frame) => frame.beat === 'freeze');
+          expect(still.at(-1)!.time - still[0]!.time).toBeGreaterThanOrEqual(0.5);
+          for (const frame of still) expect(frame.sparkler).toBe(0);
+          expect(freeze).toHaveLength(still.length);
+          for (const each of freeze) expect(each).toEqual(freeze[0]);
+        },
+      );
+      And('the potato pops into confetti', () => {
+        expect(pop.some((each) => each.confetti > 10)).toBe(true);
+        expect(pop.some((each) => each.potato)).toBe(false);
+      });
+      And('"Luca" gets a paper crown and celebrates', () => {
+        expect(pop.some((each) => each.crown)).toBe(true);
+        expect(frames.at(-1)!.moods.Luca).toBe('party');
+      });
+      And('everyone else cheers', () => {
+        for (const name of team.filter((each) => each !== 'Luca')) {
+          expect(frames.at(-1)!.moods[name], name).toBe('happy');
+        }
+      });
+    });
+
+    RuleScenario('The name holds still at the end', ({ Given, When, Then }) => {
+      const placed: { time: number; luca: string }[] = [];
+      let duration = 0;
+      Given('the unlucky person is "Luca"', () => {});
+      When('the show runs', async () => {
+        const { record } = await watch(names(8), 'Luca', 1, (time, stage) => {
+          const luca = stage.querySelector('[data-person="Luca"]')!;
+          placed.push({ time, luca: placement(luca, stage) });
+        });
+        duration = record.duration;
+      });
+      Then('"Luca" is on stage, not moving, for the last 1.5 seconds', () => {
+        const last = placed.filter((each) => each.time >= duration - 1.5);
+        expect(last.length).toBeGreaterThan(30);
+        for (const each of last) expect(each.luca).toBe(last[0]!.luca);
+      });
+    });
+  });
+
   Rule('The beats keep the show between 14 and 18 seconds', ({ RuleScenario }) => {
     RuleScenario('Each beat takes about this long', ({ When, Then }) => {
       const runs = new Map<number, Plan>();
@@ -512,6 +627,88 @@ describeSpec(await loadFeature('./hot-potato.feature'), ({ Rule }) => {
   });
 
   Rule('It reads without sound', ({ RuleScenario }) => {
+    RuleScenario('Captions tell the story', ({ Given, When, Then }) => {
+      let seed: number;
+      let record: ShowRecord;
+      Given('8 people, the unlucky person is "Luca", and the sparkler goes out once', () => {
+        seed = dudSeed(8, 'Luca');
+        expect(seed, 'a seed with a dud').toBeGreaterThan(0);
+      });
+      When('the show runs', async () => {
+        ({ record } = await watch(names(8), 'Luca', seed));
+      });
+      Then('the captions include, in this order:', (_, table: Record<string, string>[]) => {
+        const lines = table.map((row) => row.caption!);
+        expect(lines).toHaveLength(6);
+        expect(inOrder(said(record), lines), said(record).join(' / ')).toBe(true);
+      });
+    });
+
+    RuleScenario('The showdown names each catch', ({ Given, When, Then }) => {
+      const team = names(12);
+      const wanted = ['Luca', 'Tom', 'Priya'];
+      let found: { seed: number; unlucky: string } | undefined;
+      let record: ShowRecord;
+      Given('the showdown\'s catches go to "Luca", "Tom" and "Priya"', () => {
+        search: for (let seed = 1; seed <= 3000; seed++) {
+          for (const unlucky of wanted) {
+            const plan = planShow(team, unlucky, createRandom(seed));
+            if (
+              during(plan, 'showdown')
+                .map((each) => each.by)
+                .join() === wanted.join()
+            ) {
+              found = { seed, unlucky };
+              break search;
+            }
+          }
+        }
+        expect(found, 'no seed up to 3000 sends the showdown to Luca, Tom, Priya').toBeDefined();
+      });
+      When('the show runs', async () => {
+        ({ record } = await watch(team, found!.unlucky, found!.seed));
+      });
+      Then('the showdown is captioned "Luca…", "Luca… Tom…", "Luca… Tom… Priya…"', () => {
+        const lines = ['Luca…', 'Luca… Tom…', 'Luca… Tom… Priya…'];
+        expect(inOrder(said(record), lines), said(record).join(' / ')).toBe(true);
+      });
+    });
+
+    RuleScenario("The last throw's twists are captioned", ({ Given, When, Then, And }) => {
+      const ran = new Map<Twist, { plan: Plan; record: ShowRecord }>();
+      Given('the unlucky person is "Luca"', () => {});
+      When('the show runs with 20 different random seeds', async () => {
+        const all = plans(8, 'Luca');
+        for (const twist of ['back', 'boomerang'] as const) {
+          const seed = all.findIndex((plan) => plan.twist === twist) + 1;
+          expect(seed, twist).toBeGreaterThan(0);
+          const { record } = await watch(names(8), 'Luca', seed);
+          ran.set(twist, { plan: all[seed - 1]!, record });
+        }
+      });
+      Then('every thrown-back last throw is captioned "<name>… nope, back to Luca!"', () => {
+        const { plan, record } = ran.get('back')!;
+        expect(said(record)).toContain(`${plan.catches.at(-2)!.by}… nope, back to Luca!`);
+      });
+      And('every last throw that curves back is captioned "It\'s coming back!"', () => {
+        expect(said(ran.get('boomerang')!.record)).toContain("It's coming back!");
+        expect(said(ran.get('back')!.record)).not.toContain("It's coming back!");
+      });
+    });
+
+    RuleScenario('Each caption stays up long enough to read', ({ When, Then }) => {
+      let record: ShowRecord;
+      When('the show runs', async () => {
+        ({ record } = await watch(names(8), 'Luca', dudSeed(8, 'Luca')));
+      });
+      Then('every caption stays on screen for at least 1 second', () => {
+        expect(record.captions.length).toBeGreaterThan(5);
+        for (const caption of record.captions) {
+          expect(caption.to - caption.from, caption.text).toBeGreaterThanOrEqual(1 - 1e-9);
+        }
+      });
+    });
+
     RuleScenario('Names stay readable', ({ When, Then, And }) => {
       let shown: Spot[][];
       When('the show runs at 12 and at 2 people', () => {

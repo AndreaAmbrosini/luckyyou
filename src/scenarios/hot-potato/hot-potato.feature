@@ -96,7 +96,6 @@ Feature: Hot Potato
         | 2     |
         | 8     |
 
-  @pending
   Rule: The ending is a pop and a paper crown
 
     Scenario: A freeze, then the pop
@@ -133,7 +132,6 @@ Feature: Hot Potato
 
   Rule: It reads without sound
 
-    @pending
     Scenario: Captions tell the story
       Given 8 people, the unlucky person is "Luca", and the sparkler goes out once
       When the show runs
@@ -146,20 +144,17 @@ Feature: Hot Potato
         | Uh-oh…                            |
         | It popped on Luca!                |
 
-    @pending
     Scenario: The showdown names each catch
       Given the showdown's catches go to "Luca", "Tom" and "Priya"
       When the show runs
       Then the showdown is captioned "Luca…", "Luca… Tom…", "Luca… Tom… Priya…"
 
-    @pending
     Scenario: The last throw's twists are captioned
       Given the unlucky person is "Luca"
       When the show runs with 20 different random seeds
       Then every thrown-back last throw is captioned "<name>… nope, back to Luca!"
       And every last throw that curves back is captioned "It's coming back!"
 
-    @pending
     Scenario: Each caption stays up long enough to read
       When the show runs
       Then every caption stays on screen for at least 1 second
