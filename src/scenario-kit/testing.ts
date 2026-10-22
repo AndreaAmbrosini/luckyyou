@@ -56,11 +56,13 @@ export async function runShow(scenario: Scenario, options: RunShowOptions): Prom
   const seen: { error: unknown } = { error: undefined };
   const captions: { text: string; from: number; to: number }[] = [];
   let caption: { text: string; from: number } | null = null;
+  let sticker: HTMLElement | null = null;
 
   /** Notes when the caption on screen changes. */
   const readCaption = (time: number) => {
-    const sticker = host.querySelector<HTMLElement>('[data-kit="caption"]');
-    const text = sticker && !sticker.hidden ? sticker.textContent : null;
+    // Found once: looking it up every frame took a quarter of a show's time.
+    sticker ??= host.querySelector<HTMLElement>('[data-kit="caption"]');
+    const text = sticker?.isConnected && !sticker.hidden ? sticker.textContent : null;
     if (caption?.text === text) return;
     if (caption) captions.push({ ...caption, to: time });
     caption = text ? { text, from: time } : null;

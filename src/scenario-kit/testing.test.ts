@@ -73,6 +73,26 @@ describe('runShow', () => {
     expect(record.duration).toBeCloseTo(0.1, 9);
   });
 
+  it('looks for the caption once, not every frame', async () => {
+    const lookUp = vi.spyOn(Element.prototype, 'querySelector');
+    await runShow(fakeScenario({ play: (show) => show.wait(1) }), PICK);
+    const lookups = lookUp.mock.calls.filter(([selector]) => selector.includes('caption'));
+    expect(lookups.length).toBeLessThanOrEqual(1);
+  });
+
+  it('notes when the last caption leaves with the stage', async () => {
+    const record = await runShow(
+      fakeScenario({
+        play: async (show) => {
+          show.caption('Hi');
+          await show.wait(1.5);
+        },
+      }),
+      PICK,
+    );
+    expect(record.captions).toEqual([{ text: 'Hi', from: 0, to: record.duration }]);
+  });
+
   it('stops a show that runs past its limit', async () => {
     const record = await runShow(fakeScenario({ play: (show) => show.wait(60) }), {
       ...PICK,

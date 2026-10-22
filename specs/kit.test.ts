@@ -602,7 +602,7 @@ describeSpec(await loadFeature('./kit.feature'), ({ Rule }) => {
     RuleScenario("Motion runs on the show's clock and ends with it", ({ Given, When, Then }) => {
       let scenario: ReturnType<typeof fakeScenario>;
       let target: SVGSVGElement;
-      const heights = new Set<number>();
+      const heights = new Set<string>();
       Given('a show that makes a head bob', () => {
         scenario = fakeScenario({
           play: async (show) => {
@@ -615,7 +615,7 @@ describeSpec(await loadFeature('./kit.feature'), ({ Rule }) => {
       When('the show ends', async () => {
         await runShow(scenario, {
           ...PICK,
-          onFrame: () => heights.add(Number(gsap.getProperty(target, 'y'))),
+          onFrame: () => void (target && heights.add(target.style.getPropertyValue('--bob'))),
         });
       });
       Then('the head stops bobbing', () => {

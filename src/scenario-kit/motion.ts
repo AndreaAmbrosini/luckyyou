@@ -1,24 +1,37 @@
 // Movement every show can use. Each preset is a GSAP animation on the show's
 // clock, so the run stops it when the show ends. A preset that moves an
-// element owns its transform: bob a head inside the element that places it.
+// element owns how it moves: bob or shake a head inside the element that
+// places it. (GSAP folds a `translate`, which bob uses, into the transform of
+// an element it moves.)
 
 import { gsap } from 'gsap';
 import type { Show } from './contract';
 
 type Target = gsap.TweenTarget;
 
-/** Floats up and down until the show ends. */
+/**
+ * Floats up and down until the show ends, by `--bob` pixels. Only the
+ * variable changes each frame, so jsdom doesn't parse a transform for every
+ * bobbing element in every frame: that took a third of a show's test time.
+ */
 export function bob(
   target: Target,
   { distance = 8, seconds = 1.4 }: { distance?: number; seconds?: number } = {},
 ): gsap.core.Animation {
-  return gsap.to(target, {
-    y: `-=${distance}`,
-    duration: seconds / 2,
-    ease: 'sine.inOut',
-    yoyo: true,
-    repeat: -1,
-  });
+  for (const element of gsap.utils.toArray<HTMLElement | SVGElement>(target)) {
+    element.style.setProperty('translate', '0 var(--bob)');
+  }
+  return gsap.fromTo(
+    target,
+    { '--bob': '0px' },
+    {
+      '--bob': `${-distance}px`,
+      duration: seconds / 2,
+      ease: 'sine.inOut',
+      yoyo: true,
+      repeat: -1,
+    },
+  );
 }
 
 /** Sways from its top, like something hanging, until the show ends. */

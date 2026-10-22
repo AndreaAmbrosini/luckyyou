@@ -1,16 +1,12 @@
 import { loadFeature } from '@amiceli/vitest-cucumber';
 import { gsap } from 'gsap';
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import { stagePx, type Scenario } from '../../scenario-kit';
 import { describeSpec, runShow, type ShowRecord } from '../../scenario-kit/testing';
 import sharkBait from './index';
 import { fitTags, places, tagBottom, type Place } from './layout';
 import { planShow } from './plan';
 import { createRandom } from '../../scenario-kit/random';
-
-// Some steps play twenty shows. With every test file running at once they can
-// take three times as long as alone, past the usual 20 seconds.
-vi.setConfig({ testTimeout: 60_000 });
 
 const TEAM = [
   'Anna',
@@ -119,6 +115,13 @@ async function watch(
   { seed = 1, step, until }: { seed?: number; step?: number; until?: number } = {},
 ): Promise<Watched> {
   const frames: Frame[] = [];
+  /** What each frame reads, found once: looking it up every frame is slow in jsdom. */
+  let parts: {
+    scene: HTMLElement;
+    swimmers: HTMLElement[];
+    rope: HTMLElement;
+    helicopter: Element;
+  };
   const record = await runShow(sharkBait, {
     names,
     unlucky,
@@ -126,18 +129,23 @@ async function watch(
     step,
     cancelAt: until,
     onFrame(time, stage) {
-      const scene = stage.querySelector<HTMLElement>('[data-beat]');
+      parts ??= {
+        scene: stage.querySelector<HTMLElement>('[data-beat]')!,
+        swimmers: [...stage.querySelectorAll<HTMLElement>('[data-person]')],
+        rope: stage.querySelector<HTMLElement>('[data-part="rope"]')!,
+        helicopter: stage.querySelector('[data-part="helicopter"]')!,
+      };
+      const { scene, swimmers, rope, helicopter } = parts;
       // Once the show is over, the run empties the stage.
-      if (!scene) return;
-      const swimmers = [...stage.querySelectorAll<HTMLElement>('[data-person]')];
+      if (!scene.isConnected) return;
       frames.push({
         time,
         beat: scene.dataset.beat!,
         inWater: swimmers
           .filter((swimmer) => swimmer.dataset.inWater === 'true')
           .map((swimmer) => swimmer.dataset.person!),
-        aim: stage.querySelector<HTMLElement>('[data-part="rope"]')?.dataset.aim || null,
-        helicopter: position(stage.querySelector('[data-part="helicopter"]')),
+        aim: rope.dataset.aim || null,
+        helicopter: position(helicopter),
       });
     },
   });
