@@ -13,6 +13,7 @@ import { bob, shake } from '../src/scenario-kit/motion';
 import { eliminationOrder } from '../src/scenario-kit/order';
 import { createRandom } from '../src/scenario-kit/random';
 import { spread } from '../src/scenario-kit/stage';
+import { createSound, type Cue } from '../src/scenario-kit/sound';
 import { runShow, type ShowRecord } from '../src/scenario-kit/testing';
 import { bubble, nameTag } from '../src/scenario-kit/text';
 import { fitBeats } from '../src/scenario-kit/time';
@@ -792,6 +793,65 @@ describeSpec(await loadFeature('./kit.feature'), ({ Rule }) => {
       });
       And('its random draws come from seed 42', () => {
         expect(draws).toEqual([createRandom(42)()]);
+      });
+    });
+  });
+
+  Rule('Sounds', ({ RuleScenario }) => {
+    // An audio output that only counts what was started and stopped.
+    const fakeAudio = () => {
+      const counts = { started: 0, stopped: 0 };
+      const param = { setValueAtTime: () => param, exponentialRampToValueAtTime: () => param };
+      const node = () => ({
+        gain: param,
+        frequency: param,
+        Q: param,
+        connect: <T>(next: T) => next,
+        start: () => void counts.started++,
+        stop: () => void counts.stopped++,
+      });
+      class FakeContext {
+        currentTime = 0;
+        sampleRate = 8000;
+        state = 'running';
+        destination = node();
+        createGain = node;
+        createOscillator = node;
+        createBiquadFilter = node;
+        createBufferSource = node;
+        createBuffer = (_channels: number, length: number) => ({
+          getChannelData: () => new Float32Array(length),
+        });
+        close = () => Promise.resolve();
+      }
+      vi.stubGlobal('AudioContext', FakeContext);
+      return counts;
+    };
+
+    RuleScenario('A show can ask for every sound', ({ Then }) => {
+      Then('a show can play splash, rotor, whoosh, heartbeat, fanfare, sizzle and pop', () => {
+        const counts = fakeAudio();
+        const { player } = createSound({ muted: false });
+        for (const cue of ['splash', 'rotor', 'whoosh', 'heartbeat', 'fanfare', 'sizzle', 'pop']) {
+          const before = counts.started;
+          expect(() => player.play(cue as Cue), cue).not.toThrow();
+          expect(counts.started, cue).toBeGreaterThan(before);
+        }
+      });
+    });
+
+    RuleScenario('The sizzle loops until it is stopped', ({ When, Then }) => {
+      let counts: ReturnType<typeof fakeAudio>;
+      let stop: () => void;
+      When('a show plays the sizzle', () => {
+        counts = fakeAudio();
+        stop = createSound({ muted: false }).player.play('sizzle');
+      });
+      Then('it keeps playing until it is stopped', () => {
+        expect(counts.started).toBeGreaterThan(0);
+        expect(counts.stopped).toBe(0);
+        stop();
+        expect(counts.stopped).toBe(counts.started);
       });
     });
   });

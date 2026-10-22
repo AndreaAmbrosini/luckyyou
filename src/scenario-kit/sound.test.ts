@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { createSound, type Cue } from './sound';
 
-const CUES: Cue[] = ['splash', 'rotor', 'whoosh', 'heartbeat', 'fanfare'];
+const CUES: Cue[] = ['splash', 'rotor', 'whoosh', 'heartbeat', 'fanfare', 'sizzle', 'pop'];
 
 /**
  * A Web Audio context whose nodes do nothing but count what was started and

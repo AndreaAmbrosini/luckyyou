@@ -3,12 +3,12 @@
 // sound off (DESIGN.md).
 
 /** The sounds a show can ask for. */
-export type Cue = 'splash' | 'rotor' | 'whoosh' | 'heartbeat' | 'fanfare';
+export type Cue = 'splash' | 'rotor' | 'whoosh' | 'heartbeat' | 'fanfare' | 'sizzle' | 'pop';
 
 export interface SoundPlayer {
   /**
    * Plays `cue` unless the app is muted, and returns what stops it early.
-   * The rotor loops until it is stopped or the show ends.
+   * The rotor and the sizzle loop until they are stopped or the show ends.
    */
   play(cue: Cue): () => void;
   /** Stops every sound still playing. */
@@ -114,6 +114,34 @@ const CUES: Record<Cue, (context: AudioContext) => AudioScheduledSourceNode[]> =
       thump.connect(envelope(context, 0.6, 0.01, 0.16, delay)).connect(context.destination);
       return start(context, [thump], 0.2, delay);
     });
+  },
+
+  sizzle(context) {
+    const fat = noise(context, 1, { loop: true });
+    const level = context.createGain();
+    level.gain.setValueAtTime(0.06, context.currentTime);
+    fat
+      .connect(filter(context, 'highpass', 3000))
+      .connect(level)
+      .connect(context.destination);
+    // A slow crackle: the level wobbles about 7 times a second.
+    const crackle = tone(context, 'square', 7);
+    const depth = context.createGain();
+    depth.gain.setValueAtTime(0.04, context.currentTime);
+    crackle.connect(depth).connect(level.gain);
+    return start(context, [fat, crackle]);
+  },
+
+  pop(context) {
+    const burst = noise(context, 0.12);
+    burst
+      .connect(filter(context, 'highpass', 800))
+      .connect(envelope(context, 0.5, 0.002, 0.06))
+      .connect(context.destination);
+    const thump = tone(context, 'sine', 140);
+    thump.frequency.exponentialRampToValueAtTime(50, context.currentTime + 0.12);
+    thump.connect(envelope(context, 0.5, 0.003, 0.12)).connect(context.destination);
+    return start(context, [burst, thump], 0.15);
   },
 
   fanfare(context) {

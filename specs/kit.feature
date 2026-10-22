@@ -187,6 +187,15 @@ Feature: The scenario kit
       When a show shakes a head
       Then the head doesn't move
 
+  Rule: Sounds
+
+    Scenario: A show can ask for every sound
+      Then a show can play splash, rotor, whoosh, heartbeat, fanfare, sizzle and pop
+
+    Scenario: The sizzle loops until it is stopped
+      When a show plays the sizzle
+      Then it keeps playing until it is stopped
+
   Rule: Nothing is left after a show
 
     Scenario Outline: A show that <ends> leaves nothing behind
