@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { describeSpec } from '../../scenario-kit/testing';
 import { createRandom } from '../../scenario-kit/random';
 import hotPotato from './index';
+import { held, outOfPlay, ring, type Spot } from './layout';
 import { BEATS, planShow, type Beat, type Catch, type Plan, type Twist } from './plan';
 
 const TEAM = [
@@ -37,6 +38,31 @@ const before = (plan: Plan) =>
   plan.catches.filter((each) => each.beat === 'plop' || each.beat === 'hot-hands');
 const during = (plan: Plan, beat: Beat) => plan.catches.filter((each) => each.beat === beat);
 const total = (plan: Plan) => BEATS.reduce((seconds, beat) => seconds + plan.beats[beat], 0);
+
+/** A name tag's box on the stage: as wide as it may grow, two lines high. */
+const tagBox = (spot: Spot) => ({
+  left: spot.x - spot.tag.maxWidth / 2,
+  right: spot.x + spot.tag.maxWidth / 2,
+  top: spot.y - 0.04 * spot.size,
+  bottom: spot.y - 0.04 * spot.size + 2.4 * spot.tag.size + 8,
+});
+
+const overlap = (a: Spot, b: Spot) => {
+  const one = tagBox(a);
+  const two = tagBox(b);
+  return (
+    one.left < two.right && two.left < one.right && one.top < two.bottom && two.top < one.bottom
+  );
+};
+
+const overlapping = (spots: Spot[]) =>
+  spots.some((spot, index) => spots.slice(index + 1).some((other) => overlap(spot, other)));
+
+/** Everyone in play, then the same with each of them out of play. */
+const mixes = (count: number): Spot[][] => {
+  const spots = ring(count);
+  return [spots, ...spots.map((_, out) => spots.map((s, i) => (i === out ? outOfPlay(s) : s)))];
+};
 
 /** Every head count, with seeds 1–40. */
 function everyPlan(): { label: string; plan: Plan; unlucky: string }[] {
@@ -250,6 +276,51 @@ describeSpec(await loadFeature('./hot-potato.feature'), ({ Rule }) => {
         }
       });
     });
+  });
+
+  Rule('It reads without sound', ({ RuleScenario }) => {
+    RuleScenario('Names stay readable', ({ When, Then, And }) => {
+      let shown: Spot[][];
+      When('the show runs at 12 and at 2 people', () => {
+        shown = [...mixes(12), ...mixes(2)];
+      });
+      Then('every name tag is set at 22 pixels or more on the 1280 by 720 stage', () => {
+        for (const spots of shown) {
+          spots.forEach((spot) => expect(spot.tag.size).toBeGreaterThanOrEqual(22));
+        }
+      });
+      And('with 2 people, both name tags are set at 44 pixels or more', () => {
+        ring(2).forEach((spot) => expect(spot.tag.size).toBeGreaterThanOrEqual(44));
+      });
+      And('no name tag is ever over another', () => {
+        for (const spots of shown) expect(overlapping(spots)).toBe(false);
+      });
+    });
+  });
+});
+
+describe('The ring', () => {
+  it('no tag overlaps at any count', () => {
+    for (let count = 2; count <= 12; count++) {
+      const spots = ring(count);
+      expect(spots, `${count} people`).toHaveLength(count);
+      for (const mix of mixes(count)) expect(overlapping(mix), `${count} people`).toBe(false);
+      for (let mask = 0; mask < 2 ** count; mask++) {
+        const mixed = spots.map((spot, i) => (mask & (1 << i) ? outOfPlay(spot) : spot));
+        expect(overlapping(mixed), `${count} people, mask ${mask}`).toBe(false);
+      }
+    }
+  });
+
+  it('8 people match the storyboard', () => {
+    const spots = ring(8);
+    expect(spots[0]).toMatchObject({ x: 640, y: 260, size: 78 });
+    expect(spots[4]).toMatchObject({ x: 640, y: 640, size: 104 });
+  });
+
+  it('held is 35 px over the head', () => {
+    const spot = ring(8)[0]!;
+    expect(held(spot)).toEqual({ x: spot.x, y: spot.y - 0.8 * spot.size - 35 });
   });
 });
 
