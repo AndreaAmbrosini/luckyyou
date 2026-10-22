@@ -11,23 +11,28 @@ export const BEATS = [
   'dud',
   'relight',
   'showdown',
-  'last-throw',
-  'freeze',
+  'duel',
+  'last-second',
   'pop',
 ] as const;
 
 export type Beat = (typeof BEATS)[number];
 
 /**
- * The last throw: `straight` lands with the unlucky person; `back` goes from
- * the unlucky person to someone else, who throws it straight back; and
- * `boomerang` leaves the unlucky person's hands and curves back to them.
+ * How the last second goes: `too-hot`, the other one in the duel holds it at
+ * its last spark and flings it onto the unlucky person; `hang-time`, the
+ * duel's last throw floats up high and drops onto the unlucky person; and
+ * `holding-on`, the unlucky person winds up to throw and it pops before they
+ * let go.
  */
-export type Twist = 'straight' | 'back' | 'boomerang';
+export type Ending = 'too-hot' | 'hang-time' | 'holding-on';
 
 export interface Catch {
   readonly by: string;
-  /** Who threw it; null for the plop, which drops from above. Equal to `by` for the boomerang. */
+  /**
+   * Who threw it; null for the plop, which drops from above. Equal to `by`
+   * when the unlucky person throws it up and it hangs, then drops back on them.
+   */
   readonly from: string | null;
   readonly beat: Beat;
   /**
@@ -49,18 +54,28 @@ export interface Catch {
 export interface Plan {
   /** Everyone, in their order around the ring; the first stands at the back. */
   readonly ring: readonly string[];
-  /** Who stays in play for the showdown: 3, or 2 with 2 people. Includes the unlucky person. */
+  /** In play for the showdown: 3, the unlucky person among them; both with 2 people. */
   readonly showdown: readonly string[];
-  readonly twist: Twist;
+  /** The two in the duel, the unlucky person among them. */
+  readonly duel: readonly [string, string];
+  /** Who says "Phew!" and steps back after the showdown's two catches; null with 2 people. */
+  readonly phew: string | null;
+  readonly ending: Ending;
   /** Where the sparkler goes out, and how long it is when it relights; null when it doesn't go out. */
   readonly dud: { readonly out: number; readonly relit: number } | null;
   readonly catches: readonly Catch[];
-  /** Show seconds per beat; dud and relight are 0 without the dud. */
+  /** Show seconds per beat; dud and relight are 0 without the dud, the showdown 0 with 2 people. */
   readonly beats: Readonly<Record<Beat, number>>;
+  /** Show seconds when the sparkler reaches its last spark: inside the last second. */
+  readonly lastSpark: number;
+  /** Show seconds while the potato barely moves before the final move. */
+  readonly still: { readonly from: number; readonly to: number };
+  /** Show seconds of each heartbeat, from the duel's start to before the pop, closer and closer. */
+  readonly heartbeats: readonly number[];
 }
 
 /** Every show is stretched to at least this many seconds. */
-const SHORTEST = 15;
+const SHORTEST = 16;
 /** When the plop's catcher has it. */
 const PLOP_CATCH = 0.8;
 /** Hot hands starts with one throw per this many seconds of the beat. */
@@ -69,12 +84,34 @@ const HOT_HANDS_PACE = 0.6;
 const QUICKER = 0.88;
 /** The shortest a throw may be (DESIGN.md: movement that matters ≥ 0.4 s). */
 const SHORTEST_THROW = 0.4;
-/** Each showdown throw is this much longer than the one before. */
-const SLOWER = 1.2;
 const DUD = { out: 0.55, relit: 0.4 };
+/** The showdown's two catches, in seconds from its start, and the sparkler left at each. */
+const SHOWDOWN = [
+  { thrown: 0, at: 0.8, sparkler: 0.35 },
+  { thrown: 0.8, at: 1.7, sparkler: 0.25 },
+];
+/** Seconds the two take to step into the middle before the duel's first throw. */
+const STEP_IN = 0.5;
+/** The duel's three throws with 3 or more people, in proportion. */
+const DUEL_FLIGHTS = [0.95, 1.2, 1.45];
+/** With 2 people the duel has 5 throws, each this much longer than the one before. */
+const PAIR_DUEL = { throws: 5, slower: 1.14 };
+/** The sparkler at the duel's first catch and at its last. */
+const DUEL_SPARKLER = { first: 0.15, last: 0.05 };
+/**
+ * Per ending, in seconds from the start of the last second: when the sparkler
+ * reaches its last spark, and while the potato barely moves.
+ */
+const ENDINGS: Readonly<Record<Ending, { lastSpark: number; still: [number, number] }>> = {
+  'too-hot': { lastSpark: 0.4, still: [0.4, 1.3] },
+  'hang-time': { lastSpark: 0.6, still: [0.6, 1.3] },
+  'holding-on': { lastSpark: 0.8, still: [0.8, 1.5] },
+};
+/** The first heartbeat gap, how much shorter each next one is, and the shortest. */
+const HEARTBEAT = { first: 0.9, quicker: 0.88, shortest: 0.4 };
 
 /**
- * Throw lengths that shrink by `ratio` each time and add up to `total`
+ * Throw lengths that change by `ratio` each time and add up to `total`
  * exactly.
  */
 function lengths(total: number, count: number, ratio: number): number[] {
@@ -92,23 +129,28 @@ function other(among: readonly string[], not: string, random: () => number): str
 
 export function planShow(names: readonly string[], unlucky: string, random: () => number): Plan {
   const count = names.length;
+  const pair = count === 2;
   const ring = shuffle(names, random);
   const rest = names.filter((name) => name !== unlucky);
   const showdown = shuffle([unlucky, ...shuffle(rest, random).slice(0, 2)], random);
-  const twist = pickOne<Twist>(['straight', 'back', 'boomerang'], random);
+  const partner = other(showdown, unlucky, random);
+  const duel = showdown.filter((name) => name === unlucky || name === partner) as [string, string];
+  const phew = showdown.find((name) => !duel.includes(name)) ?? null;
+  const ending = pickOne<Ending>(['too-hot', 'hang-time', 'holding-on'], random);
   const dud = random() < 0.5 ? DUD : null;
+  const thrower = ending === 'hang-time' ? pickOne(duel, random) : null;
 
-  // Without the dud, hot hands and the showdown stretch to 15 s; with it,
-  // the show is already longer and nothing stretches.
+  // Without the dud, hot hands and the duel stretch to 16 s; with it, the
+  // show is already longer and nothing stretches.
   const beats = fitBeats<Beat>(
     {
       plop: { seconds: 1.6 },
-      'hot-hands': { seconds: 3.0 + 0.1 * (count - 2), flexible: true },
-      dud: { seconds: dud ? 2.2 : 0 },
+      'hot-hands': { seconds: 3.0 + 0.04 * (count - 2), flexible: true },
+      dud: { seconds: dud ? 1.8 : 0 },
       relight: { seconds: dud ? 1.0 : 0 },
-      showdown: { seconds: count === 2 ? 4.4 : 3.6, flexible: true },
-      'last-throw': { seconds: 1.4 },
-      freeze: { seconds: 0.8 },
+      showdown: { seconds: pair ? 0 : 2.6 },
+      duel: { seconds: pair ? 6.7 : 4.1, flexible: true },
+      'last-second': { seconds: 2.0 },
       pop: { seconds: 2.6 },
     },
     SHORTEST,
@@ -116,25 +158,25 @@ export function planShow(names: readonly string[], unlucky: string, random: () =
   const hotHandsStart = beats.plop;
   const hotHandsEnd = hotHandsStart + beats['hot-hands'];
   const showdownStart = hotHandsEnd + beats.dud + beats.relight;
-  const showdownEnd = showdownStart + beats.showdown;
-  const lastThrowEnd = showdownEnd + beats['last-throw'];
+  const duelStart = showdownStart + beats.showdown;
+  const lastSecond = duelStart + beats.duel;
+  const pop = lastSecond + beats['last-second'];
 
-  // Backwards from the pop: who throws the last throw, then the showdown,
-  // then the hot-hands chain back to whoever catches the plop.
-  const c3 = twist === 'straight' ? other(showdown, unlucky, random) : unlucky;
-  const thrownBack = twist === 'back' ? other(showdown, unlucky, random) : null;
-  const c2 = other(showdown, c3, random);
-  const c1 = other(showdown, c2, random);
+  // Backwards from the pop: who holds it when the duel ends, then who holds
+  // it first in the duel (the count of duel throws is odd, so the other one),
+  // then the showdown, then the hot-hands chain back to the plop's catcher.
+  const end = ending === 'too-hot' ? partner : ending === 'holding-on' ? unlucky : thrower!;
+  const opener = duel.find((name) => name !== end)!;
+  const c1 = pair ? null : other(showdown, opener, random);
   // One throw per 0.6 s to start with, then one fewer while the last, and
-  // quickest, would be under 0.4 s (at 7 people without the dud it would be
-  // 0.3995 s with 7 throws).
+  // quickest, would be under 0.4 s.
   let throws = Math.floor(beats['hot-hands'] / HOT_HANDS_PACE);
   while (throws > 1 && lengths(beats['hot-hands'], throws, QUICKER).at(-1)! < SHORTEST_THROW) {
     throws--;
   }
   // With 2 people the chain alternates, so the plop's catcher follows from
   // the number of throws.
-  const chain = [other(names, c1, random)];
+  const chain = [c1 === null ? opener : other(names, c1, random)];
   while (chain.length < throws + 1) chain.unshift(other(names, chain[0]!, random));
 
   const catches: Catch[] = [];
@@ -160,24 +202,64 @@ export function planShow(names: readonly string[], unlucky: string, random: () =
     thrown = at;
   });
 
-  const slower = lengths(beats.showdown, 3, SLOWER);
+  // The showdown: two catches, then nobody throws until the duel.
   let holder = chain.at(-1)!;
-  thrown = showdownStart;
-  [c1, c2, c3].forEach((by, index) => {
-    const at = index === 2 ? showdownEnd : thrown + slower[index]!;
-    add(by, holder, 'showdown', thrown, at, 0.4 - 0.25 * ((at - showdownStart) / beats.showdown));
+  if (c1 !== null) {
+    [c1, opener].forEach((by, index) => {
+      const step = SHOWDOWN[index]!;
+      add(
+        by,
+        holder,
+        'showdown',
+        showdownStart + step.thrown,
+        showdownStart + step.at,
+        step.sparkler,
+      );
+      holder = by;
+    });
+  }
+
+  // The duel: back and forth, each throw slower, from the step-in (with 3 or
+  // more people) to the last second.
+  const flights = pair
+    ? lengths(beats.duel, PAIR_DUEL.throws, PAIR_DUEL.slower)
+    : DUEL_FLIGHTS.map(
+        (flight) => (flight * (beats.duel - STEP_IN)) / DUEL_FLIGHTS.reduce((a, b) => a + b),
+      );
+  thrown = pair ? duelStart : duelStart + STEP_IN;
+  flights.forEach((flight, index) => {
+    const by = holder === duel[0] ? duel[1] : duel[0];
+    const at = index === flights.length - 1 ? lastSecond : thrown + flight;
+    const burnt = index / (flights.length - 1);
+    const sparkler = DUEL_SPARKLER.first - (DUEL_SPARKLER.first - DUEL_SPARKLER.last) * burnt;
+    add(by, holder, 'duel', thrown, at, sparkler);
     holder = by;
     thrown = at;
   });
 
-  if (twist === 'straight') {
-    add(unlucky, c3, 'last-throw', showdownEnd + 0.4, lastThrowEnd, 0);
-  } else if (thrownBack) {
-    add(thrownBack, unlucky, 'last-throw', showdownEnd, showdownEnd + 0.6, 0.1);
-    add(unlucky, thrownBack, 'last-throw', showdownEnd + 0.6, lastThrowEnd, 0);
-  } else {
-    add(unlucky, unlucky, 'last-throw', showdownEnd, lastThrowEnd, 0);
+  // The last second: too hot, it's flung as the stillness ends; hanging,
+  // the duel's last catcher throws it up at once.
+  const { lastSpark, still } = ENDINGS[ending];
+  if (ending === 'too-hot') add(unlucky, partner, 'last-second', lastSecond + still[1], pop, 0);
+  if (ending === 'hang-time') add(unlucky, thrower, 'last-second', lastSecond, pop, 0);
+
+  const heartbeats: number[] = [];
+  for (let time = duelStart, k = 0; time < pop; k++) {
+    heartbeats.push(time);
+    time += Math.max(HEARTBEAT.shortest, HEARTBEAT.first * HEARTBEAT.quicker ** k);
   }
 
-  return { ring, showdown, twist, dud, catches, beats };
+  return {
+    ring,
+    showdown,
+    duel,
+    phew,
+    ending,
+    dud,
+    catches,
+    beats,
+    lastSpark: lastSecond + lastSpark,
+    still: { from: lastSecond + still[0], to: lastSecond + still[1] },
+    heartbeats,
+  };
 }

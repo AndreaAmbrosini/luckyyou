@@ -48,10 +48,8 @@ const HOT_GAP = 1.0;
 const CONFETTI = { count: 36, out: 0.45, fall: 1.4 };
 /** Seconds the unlucky person takes to grow at the pop. */
 const GROW = 0.5;
-/** The kit holds each caption at least this many seconds. */
-const READ = 1;
 
-type Phase = 'throws' | 'dud' | 'relight' | 'showdown' | 'freeze' | 'ending';
+type Phase = 'throws' | 'dud' | 'relight' | 'showdown' | 'ending';
 
 interface Person {
   readonly name: string;
@@ -107,8 +105,7 @@ export async function playHotPotato(show: Show): Promise<void> {
   scene.dataset.beat = BEATS[0];
 
   // Who holds it, who it's flying to, what's going on and who is out: the
-  // moods follow from these. Whoever has it, or has it coming, braces for it;
-  // in the freeze, those out of play watch it too.
+  // moods follow from these. Whoever has it, or has it coming, braces for it.
   let holder = '';
   let coming = first.by;
   let phase: Phase = 'throws';
@@ -123,7 +120,7 @@ export async function playHotPotato(show: Show): Promise<void> {
         ? name === show.unlucky
           ? 'party'
           : 'happy'
-        : phase === 'dud' || (!inPlay && phase !== 'freeze')
+        : phase === 'dud' || !inPlay
           ? 'happy'
           : phase === 'relight' || braced
             ? 'scared'
@@ -132,7 +129,7 @@ export async function playHotPotato(show: Show): Promise<void> {
       el.dataset.mood = mood;
       face.setMood(mood);
       face.setRaised(ending || braced);
-      face.setSweat(!ending && inPlay && (braced || phase === 'showdown' || phase === 'freeze'));
+      face.setSweat(!ending && inPlay && (braced || phase === 'showdown'));
     }
   };
   /** From `time` it's in `name`'s hands, or flying to them when `flying`. */
@@ -171,7 +168,7 @@ export async function playHotPotato(show: Show): Promise<void> {
       from,
     );
 
-  /** One throw, in an arc over the ring, or the boomerang's loop out and back. */
+  /** One throw, in an arc over the ring. */
   function fly(each: Catch) {
     const path = throwPath(over(each.from!), over(each.by), scale);
     const along = { t: 0 };
@@ -202,8 +199,11 @@ export async function playHotPotato(show: Show): Promise<void> {
   let previous = first;
   for (const each of plan.catches.slice(1)) {
     // With the dud, the sparkler waits at its relit length until the showdown.
-    const relit = plan.dud && each.beat === 'showdown' && previous.beat === 'hot-hands';
-    burn(relit ? starts.showdown : previous.at, each.at, each.sparkler);
+    // In the last second it burns to its last spark on its own time.
+    const relit = plan.dud && each.beat !== 'hot-hands' && previous.beat === 'hot-hands';
+    if (each.beat !== 'last-second') {
+      burn(relit ? starts.showdown : previous.at, each.at, each.sparkler);
+    }
     hold(each.thrown, each.by, true);
     cue(each.thrown, 'whoosh');
     fly(each);
@@ -247,7 +247,7 @@ export async function playHotPotato(show: Show): Promise<void> {
     for (const name of plan.ring) if (!plan.showdown.includes(name)) out.add(name);
   });
   enter(starts.showdown, 'showdown');
-  cue(starts.showdown, 'heartbeat');
+  for (const time of plan.heartbeats) cue(time, 'heartbeat');
   // Only the head: the name tag keeps its size, so it stays readable.
   for (const person of people.values()) {
     if (plan.showdown.includes(person.name)) continue;
@@ -259,38 +259,21 @@ export async function playHotPotato(show: Show): Promise<void> {
     );
   }
 
-  // The boomerang leaves the unlucky person smug.
-  if (plan.twist === 'boomerang') at(starts['last-throw'], () => potato.setFace('smug'));
-
   const during = (beat: Beat) => plan.catches.filter((each) => each.beat === beat);
   const before = plan.catches.filter((each) => each.beat === 'plop' || each.beat === 'hot-hands');
 
   // Captions, one at each moment; the kit holds each long enough to read and
-  // queues the next. The pop's caption has to go up on time, so the one before
-  // it goes up a second earlier: "Uh-oh…" as the last throw comes down, or a
-  // twist's own caption, which comes too soon after the showdown's last name
-  // to leave room for "Uh-oh…" as well.
+  // queues the next. The duel's last name goes up as the last second starts,
+  // 2 s before the pop, so the pop's caption goes up on time.
   caption(0, "Don't be holding it when it pops!");
   caption(starts['hot-hands'], 'Faster… faster…');
   if (plan.dud) {
     caption(starts.dud, '…a dud?');
     caption(starts.relight, 'Nope! Still lit!');
   }
-  const named: string[] = [];
-  for (const each of during('showdown')) {
-    named.push(each.by);
-    caption(each.at, `${named.join('… ')}…`);
-  }
-  if (plan.twist === 'back') {
-    const away = plan.catches.at(-2)!;
-    caption(away.at, `${away.by}… nope, back to ${show.unlucky}!`);
-  } else if (plan.twist === 'boomerang') {
-    // As it turns back, halfway.
-    const last = plan.catches.at(-1)!;
-    caption((last.thrown + last.at) / 2, "It's coming back!");
-  } else {
-    caption(starts.pop - READ, 'Uh-oh…');
-  }
+  // With 2 people the showdown takes no time, so this is the duel's start.
+  caption(starts.showdown, 'Uh-oh…');
+  for (const each of during('duel')) caption(each.at, `${each.by}…`);
   caption(starts.pop, `It popped on ${show.unlucky}!`);
 
   // Gags, in bubbles beside the potato, or beside someone's head and clear
@@ -322,17 +305,11 @@ export async function playHotPotato(show: Show): Promise<void> {
   if (steppingBack) {
     say(starts.showdown, 'Not me!', headBox(people.get(steppingBack)!.spot), [inHands(lastHolder)]);
   }
-  if (plan.twist === 'back') {
-    const away = plan.catches.at(-2)!;
-    say(away.at, 'Nope!', inHands(away.by));
-  }
 
-  // The freeze: nothing moves but the face, squeezed shut on the last spark.
-  at(starts.freeze, () => {
-    potato.setFace('squeezed');
-    potato.setSparkler(0);
-  });
-  enter(starts.freeze, 'freeze');
+  // The last second: the sparkler burns to its last spark, and the face
+  // squeezes shut.
+  burn(starts['last-second'], plan.lastSpark, 0);
+  at(plan.lastSpark, () => potato.setFace('squeezed'));
 
   // The pop: a burst behind the people where the potato was, confetti out
   // and down, and the unlucky person in front of everyone, growing, with a

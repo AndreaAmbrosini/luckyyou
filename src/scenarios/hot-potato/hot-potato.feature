@@ -39,20 +39,6 @@ Feature: Hot Potato
 
   Rule: Throws speed up, then slow down for a showdown
 
-    Scenario Outline: <count> people
-      Given <count> people
-      When the show runs
-      Then each throw before the showdown is quicker than the one before
-      And <in play> people are left in play for the showdown, the unlucky person among them
-      And each throw in the showdown takes longer than the one before
-
-      Examples:
-        | count | in play |
-        | 12    | 3       |
-        | 8     | 3       |
-        | 3     | 3       |
-        | 2     | 2       |
-
     Scenario: Everyone else steps back
       Given 8 people
       When the showdown starts
@@ -80,7 +66,6 @@ Feature: Hot Potato
         | 8     |
         | 3     |
 
-    @pending
     Scenario: With 2 people it is a duel from the start
       Given 2 people
       When the show runs
@@ -98,7 +83,6 @@ Feature: Hot Potato
       And the sparkler is a short stub that flickers, never more than 3 times a second
       And the heartbeat comes quicker and quicker until the pop
 
-    @pending
     Scenario: Who says "Phew!" gives nothing away
       Given 8 people, with the same unlucky person every time
       When the show runs with 20 different random seeds
@@ -107,12 +91,6 @@ Feature: Hot Potato
 
   Rule: The sparkler is the clock everyone watches
 
-    Scenario: It burns down to the pop
-      When the show runs
-      Then the sparkler is shorter at each throw than at the one before, except when it relights
-      And it is at its last spark only while the unlucky person holds the potato, just before the pop
-
-    @pending
     Scenario: It burns down to the last second
       When the show runs
       Then the sparkler is shorter at each throw than at the one before, except when it relights
@@ -129,20 +107,6 @@ Feature: Hot Potato
         | 2     |
         | 8     |
         | 12    |
-
-  Rule: The last throw can twist
-
-    Scenario Outline: The last throw, with <count> people
-      Given <count> people
-      When the show runs with 20 different random seeds
-      Then in some runs the last throw goes to someone else, who throws it straight back to the unlucky person
-      And in some runs the unlucky person throws it away and it curves back to them
-      And in some runs it simply lands with the unlucky person
-
-      Examples:
-        | count |
-        | 2     |
-        | 8     |
 
   @pending
   Rule: The last second could go either way
@@ -173,15 +137,6 @@ Feature: Hot Potato
 
   Rule: The ending is a pop and a paper crown
 
-    Scenario: A freeze, then the pop
-      Given the unlucky person is "Luca"
-      When the potato reaches "Luca" for the last time
-      Then everything holds still for at least half a second, the sparkler at its last spark
-      And the potato pops into confetti
-      And "Luca" gets a paper crown and celebrates
-      And everyone else cheers
-
-    @pending
     Scenario: The pop
       Given the unlucky person is "Luca"
       When the potato pops on "Luca"
@@ -201,31 +156,6 @@ Feature: Hot Potato
       And the burst is behind everyone, and "Pop!" covers neither Luca's head nor the crown
       And "It popped on Luca!" is up within 0.2 seconds of the pop
 
-    Scenario: Everyone watches the freeze
-      Given 8 people
-      When the showdown reaches the freeze
-      Then those out of play look worried, not relieved
-
-  Rule: The beats keep the show between 14 and 18 seconds
-
-    Scenario: Each beat takes about this long
-      When the show runs at 12, 8 and 2 people, with the sparkler going out
-      Then its beats take these seconds, give or take 0.3:
-        | beat           | 12 people | 8 people | 2 people |
-        | plop           | 1.6       | 1.6      | 1.6      |
-        | hot hands      | 4.0       | 3.6      | 3.0      |
-        | a dud          | 2.2       | 2.2      | 2.2      |
-        | it relights    | 1.0       | 1.0      | 1.0      |
-        | the showdown   | 3.6       | 3.6      | 4.4      |
-        | the last throw | 1.4       | 1.4      | 1.4      |
-        | the freeze     | 0.8       | 0.8      | 0.8      |
-        | the pop        | 2.6       | 2.6      | 2.6      |
-
-    Scenario: Every head count lands inside the time limit
-      When the show runs at every head count from 2 to 12, with and without the sparkler going out
-      Then each run lasts between 14 and 18 seconds
-
-  @pending
   Rule: The beats keep every show a second or more inside the limit
 
     Scenario: Each beat takes about this long now
@@ -248,29 +178,6 @@ Feature: Hot Potato
 
   Rule: It reads without sound
 
-    Scenario: Captions tell the story
-      Given 8 people, the unlucky person is "Luca", the sparkler goes out once, and the last throw lands straight
-      When the show runs
-      Then the captions include, in this order:
-        | caption                           |
-        | Don't be holding it when it pops! |
-        | Faster… faster…                   |
-        | …a dud?                           |
-        | Nope! Still lit!                  |
-        | Uh-oh…                            |
-        | It popped on Luca!                |
-
-    Scenario: The showdown names each catch
-      Given the showdown's catches go to "Luca", "Tom" and "Priya"
-      When the show runs
-      Then the showdown is captioned "Luca…", "Luca… Tom…", "Luca… Tom… Priya…"
-
-    Scenario: The last throw's twists are captioned
-      Given the unlucky person is "Luca"
-      When the show runs with 20 different random seeds
-      Then every thrown-back last throw is captioned "<name>… nope, back to Luca!"
-      And every last throw that curves back is captioned "It's coming back!"
-
     @pending
     Scenario: Captions tell the story to the end
       Given 8 people, the unlucky person is "Luca", the sparkler goes out once, and it gets too hot at the end
@@ -285,7 +192,6 @@ Feature: Hot Potato
         | Too hot!                          |
         | It popped on Luca!                |
 
-    @pending
     Scenario: The duel names each catch
       Given 8 people, and the duel's catches go to "Priya", "Tom" and "Priya"
       When the show runs
