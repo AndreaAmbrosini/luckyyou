@@ -248,11 +248,12 @@ export async function playHotPotato(show: Show): Promise<void> {
   });
   enter(starts.showdown, 'showdown');
   cue(starts.showdown, 'heartbeat');
+  // Only the head: the name tag keeps its size, so it stays readable.
   for (const person of people.values()) {
     if (plan.showdown.includes(person.name)) continue;
     const smaller = outOfPlay(person.spot).size / person.spot.size;
     timeline.to(
-      person.el,
+      person.face.el,
       { scale: smaller, duration: STEP_BACK, ease: 'power2.out' },
       starts.showdown,
     );

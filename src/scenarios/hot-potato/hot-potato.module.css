@@ -5,6 +5,8 @@
 
 .person > svg {
   display: block;
+  /* The head steps back towards the feet, as the person does. */
+  transform-origin: 50% 80%;
 }
 
 .potato {

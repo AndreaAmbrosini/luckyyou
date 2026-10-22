@@ -95,7 +95,7 @@ interface Frame {
   readonly lit: boolean;
   readonly inPlay: readonly string[];
   readonly moods: Readonly<Record<string, string>>;
-  /** How big each person is drawn, 1 their spot's size. */
+  /** How big each head is drawn, 1 their spot's size. */
   readonly scales: Readonly<Record<string, number>>;
 }
 
@@ -177,7 +177,8 @@ async function watch(
           scales: Object.fromEntries(
             people.map((person) => [
               person.dataset.person!,
-              Number(gsap.getProperty(person, 'scale')),
+              Number(gsap.getProperty(person, 'scale')) *
+                Number(gsap.getProperty(person.querySelector('svg')!, 'scale')),
             ]),
           ),
         });
@@ -870,6 +871,21 @@ interface LabRun {
   readonly raised: string[];
   /** Where the unlucky person was drawn, each frame. */
   readonly placed: { time: number; at: string }[];
+  /** The smallest any name tag was drawn, in stage pixels, over every frame. */
+  readonly smallestTag: number;
+}
+
+/**
+ * How big `tag` is drawn on `stage`: its size times the scale GSAP gives it and
+ * everything around it. (GSAP can't read the tag's own CSS transform in jsdom.)
+ */
+function drawnTag(tag: HTMLElement, stage: HTMLElement): number {
+  let size = parseFloat(tag.style.getPropertyValue('--tag-size'));
+  for (let at: Element | null = tag; at && at !== stage; at = at.parentElement) {
+    const scale = /scale\(([^,)]+)/.exec((at as HTMLElement).style.transform);
+    if (scale) size *= Number(scale[1]);
+  }
+  return size;
 }
 
 /** Hot Potato at 2, 8 and 12 people, the unlucky person last, once with each twist. */
@@ -885,6 +901,7 @@ async function labRuns(): Promise<LabRun[]> {
       const bubbles: Said[] = [];
       const seen = new Set<Element>();
       const placed: { time: number; at: string }[] = [];
+      let smallestTag = Infinity;
       let end = { burstBehind: false, inFront: false, grownScale: 0, raised: [] as string[] };
       const { frames, record } = await watch(team, unlucky, seed, (time, stage) => {
         const scene = stage.querySelector<HTMLElement>('[data-part="scene"]')!;
@@ -909,6 +926,9 @@ async function labRuns(): Promise<LabRun[]> {
         const them = people.find((person) => person.dataset.person === unlucky)!;
         const burst = scene.querySelector('[data-part="burst"]')!;
         placed.push({ time, at: placement(them, stage) });
+        for (const tag of scene.querySelectorAll<HTMLElement>('[data-on="chest"]')) {
+          smallestTag = Math.min(smallestTag, drawnTag(tag, stage));
+        }
         end = {
           burstBehind: people.every(
             (person) =>
@@ -933,6 +953,7 @@ async function labRuns(): Promise<LabRun[]> {
         frames,
         bubbles,
         placed,
+        smallestTag,
         ...end,
       });
     }
@@ -956,6 +977,12 @@ describe('The lab check', () => {
         expect(box.bottom, `${label}: ${text}`).toBeLessThanOrEqual(720);
         if (potato) expect(overlap(box, potato), `${label}: ${text}`).toBe(false);
       }
+    }
+  });
+
+  it('every name tag is drawn at 22 px or more on every frame', () => {
+    for (const { label, smallestTag } of runs) {
+      expect(smallestTag, label).toBeGreaterThanOrEqual(22);
     }
   });
 

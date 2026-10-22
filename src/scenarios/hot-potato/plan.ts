@@ -151,7 +151,7 @@ export function planShow(names: readonly string[], unlucky: string, random: () =
   };
 
   add(chain[0]!, null, 'plop', 0, PLOP_CATCH, 1);
-  const hotHandsLow = dud ? 0.55 : 0.45;
+  const hotHandsLow = dud ? DUD.out : 0.45;
   let thrown = hotHandsStart;
   lengths(beats['hot-hands'], throws, QUICKER).forEach((length, index) => {
     const at = index === throws - 1 ? hotHandsEnd : thrown + length;

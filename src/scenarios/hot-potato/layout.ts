@@ -89,10 +89,9 @@ export function ring(count: number): Spot[] {
   });
 }
 
-/** Someone who is out of play: a little smaller, in the same place. */
+/** Someone who is out of play: a little smaller, in the same place; the name tag keeps its size. */
 export function outOfPlay(spot: Spot): Spot {
-  const size = spot.size * 0.88;
-  return { x: spot.x, y: spot.y, size, tag: tagFor(size) };
+  return { ...spot, size: spot.size * 0.88 };
 }
 
 /** The gap between a held potato's box and the holder's face. */
