@@ -108,6 +108,11 @@ Feature: The scenario kit
       When a name tag is asked for at 10 stage pixels
       Then it is set at 22 stage pixels
 
+    Scenario: A name tag can sit on the chest
+      When a name tag is made for the chest of a head
+      Then it is centred under the head, its top at 76% of the head's height
+      And it is set at the size asked for
+
     Scenario: A long name takes at most two lines, shrinking first
       Given a person named "Wolfeschlegelsteinhausenberger", 30 characters with no space
       When their name tag is made at 48 stage pixels, at most 240 stage pixels wide

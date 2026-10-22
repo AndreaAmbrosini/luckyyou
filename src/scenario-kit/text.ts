@@ -64,11 +64,17 @@ function lineCount(name: string, size: number, width: number): number {
  * `wrapBelow` (`--size-stage-tag-min` unless given); past that it wraps onto
  * two lines at that size, shrinking again only if two lines need it, and at
  * `--size-stage-tag-min` the tag widens instead. Never smaller, never three
- * lines.
+ * lines. With `chest` the tag is placed for a box the size of a head, centred
+ * with its top at 76% of the box, below the chin.
  */
 export function nameTag(
   name: string,
-  { size, maxWidth, wrapBelow = 0 }: { size: number; maxWidth: number; wrapBelow?: number },
+  {
+    size,
+    maxWidth,
+    wrapBelow = 0,
+    chest = false,
+  }: { size: number; maxWidth: number; wrapBelow?: number; chest?: boolean },
 ): HTMLElement {
   const min = stagePx('--size-stage-tag-min');
   const borders = 2 * stagePx('--line');
@@ -107,6 +113,12 @@ export function nameTag(
   tag.dataset.lines = String(lines);
   tag.style.setProperty('--tag-size', `${chosen}px`);
   tag.style.maxWidth = `${width}px`;
+  if (chest) {
+    tag.classList.add(styles.chest);
+    tag.dataset.on = 'chest';
+    tag.style.left = '50%';
+    tag.style.top = '76%';
+  }
   const text = tag.appendChild(document.createElement('span'));
   // On the text, not the tag: jsdom slows down badly when styles are read on
   // an element with a dir attribute, and GSAP reads the tag's.

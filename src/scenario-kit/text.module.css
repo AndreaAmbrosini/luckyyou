@@ -16,6 +16,12 @@
   overflow-wrap: anywhere;
 }
 
+/* On the chest: left and top are set inline, relative to a box the head's size. */
+.chest {
+  position: absolute;
+  transform: translateX(-50%);
+}
+
 .caption {
   position: absolute;
   top: 28px;

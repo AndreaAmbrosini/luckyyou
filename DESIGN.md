@@ -102,7 +102,8 @@ Every scenario follows these so the shows look like one app:
 - Drawings use flat fills and ink outlines of 4 to 5 stage pixels.
 - Name tags are paper stickers with an ink outline and ink text, straight
   (never on a curve), at least `--size-stage-tag-min`, at most two lines,
-  never over another tag. They grow as fewer people are left.
+  never over another tag. They grow as fewer people are left. On land they
+  sit on the chest, so hands can hold things overhead.
 - Captions are one at a time, top centre, in the display font at
   `--size-stage-caption` on a paper sticker, each for at least a second.
 - People are cartoon heads with a mood (calm, worried, scared, happy, party)

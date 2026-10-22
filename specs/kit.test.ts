@@ -430,6 +430,21 @@ describeSpec(await loadFeature('./kit.feature'), ({ Rule }) => {
       });
     });
 
+    RuleScenario('A name tag can sit on the chest', ({ When, Then, And }) => {
+      let tag: HTMLElement;
+      When('a name tag is made for the chest of a head', () => {
+        tag = nameTag('Anna', { size: 40, maxWidth: 400, chest: true });
+      });
+      Then("it is centred under the head, its top at 76% of the head's height", () => {
+        expect(tag.dataset.on).toBe('chest');
+        expect(tag.style.left).toBe('50%');
+        expect(tag.style.top).toBe('76%');
+      });
+      And('it is set at the size asked for', () => {
+        expect(tagSize(tag)).toBe(40);
+      });
+    });
+
     RuleScenario(
       'A long name takes at most two lines, shrinking first',
       ({ Given, When, Then, And }) => {
