@@ -1,10 +1,27 @@
 import { loadFeature } from '@amiceli/vitest-cucumber';
 import { gsap } from 'gsap';
-import { describe, expect, it } from 'vitest';
+import { beforeAll, describe, expect, it } from 'vitest';
 import { describeSpec, runShow, type ShowRecord } from '../../scenario-kit/testing';
 import { createRandom } from '../../scenario-kit/random';
 import hotPotato from './index';
-import { held, outOfPlay, ring, type Spot } from './layout';
+import {
+  bezier,
+  crowned,
+  headBox,
+  held,
+  outOfPlay,
+  overlap,
+  POTATO,
+  potatoBox,
+  ring,
+  SKY,
+  speechBox,
+  tagBox,
+  throwPath,
+  type Box,
+  type Point,
+  type Spot,
+} from './layout';
 import { BEATS, planShow, type Beat, type Catch, type Plan, type Twist } from './plan';
 
 const TEAM = [
@@ -40,24 +57,10 @@ const before = (plan: Plan) =>
 const during = (plan: Plan, beat: Beat) => plan.catches.filter((each) => each.beat === beat);
 const total = (plan: Plan) => BEATS.reduce((seconds, beat) => seconds + plan.beats[beat], 0);
 
-/** A name tag's box on the stage: as wide as it may grow, two lines high. */
-const tagBox = (spot: Spot) => ({
-  left: spot.x - spot.tag.maxWidth / 2,
-  right: spot.x + spot.tag.maxWidth / 2,
-  top: spot.y - 0.04 * spot.size,
-  bottom: spot.y - 0.04 * spot.size + 2.4 * spot.tag.size + 8,
-});
-
-const overlap = (a: Spot, b: Spot) => {
-  const one = tagBox(a);
-  const two = tagBox(b);
-  return (
-    one.left < two.right && two.left < one.right && one.top < two.bottom && two.top < one.bottom
-  );
-};
-
 const overlapping = (spots: Spot[]) =>
-  spots.some((spot, index) => spots.slice(index + 1).some((other) => overlap(spot, other)));
+  spots.some((spot, index) =>
+    spots.slice(index + 1).some((other) => overlap(tagBox(spot), tagBox(other))),
+  );
 
 /** Everyone in play, then the same with each of them out of play. */
 const mixes = (count: number): Spot[][] => {
@@ -338,7 +341,9 @@ describeSpec(await loadFeature('./hot-potato.feature'), ({ Rule }) => {
           const outside = team.filter((name) => !plan.showdown.includes(name));
           expect(outside).toHaveLength(5);
           const start = showdown[0]!.time;
-          for (const frame of showdown) {
+          // Until the freeze, when they watch the potato too.
+          const freeze = showdown.findIndex((frame) => frame.beat === 'freeze');
+          for (const frame of showdown.slice(0, freeze)) {
             expect([...frame.inPlay].sort()).toEqual([...plan.showdown].sort());
             for (const name of outside) {
               expect(frame.moods[name], name).toBe('happy');
@@ -748,9 +753,57 @@ describe('The ring', () => {
     expect(spots[4]).toMatchObject({ x: 640, y: 640, size: 104 });
   });
 
-  it('held is 35 px over the head', () => {
-    const spot = ring(8)[0]!;
+  it('held is 35 px over the head where that stays out of the sky', () => {
+    const spot = ring(8)[4]!;
     expect(held(spot)).toEqual({ x: spot.x, y: spot.y - 0.8 * spot.size - 35 });
+  });
+
+  /** The top of the potato's drawing, a full sparkler or the smoke included, centred at `point`. */
+  const drawingTop = (point: Point, scale: number) =>
+    point.y - scale * (POTATO.height / 2 + POTATO.above);
+
+  it('the potato stays below the caption, held at any spot and at the top of every throw', () => {
+    for (let count = 2; count <= 12; count++) {
+      const scale = count === 2 ? POTATO.pairScale : 1;
+      const points = ring(count).map((spot) => held(spot, scale));
+      for (const [index, point] of points.entries()) {
+        expect(drawingTop(point, scale), `${count} people, spot ${index}`).toBeGreaterThanOrEqual(
+          SKY,
+        );
+        const box = potatoBox(point, scale);
+        expect(box.left, `${count} people, spot ${index}`).toBeGreaterThanOrEqual(0);
+        expect(box.right, `${count} people, spot ${index}`).toBeLessThanOrEqual(1280);
+      }
+      for (const [i, from] of points.entries()) {
+        for (const [j, to] of points.entries()) {
+          const path = throwPath(from, to, scale);
+          for (let step = 0; step <= 200; step++) {
+            const point = bezier(step / 200, ...path);
+            expect(
+              drawingTop(point, scale),
+              `${count} people, ${i} to ${j}`,
+            ).toBeGreaterThanOrEqual(SKY - 1e-6);
+          }
+        }
+      }
+    }
+  });
+
+  it('a grown unlucky person keeps their tag on stage and off every other tag', () => {
+    for (let count = 2; count <= 12; count++) {
+      const spots = ring(count);
+      for (const [index, spot] of spots.entries()) {
+        const { tag } = crowned(spot);
+        const label = `${count} people, spot ${index}`;
+        expect(tag.left, label).toBeGreaterThanOrEqual(0);
+        expect(tag.right, label).toBeLessThanOrEqual(1280);
+        expect(tag.bottom, label).toBeLessThanOrEqual(720);
+        for (const other of spots.filter((each) => each !== spot)) {
+          expect(overlap(tag, tagBox(other)), label).toBe(false);
+          expect(overlap(tag, tagBox(outOfPlay(other))), label).toBe(false);
+        }
+      }
+    }
   });
 });
 
@@ -763,6 +816,171 @@ describe('The stage', () => {
       const { catches } = await watch(team, 'Luca', seed);
       const holders = catches.map((each) => each.holder);
       expect(holders, `${twist}, seed ${seed}`).toEqual(plan.catches.map((each) => each.by));
+    }
+  });
+});
+
+/** A bubble as it appeared: what it said, its box, and the potato's box then (null while hidden). */
+interface Said {
+  readonly text: string;
+  readonly box: Box;
+  readonly potato: Box | null;
+}
+
+/** One run of the lab check: its plan, captions, bubbles, and the stage near the end. */
+interface LabRun {
+  readonly label: string;
+  readonly plan: Plan;
+  readonly unlucky: string;
+  readonly record: ShowRecord;
+  readonly frames: Frame[];
+  readonly bubbles: Said[];
+  /** The burst comes before every person on the stage. */
+  readonly burstBehind: boolean;
+  /** In the last frame: the unlucky person comes after everyone else, and how big they are. */
+  readonly inFront: boolean;
+  readonly grownScale: number;
+  /** In the last frame: whose arms are up. */
+  readonly raised: string[];
+  /** Where the unlucky person was drawn, each frame. */
+  readonly placed: { time: number; at: string }[];
+}
+
+/** Hot Potato at 2, 8 and 12 people, the unlucky person last, once with each twist. */
+async function labRuns(): Promise<LabRun[]> {
+  const runs: LabRun[] = [];
+  for (const count of [2, 8, 12]) {
+    const team = names(count);
+    const unlucky = team.at(-1)!;
+    const all = plans(count, unlucky, 40);
+    for (const twist of ['straight', 'back', 'boomerang'] as const) {
+      const seed = all.findIndex((plan) => plan.twist === twist) + 1;
+      expect(seed, `${count} people, ${twist}`).toBeGreaterThan(0);
+      const bubbles: Said[] = [];
+      const seen = new Set<Element>();
+      const placed: { time: number; at: string }[] = [];
+      let end = { burstBehind: false, inFront: false, grownScale: 0, raised: [] as string[] };
+      const { frames, record } = await watch(team, unlucky, seed, (time, stage) => {
+        const scene = stage.querySelector<HTMLElement>('[data-part="scene"]')!;
+        const potato = scene.querySelector<SVGElement>('[data-part="potato"]')!;
+        for (const bubble of scene.querySelectorAll<HTMLElement>('[data-part="bubble"]')) {
+          if (seen.has(bubble) || bubble.style.visibility === 'hidden') continue;
+          if (Number(bubble.style.opacity || 1) === 0) continue;
+          seen.add(bubble);
+          const scale = Number(gsap.getProperty(potato, 'scale'));
+          const centre = {
+            x: Number(gsap.getProperty(potato, 'x')) + POTATO.width / 2,
+            y: Number(gsap.getProperty(potato, 'y')) + POTATO.height / 2,
+          };
+          const anchor = { x: parseFloat(bubble.style.left), y: parseFloat(bubble.style.top) };
+          bubbles.push({
+            text: bubble.textContent!,
+            box: speechBox(bubble.textContent!, anchor),
+            potato: shown(potato, stage) ? potatoBox(centre, scale) : null,
+          });
+        }
+        const people = [...scene.querySelectorAll<HTMLElement>('[data-person]')];
+        const them = people.find((person) => person.dataset.person === unlucky)!;
+        const burst = scene.querySelector('[data-part="burst"]')!;
+        placed.push({ time, at: placement(them, stage) });
+        end = {
+          burstBehind: people.every(
+            (person) =>
+              (burst.compareDocumentPosition(person) & Node.DOCUMENT_POSITION_FOLLOWING) !== 0,
+          ),
+          inFront: people.every(
+            (person) =>
+              person === them ||
+              (them.compareDocumentPosition(person) & Node.DOCUMENT_POSITION_PRECEDING) !== 0,
+          ),
+          grownScale: Number(gsap.getProperty(them, 'scale')),
+          raised: people
+            .filter((person) => shown(person.querySelector('[data-part="land-arms"]'), stage))
+            .map((person) => person.dataset.person!),
+        };
+      });
+      runs.push({
+        label: `${count} people, ${twist}, seed ${seed}`,
+        plan: all[seed - 1]!,
+        unlucky,
+        record,
+        frames,
+        bubbles,
+        placed,
+        ...end,
+      });
+    }
+  }
+  return runs;
+}
+
+describe('The lab check', () => {
+  let runs: LabRun[];
+  beforeAll(async () => {
+    runs = await labRuns();
+  }, 60_000);
+
+  it('bubbles appear inside the stage and off the potato', () => {
+    for (const { label, bubbles } of runs) {
+      expect(bubbles.length, label).toBeGreaterThan(2);
+      for (const { text, box, potato } of bubbles) {
+        expect(box.left, `${label}: ${text}`).toBeGreaterThanOrEqual(0);
+        expect(box.right, `${label}: ${text}`).toBeLessThanOrEqual(1280);
+        expect(box.top, `${label}: ${text}`).toBeGreaterThanOrEqual(0);
+        expect(box.bottom, `${label}: ${text}`).toBeLessThanOrEqual(720);
+        if (potato) expect(overlap(box, potato), `${label}: ${text}`).toBe(false);
+      }
+    }
+  });
+
+  it('those out of play watch the freeze, worried, and everyone cheers at the end', () => {
+    for (const { label, plan, unlucky, frames, raised } of runs) {
+      const outside = plan.ring.filter((name) => !plan.showdown.includes(name));
+      for (const frame of frames.filter((each) => each.beat === 'freeze')) {
+        for (const name of outside) expect(frame.moods[name], `${label}: ${name}`).toBe('worried');
+      }
+      for (const name of plan.ring) {
+        expect(frames.at(-1)!.moods[name], `${label}: ${name}`).toBe(
+          name === unlucky ? 'party' : 'happy',
+        );
+      }
+      expect([...raised].sort(), label).toEqual([...plan.ring].sort());
+    }
+  });
+
+  it('the burst is behind the people, and Pop! is off the unlucky head and crown', () => {
+    for (const { label, burstBehind, bubbles, unlucky, plan } of runs) {
+      expect(burstBehind, label).toBe(true);
+      const spot = ring(plan.ring.length)[plan.ring.indexOf(unlucky)]!;
+      const pop = bubbles.find((each) => each.text === 'Pop!')!;
+      expect(pop, label).toBeDefined();
+      expect(overlap(pop.box, headBox(spot)), label).toBe(false);
+      expect(overlap(pop.box, crowned(spot).head), label).toBe(false);
+    }
+  });
+
+  it('"It popped on …" goes up within 0.2 s of the pop, every caption up 1 s or more', () => {
+    for (const { label, plan, unlucky, record } of runs) {
+      const pop = total(plan) - plan.beats.pop;
+      const popped = record.captions.find((each) => each.text === `It popped on ${unlucky}!`);
+      expect(popped, label).toBeDefined();
+      // Frames are 1/30 s apart.
+      expect(popped!.from - pop, label).toBeLessThanOrEqual(0.2 + 1 / 30 + 1e-9);
+      for (const caption of record.captions) {
+        expect(caption.to - caption.from, `${label}: ${caption.text}`).toBeGreaterThanOrEqual(
+          1 - 1e-9,
+        );
+      }
+    }
+  });
+
+  it('the unlucky person ends 1.3 times their size, in front of everyone, still for 1.5 s', () => {
+    for (const { label, record, inFront, grownScale, placed } of runs) {
+      expect(inFront, label).toBe(true);
+      expect(grownScale, label).toBeCloseTo(1.3, 3);
+      const last = placed.filter((each) => each.time >= record.duration - 1.5);
+      expect(last.length, label).toBeGreaterThan(30);
+      for (const each of last) expect(each.at, label).toBe(last[0]!.at);
     }
   });
 });
