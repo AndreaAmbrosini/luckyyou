@@ -240,6 +240,79 @@ function placement(element: Element, stage: HTMLElement): string {
   return styles.join(' / ');
 }
 
+/** Someone as drawn in one frame of the shared run. */
+interface Drawn {
+  /** Where their spot is drawn on the stage. */
+  readonly x: number;
+  readonly y: number;
+  /** 0 hidden … 1 fully drawn. */
+  readonly shown: number;
+  /** Their name tag's size as drawn. */
+  readonly tag: number;
+  /** Their place among the people on the stage: later is in front. */
+  readonly order: number;
+}
+
+/** What one frame of the shared run showed beyond its Frame. */
+interface Seen {
+  readonly time: number;
+  readonly beat: string;
+  readonly potatoShown: boolean;
+  readonly confetti: number;
+  readonly crown: boolean;
+  /** Where Luca is drawn. */
+  readonly luca: string;
+  readonly people: Readonly<Record<string, Drawn>>;
+}
+
+/**
+ * 8 people, Luca unlucky, seed 1: run once and shared by the scenarios that
+ * watch it.
+ */
+let lucaShow:
+  Promise<{ plan: Plan; frames: Frame[]; record: ShowRecord; seen: Seen[] }> | undefined;
+function lucaRun() {
+  lucaShow ??= (async () => {
+    const team = names(8);
+    const plan = planShow(team, 'Luca', createRandom(1));
+    const spots = ring(8);
+    const seen: Seen[] = [];
+    const { frames, record } = await watch(team, 'Luca', 1, (time, stage) => {
+      const scene = stage.querySelector<HTMLElement>('[data-part="scene"]')!;
+      const people = [...scene.querySelectorAll<HTMLElement>('[data-person]')];
+      const luca = scene.querySelector<HTMLElement>('[data-person="Luca"]')!;
+      seen.push({
+        time,
+        beat: scene.dataset.beat!,
+        potatoShown: shown(scene.querySelector('[data-part="potato"]'), stage),
+        confetti: [...scene.querySelectorAll('[data-part="confetti"]')].filter((bit) =>
+          shown(bit, stage),
+        ).length,
+        crown: shown(luca.querySelector('[data-part="crown"]'), stage),
+        luca: placement(luca, stage),
+        people: Object.fromEntries(
+          people.map((el, order) => {
+            const spot = spots[plan.ring.indexOf(el.dataset.person!)]!;
+            const opacity = el.style.visibility === 'hidden' ? 0 : Number(el.style.opacity || 1);
+            return [
+              el.dataset.person!,
+              {
+                x: spot.x + Number(gsap.getProperty(el, 'x')),
+                y: spot.y + Number(gsap.getProperty(el, 'y')),
+                shown: opacity,
+                tag: drawnTag(el.querySelector<HTMLElement>('[data-on="chest"]')!, stage),
+                order,
+              },
+            ];
+          }),
+        ),
+      });
+    });
+    return { plan, frames, record, seen };
+  })();
+  return lucaShow;
+}
+
 /** The captions of one run, in order. */
 const said = (record: ShowRecord) => record.captions.map((caption) => caption.text);
 
@@ -336,7 +409,7 @@ describeSpec(await loadFeature('./hot-potato.feature'), ({ Rule }) => {
           plan = planShow(team, 'Luca', createRandom(1));
         });
         When('the showdown starts', async () => {
-          const { frames } = await watch(team, 'Luca');
+          const { frames } = await lucaRun();
           showdown = frames.slice(frames.findIndex((frame) => frame.beat === 'showdown'));
         });
         Then('the 5 people out of play step back, smaller and relieved', () => {
@@ -489,52 +562,31 @@ describeSpec(await loadFeature('./hot-potato.feature'), ({ Rule }) => {
         const unlucky = 'Luca';
         let plan: Plan;
         let frames: Frame[];
-        /** The pair's name tags as drawn, where they stand, and whether they're in front of everyone else. */
-        const pair: { time: number; tags: number[]; x: number[]; inFront: boolean }[] = [];
+        let seen: Seen[];
         Given('8 people', () => {
           plan = planShow(team, unlucky, createRandom(1));
         });
         When('the duel starts', async () => {
-          ({ frames } = await watch(team, unlucky, 1, (time, stage) => {
-            const people = [...stage.querySelectorAll<HTMLElement>('[data-person]')];
-            const two = plan.duel.map((name) =>
-              people.find((each) => each.dataset.person === name)!,
-            );
-            const spots = ring(8);
-            pair.push({
-              time,
-              tags: two.map((el) =>
-                drawnTag(el.querySelector<HTMLElement>('[data-on="chest"]')!, stage),
-              ),
-              x: two.map(
-                (el) =>
-                  spots[plan.ring.indexOf(el.dataset.person!)]!.x +
-                  Number(gsap.getProperty(el, 'x')),
-              ),
-              inFront: people.every(
-                (el) =>
-                  two.includes(el) ||
-                  two.every(
-                    (one) =>
-                      (el.compareDocumentPosition(one) & Node.DOCUMENT_POSITION_FOLLOWING) !== 0,
-                  ),
-              ),
-            });
-          }));
+          ({ frames, seen } = await lucaRun());
         });
         Then(
           'the last two step into the middle and face each other, drawn big, their name tags at 40 pixels or more',
           () => {
             const D = startOf(plan, 'duel');
             const P = startOf(plan, 'pop');
-            const big = pair.filter((each) => each.time >= D + 0.5 - 1e-9 && each.time < P);
+            const big = seen.filter((each) => each.time >= D + 0.5 - 1e-9 && each.time < P);
             expect(big.length).toBeGreaterThan(30);
             for (const each of big) {
-              for (const tag of each.tags)
-                expect(tag, `at ${each.time}`).toBeGreaterThanOrEqual(40);
-              expect(each.inFront, `at ${each.time}`).toBe(true);
+              const two = plan.duel.map((name) => each.people[name]!);
+              for (const one of two) {
+                expect(one.tag, `at ${each.time}`).toBeGreaterThanOrEqual(40);
+                // In front of everyone else.
+                for (const other of Object.values(each.people)) {
+                  if (!two.includes(other)) expect(one.order).toBeGreaterThan(other.order);
+                }
+              }
               // One on each side of the middle, facing each other.
-              const [left, right] = [...each.x].sort((a, b) => a - b);
+              const [left, right] = two.map((one) => one.x).sort((a, b) => a - b);
               expect(left, `at ${each.time}`).toBeCloseTo(320, 3);
               expect(right, `at ${each.time}`).toBeCloseTo(960, 3);
             }
@@ -560,6 +612,25 @@ describeSpec(await loadFeature('./hot-potato.feature'), ({ Rule }) => {
               expect(frame.scales[name], `${name} at ${frame.time}`).toBeLessThan(1);
             }
           }
+          // They fade out and back in: hidden at most 0.3 s, then drawn at
+          // their spot in the duel from the end of the step-in.
+          const pair = plan.duel.map((name) => plan.ring.indexOf(name)) as [number, number];
+          const spots = duelLayout(8, pair);
+          const stepIn = seen.filter((each) => each.time >= D - 1e-9 && each.time < D + 0.5);
+          const after = seen.filter((each) => each.time >= D + 0.5 - 1e-9 && each.time < P);
+          expect(after.length).toBeGreaterThan(30);
+          for (const name of others) {
+            const hidden = stepIn.filter((each) => each.people[name]!.shown === 0);
+            expect(hidden.length, name).toBeGreaterThan(0);
+            expect(hidden.at(-1)!.time - hidden[0]!.time, name).toBeLessThanOrEqual(0.3 + 1e-9);
+            const spot = spots[plan.ring.indexOf(name)]!;
+            for (const each of after) {
+              const drawn = each.people[name]!;
+              expect(drawn.shown, `${name} at ${each.time}`).toBe(1);
+              expect(drawn.x, `${name} at ${each.time}`).toBeCloseTo(spot.x, 3);
+              expect(drawn.y, `${name} at ${each.time}`).toBeCloseTo(spot.y, 3);
+            }
+          }
         });
         And('the potato only goes between the two until it pops', () => {
           const D = startOf(plan, 'duel');
@@ -569,6 +640,34 @@ describeSpec(await loadFeature('./hot-potato.feature'), ({ Rule }) => {
             .filter(Boolean);
           expect(holders.length).toBeGreaterThan(0);
           for (const holder of holders) expect(plan.duel).toContain(holder);
+          // Held over the one who has it in the duel, and carried in with the
+          // one who opens it.
+          const pair = plan.duel.map((name) => plan.ring.indexOf(name)) as [number, number];
+          const spots = duelLayout(8, pair);
+          const L = startOf(plan, 'last-second');
+          const near = (frame: Frame, point: Point) =>
+            expect(
+              Math.hypot(frame.potato.x - point.x, frame.potato.y - point.y),
+              `at ${frame.time}`,
+            ).toBeLessThanOrEqual(3);
+          // The duel's throws go straight on, so it's only held as it lands:
+          // in the last frame before each catch, it's a few px from the catcher.
+          const catches = plan.catches.filter(
+            (each) => each.thrown >= D + 0.5 - 1e-9 && each.at <= L,
+          );
+          expect(catches.length).toBe(3);
+          for (const each of catches) {
+            const landing = frames.filter((frame) => frame.time < each.at - 1e-9).at(-1)!;
+            expect(each.at - landing.time).toBeLessThanOrEqual(1 / 30 + 1e-9);
+            near(landing, held(spots[plan.ring.indexOf(each.by)]!));
+          }
+          const opener = plan.ring.indexOf(during(plan, 'duel')[0]!.from!);
+          const stepIn = frames.filter((frame) => frame.time >= D - 1e-9 && frame.time < D + 0.5);
+          expect(stepIn.length).toBeGreaterThan(10);
+          for (const frame of stepIn) {
+            const t = (frame.time - D) / 0.5;
+            near(frame, held(duelMove(8, pair, t)[opener]!.spot));
+          }
         });
         And('the sparkler is a short stub that flickers, never more than 3 times a second', () => {
           const D = startOf(plan, 'duel');
@@ -738,24 +837,16 @@ describeSpec(await loadFeature('./hot-potato.feature'), ({ Rule }) => {
     RuleScenario('The pop', ({ Given, When, Then, And }) => {
       const team = names(8);
       let frames: Frame[];
-      const pop: { potato: boolean; confetti: number; crown: boolean }[] = [];
+      let pop: Seen[];
       Given('the unlucky person is "Luca"', () => {});
       When('the potato pops on "Luca"', async () => {
-        ({ frames } = await watch(team, 'Luca', 1, (_, stage) => {
-          const beat = stage.querySelector<HTMLElement>('[data-part="scene"]')?.dataset.beat;
-          if (beat !== 'pop') return;
-          pop.push({
-            potato: shown(stage.querySelector('[data-part="potato"]'), stage),
-            confetti: [...stage.querySelectorAll('[data-part="confetti"]')].filter((bit) =>
-              shown(bit, stage),
-            ).length,
-            crown: shown(stage.querySelector('[data-person="Luca"] [data-part="crown"]'), stage),
-          });
-        }));
+        let seen: Seen[];
+        ({ frames, seen } = await lucaRun());
+        pop = seen.filter((each) => each.beat === 'pop');
       });
       Then('it pops into confetti', () => {
         expect(pop.some((each) => each.confetti > 10)).toBe(true);
-        expect(pop.some((each) => each.potato)).toBe(false);
+        expect(pop.some((each) => each.potatoShown)).toBe(false);
       });
       And('"Luca" gets a paper crown and celebrates', () => {
         expect(pop.some((each) => each.crown)).toBe(true);
@@ -769,15 +860,13 @@ describeSpec(await loadFeature('./hot-potato.feature'), ({ Rule }) => {
     });
 
     RuleScenario('The name holds still at the end', ({ Given, When, Then }) => {
-      const placed: { time: number; luca: string }[] = [];
+      let placed: Seen[];
       let duration = 0;
       Given('the unlucky person is "Luca"', () => {});
       When('the show runs', async () => {
-        const { record } = await watch(names(8), 'Luca', 1, (time, stage) => {
-          const luca = stage.querySelector('[data-person="Luca"]')!;
-          placed.push({ time, luca: placement(luca, stage) });
-        });
-        duration = record.duration;
+        const run = await lucaRun();
+        placed = run.seen;
+        duration = run.record.duration;
       });
       Then('"Luca" is on stage, not moving, for the last 1.5 seconds', () => {
         const last = placed.filter((each) => each.time >= duration - 1.5);
@@ -1061,27 +1150,46 @@ describe('The ring', () => {
     ).flat();
 
   it("nobody's tag crosses another on the way into the duel", () => {
+    // Every 1/1000 of the step-in, so nothing slips between samples. A
+    // watcher counts once more than 5% visible, and the two in the duel keep
+    // 4 px clear of every tag around them.
+    const margin = 4;
+    const apart = (one: Box, two: Box) =>
+      Math.max(
+        two.left - one.right,
+        one.left - two.right,
+        two.top - one.bottom,
+        one.top - two.bottom,
+      );
+    const wrong: string[] = [];
     for (let count = 3; count <= 12; count++) {
       for (const pair of pairs(count)) {
-        for (let step = 0; step <= 20; step++) {
-          const t = step / 20;
+        for (let step = 0; step <= 1000; step++) {
+          const t = step / 1000;
           const label = `${count} people, pair ${pair.join(' and ')}, t ${t}`;
           const moved = duelMove(count, pair, t);
-          expect(moved, label).toHaveLength(count);
-          for (const index of pair) expect(moved[index]!.shown, label).toBe(1);
-          const seen = moved.filter((each) => each.shown > 0).map((each) => each.spot);
-          expect(overlapping(seen), label).toBe(false);
-          for (const spot of seen) {
-            const tag = tagBox(spot);
-            expect(tag.left, label).toBeGreaterThanOrEqual(0);
-            expect(tag.right, label).toBeLessThanOrEqual(1280);
-            expect(tag.top, label).toBeGreaterThanOrEqual(0);
-            expect(tag.bottom, label).toBeLessThanOrEqual(720);
-            expect(headBox(spot).top, label).toBeGreaterThanOrEqual(SKY);
-          }
+          if (moved.length !== count) wrong.push(`${label}: ${moved.length} spots`);
+          if (pair.some((index) => moved[index]!.shown !== 1)) wrong.push(`${label}: pair hidden`);
+          const seen = moved
+            .map((each, index) => ({ ...each, index, tag: tagBox(each.spot) }))
+            .filter((each) => each.shown > 0.05);
+          seen.forEach((one, k) => {
+            const { tag, spot } = one;
+            if (tag.left < 0 || tag.right > 1280 || tag.top < 0 || tag.bottom > 720) {
+              wrong.push(`${label}: ${one.index}'s tag off stage`);
+            }
+            if (headBox(spot).top < SKY) wrong.push(`${label}: ${one.index}'s head in the sky`);
+            for (const two of seen.slice(k + 1)) {
+              const needed = pair.includes(one.index) || pair.includes(two.index) ? margin : 0;
+              if (apart(tag, two.tag) < needed) {
+                wrong.push(`${label}: ${one.index} and ${two.index} ${apart(tag, two.tag)} apart`);
+              }
+            }
+          });
         }
       }
     }
+    expect(wrong.slice(0, 20)).toEqual([]);
   });
 
   it('the watchers fade out at their ring spot and back in watching, quickly', () => {

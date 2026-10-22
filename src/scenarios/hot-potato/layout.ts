@@ -112,12 +112,18 @@ export function duelGrowth(spot: Spot): number {
  */
 const FADE = { out: 0.25, in: 0.8 };
 
+/** Eases in and out, `t` (0…1) to the `power`. */
+const inOut = (power: number) => (t: number) =>
+  t < 0.5 ? 2 ** (power - 1) * t ** power : 1 - 2 ** (power - 1) * (1 - t) ** power;
+
 /**
- * The pair's walk eases in and out, and they grow later still, so they're
- * still small while the watchers fade out and full size once they're back.
+ * The pair's walk eases in and out steeply, and they only start growing
+ * once the watchers have faded out: so they're still small, near where they
+ * stood, while the watchers fade out, and nearly there when they're back.
  */
-const walking = (t: number) => (t < 0.5 ? 4 * t ** 3 : 1 - 4 * (1 - t) ** 3);
-const growing = (t: number) => (t < 0.5 ? 8 * t ** 4 : 1 - 8 * (1 - t) ** 4);
+const walking = inOut(4);
+const GROW_FROM = 0.3;
+const growing = (t: number) => inOut(3)(Math.max(0, (t - GROW_FROM) / (1 - GROW_FROM)));
 
 /** How finely the watchers' arc is narrowed, in radians. */
 const ARC_STEP = 0.005;
