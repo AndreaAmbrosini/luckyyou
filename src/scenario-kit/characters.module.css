@@ -1,4 +1,4 @@
-/* A head's colours. Its skin, accent and ring come in as --skin, --accent and --ring. */
+/* A head's colours. Its skin, accent, ring and shirt come in as --skin, --accent, --ring and --shirt. */
 .head {
   overflow: visible;
 }
@@ -46,6 +46,12 @@
 .ring {
   fill: var(--ring);
   stroke: var(--color-ink);
+}
+
+.shirt {
+  fill: var(--shirt);
+  stroke: var(--color-ink);
+  stroke-linejoin: round;
 }
 
 .shine {

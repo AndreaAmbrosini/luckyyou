@@ -146,6 +146,21 @@ Feature: The scenario kit
       When its mood changes from calm to party
       Then it still has skin tone 3 and a snorkel
 
+    Scenario: On land, a person has a shirt and no swim ring
+      When a head is drawn on land
+      Then it wears a shirt in its look's second colour
+      And it has no swim ring
+
+    Scenario: On land, raised arms start at the shoulders
+      When a happy head is drawn on land
+      Then its arms rise from its shoulders, not from its cheeks
+
+    Scenario: A head can raise its arms in any mood
+      Given a scared head on land
+      When it raises its arms
+      Then its arms are up
+      And it still looks scared
+
     Scenario: Looks are varied
       When looks are handed out to 12 people
       Then they use at least 4 skin tones

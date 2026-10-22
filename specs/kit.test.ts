@@ -584,6 +584,50 @@ describeSpec(await loadFeature('./kit.feature'), ({ Rule }) => {
       });
     });
 
+    RuleScenario('On land, a person has a shirt and no swim ring', ({ When, Then, And }) => {
+      let drawn: ReturnType<typeof head>;
+      When('a head is drawn on land', () => {
+        drawn = head(LOOK, { land: true });
+      });
+      Then("it wears a shirt in its look's second colour", () => {
+        expect(visibleParts(drawn.el)).toContain('shirt');
+        expect(drawn.el.style.getPropertyValue('--shirt')).toBe('var(--color-' + LOOK.ring + ')');
+      });
+      And('it has no swim ring', () => {
+        expect(visibleParts(drawn.el)).not.toContain('ring');
+        drawn.setRing(true);
+        expect(visibleParts(drawn.el)).not.toContain('ring');
+      });
+    });
+
+    RuleScenario('On land, raised arms start at the shoulders', ({ When, Then }) => {
+      let drawn: ReturnType<typeof head>;
+      When('a happy head is drawn on land', () => {
+        drawn = head(LOOK, { land: true, mood: 'happy' });
+      });
+      Then('its arms rise from its shoulders, not from its cheeks', () => {
+        expect(visibleParts(drawn.el)).toContain('land-arms');
+        expect(visibleParts(drawn.el)).not.toContain('arms');
+      });
+    });
+
+    RuleScenario('A head can raise its arms in any mood', ({ Given, When, Then, And }) => {
+      let drawn: ReturnType<typeof head>;
+      Given('a scared head on land', () => {
+        drawn = head(LOOK, { land: true, mood: 'scared' });
+        expect(visibleParts(drawn.el)).not.toContain('land-arms');
+      });
+      When('it raises its arms', () => {
+        drawn.setRaised(true);
+      });
+      Then('its arms are up', () => {
+        expect(visibleParts(drawn.el)).toContain('land-arms');
+      });
+      And('it still looks scared', () => {
+        expect(visibleParts(drawn.el)).toEqual(expect.arrayContaining(['wide-eyes', 'scream']));
+      });
+    });
+
     RuleScenario('Looks are varied', ({ When, Then }) => {
       let looks: Map<string, Look>;
       When('looks are handed out to 12 people', () => {

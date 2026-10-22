@@ -52,6 +52,10 @@ interface Part {
   readonly moods?: readonly Mood[];
   /** Only drawn on a head with this accessory. */
   readonly accessory?: Accessory;
+  /** Only drawn in this body; both when absent. */
+  readonly body?: 'water' | 'land';
+  /** Also shown whenever the arms are raised, in any mood. */
+  readonly raised?: boolean;
 }
 
 const ALL_BUT_PARTY: readonly Mood[] = ['calm', 'worried', 'scared', 'happy'];
@@ -59,8 +63,29 @@ const ALL_BUT_PARTY: readonly Mood[] = ['calm', 'worried', 'scared', 'happy'];
 /** Back to front. */
 const PARTS: readonly Part[] = [
   {
-    name: 'arms',
+    // From the shoulders, for a person standing.
+    name: 'land-arms',
+    body: 'land',
     moods: ['happy', 'party'],
+    raised: true,
+    shapes: [
+      ['path', styles.line, { d: 'M22 86 L2 6 M78 86 L98 6', 'stroke-width': 7 }],
+      ['circle', styles.skin, { cx: 2, cy: 6, r: 6, 'stroke-width': 3 }],
+      ['circle', styles.skin, { cx: 98, cy: 6, r: 6, 'stroke-width': 3 }],
+    ],
+  },
+  {
+    name: 'shirt',
+    body: 'land',
+    shapes: [
+      ['path', styles.shirt, { d: 'M12 112 Q12 74 50 72 Q88 74 88 112 Z', 'stroke-width': 4 }],
+    ],
+  },
+  {
+    name: 'arms',
+    body: 'water',
+    moods: ['happy', 'party'],
+    raised: true,
     shapes: [
       ['path', styles.line, { d: 'M24 60 L6 12 M76 60 L94 12', 'stroke-width': 7 }],
       ['circle', styles.skin, { cx: 6, cy: 12, r: 6, 'stroke-width': 3 }],
@@ -153,6 +178,7 @@ const PARTS: readonly Part[] = [
   },
   {
     name: 'ring',
+    body: 'water',
     shapes: [
       ['ellipse', styles.ring, { cx: 50, cy: 80, rx: 45, ry: 15, 'stroke-width': 4 }],
       ['path', styles.shine, { d: 'M17 76 Q28 70 44 69', 'stroke-width': 4 }],
@@ -168,16 +194,24 @@ export interface Head {
   setMood(mood: Mood): void;
   /** Shows or hides the swim ring. */
   setRing(on: boolean): void;
+  /** Raises or lowers the arms, whatever the mood. */
+  setRaised(on: boolean): void;
 }
 
 /**
  * A cartoon head with `look`, in `mood` (calm unless given), with a swim
- * ring unless `ring` is false. Happy and party raise the arms; party swaps
- * the eyes for sunglasses.
+ * ring unless `ring` is false. On `land` it wears a shirt instead of a ring
+ * and its arms start at the shoulders. Happy and party raise the arms, as
+ * does `raised`; party swaps the eyes for sunglasses.
  */
 export function head(
   look: Look,
-  { mood = 'calm', ring = true }: { mood?: Mood; ring?: boolean } = {},
+  {
+    mood = 'calm',
+    ring = true,
+    land = false,
+    raised = false,
+  }: { mood?: Mood; ring?: boolean; land?: boolean; raised?: boolean } = {},
 ): Head {
   const el = document.createElementNS(SVG, 'svg');
   el.setAttribute('viewBox', '0 0 100 100');
@@ -186,8 +220,13 @@ export function head(
   el.style.setProperty('--skin', `var(--color-skin-${look.skin})`);
   el.style.setProperty('--accent', `var(--color-${look.colour})`);
   el.style.setProperty('--ring', `var(--color-${look.ring})`);
+  el.style.setProperty('--shirt', `var(--color-${look.ring})`);
 
-  const drawn = PARTS.filter((part) => !part.accessory || part.accessory === look.accessory).map(
+  const body = land ? 'land' : 'water';
+  const drawn = PARTS.filter(
+    (part) =>
+      (!part.accessory || part.accessory === look.accessory) && (!part.body || part.body === body),
+  ).map(
     (part) => {
       const group = el.appendChild(document.createElementNS(SVG, 'g'));
       group.dataset.part = part.name;
@@ -201,11 +240,12 @@ export function head(
     },
   );
 
-  let current = { mood, ring };
+  let current = { mood, ring, raised };
   const draw = () => {
     for (const { part, group } of drawn) {
       const shown =
-        (part.moods?.includes(current.mood) ?? true) && (part.name !== 'ring' || current.ring);
+        ((part.moods?.includes(current.mood) ?? true) || (part.raised && current.raised)) &&
+        (part.name !== 'ring' || current.ring);
       if (shown) group.removeAttribute('display');
       else group.setAttribute('display', 'none');
     }
@@ -220,6 +260,10 @@ export function head(
     },
     setRing(on) {
       current = { ...current, ring: on };
+      draw();
+    },
+    setRaised(on) {
+      current = { ...current, raised: on };
       draw();
     },
   };
