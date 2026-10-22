@@ -34,9 +34,16 @@ export type Rescue =
     }
   /**
    * The last two: the rope swings back and forth between them, starting with
-   * the unlucky person, and hangs over the one it lifts before the hook comes down.
+   * the unlucky person, and hangs over the one it lifts before the hook comes
+   * down. While it holds over `aims[feint]`, the helicopter sets off towards
+   * the other one and turns back halfway.
    */
-  | { readonly kind: 'duel'; readonly aims: readonly string[]; readonly lifted: string };
+  | {
+      readonly kind: 'duel';
+      readonly aims: readonly string[];
+      readonly feint: number | null;
+      readonly lifted: string;
+    };
 
 export interface Plan {
   /** Everyone, in the order of the places they start in. */
@@ -52,6 +59,28 @@ const SLOW_FROM = 4;
 const SWOOP_MAX = 4;
 /** Every show is stretched to at least this many seconds. */
 const SHORTEST = 11.5;
+
+/**
+ * The duel takes one of a few shapes, at random. With two people: straight
+ * back and forth, or the same with a feint in the hang over the one it
+ * lifts. With more: straight back and forth, or across once, with a feint
+ * over either of the two.
+ */
+function duel(unlucky: string, lifted: string, pair: boolean, random: () => number): Rescue {
+  const across = [unlucky, lifted, unlucky, lifted];
+  const once = [unlucky, lifted];
+  const shapes = pair
+    ? [
+        { aims: across, feint: null },
+        { aims: across, feint: 3 },
+      ]
+    : [
+        { aims: across, feint: null },
+        { aims: once, feint: 0 },
+        { aims: once, feint: 1 },
+      ];
+  return { kind: 'duel', lifted, ...pickOne(shapes, random) };
+}
 
 export function planShow(names: readonly string[], unlucky: string, random: () => number): Plan {
   const order = eliminationOrder(names, unlucky, random);
@@ -78,7 +107,7 @@ export function planShow(names: readonly string[], unlucky: string, random: () =
           : { kind: 'fake-out', decoy: lifted, via: pickOne(others, random), lifted },
       );
     } else {
-      rescues.push({ kind: 'duel', aims: [unlucky, lifted, unlucky, lifted], lifted });
+      rescues.push(duel(unlucky, lifted, count === 2, random));
     }
   }
 

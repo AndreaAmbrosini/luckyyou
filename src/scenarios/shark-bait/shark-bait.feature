@@ -68,13 +68,24 @@ Feature: Shark Bait
     Scenario Outline: The duel swings back and forth, and hangs over the one it lifts
       Given <count> people
       When the show runs
-      Then the rope swings between the last two at least 3 times before it lifts one
+      Then the helicopter swings back and forth at least 3 times before it lifts one
       And it holds still longest over the one it lifts, before the hook comes down
 
       Examples:
         | count |
         | 2     |
         | 3     |
+        | 12    |
+
+    Scenario Outline: Sometimes the helicopter changes its mind, with <count> people
+      Given <count> people
+      When the show runs with 20 different random seeds
+      Then in some runs, during the duel, it sets off towards one of the two and turns back halfway
+      And in some runs it never turns back halfway
+
+      Examples:
+        | count |
+        | 2     |
         | 12    |
 
     Scenario: Fake-outs go both ways

@@ -37,12 +37,17 @@ const GRAB = 0.25;
  * how the rest of the beat is shared out as holds over each, the last one
  * the hang before the hook comes down. With more than two, the rope lingers
  * on the first, flicks back and forth, then slows; with two, each hold is
- * long enough to read the caption that goes with it.
+ * long enough to read the caption that goes with it. A feint comes out of
+ * the time for holds.
  */
 const DUEL = {
   many: { moves: [ARRIVE, 0.3, 0.35, 0.5], holds: [2, 1, 1.2, 3] },
+  manyOnce: { moves: [ARRIVE, 0.5], holds: [1, 1.8] },
   two: { moves: [ARRIVE, 0.4, 0.45, 0.6], holds: [1, 1, 1.2, 2.5] },
+  twoFeint: { moves: [ARRIVE, 0.4, 0.45, 0.6], holds: [1, 1, 1, 1.6] },
 };
+/** A feint: how far towards the other one the helicopter gets, and the seconds out and back. */
+const FEINT = { reach: 0.45, out: 0.3, back: 0.35 };
 /** How far the hook creeps down while the rope hangs over the last one in a duel. */
 const CREEP = 24;
 /** Where the rope hangs from, low enough that the helicopter stays under the caption. */
@@ -265,11 +270,15 @@ export async function playSharkBait(show: Show): Promise<void> {
    */
   function rescueOne(rescue: Exclude<Rescue, { kind: 'group' }>, start: number, seconds: number) {
     const aims = AIMS[rescue.kind](rescue as never);
-    const pace = rescue.kind === 'duel' ? DUEL[show.names.length === 2 ? 'two' : 'many'] : null;
+    const feint = rescue.kind === 'duel' ? rescue.feint : null;
+    const pace =
+      rescue.kind === 'duel' ? DUEL[duelPace(show.names.length === 2, aims, feint)] : null;
+    const two = pace === DUEL.two || pace === DUEL.twoFeint;
     const moves = pace?.moves ?? aims.map((_, index) => (index === 0 ? ARRIVE : SWING));
     const shares =
       pace?.holds ?? aims.map((_, index) => (aims.length === 1 || index < aims.length - 1 ? 1 : 0));
-    const spare = seconds - sum(moves) - LIFT;
+    const feinting = feint === null ? 0 : FEINT.out + FEINT.back;
+    const spare = seconds - sum(moves) - feinting - LIFT;
     const holds = shares.map((share) => (spare * share) / sum(shares));
 
     let time = start;
@@ -281,7 +290,7 @@ export async function playSharkBait(show: Show): Promise<void> {
       moods(time, name);
       chopper.phase('hovering', time);
       if (rescue.kind === 'duel') cue(time, 'heartbeat');
-      if (pace === DUEL.two) {
+      if (two) {
         // With two people, the caption follows the rope: "Marco… Giulia… Marco… Giulia!"
         caption(time, aims.slice(0, index + 1).join('… ') + (last ? '!' : '…'));
       } else if (pace) {
@@ -295,11 +304,26 @@ export async function playSharkBait(show: Show): Promise<void> {
       chopper.flyTo({ x: target.place.x, y: HOVER_Y, scale: 1 }, time, seconds, 'power2.inOut');
       chopper.lower(hookAbove(target.place) - HOVER_Y, time, seconds);
       time += seconds;
-      const hold = holds[index]!;
-      if (aims.length === 1 || (pace && last)) chopper.wobble(time, hold);
+      const hold = holds[index]! + (index === feint ? feinting : 0);
+      // A feint swings the rope itself, so it doesn't sway as well.
+      if (aims.length === 1 || (pace && last && index !== feint)) chopper.wobble(time, hold);
       // In a duel, the hook creeps down over the last one before it drops.
       if (pace && last) {
         chopper.lower(hookAbove(target.place) - HOVER_Y + CREEP, time, hold, 'sine.inOut');
+      }
+      if (index === feint) {
+        // Halfway through the hold, it sets off for the other one, and thinks better of it.
+        const other = swimmers.get(aims.find((each) => each !== name)!)!;
+        const out = time + holds[index]! / 2;
+        const back = out + FEINT.out;
+        const halfway = target.place.x + FEINT.reach * (other.place.x - target.place.x);
+        moods(out, other.name);
+        cue(out, 'heartbeat');
+        chopper.swing(halfway, out, FEINT.out);
+        chopper.flyTo({ x: halfway, y: HOVER_Y }, out, FEINT.out, 'power2.out');
+        moods(back, name);
+        chopper.swing(target.place.x, back, FEINT.back);
+        chopper.flyTo({ x: target.place.x, y: HOVER_Y }, back, FEINT.back, 'power2.inOut');
       }
       time += hold;
     });
@@ -325,6 +349,10 @@ const AIMS: {
   'fake-out': ({ decoy, via, lifted }) => (via ? [lifted, via, lifted] : [decoy, lifted]),
   duel: ({ aims }) => aims,
 };
+
+/** Which of the duel's paces fits its shape. */
+const duelPace = (pair: boolean, aims: readonly string[], feint: number | null) =>
+  pair ? (feint === null ? 'two' : 'twoFeint') : aims.length === 2 ? 'manyOnce' : 'many';
 
 const sum = (seconds: readonly number[]) => seconds.reduce((total, each) => total + each, 0);
 

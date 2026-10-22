@@ -99,6 +99,40 @@ class Watched {
     return this.restsUntil(lift?.time ?? Infinity, ['duel']);
   }
 
+  /**
+   * The duel's moves, from when the helicopter first holds still over one of
+   * the two until someone leaves the water: each run in one direction, and
+   * whether it ended where the helicopter had held still before or turned
+   * back on the way.
+   */
+  get duelMoves(): { from: number; to: number; halfway: boolean }[] {
+    const lift = this.lifts.find((each) => each.beat === 'duel')?.time ?? Infinity;
+    const xs = this.frames
+      .filter((frame) => frame.beat === 'duel' && frame.time < lift)
+      .map((frame) => frame.helicopter.x);
+    const stops: number[] = [];
+    const moves: { from: number; to: number }[] = [];
+    let direction = 0;
+    xs.forEach((x, index) => {
+      if (index === 0) return;
+      const dx = x - xs[index - 1]!;
+      if (Math.abs(dx) < 0.5) {
+        if (!stops.some((stop) => Math.abs(stop - x) < 5)) stops.push(x);
+        direction = 0;
+        return;
+      }
+      if (stops.length === 0) return;
+      const sign = Math.sign(dx);
+      if (sign !== direction) moves.push({ from: xs[index - 1]!, to: x });
+      else moves.at(-1)!.to = x;
+      direction = sign;
+    });
+    return moves.map((move) => ({
+      ...move,
+      halfway: !stops.some((stop) => Math.abs(stop - move.to) < 5),
+    }));
+  }
+
   private restsUntil(until: number, beats: readonly string[]): { aim: string; seconds: number }[] {
     const rests: { aim: string; frames: number }[] = [];
     this.frames.forEach((frame, index) => {
@@ -267,6 +301,9 @@ function sharkPhase(frames: readonly EndFrame[], phase: string): EndFrame[] {
   const end = frames.findIndex((frame, index) => index > start && frame.shark.phase !== phase);
   return frames.slice(start, end < 0 ? undefined : end);
 }
+
+/** The beats up to the end of the duel. */
+const BEATS_BEFORE_RUN = ['splash-in', 'group-rescues', 'four-left', 'fake-out', 'duel'] as const;
 
 /** The beats as the feature's table names them. */
 const BEATS: Record<string, string> = {
@@ -460,11 +497,10 @@ describeSpec(await loadFeature('./shark-bait.feature'), ({ Rule }) => {
           const names = TEAM.slice(-Number(variables.count));
           show = await watch(names, 'Marco');
         });
-        Then('the rope swings between the last two at least 3 times before it lifts one', () => {
-          const aims = show.aimsDuring('duel');
-          expect(aims.length - 1).toBeGreaterThanOrEqual(3);
+        Then('the helicopter swings back and forth at least 3 times before it lifts one', () => {
+          expect(show.duelMoves.length).toBeGreaterThanOrEqual(3);
           const lift = show.lifts.find((each) => each.beat === 'duel')!;
-          expect(aims.at(-1)).toBe(lift.names[0]);
+          expect(show.aimsDuring('duel').at(-1)).toBe(lift.names[0]);
         });
         And('it holds still longest over the one it lifts, before the hook comes down', () => {
           const holds = show.duelHolds;
@@ -472,6 +508,34 @@ describeSpec(await loadFeature('./shark-bait.feature'), ({ Rule }) => {
           for (const hold of holds.slice(0, -1)) {
             expect(last.seconds, `over ${hold.aim}`).toBeGreaterThan(hold.seconds);
           }
+        });
+      },
+    );
+
+    RuleScenarioOutline(
+      'Sometimes the helicopter changes its mind, with <count> people',
+      ({ Given, When, Then, And }, { count }) => {
+        /** For each run, whether the helicopter turned back halfway in the duel. */
+        const turned: boolean[] = [];
+        Given('<count> people', () => {});
+        When('the show runs with 20 different random seeds', async () => {
+          const names = TEAM.slice(-Number(count));
+          for (let seed = 1; seed <= 20; seed++) {
+            // Each show stops once the duel is over.
+            const { beats } = planShow(names, 'Marco', createRandom(seed));
+            const until = BEATS_BEFORE_RUN.reduce((total, beat) => total + beats[beat], 0);
+            const show = await watch(names, 'Marco', { seed, step: 0.05, until });
+            turned.push(show.duelMoves.some((move) => move.halfway));
+          }
+        });
+        Then(
+          'in some runs, during the duel, it sets off towards one of the two and turns back halfway',
+          () => {
+            expect(turned).toContain(true);
+          },
+        );
+        And('in some runs it never turns back halfway', () => {
+          expect(turned).toContain(false);
         });
       },
     );
