@@ -7,6 +7,7 @@ import hotPotato from './index';
 import {
   bezier,
   crowned,
+  face,
   headBox,
   held,
   outOfPlay,
@@ -753,9 +754,33 @@ describe('The ring', () => {
     expect(spots[4]).toMatchObject({ x: 640, y: 640, size: 104 });
   });
 
-  it('held is 35 px over the head where that stays out of the sky', () => {
-    const spot = ring(8)[4]!;
-    expect(held(spot)).toEqual({ x: spot.x, y: spot.y - 0.8 * spot.size - 35 });
+  it('held is over the face where that stays out of the sky, beside it where not', () => {
+    const front = ring(8)[4]!;
+    expect(held(front).x).toBe(front.x);
+    expect(held(front).y).toBeLessThan(face(front).y);
+    const back = ring(8)[0]!;
+    expect(held(back).x).toBeGreaterThan(back.x);
+    expect(held(back).y).toBeGreaterThanOrEqual(face(back).y);
+  });
+
+  it("a held potato never covers the holder's face or reaches the caption", () => {
+    for (let count = 2; count <= 12; count++) {
+      const scale = count === 2 ? POTATO.pairScale : 1;
+      for (const [index, spot] of ring(count).entries()) {
+        const label = `${count} people, spot ${index}`;
+        const box = potatoBox(held(spot, scale), scale);
+        const { x, y, r } = face(spot);
+        const near = {
+          x: Math.min(box.right, Math.max(box.left, x)),
+          y: Math.min(box.bottom, Math.max(box.top, y)),
+        };
+        expect(Math.hypot(near.x - x, near.y - y), label).toBeGreaterThan(r);
+        expect(box.top - scale * POTATO.above, label).toBeGreaterThanOrEqual(SKY);
+        expect(box.left, label).toBeGreaterThanOrEqual(0);
+        expect(box.right, label).toBeLessThanOrEqual(1280);
+        expect(box.bottom, label).toBeLessThanOrEqual(720);
+      }
+    }
   });
 
   /** The top of the potato's drawing, a full sparkler or the smoke included, centred at `point`. */

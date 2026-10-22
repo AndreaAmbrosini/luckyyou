@@ -95,24 +95,34 @@ export function outOfPlay(spot: Spot): Spot {
   return { x: spot.x, y: spot.y, size, tag: tagFor(size) };
 }
 
-/** A held potato that would reach the sky goes beside the head instead: all the way once this much lower, this far past the head's side. */
-const BESIDE = { lower: 55, gap: 45 };
+/** The gap between a held potato's box and the holder's face. */
+const HOLD_GAP = 6;
 
 /** The highest the centre of a potato drawn at `scale` may go without reaching the sky. */
 export function highest(scale: number): number {
   return SKY + scale * (POTATO.height / 2 + POTATO.above);
 }
 
+/** The face on a head at `spot`: the kit's circle at 50, 44, radius 29 on its 100 grid. */
+export function face(spot: Spot): Point & { readonly r: number } {
+  const top = spot.y - 0.8 * spot.size;
+  return { x: spot.x, y: top + 0.44 * spot.size, r: 0.29 * spot.size };
+}
+
 /**
- * Where a potato drawn at `scale` is held: 35 px over the head; where that
- * would reach the sky, lower and beside the head, towards the stage's middle.
+ * Where a potato drawn at `scale` is held: just over the face; where that
+ * would reach the sky, beside the face at about its height, towards the
+ * stage's middle.
  */
 export function held(spot: Spot, scale = 1): Point {
-  const over = spot.y - 0.8 * spot.size - 35;
-  const lower = Math.max(0, highest(scale) - over);
-  const side = spot.x > STAGE.width / 2 ? -1 : 1;
-  const aside = Math.min(1, lower / BESIDE.lower) * (spot.size / 2 + BESIDE.gap);
-  return { x: spot.x + side * aside, y: over + lower };
+  const { x, y, r } = face(spot);
+  const over = y - r - HOLD_GAP - (scale * POTATO.height) / 2;
+  if (over >= highest(scale)) return { x, y: over };
+  const side = x > STAGE.width / 2 ? -1 : 1;
+  return {
+    x: x + side * (r + HOLD_GAP + (scale * POTATO.width) / 2),
+    y: Math.max(highest(scale), y),
+  };
 }
 
 /** The potato's box when its centre is at `point`. */
