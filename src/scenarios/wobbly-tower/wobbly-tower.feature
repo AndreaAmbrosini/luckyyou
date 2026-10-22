@@ -6,7 +6,6 @@ Feature: Wobbly Tower
   on the unlucky person's turn, toward them, and they get a hard hat. The
   contract in specs/scenarios.feature applies as well.
 
-  @pending
   Rule: Its card
 
     Scenario: The picker shows Wobbly Tower
