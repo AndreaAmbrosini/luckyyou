@@ -1,6 +1,6 @@
 # LuckyYou
 
-Pick one unlucky person for a job nobody wants, with a silly 10–15 second show.
+Pick one unlucky person for a job nobody wants, with a silly 10–20 second show.
 
 In a video call, one person opens LuckyYou and shares their screen. They tick
 who's here and click a show to start it. When it's over:

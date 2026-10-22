@@ -317,14 +317,14 @@ describeSpec(await loadFeature('./kit.feature'), ({ Rule }) => {
         });
         When('it runs in development', async () => {
           warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
-          await runShow(scenario, { ...PICK, development: true, limit: 20 });
+          await runShow(scenario, { ...PICK, development: true, limit: 25 });
         });
         Then('the console <warns>', () => {
           if (warns === 'stays quiet') {
             expect(warn).not.toHaveBeenCalled();
           } else {
             expect(warn).toHaveBeenCalledExactlyOnceWith(
-              `Slowpoke lasted ${seconds}.0 s. A show must last 10 to 15 s.`,
+              `Slowpoke lasted ${seconds}.0 s. A show must last 10 to 20 s.`,
             );
           }
         });

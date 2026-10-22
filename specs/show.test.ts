@@ -154,7 +154,7 @@ describeSpec(await loadFeature('./show.feature'), ({ Rule }) => {
     });
 
     RuleScenario(
-      'A scenario that never ends is stopped after 20 seconds',
+      'A scenario that never ends is stopped after 25 seconds',
       ({ Given, When, Then, And }) => {
         const { scenario, show } = endlessShow();
         Given('a scenario that never finishes', () => {

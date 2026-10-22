@@ -38,8 +38,8 @@ Feature: The show
       When the show starts
       Then the result names the app's pick
 
-    Scenario: A scenario that never ends is stopped after 20 seconds
+    Scenario: A scenario that never ends is stopped after 25 seconds
       Given a scenario that never finishes
-      When the show has run for 20 seconds
+      When the show has run for 25 seconds
       Then the scenario is stopped
       And the result names the app's pick

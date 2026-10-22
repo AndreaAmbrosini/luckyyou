@@ -53,7 +53,7 @@ Feature: Scenarios
     Scenario Outline: At its <size> head count, unlucky person <position>, the show keeps time and cleans up
       Given the scenario's <size> head count, with the unlucky person <position> in the list
       When the show runs
-      Then it ends between 10 and 15 seconds after it started
+      Then it ends between 10 and 20 seconds after it started
       And the stage is empty
       And no element, animation, timer or listener it added is left
 

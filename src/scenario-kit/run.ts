@@ -18,7 +18,7 @@ export interface RunOptions {
   readonly muted: boolean;
   /** Aborting it stops the show at once. */
   readonly signal: AbortSignal;
-  /** Warns on the console when a show leaves 10–15 s. On in the dev server. */
+  /** Warns on the console when a show leaves 10–20 s. On in the dev server. */
   readonly development?: boolean;
   /** Less motion; the browser's prefers-reduced-motion unless given. */
   readonly reducedMotion?: boolean;

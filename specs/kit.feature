@@ -68,9 +68,9 @@ Feature: The scenario kit
 
       Examples:
         | seconds | warns                         |
-        | 9       | warns that it left 10 to 15 s |
-        | 12      | stays quiet                   |
-        | 16      | warns that it left 10 to 15 s |
+        | 9       | warns that it left 10 to 20 s |
+        | 16      | stays quiet                   |
+        | 21      | warns that it left 10 to 20 s |
 
   Rule: Who leaves when
 

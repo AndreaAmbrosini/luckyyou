@@ -55,7 +55,7 @@ const expectNothingLeft = (record: ShowRecord, name: string) => {
 const expectOnTime = (record: ShowRecord, name: string) => {
   expect(record.outcome, name).toBe('finished');
   expect(record.duration, name).toBeGreaterThanOrEqual(10);
-  expect(record.duration, name).toBeLessThanOrEqual(15);
+  expect(record.duration, name).toBeLessThanOrEqual(20);
 };
 
 /** A module map as import.meta.glob gives it, for scenarios in made-up folders. */
@@ -258,7 +258,7 @@ describeSpec(await loadFeature('./scenarios.feature'), ({ Rule }) => {
             }),
           );
         });
-        Then('it ends between 10 and 15 seconds after it started', () => {
+        Then('it ends between 10 and 20 seconds after it started', () => {
           for (const [scenario, record] of records) expectOnTime(record, scenario.name);
         });
         And('the stage is empty', () => {
