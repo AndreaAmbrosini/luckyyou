@@ -10,3 +10,155 @@
   background-color: var(--color-sky);
   list-style: none;
 }
+
+.scene {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 1280px;
+  height: 720px;
+  overflow: hidden;
+  background-color: var(--color-sky);
+}
+
+.cloud {
+  position: absolute;
+  border-radius: var(--radius-pill);
+  background-color: var(--color-paper);
+  opacity: 0.75;
+}
+
+.cloud1 {
+  top: 120px;
+  left: 70px;
+  width: 170px;
+  height: 46px;
+}
+
+.cloud2 {
+  top: 98px;
+  left: 130px;
+  width: 90px;
+  height: 46px;
+}
+
+.cloud3 {
+  top: 128px;
+  left: 1010px;
+  width: 190px;
+  height: 48px;
+}
+
+.grass {
+  position: absolute;
+  top: 220px;
+  left: 0;
+  width: 1280px;
+  height: 500px;
+  border-top: 4px solid var(--color-ink);
+  background-color: var(--color-mint);
+}
+
+.ink,
+.steamInk,
+.steamPaper,
+.tomatoLine,
+.orangeLine {
+  fill: none;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.ink,
+.steamInk {
+  stroke: var(--color-ink);
+}
+
+.steamPaper {
+  stroke: var(--color-paper);
+}
+
+.tomatoLine {
+  stroke: var(--color-tomato);
+}
+
+.orangeLine {
+  stroke: var(--color-orange);
+}
+
+.tomatoFill {
+  fill: var(--color-tomato);
+}
+
+.inkFill {
+  fill: var(--color-ink);
+}
+
+.skin {
+  fill: var(--color-skin-3);
+  stroke: var(--color-ink);
+  stroke-linejoin: round;
+}
+
+.spot {
+  fill: var(--color-skin-4);
+}
+
+.paper {
+  fill: var(--color-paper);
+  stroke: var(--color-ink);
+}
+
+.sun {
+  fill: var(--color-sun);
+  stroke: var(--color-ink);
+  stroke-linejoin: round;
+}
+
+.glass {
+  fill: var(--color-glass);
+  stroke: var(--color-ink);
+  stroke-linejoin: round;
+}
+
+.confetti {
+  position: absolute;
+  box-sizing: border-box;
+  border: 3px solid var(--color-ink);
+}
+
+.rect {
+  width: 14px;
+  height: 26px;
+  border-radius: 3px;
+}
+
+.dot {
+  width: 18px;
+  height: 18px;
+  border-radius: var(--radius-pill);
+}
+
+.confettiTomato {
+  background-color: var(--color-tomato);
+}
+
+.confettiSun {
+  background-color: var(--color-sun);
+}
+
+.confettiMint {
+  background-color: var(--color-mint);
+}
+
+.confettiGrape {
+  background-color: var(--color-grape);
+}
+
+.confettiPink {
+  background-color: var(--color-pink);
+}
+
+.confettiOrange {
+  background-color: var(--color-orange);
+}
