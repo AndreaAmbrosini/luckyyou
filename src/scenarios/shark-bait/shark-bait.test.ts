@@ -90,10 +90,20 @@ class Watched {
    * didn't move counts one frame's time.
    */
   get rests(): { aim: string; seconds: number }[] {
+    return this.restsUntil(Infinity, ['four-left', 'fake-out', 'duel']);
+  }
+
+  /** The same as `rests` for the duel, counted only until someone leaves the water. */
+  get duelHolds(): { aim: string; seconds: number }[] {
+    const lift = this.lifts.find((each) => each.beat === 'duel');
+    return this.restsUntil(lift?.time ?? Infinity, ['duel']);
+  }
+
+  private restsUntil(until: number, beats: readonly string[]): { aim: string; seconds: number }[] {
     const rests: { aim: string; frames: number }[] = [];
     this.frames.forEach((frame, index) => {
       const before = this.frames[index - 1];
-      if (!frame.aim || !['four-left', 'fake-out', 'duel'].includes(frame.beat)) return;
+      if (!frame.aim || !beats.includes(frame.beat) || frame.time >= until) return;
       if (frame.aim !== before?.aim) rests.push({ aim: frame.aim, frames: 0 });
       const still = before && Math.abs(frame.helicopter.x - before.helicopter.x) < 0.5;
       if (still) rests.at(-1)!.frames++;
@@ -441,18 +451,30 @@ describeSpec(await loadFeature('./shark-bait.feature'), ({ Rule }) => {
       });
     });
 
-    RuleScenario('With 2 people, the duel swings longer', ({ Given, When, Then }) => {
-      let show: Watched;
-      Given('2 people', () => {});
-      When('the show runs', async () => {
-        show = await watch(['Marco', 'Giulia'], 'Marco');
-      });
-      Then('the rope swings between them at least 3 times before it lifts one', () => {
-        const aims = show.aimsDuring('duel');
-        expect(aims.length - 1).toBeGreaterThanOrEqual(3);
-        expect(aims.at(-1)).toBe('Giulia');
-      });
-    });
+    RuleScenarioOutline(
+      'The duel swings back and forth, and hangs over the one it lifts',
+      ({ Given, When, Then, And }, variables) => {
+        let show: Watched;
+        Given('<count> people', () => {});
+        When('the show runs', async () => {
+          const names = TEAM.slice(-Number(variables.count));
+          show = await watch(names, 'Marco');
+        });
+        Then('the rope swings between the last two at least 3 times before it lifts one', () => {
+          const aims = show.aimsDuring('duel');
+          expect(aims.length - 1).toBeGreaterThanOrEqual(3);
+          const lift = show.lifts.find((each) => each.beat === 'duel')!;
+          expect(aims.at(-1)).toBe(lift.names[0]);
+        });
+        And('it holds still longest over the one it lifts, before the hook comes down', () => {
+          const holds = show.duelHolds;
+          const last = holds.at(-1)!;
+          for (const hold of holds.slice(0, -1)) {
+            expect(last.seconds, `over ${hold.aim}`).toBeGreaterThan(hold.seconds);
+          }
+        });
+      },
+    );
 
     RuleScenario('Fake-outs go both ways', ({ Given, When, Then, And }) => {
       /** For each run, the rope's aims in the rescue at 3 left, and who it lifted. */
@@ -528,7 +550,7 @@ describeSpec(await loadFeature('./shark-bait.feature'), ({ Rule }) => {
     });
   });
 
-  Rule('The beats keep the show between 11 and 14 seconds', ({ RuleScenario }) => {
+  Rule('The beats keep the show between 11 and 14.5 seconds', ({ RuleScenario }) => {
     RuleScenario('Each beat takes about this long', ({ When, Then }) => {
       const shows = new Map<number, Watched>();
       When('the show runs at 12, 4 and 2 people', async () => {
@@ -562,10 +584,10 @@ describeSpec(await loadFeature('./shark-bait.feature'), ({ Rule }) => {
           records.push((await watch(names, names.at(-1)!, { step: 0.1 })).record);
         }
       });
-      Then('each run lasts between 11 and 14 seconds', () => {
+      Then('each run lasts between 11 and 14.5 seconds', () => {
         for (const record of records) {
           expect(record.duration).toBeGreaterThanOrEqual(11);
-          expect(record.duration).toBeLessThanOrEqual(14);
+          expect(record.duration).toBeLessThanOrEqual(14.5);
         }
       });
     });
@@ -670,7 +692,7 @@ describeSpec(await loadFeature('./shark-bait.feature'), ({ Rule }) => {
     });
   });
 
-  Rule('It reads without sound', ({ RuleScenario }) => {
+  Rule('It reads without sound', ({ RuleScenario, RuleScenarioOutline }) => {
     RuleScenario('Captions tell the story', ({ Given, When, Then, And }) => {
       let unlucky: string;
       let show: Watched;
@@ -692,11 +714,8 @@ describeSpec(await loadFeature('./shark-bait.feature'), ({ Rule }) => {
       And('every fake-out is captioned {string}', (_, pattern: string) => {
         expect(pattern).toBe("It's going for <name>… nope, <other name>!");
         const captions = show.record.captions.map(({ text }) => text);
-        // At 12 people, both the fake-out and the duel swing the rope.
-        for (const beat of ['fake-out', 'duel']) {
-          const [first, second] = show.aimsDuring(beat);
-          expect(captions).toContain(`It's going for ${first}… nope, ${second}!`);
-        }
+        const [first, second] = show.aimsDuring('fake-out');
+        expect(captions).toContain(`It's going for ${first}… nope, ${second}!`);
         for (const caption of captions.filter((text) => text.startsWith("It's going"))) {
           const [, first, second] = /^It's going for (.+)… nope, (.+)!$/.exec(caption) ?? [];
           expect(TEAM, caption).toContain(first);
@@ -705,6 +724,36 @@ describeSpec(await loadFeature('./shark-bait.feature'), ({ Rule }) => {
         }
       });
     });
+
+    RuleScenarioOutline(
+      "The duel's caption, with <count> people",
+      ({ Given, When, Then }, { count, captions: expected }) => {
+        let show: Watched | undefined;
+        Given(
+          '<count> people, the last two in the water {string}, the unlucky person, and {string}',
+          async (_, unlucky: string, other: string) => {
+            const names = Number(count) === 2 ? [other, unlucky] : ['Anna', other, unlucky];
+            // With three people, a few seeds give a duel between these two.
+            for (let seed = 1; seed <= 10 && !show; seed++) {
+              const run = await watch(names, unlucky, { seed });
+              if (run.inWaterAt('duel').includes(other)) show = run;
+            }
+            expect(show).toBeDefined();
+          },
+        );
+        When('the rope comes down for them', () => {
+          expect(show!.inWaterAt('duel').toSorted()).toEqual(['Giulia', 'Marco']);
+        });
+        Then('the duel is captioned <captions>', () => {
+          const duel = show!.frames.find((frame) => frame.beat === 'duel')!.time;
+          const run = show!.frames.find((frame) => frame.beat === 'sharks-run')!.time;
+          const captions = show!.record.captions
+            .filter(({ from }) => from >= duel - 1e-9 && from < run)
+            .map(({ text }) => `"${text}"`);
+          expect(captions.join(', ')).toBe(expected);
+        });
+      },
+    );
 
     RuleScenario('Each caption stays up long enough to read', ({ When, Then }) => {
       const records: ShowRecord[] = [];

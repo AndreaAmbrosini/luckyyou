@@ -32,7 +32,10 @@ export type Rescue =
       readonly via: string | null;
       readonly lifted: string;
     }
-  /** The last two: the rope swings between them, starting with the unlucky person. */
+  /**
+   * The last two: the rope swings back and forth between them, starting with
+   * the unlucky person, and hangs over the one it lifts before the hook comes down.
+   */
   | { readonly kind: 'duel'; readonly aims: readonly string[]; readonly lifted: string };
 
 export interface Plan {
@@ -75,8 +78,7 @@ export function planShow(names: readonly string[], unlucky: string, random: () =
           : { kind: 'fake-out', decoy: lifted, via: pickOne(others, random), lifted },
       );
     } else {
-      const aims = count === 2 ? [unlucky, lifted, unlucky, lifted] : [unlucky, lifted];
-      rescues.push({ kind: 'duel', aims, lifted });
+      rescues.push({ kind: 'duel', aims: [unlucky, lifted, unlucky, lifted], lifted });
     }
   }
 
@@ -88,9 +90,9 @@ export function planShow(names: readonly string[], unlucky: string, random: () =
     {
       'splash-in': { seconds: count === 2 ? 2.0 : 1.8 },
       'group-rescues': { seconds: swoops * 1.0 },
-      'four-left': { seconds: count >= 4 ? 1.6 + slower : 0, flexible: true },
+      'four-left': { seconds: count >= 4 ? 1.4 + 2 * slower : 0, flexible: true },
       'fake-out': { seconds: count >= 3 ? 2.0 + slower + twice : 0, flexible: true },
-      duel: { seconds: count === 2 ? 5.5 : 2.6 + slower, flexible: true },
+      duel: { seconds: count === 2 ? 6.0 : 3.6 + slower, flexible: true },
       'sharks-run': { seconds: count === 2 ? 1.5 : 1.4 },
       'victory-lap': { seconds: count === 2 ? 2.5 : 2.0 },
     },

@@ -32,6 +32,19 @@ const SWING = 0.4;
 const LIFT = 0.7;
 /** Of a lift, the seconds before the person leaves the water. */
 const GRAB = 0.25;
+/**
+ * How the duel's rope swings: the seconds of each move to the next aim, and
+ * how the rest of the beat is shared out as holds over each, the last one
+ * the hang before the hook comes down. With more than two, the rope lingers
+ * on the first, flicks back and forth, then slows; with two, each hold is
+ * long enough to read the caption that goes with it.
+ */
+const DUEL = {
+  many: { moves: [ARRIVE, 0.3, 0.35, 0.5], holds: [2, 1, 1.2, 3] },
+  two: { moves: [ARRIVE, 0.4, 0.45, 0.6], holds: [1, 1, 1.2, 2.5] },
+};
+/** How far the hook creeps down while the rope hangs over the last one in a duel. */
+const CREEP = 24;
 /** Where the rope hangs from, low enough that the helicopter stays under the caption. */
 const HOVER_Y = 218;
 /** Where the hook stops for a swoop, and how far apart the people hanging from it are. */
@@ -247,25 +260,32 @@ export async function playSharkBait(show: Show): Promise<void> {
   /**
    * One at a time: the rope heads for each of the rescue's aims in turn, then
    * lifts one. The rest of the beat is spread as holds over the aims it
-   * swings away from; over the last one, the lift is its hold.
+   * swings away from; over the last one, the lift is its hold. A duel has
+   * its own pace, and hangs over the last one too.
    */
   function rescueOne(rescue: Exclude<Rescue, { kind: 'group' }>, start: number, seconds: number) {
     const aims = AIMS[rescue.kind](rescue as never);
-    const spare = seconds - ARRIVE - (aims.length - 1) * SWING - LIFT;
-    const hold = spare / Math.max(1, aims.length - 1);
+    const pace = rescue.kind === 'duel' ? DUEL[show.names.length === 2 ? 'two' : 'many'] : null;
+    const moves = pace?.moves ?? aims.map((_, index) => (index === 0 ? ARRIVE : SWING));
+    const shares =
+      pace?.holds ?? aims.map((_, index) => (aims.length === 1 || index < aims.length - 1 ? 1 : 0));
+    const spare = seconds - sum(moves) - LIFT;
+    const holds = shares.map((share) => (spare * share) / sum(shares));
 
     let time = start;
     aims.forEach((name, index) => {
       const target = swimmers.get(name)!;
-      const seconds = index === 0 ? ARRIVE : SWING;
+      const seconds = moves[index]!;
+      const last = index === aims.length - 1;
       chopper.aim(name, time);
       moods(time, name);
       chopper.phase('hovering', time);
       if (rescue.kind === 'duel') cue(time, 'heartbeat');
-      if (rescue.kind === 'duel' && aims.length > 2) {
+      if (pace === DUEL.two) {
         // With two people, the caption follows the rope: "Marco… Giulia… Marco… Giulia!"
-        const last = index === aims.length - 1;
         caption(time, aims.slice(0, index + 1).join('… ') + (last ? '!' : '…'));
+      } else if (pace) {
+        if (index === 0) caption(time, `${aims[0]} or ${aims[1]}?`);
       } else if (index === 1) {
         caption(time, `It's going for ${aims[0]}… nope, ${name}!`);
       } else if (index === 2) {
@@ -275,8 +295,13 @@ export async function playSharkBait(show: Show): Promise<void> {
       chopper.flyTo({ x: target.place.x, y: HOVER_Y, scale: 1 }, time, seconds, 'power2.inOut');
       chopper.lower(hookAbove(target.place) - HOVER_Y, time, seconds);
       time += seconds;
-      if (aims.length === 1) chopper.wobble(time, hold);
-      if (aims.length === 1 || index < aims.length - 1) time += hold;
+      const hold = holds[index]!;
+      if (aims.length === 1 || (pace && last)) chopper.wobble(time, hold);
+      // In a duel, the hook creeps down over the last one before it drops.
+      if (pace && last) {
+        chopper.lower(hookAbove(target.place) - HOVER_Y + CREEP, time, hold, 'sine.inOut');
+      }
+      time += hold;
     });
     const lifted = swimmers.get(rescue.lifted)!;
     chopper.lower(lifted.place.y - 0.68 * lifted.place.size - 10 - HOVER_Y, time, GRAB);
@@ -300,6 +325,8 @@ const AIMS: {
   'fake-out': ({ decoy, via, lifted }) => (via ? [lifted, via, lifted] : [decoy, lifted]),
   duel: ({ aims }) => aims,
 };
+
+const sum = (seconds: readonly number[]) => seconds.reduce((total, each) => total + each, 0);
 
 /** Keeps the helicopter's rope where the whole helicopter is on stage. */
 const clamp = (x: number) => Math.min(1100, Math.max(180, x));

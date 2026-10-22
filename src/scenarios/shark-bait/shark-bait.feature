@@ -65,10 +65,17 @@ Feature: Shark Bait
       Then it goes towards "Marco" first
       And it swings to "Giulia", who is lifted out
 
-    Scenario: With 2 people, the duel swings longer
-      Given 2 people
+    Scenario Outline: The duel swings back and forth, and hangs over the one it lifts
+      Given <count> people
       When the show runs
-      Then the rope swings between them at least 3 times before it lifts one
+      Then the rope swings between the last two at least 3 times before it lifts one
+      And it holds still longest over the one it lifts, before the hook comes down
+
+      Examples:
+        | count |
+        | 2     |
+        | 3     |
+        | 12    |
 
     Scenario: Fake-outs go both ways
       Given 12 people
@@ -80,7 +87,7 @@ Feature: Shark Bait
       When the show runs at every head count from 3 to 12, with both kinds of fake-out
       Then the helicopter holds still over each person the rope heads for, for at least 0.15 seconds
 
-  Rule: The beats keep the show between 11 and 14 seconds
+  Rule: The beats keep the show between 11 and 14.5 seconds
 
     Scenario: Each beat takes about this long
       When the show runs at 12, 4 and 2 people
@@ -88,15 +95,15 @@ Feature: Shark Bait
         | beat                     | 12 people | 4 people | 2 people |
         | splash-in                | 1.8       | 1.8      | 2.0      |
         | group rescues            | 2.0       | 0        | 0        |
-        | 4 left, one lifted out   | 1.6       | 1.8      | 0        |
+        | 4 left, one lifted out   | 1.4       | 1.8      | 0        |
         | 3 left, a fake-out       | 2.0       | 2.2      | 0        |
-        | the duel                 | 2.6       | 2.8      | 5.5      |
+        | the duel                 | 3.6       | 3.8      | 6.0      |
         | the shark's run          | 1.4       | 1.4      | 1.5      |
         | the victory lap          | 2.0       | 2.0      | 2.5      |
 
     Scenario: Every head count lands in the middle of the time limit
       When the show runs at every head count from 2 to 12
-      Then each run lasts between 11 and 14 seconds
+      Then each run lasts between 11 and 14.5 seconds
 
   Rule: The ending is a victory lap
 
@@ -131,6 +138,16 @@ Feature: Shark Bait
         | Uh-oh…                             |
         | Last one in the water!             |
       And every fake-out is captioned "It's going for <name>… nope, <other name>!"
+
+    Scenario Outline: The duel's caption, with <count> people
+      Given <count> people, the last two in the water "Marco", the unlucky person, and "Giulia"
+      When the rope comes down for them
+      Then the duel is captioned <captions>
+
+      Examples:
+        | count | captions                                                         |
+        | 3     | "Marco or Giulia?"                                               |
+        | 2     | "Marco…", "Marco… Giulia…", "Marco… Giulia… Marco…", "Marco… Giulia… Marco… Giulia!" |
 
     Scenario: Each caption stays up long enough to read
       When the show runs
