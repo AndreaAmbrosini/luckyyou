@@ -1754,10 +1754,40 @@ async function labRuns(): Promise<LabRun[]> {
         grownScale: 0,
         raised: [] as string[],
       };
+      /**
+       * What each frame reads, found once: the show draws every part before
+       * it starts and only moves them, and looking them up every frame took
+       * most of the lab's time.
+       */
+      let parts:
+        | {
+            scene: HTMLElement;
+            potato: SVGElement;
+            speech: HTMLElement[];
+            people: HTMLElement[];
+            them: HTMLElement;
+            burst: SVGElement;
+            tags: HTMLElement[];
+            arms: (Element | null)[];
+          }
+        | undefined;
       const { frames, catches, record } = await watch(team, unlucky, seed, (time, stage) => {
-        const scene = stage.querySelector<HTMLElement>('[data-part="scene"]')!;
-        const potato = scene.querySelector<SVGElement>('[data-part="potato"]')!;
-        for (const bubble of scene.querySelectorAll<HTMLElement>('[data-part="bubble"]')) {
+        if (!parts) {
+          const scene = stage.querySelector<HTMLElement>('[data-part="scene"]')!;
+          const people = [...scene.querySelectorAll<HTMLElement>('[data-person]')];
+          parts = {
+            scene,
+            potato: scene.querySelector<SVGElement>('[data-part="potato"]')!,
+            speech: [...scene.querySelectorAll<HTMLElement>('[data-part="bubble"]')],
+            people,
+            them: people.find((person) => person.dataset.person === unlucky)!,
+            burst: scene.querySelector<SVGElement>('[data-part="burst"]')!,
+            tags: [...scene.querySelectorAll<HTMLElement>('[data-on="chest"]')],
+            arms: people.map((person) => person.querySelector('[data-part="land-arms"]')),
+          };
+        }
+        const { scene, potato, speech, people, them, burst, tags, arms } = parts;
+        for (const bubble of speech) {
           if (seen.has(bubble) || bubble.style.visibility === 'hidden') continue;
           if (Number(bubble.style.opacity || 1) === 0) continue;
           seen.add(bubble);
@@ -1773,12 +1803,9 @@ async function labRuns(): Promise<LabRun[]> {
             potato: shown(potato, stage) ? potatoBox(centre, scale) : null,
           });
         }
-        const people = [...scene.querySelectorAll<HTMLElement>('[data-person]')];
-        const them = people.find((person) => person.dataset.person === unlucky)!;
-        const burst = scene.querySelector<SVGElement>('[data-part="burst"]')!;
         placed.push({ time, at: placement(them, stage) });
         if (scene.dataset.beat !== 'pop') beforePop = Number(gsap.getProperty(them, 'scale'));
-        for (const tag of scene.querySelectorAll<HTMLElement>('[data-on="chest"]')) {
+        for (const tag of tags) {
           smallestTag = Math.min(smallestTag, drawnTag(tag, stage));
         }
         end = {
@@ -1798,7 +1825,7 @@ async function labRuns(): Promise<LabRun[]> {
           ),
           grownScale: Number(gsap.getProperty(them, 'scale')) / beforePop,
           raised: people
-            .filter((person) => shown(person.querySelector('[data-part="land-arms"]'), stage))
+            .filter((_, index) => shown(arms[index]!, stage))
             .map((person) => person.dataset.person!),
         };
       });

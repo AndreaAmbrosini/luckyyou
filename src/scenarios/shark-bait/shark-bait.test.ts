@@ -154,11 +154,37 @@ class Watched {
   }
 }
 
-/** Runs Shark Bait and notes what the stage showed every frame. */
-async function watch(
+/** How a show is watched: its seed, seconds per frame, and when it's cancelled. */
+interface Watching {
+  seed?: number;
+  step?: number;
+  until?: number;
+}
+
+/** Every show watched in this test file, by its names, unlucky person and how it's watched. */
+const watched = new Map<string, Promise<Watched>>();
+
+/**
+ * Runs Shark Bait and notes what the stage showed every frame. Each show is
+ * run once per test file: the same show asked for again is the same
+ * recording, so scenarios that watch it share it.
+ */
+function watch(
   names: readonly string[],
   unlucky: string,
-  { seed = 1, step, until }: { seed?: number; step?: number; until?: number } = {},
+  watching: Watching = {},
+): Promise<Watched> {
+  const { seed = 1, step, until } = watching;
+  const key = JSON.stringify([names, unlucky, seed, step ?? null, until ?? null]);
+  let run = watched.get(key);
+  if (!run) watched.set(key, (run = recordShow(names, unlucky, { seed, step, until })));
+  return run;
+}
+
+async function recordShow(
+  names: readonly string[],
+  unlucky: string,
+  { seed = 1, step, until }: Watching,
 ): Promise<Watched> {
   const frames: Frame[] = [];
   /** What each frame reads, found once: looking it up every frame is slow in jsdom. */
@@ -225,6 +251,12 @@ const position = (element: Element | null) => ({
   x: Number(gsap.getProperty(element, 'x')),
   y: Number(gsap.getProperty(element, 'y')),
 });
+
+/** The rope's aims in a rescue at 3 left, and who it lifted. */
+interface Rescued {
+  readonly aims: string[];
+  readonly lifted: string;
+}
 
 /** What the ending showed in one frame. */
 interface EndFrame {
@@ -370,7 +402,8 @@ describeSpec(await loadFeature('./shark-bait.feature'), ({ Rule }) => {
           unlucky = 'Elena';
         });
         When('the show runs with 20 different random seeds', async () => {
-          for (let seed = 1; seed <= 20; seed++) {
+          // Once 5 places are seen, the rest of the 20 can't change the outcome.
+          for (let seed = 1; seed <= 20 && places.size < 5; seed++) {
             let place: string | null = null;
             await runShow(sharkBait, {
               names,
@@ -594,14 +627,25 @@ describeSpec(await loadFeature('./shark-bait.feature'), ({ Rule }) => {
 
     RuleScenario('Fake-outs go both ways', ({ Given, When, Then, And }) => {
       /** For each run, the rope's aims in the rescue at 3 left, and who it lifted. */
-      const rescues: { aims: string[]; lifted: string }[] = [];
+      const rescues: Rescued[] = [];
+      /** Whether a rescue swings away and back to the one it lifts. */
+      const awayAndBack = ({ aims, lifted }: Rescued) =>
+        aims.length >= 3 && aims[0] === lifted && aims.at(-1) === lifted;
+      /** Whether a rescue swings to the one it lifts from someone else. */
+      const elsewhere = ({ aims, lifted }: Rescued) =>
+        aims.length >= 2 && aims[0] !== lifted && aims.at(-1) === lifted;
       Given('12 people', () => {});
       When('the show runs with 20 different random seeds', async () => {
         // Each show stops once the rescue at 3 left is over.
         const { beats } = planShow(TEAM, 'Marco', Math.random);
         const until =
           beats['splash-in'] + beats['group-rescues'] + beats['four-left'] + beats['fake-out'];
-        for (let seed = 1; seed <= 20; seed++) {
+        // Once both kinds are seen, the rest of the 20 can't change the outcome.
+        for (
+          let seed = 1;
+          seed <= 20 && !(rescues.some(awayAndBack) && rescues.some(elsewhere));
+          seed++
+        ) {
           // Five frames a second still sees every aim: each lasts 0.4 seconds or more.
           const show = await watch(TEAM, 'Marco', { seed, step: 0.2, until });
           const lift = show.lifts.find((each) => each.beat === 'fake-out')!;
@@ -609,16 +653,10 @@ describeSpec(await loadFeature('./shark-bait.feature'), ({ Rule }) => {
         }
       });
       Then('in some runs a one-at-a-time rescue swings away and back to the same person', () => {
-        const awayAndBack = rescues.filter(
-          ({ aims, lifted }) => aims.length >= 3 && aims[0] === lifted && aims.at(-1) === lifted,
-        );
-        expect(awayAndBack.length).toBeGreaterThan(0);
+        expect(rescues.filter(awayAndBack).length).toBeGreaterThan(0);
       });
       And('in some runs it swings to someone else', () => {
-        const elsewhere = rescues.filter(
-          ({ aims, lifted }) => aims.length >= 2 && aims[0] !== lifted && aims.at(-1) === lifted,
-        );
-        expect(elsewhere.length).toBeGreaterThan(0);
+        expect(rescues.filter(elsewhere).length).toBeGreaterThan(0);
       });
     });
 

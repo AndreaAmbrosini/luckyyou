@@ -762,6 +762,12 @@ export function pointerTip(spot: Spot, holding = false): Point {
   return { x: spot.x, y: top - TIP_GAP };
 }
 
+const graphemes = new Intl.Segmenter('en', { granularity: 'grapheme' });
+/** How many letters each name has, counted once: tags are measured every frame. */
+const lettersIn = new Map<string, number>();
+/** The tag's border, read once. */
+let border: number | undefined;
+
 /**
  * A name tag's width in stage pixels as the kit sets it, estimated where
  * nothing can measure it: a single line is as wide as its name (0.6 em a
@@ -772,8 +778,10 @@ export function pointerTip(spot: Spot, holding = false): Point {
  */
 export function tagContentWidth(name: string, size: number, set: number, lines: 1 | 2): number {
   if (lines === 2) return set;
-  const letters = [...new Intl.Segmenter('en', { granularity: 'grapheme' }).segment(name)].length;
-  const own = letters * 0.6 * size + 0.6 * size + 2 * stagePx('--line') + 2;
+  let letters = lettersIn.get(name);
+  if (letters === undefined) lettersIn.set(name, (letters = [...graphemes.segment(name)].length));
+  border ??= stagePx('--line');
+  const own = letters * 0.6 * size + 0.6 * size + 2 * border + 2;
   return Math.min(set, Math.ceil(own));
 }
 
