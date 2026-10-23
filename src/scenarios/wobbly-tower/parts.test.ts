@@ -60,10 +60,25 @@ describe('the pigeon', () => {
       bird.setPose(pose);
       expect(bird.el.dataset.pose).toBe(pose);
       for (const other of POSES) {
-        const group = bird.el.querySelector(`[data-pose-part="${other}"]`);
-        expect(group, other).not.toBeNull();
-        expect(hidden(group), `${other} while ${pose}`).toBe(other !== pose);
+        const groups = [...bird.el.querySelectorAll(`[data-pose-part="${other}"]`)];
+        expect(groups.length, other).toBeGreaterThan(0);
+        for (const group of groups) {
+          expect(hidden(group), `${other} while ${pose}`).toBe(other !== pose);
+        }
       }
+    }
+  });
+
+  it('paints each wing over the body', () => {
+    const bird = pigeon();
+    const body = bird.el.querySelector('ellipse')!;
+    for (const pose of POSES) {
+      const wing = bird.el.querySelector(`[data-pose-part="${pose}"] [data-wing]`);
+      expect(wing, pose).not.toBeNull();
+      expect(
+        body.compareDocumentPosition(wing!) & Node.DOCUMENT_POSITION_FOLLOWING,
+        pose,
+      ).toBeTruthy();
     }
   });
 

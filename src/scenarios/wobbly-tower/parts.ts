@@ -141,24 +141,36 @@ export function pigeon(): Pigeon {
   el.style.overflow = 'visible';
   el.dataset.part = 'pigeon';
 
-  const poses: Record<Pose, SVGGElement> = {
-    perched: group(
-      el,
-      ['data-pose-part', 'perched'],
-      [['path', styles.legs, { d: 'M30 58 V68 M46 58 V68', 'stroke-width': 5 }]],
-    ),
-    flying: group(el, ['data-pose-part', 'flying'], []),
-  };
-  draw(poses.perched, [['path', styles.tail, { d: 'M14 36 L0 24 L2 46 Z', 'stroke-width': 4 }]]);
-  draw(poses.flying, [['path', styles.tail, { d: 'M14 36 L0 30 L2 50 Z', 'stroke-width': 4 }]]);
+  // Each pose has a layer behind the body (legs, tail) and one over it (wing).
+  const behind = (pose: Pose, shapes: readonly Shape[]) =>
+    group(el, ['data-pose-part', pose], shapes);
+  const back: SVGGElement[] = [
+    behind('perched', [
+      ['path', styles.legs, { d: 'M30 58 V68 M46 58 V68', 'stroke-width': 5 }],
+      ['path', styles.tail, { d: 'M14 36 L0 24 L2 46 Z', 'stroke-width': 4 }],
+    ]),
+    behind('flying', [['path', styles.tail, { d: 'M14 36 L0 30 L2 50 Z', 'stroke-width': 4 }]]),
+  ];
   draw(el, [['ellipse', styles.bird, { cx: 38, cy: 42, rx: 28, ry: 18, 'stroke-width': 4 }]]);
-  draw(poses.perched, [['path', styles.ink, { d: 'M22 40 Q36 30 52 42', 'stroke-width': 4 }]]);
-  draw(poses.flying, [
-    ['path', styles.wing, { d: 'M24 38 Q18 8 44 -8 Q50 16 56 38 Z', 'stroke-width': 4 }],
-  ]);
+  const front: SVGGElement[] = [
+    behind('perched', [
+      ['path', styles.ink, { d: 'M22 40 Q36 30 52 42', 'data-wing': '', 'stroke-width': 4 }],
+    ]),
+    behind('flying', [
+      [
+        'path',
+        styles.wing,
+        { d: 'M24 38 Q18 8 44 -8 Q50 16 56 38 Z', 'data-wing': '', 'stroke-width': 4 },
+      ],
+    ]),
+  ];
+  const poses: Record<Pose, SVGGElement[]> = {
+    perched: [back[0]!, front[0]!],
+    flying: [back[1]!, front[1]!],
+  };
   draw(el, [
     ['circle', styles.bird, { cx: 64, cy: 22, r: 14, 'stroke-width': 4 }],
-    ['path', styles.beak, { d: 'M76 18 L89 24 L76 29 Z', 'stroke-width': 3 }],
+    ['path', styles.beak, { d: 'M76 18 L89 24 L76 29 Z', 'stroke-width': 4 }],
     ['circle', styles.inkFill, { cx: 67, cy: 19, r: 3.5 }],
   ]);
 
@@ -166,7 +178,9 @@ export function pigeon(): Pigeon {
     el,
     setPose(pose) {
       el.dataset.pose = pose;
-      for (const [name, g] of Object.entries(poses)) show(g, name === pose);
+      for (const [name, layers] of Object.entries(poses)) {
+        for (const g of layers) show(g, name === pose);
+      }
     },
   };
   api.setPose('perched');
@@ -177,7 +191,7 @@ export function pigeon(): Pigeon {
 export function hardHat(): SVGSVGElement {
   const svg = drawing(100, 100, [
     ['path', styles.sun, { d: 'M20 34 A30 30 0 0 1 80 34 Z', 'stroke-width': 4 }],
-    ['path', styles.orange, { d: 'M44 6 H56 V34 H44 Z', 'stroke-width': 3 }],
+    ['path', styles.orange, { d: 'M44 6 H56 V34 H44 Z', 'stroke-width': 4 }],
     ['path', styles.sun, { d: 'M6 32 H94 Q94 40 86 40 H14 Q6 40 6 32 Z', 'stroke-width': 4 }],
   ]);
   svg.style.overflow = 'visible';
