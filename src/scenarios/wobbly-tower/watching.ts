@@ -9,11 +9,13 @@ import { nameTag, speechBox, type Cue, type Scenario } from '../../scenario-kit'
 import wobblyTower from './index';
 import { planShow, READ, type Beat, type Ending, type Plan, type Turn } from './plan';
 import {
+  benchTag,
+  blockOverlaps,
   overlap,
+  placings,
   sideOf,
-  spots,
+  startingRows,
   tagBox,
-  placeTags,
   tagContentWidth,
   type Block,
   type Box,
@@ -99,52 +101,25 @@ export function everyPlan(): { label: string; plan: Plan; unlucky: string }[] {
   return all;
 }
 
-/** Whether a point is inside a box. */
-export const inside = (box: Box, point: { x: number; y: number }) =>
-  point.x > box.left && point.x < box.right && point.y > box.top && point.y < box.bottom;
 /** Whether any two boxes overlap. */
 export const anyOverlap = (boxes: Box[]) =>
   boxes.some((box, index) => boxes.slice(index + 1).some((other) => overlap(box, other)));
-/** The tag boxes as the kit sets them, placed as placeTags says: `called[i]` stands at spot i. */
-export function tagsFor(all: Spot[], called: readonly string[]): Box[] {
-  const widths = all.map((spot, index) => {
-    const name = called[index]!;
-    const tag = nameTag(name, { size: spot.tag.size, maxWidth: spot.tag.maxWidth, chest: true });
-    const lines = tag.dataset.lines === '2' ? (2 as const) : (1 as const);
-    return tagContentWidth(name, spot.tag.size, Number.parseFloat(tag.style.maxWidth), lines);
-  });
-  const shifts = placeTags(all, widths);
-  return all.map((spot, index) => tagBox(spot, widths[index], shifts[index]));
-}
+/** The size a name tag is set at, in stage pixels. */
+export const sizeOf = (tag: HTMLElement) =>
+  Number.parseFloat(tag.style.getPropertyValue('--tag-size'));
+/** How wide the kit sets `tag`, for `name`. */
+export const drawnWidth = (name: string, tag: HTMLElement) =>
+  tagContentWidth(
+    name,
+    sizeOf(tag),
+    Number.parseFloat(tag.style.maxWidth),
+    tag.dataset.lines === '2' ? 2 : 1,
+  );
+/** The kit's name tag for `name` set as `tag` says, as the show sets it: wrapped rather than shrunk. */
+export const tagAt = (name: string, tag: Spot['tag']) =>
+  nameTag(name, { ...tag, wrapBelow: tag.size, chest: true });
 /** The test team's names without the 30-character one, and one more to make twelve. */
 export const NORMAL = [...TEAM.slice(0, -1), 'Zoe'];
-/**
- * The spots and the tag boxes of the normal names at `count` people, every
- * name at every spot in turn (the names shifted round one place each time).
- */
-export const casts = (count: number) => {
-  const all = spots(count);
-  const pool = NORMAL.slice(0, count);
-  return pool.map((_, round) => ({
-    all,
-    boxes: tagsFor(
-      all,
-      pool.map((__, index) => pool[(index + round) % count]!),
-    ),
-  }));
-};
-/** The full test team at 12 (and its first and last at 2), standing as the plan with seed 1 has it. */
-export const shownAt = (count: number) => {
-  const team = count === 12 ? TEAM : [TEAM[0]!, TEAM.at(-1)!];
-  const { order } = planShow(team, team.at(-1)!, createRandom(1));
-  const all = spots(count);
-  return { all, boxes: tagsFor(all, order) };
-};
-
-/** Leans from -22 to 22 degrees. */
-export const LEANS = Array.from({ length: 45 }, (_, index) => index - 22);
-/** Towers of 40 px blocks the tags are checked against: as tall as any the show builds, or taller. */
-export const HEIGHTS = [9, 10, 11];
 
 /** Show seconds per recorded frame. */
 export const STEP = 1 / 30;
@@ -157,6 +132,12 @@ export interface Frame {
   readonly over: string;
   /** Where the pointer's tip is, and how opaque it's drawn: 0 hidden, 1 fully. */
   readonly pointer: Point & { readonly shown: number };
+  /** Both pointers, the first as `pointer` and `over`, the second for a pair's second thrower. */
+  readonly pointers: readonly (Point & { readonly shown: number; readonly over: string })[];
+  /** Where each person is drawn, their name tag's box as the kit sets it, and whether they sit on the bench. */
+  readonly people: Readonly<Record<string, { spot: Spot; tag: Box; benched: boolean }>>;
+  /** The number on the "At risk" plinth; everyone, with no plinth (2 or 3 people). */
+  readonly atRisk: number;
   /** The tower's lean in degrees, positive to the right of the stage. */
   readonly lean: number;
   /** How many blocks have landed on the tower. */
@@ -274,6 +255,8 @@ export async function watch(
         blocks: HTMLElement[];
         people: HTMLElement[];
         pointer: HTMLElement;
+        pointers: HTMLElement[];
+        atRisk: HTMLElement | null;
         bubbles: HTMLElement[];
         them: HTMLElement;
         hat: SVGElement | null;
@@ -313,6 +296,8 @@ export async function watch(
         blocks: [...stage.querySelectorAll<HTMLElement>('[data-part="tower"] [data-part="block"]')],
         people: [...stage.querySelectorAll<HTMLElement>('[data-person]')],
         pointer: stage.querySelector<HTMLElement>('[data-part="pointer"]')!,
+        pointers: [...stage.querySelectorAll<HTMLElement>('[data-part="pointer"]')],
+        atRisk: stage.querySelector<HTMLElement>('[data-part="at-risk"]'),
         bubbles: [...stage.querySelectorAll<HTMLElement>('[data-part="bubble"]')],
         them: [...stage.querySelectorAll<HTMLElement>('[data-person]')].find(
           (person) => person.dataset.person === unlucky,
@@ -366,6 +351,25 @@ export async function watch(
           y: Number(gsap.getProperty(pointer, 'y')) + POINTER.tip.y,
           shown: opacityOf(pointer),
         },
+        pointers: parts.pointers.map((each) => ({
+          x: Number(gsap.getProperty(each, 'x')) + POINTER.tip.x,
+          y: Number(gsap.getProperty(each, 'y')) + POINTER.tip.y,
+          shown: opacityOf(each),
+          over: each.dataset.over!,
+        })),
+        people: Object.fromEntries(
+          people.map((person) => {
+            const name = person.dataset.person!;
+            return [
+              name,
+              drawnAs(
+                person,
+                parts!.tags.find((tag) => tag.textContent === name)!,
+              ),
+            ];
+          }),
+        ),
+        atRisk: parts.atRisk ? Number(parts.atRisk.textContent) : people.length,
         lean: Number(drawn.dataset.lean),
         blocks: landed,
         top: landed > 0 ? placed(blocks[landed - 1]!) : null,
@@ -423,6 +427,31 @@ export async function watch(
     lifts,
     cues,
     end,
+  };
+}
+
+/**
+ * Where `person` is drawn, with the box of their name `tag` as the kit sets
+ * it (empty while it hides), and whether they sit on the bench.
+ */
+export function drawnAs(person: HTMLElement, tag: HTMLElement) {
+  const size = Number.parseFloat(person.style.width);
+  const name = person.dataset.person!;
+  const spot: Spot = {
+    x: Number.parseFloat(person.style.left) + size / 2,
+    y: Number.parseFloat(person.style.top) + 0.8 * size,
+    size,
+    tag: { size: sizeOf(tag), maxWidth: Number.parseFloat(tag.style.maxWidth) },
+    row: 'front',
+  };
+  const shift = /calc(50% + ([-d.e]+)px)/.exec(tag.style.left);
+  const box = tagBox(spot, drawnWidth(name, tag), shift ? Number(shift[1]) : 0);
+  // A hidden tag takes no room: an empty box where it would be.
+  const hidden = tag.style.visibility === 'hidden';
+  return {
+    spot,
+    tag: hidden ? { ...box, right: box.left, bottom: box.top } : box,
+    benched: person.dataset.benched === 'true',
   };
 }
 
@@ -517,9 +546,6 @@ export const swaysPerSecond = (frames: readonly Frame[]) => {
   return Math.max(0, ...times.map((from) => times.filter((t) => t >= from && t < from + 1).length));
 };
 
-/** The tag boxes at `count` people standing in `order`, as the kit sets them. */
-export const tagsOf = (order: readonly string[]) => tagsFor(spots(order.length), order);
-
 /** The pointer's whole box with its tip at `tip`. */
 export const pointerBox = (tip: Point): Box => ({
   left: tip.x - POINTER.tip.x,
@@ -528,9 +554,16 @@ export const pointerBox = (tip: Point): Box => ({
   bottom: tip.y - POINTER.tip.y + POINTER.height,
 });
 
-/** Where `name` stands in a run of `plan`. */
-export const spotOf = (plan: Plan, name: string) =>
-  spots(plan.order.length)[plan.order.indexOf(name)]!;
+/** The bench tags' widths in a show of `plan`, in the order its people go safe. */
+export function benchWidths(plan: Plan): number[] {
+  const benched = plan.turns.filter((turn) => turn.safe !== null).map((turn) => turn.by);
+  const tag = benchTag(benched.length);
+  return benched.map((name) => drawnWidth(name, tagAt(name, tag)));
+}
+/** Where everyone is over a show of `plan`. */
+export const placesOf = (plan: Plan) => placings(plan, benchWidths(plan));
+/** Where `name` stands at `t` in a run of `plan`. */
+export const spotOf = (plan: Plan, name: string, t = 0) => placesOf(plan).at(name, t);
 
 /** 8 people, Luca unlucky, seed 1: run once and shared by the scenarios that watch it. */
 let eightShow: ReturnType<typeof watch> | undefined;
@@ -736,7 +769,7 @@ export function expectEndingPlayed(
       frame.time > falls && frame.time <= falls + 0.5 && Math.abs(frame.lean - leans.at(-1)!) >= 1,
   );
   expect(soon, label).toBeDefined();
-  const side = sideOf(spotOf(plan, unlucky));
+  const side = sideOf(spotOf(plan, unlucky, plan.end));
   expect(Math.sign(frames.at(-1)!.lean), label).toBe(side);
   for (const rest of run.end.rests) expect(Math.sign(rest.x - 640), label).toBe(side);
 
@@ -767,12 +800,85 @@ export function expectEndingPlayed(
   if (plan.ending === 'it-holds') {
     // Level with them: beside them where there's room, else pushed along their row.
     const phew = saying('Phew!', plan.still.from, plan.still.from + STEP + 1e-9);
-    const them = spotOf(plan, unlucky);
+    const them = spotOf(plan, unlucky, plan.end);
     expect(Math.abs(phew.y - them.y), label).toBeLessThan(them.size + 120);
   }
   const timber = saying('Timber!', falls, falls + STEP + 1e-9);
   const box = speechBox('Timber!', timber);
-  const spot = spotOf(plan, unlucky);
+  const spot = spotOf(plan, unlucky, plan.end);
   expect(overlap(box, grownBoxes(spot).head), label).toBe(false);
   expect(overlap(box, hatBox(spot)), label).toBe(false);
+}
+
+/** `count` of the normal names, the last unlucky, seed 1: run once and shared by the scenarios that watch it. */
+const normalShows = new Map<number, ReturnType<typeof watch>>();
+export const normalRun = (count: number) => {
+  let run = normalShows.get(count);
+  if (!run) {
+    const team = NORMAL.slice(0, count);
+    run = watch(team, team.at(-1)!);
+    normalShows.set(count, run);
+  }
+  return run;
+};
+
+/** Whether a name tag's box is drawn: a hidden one's is empty. */
+export const shows = (tag: Box) => tag.right > tag.left;
+
+/** The pointers' boxes drawn in `frame`. */
+export const pointersIn = (frame: Frame) =>
+  frame.pointers.filter((pointer) => pointer.shown > 0).map((pointer) => pointerBox(pointer));
+
+/**
+ * In every frame: no name tag over another, under a pointer, or under a
+ * block without being drawn over it; and every tag on the 1280 × 720 stage.
+ */
+export function expectTagsClear(frames: readonly Frame[], label: string) {
+  for (const frame of frames) {
+    const at = `${label} at ${frame.time.toFixed(3)}`;
+    const tags = Object.entries(frame.people)
+      .map(([name, { tag }]) => ({ name, tag }))
+      .filter(({ tag }) => shows(tag));
+    tags.forEach(({ name, tag }, index) => {
+      for (const other of tags.slice(index + 1)) {
+        expect(overlap(tag, other.tag), `${at}: ${name} and ${other.name}`).toBe(false);
+      }
+      expect(tag.left, `${at}: ${name}`).toBeGreaterThanOrEqual(0);
+      expect(tag.right, `${at}: ${name}`).toBeLessThanOrEqual(1280);
+      expect(tag.bottom, `${at}: ${name}`).toBeLessThanOrEqual(720);
+      for (const pointer of pointersIn(frame)) {
+        expect(overlap(pointer, tag), `${at}: the pointer over ${name}`).toBe(false);
+      }
+      for (const block of frame.drawn) {
+        if (blockOverlaps(block, tag)) expect(block.under, `${at}: ${name}`).toContain(name);
+      }
+    });
+  }
+}
+
+/** The rows `names` (at risk, in standing order) stand in: each keeps the one they start in. */
+export const startingRowsOf = (plan: Plan, names: readonly string[]) =>
+  names.map((name) => startingRows(plan.order.length)[plan.order.indexOf(name)]!);
+
+/**
+ * A bubble saying `text` that pops up at `at` beside the head of someone at
+ * `spot`, up 0.8 s or more: level with them, beside them where there's room,
+ * else pushed along their row.
+ */
+export function expectBeside(
+  bubbles: ReturnType<typeof said>,
+  text: string,
+  at: number,
+  spot: Spot,
+  label: string,
+) {
+  const found = bubbles.find(
+    (bubble) =>
+      bubble.text === text &&
+      bubble.from >= at - 1e-9 &&
+      bubble.from <= at + STEP + 1e-6 &&
+      Math.abs(bubble.y - spot.y) < spot.size + 120,
+  );
+  expect(found, `${label}: ${text} at ${at}`).toBeDefined();
+  expect(found!.to + STEP - found!.from, label).toBeGreaterThanOrEqual(0.8 - STEP - 1e-6);
 }

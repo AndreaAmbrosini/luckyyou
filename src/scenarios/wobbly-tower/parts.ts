@@ -1,9 +1,10 @@
 // Wobbly Tower's drawings, from the Design canvas: the "Your turn!" pointer,
-// the blocks, the hard hat, the dust puffs, the speed lines and the field.
+// the blocks, the Safe bench, the "At risk" plinth, the hard hat, the dust
+// puffs, the speed lines and the field.
 // Every colour comes from a class in wobbly-tower.module.css, or from the
 // `var(--…)` a block is given.
 
-import { BLOCK_HEIGHT, type Point } from './layout';
+import { BLOCK_HEIGHT, PLINTH, type Point } from './layout';
 import styles from './wobbly-tower.module.css';
 
 type Shape = readonly [tag: string, className: string, attributes: Record<string, string | number>];
@@ -91,6 +92,60 @@ export function block(width: number, fill: string, height = BLOCK_HEIGHT): HTMLE
   el.style.setProperty('--block-fill', fill);
   el.dataset.fill = fill;
   return el;
+}
+
+/**
+ * The Safe bench: a plank from `left` to `right` with its top at `top`, on
+ * two legs down to the grass; data-part="bench".
+ */
+export function bench({
+  left,
+  right,
+  top,
+}: {
+  left: number;
+  right: number;
+  top: number;
+}): HTMLElement {
+  const el = part(styles.bench, 'bench');
+  el.style.left = `${left}px`;
+  el.style.top = `${top}px`;
+  el.style.width = `${right - left}px`;
+  el.append(
+    part(styles.plank),
+    part(`${styles.leg} ${styles.legLeft}`),
+    part(`${styles.leg} ${styles.legRight}`),
+  );
+  return el;
+}
+
+export interface Plinth {
+  /** The tomato plinth at PLINTH under the tower, "At risk" and the count on it; data-part="plinth". */
+  readonly el: HTMLElement;
+  /** Shows `count` at risk, in data-part="at-risk". */
+  count(count: number): void;
+}
+
+/** The plinth's label, before the count. */
+export const PLINTH_LABEL = 'At risk';
+
+/** The plinth the tower stands on, with how many are still at risk. */
+export function plinth(): Plinth {
+  const el = part(styles.plinth, 'plinth');
+  el.style.left = `${PLINTH.left}px`;
+  el.style.top = `${PLINTH.top}px`;
+  el.style.width = `${PLINTH.right - PLINTH.left}px`;
+  el.style.height = `${PLINTH.bottom - PLINTH.top}px`;
+  const label = el.appendChild(document.createElement('span'));
+  label.textContent = PLINTH_LABEL;
+  const number = el.appendChild(part(styles.atRisk, 'at-risk'));
+  return {
+    el,
+    count(count) {
+      const text = String(count);
+      if (number.textContent !== text) number.textContent = text;
+    },
+  };
 }
 
 /** A hard hat for a head on a 100 grid. */

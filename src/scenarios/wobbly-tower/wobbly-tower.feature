@@ -40,7 +40,6 @@ Feature: Wobbly Tower
 
   Rule: Hold the tower and you're safe
 
-    @pending
     Scenario: A block that holds makes its thrower safe
       Given 8 people
       When a turn's block lands and the tower settles, before the last turn
@@ -69,20 +68,17 @@ Feature: Wobbly Tower
       Then the first turn goes to at least 5 different people
       And the two who share the final three with the unlucky person are at least 4 different people across the runs
 
-    @pending
     Scenario: The tower gets shakier
       Given 8 people
       When the show runs
       Then each sway before "Nearly!" leans further than the one before
       And each turn before the final three takes between 2 and 2.6 seconds
 
-    @pending
     Scenario: Up to 8 people, one thrower a turn
       Given 8 people
       When the show runs
       Then every turn has one pointer and one thrower
 
-    @pending
     Scenario Outline: With <count> people, the turns before the final three go in pairs
       Given <count> people
       When the show runs with 20 different random seeds
@@ -171,7 +167,6 @@ Feature: Wobbly Tower
       And the thrower says "Phew!"
       And the caption is "Nearly!"
 
-    @pending
     Scenario: After Nearly, the thrower is safe
       Given 8 people
       When "Nearly!" swings back upright
@@ -271,7 +266,6 @@ Feature: Wobbly Tower
       And with 2 people, both name tags are set at 44 pixels or more
       And no name tag is ever over another, under a block or under the pointer
 
-    @pending
     Scenario: Whoever is at risk is drawn big
       When the show runs at 6 and at 12 people
       Then with 6 or fewer at risk, their heads are 120 pixels tall and their name tags 36 pixels or more, on the 1280 by 720 stage

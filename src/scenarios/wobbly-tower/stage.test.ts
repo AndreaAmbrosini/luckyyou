@@ -3,18 +3,29 @@ import { createRandom } from '../../scenario-kit/random';
 import { handOutLooks } from '../../scenario-kit';
 import { BEATS, hopInto, LEANS as PEAKS, planShow, READ, stayOn, type Plan } from './plan';
 import {
+  CAPTION_BOTTOM,
   HEAP_BAND,
-  blockOverlaps,
+  PLINTH,
+  benchSpot,
+  benchTag,
+  between,
   blockBox,
+  blockHeight,
+  blockOverlaps,
   headBox,
   heap,
   heldBlock,
   overlap,
+  plank,
   pointerTip,
+  riskSpots,
   sideOf,
+  startingRows,
   signedLean,
-  spots,
+  tagBox,
   tower,
+  type Box,
+  type Spot,
 } from './layout';
 import {
   names,
@@ -26,147 +37,263 @@ import {
   stopsOf,
   nearlyOf,
   plannedCaptions,
-  inside,
   anyOverlap,
   NORMAL,
-  casts,
-  LEANS,
-  HEIGHTS,
+  TEAM,
+  drawnWidth,
+  tagAt,
+  sizeOf,
   STEP,
   watch,
   stops,
   swings,
   swaysPerSecond,
-  tagsOf,
+  pointersIn,
+  shows,
   pointerBox,
   spotOf,
+  placesOf,
   seedOf,
   eightRun,
   expectSwaysAndSettles,
 } from './watching';
 
 describe('The layout', () => {
-  it('no tag overlaps at any count', () => {
-    for (let count = 2; count <= 12; count++) {
-      const all = spots(count);
-      const label = `${count} people`;
-      expect(all, label).toHaveLength(count);
-      for (const [round, { boxes }] of casts(count).entries()) {
-        const at_ = `${label}, names shifted ${round}`;
-        expect(anyOverlap(boxes), at_).toBe(false);
-        for (const box of boxes) {
-          expect(box.left, at_).toBeGreaterThanOrEqual(0);
-          expect(box.right, at_).toBeLessThanOrEqual(1280);
-          // Own head excepted: a chest tag starts on its bottom edge.
-          all.forEach((spot, own) => {
-            if (boxes[own] !== box) expect(overlap(box, headBox(spot)), at_).toBe(false);
-          });
+  /** The tallest towers the show builds, at every lean before the fall, row by row: how far they reach. */
+  const outline = (() => {
+    const left = Array.from({ length: 721 }, () => Infinity);
+    const right = Array.from({ length: 721 }, () => -Infinity);
+    for (let total = 9; total <= 15; total++) {
+      for (let lean = -11; lean <= 11; lean++) {
+        for (const block of tower(total, lean, blockHeight(total))) {
+          const box = blockBox(block);
+          for (let y = Math.floor(box.top); y <= Math.ceil(box.bottom); y++) {
+            left[y] = Math.min(left[y]!, box.left);
+            right[y] = Math.max(right[y]!, box.right);
+          }
         }
       }
-      for (const spot of all) {
-        expect(spot.tag.size, label).toBe(Math.max(22, Math.round(0.22 * spot.size)));
-        expect(spot.tag.maxWidth, label).toBeGreaterThanOrEqual(120);
-        expect(spot.tag.maxWidth, label).toBeLessThanOrEqual(
-          Math.max(198, Math.round(2.2 * spot.size)),
+    }
+    return { left, right };
+  })();
+  const underTower = (box: Box) => {
+    for (let y = Math.max(0, Math.ceil(box.top)); y <= Math.min(720, Math.floor(box.bottom)); y++) {
+      if (outline.left[y]! < box.right && outline.right[y]! > box.left) return true;
+    }
+    return false;
+  };
+  /** Every way `leaving` of `count` can leave: their places in the standing order. */
+  const leavers = (count: number, leaving: number): number[][] =>
+    leaving === 1
+      ? Array.from({ length: count }, (_, i) => [i])
+      : Array.from({ length: count }, (_, i) =>
+          Array.from({ length: count - i - 1 }, (__, k) => [i, i + 1 + k]),
+        ).flat();
+
+  it("nobody's tag crosses another while the gap closes", () => {
+    const failures: string[] = [];
+    /** Checks the tags of those staying at risk, moving `from` → `to` (in order), at t = 0, 0.05 … 1. */
+    const closing = (from: readonly Spot[], to: readonly Spot[], at: string) => {
+      // Whoever changes sides walks round the tower, their tag drawn over it like over every block.
+      const round = from.map((spot, index) => sideOf(spot) !== sideOf(to[index]!));
+      for (let step = 0; step <= 20; step++) {
+        const t = step / 20;
+        const boxes = from.map((spot, index) => tagBox(between(spot, to[index]!, t)));
+        const label = `${at}, t ${t}`;
+        if (anyOverlap(boxes)) failures.push(`${label}: tags cross`);
+        boxes.forEach((box, index) => {
+          if (box.left < 0 || box.right > 1280 || box.top < 0 || box.bottom > 720) {
+            failures.push(`${label}: off the stage`);
+          }
+          if (round[index]) return;
+          if (overlap(box, PLINTH)) failures.push(`${label}: on the plinth`);
+          if (underTower(box)) failures.push(`${label}: under the tower`);
+        });
+      }
+    };
+    for (let people = 4; people <= 12; people++) {
+      const rows = startingRows(people);
+      // At risk: everyone but the first `gone`, the last `gone`, or every other one from the start.
+      const sets = (gone: number) => [
+        rows.map((_, index) => index).slice(gone),
+        rows.map((_, index) => index).slice(0, people - gone),
+        rows.map((_, index) => index).filter((index) => index >= 2 * gone || index % 2 === 1),
+      ];
+      for (let count = people; count >= 3; count--) {
+        for (const set of sets(people - count)) {
+          const atRisk = set.slice(0, count);
+          for (const leaving of people >= 9 && count >= 4 ? [1, 2] : [1]) {
+            for (const gone of leavers(count, leaving)) {
+              const staying = atRisk.filter((_, index) => !gone.includes(index));
+              const from = riskSpots(
+                count,
+                people,
+                atRisk.map((index) => rows[index]!),
+              );
+              const to = riskSpots(
+                count - leaving,
+                people,
+                staying.map((index) => rows[index]!),
+              );
+              closing(
+                from.filter((_, index) => !gone.includes(index)),
+                to,
+                `${people} people, ${count} at risk, ${gone.join('+')} leaving`,
+              );
+            }
+          }
+        }
+      }
+    }
+    // And every gap that closes in the plans for seeds 1–40.
+    for (const { label, plan } of everyPlan()) {
+      const places = placesOf(plan);
+      for (const at of new Set(
+        plan.turns.flatMap((turn) => (turn.safe === null ? [] : [turn.safe])),
+      )) {
+        const staying = places.atRisk(at);
+        closing(
+          staying.map((name) => places.at(name, at - 1e-9)),
+          staying.map((name) => places.at(name, at + 0.6)),
+          `${label}, at ${at.toFixed(2)}`,
         );
       }
     }
+    expect(failures.slice(0, 20)).toEqual([]);
   });
 
-  it('no tag is under the tower or the heap at any count', () => {
-    // Hundreds of thousands of checks: each failure is noted, and checked once.
-    const failures: string[] = [];
+  it('the bench holds everyone at 12', () => {
+    const long = TEAM.at(-1)!;
+    const others = TEAM.slice(0, -1);
+    for (let benched = 1; benched <= 10; benched++) {
+      // The long name in each slot, the rest of the team around it.
+      for (let slot = 0; slot < benched; slot++) {
+        const called = [...others.slice(0, benched - 1)];
+        called.splice(slot, 0, long);
+        const label = `${benched} benched, the long name in slot ${slot}`;
+        const tag = benchTag(benched);
+        const tags = called.map((name) => tagAt(name, tag));
+        const widths = called.map((name, index) => drawnWidth(name, tags[index]!));
+        const all = called.map((_, index) => benchSpot(index, widths));
+        const boxes = all.map((spot, index) => tagBox(spot, widths[index]));
+        expect(anyOverlap(boxes), label).toBe(false);
+        boxes.forEach((box, index) => {
+          expect(sizeOf(tags[index]!), label).toBeGreaterThanOrEqual(22);
+          expect(box.left, label).toBeGreaterThanOrEqual(16);
+          expect(box.right, label).toBeLessThanOrEqual(1280 - 16);
+          expect(box.top, label).toBeGreaterThanOrEqual(CAPTION_BOTTOM);
+          expect(box.bottom, label).toBeLessThanOrEqual(250);
+          const head = headBox(all[index]!);
+          expect(head.top, label).toBeGreaterThanOrEqual(CAPTION_BOTTOM);
+          expect(head.bottom, label).toBeLessThanOrEqual(250);
+          expect(head.right - head.left, label).toBe(76);
+        });
+        // In the order they go safe, left to right, from x 250 unless the bench is too long.
+        const xs = all.map((spot) => spot.x);
+        xs.slice(1).forEach((x, index) => {
+          expect(x - xs[index]!, label).toBeGreaterThanOrEqual(
+            Math.min(125, 870 / (benched - 1)) - 1e-9,
+          );
+        });
+        if (boxes.at(-1)!.right < 1280 - 16 - 1e-9) expect(xs[0], label).toBe(250);
+        expect(plank(widths).right, label).toBeCloseTo(xs.at(-1)! + 60, 9);
+        expect(plank(widths).top, label).toBe(250);
+      }
+    }
+  });
+
+  it('the at-risk sizes', () => {
     for (let count = 2; count <= 12; count++) {
-      const all = spots(count);
-      const everyCast = casts(count);
-      const tags = everyCast.flatMap(({ boxes }) => boxes);
-      for (const blocks of HEIGHTS) {
-        for (const lean of LEANS) {
-          tower(blocks, lean).forEach((block, k) => {
-            if (tags.some((box) => blockOverlaps(block, box))) {
-              failures.push(`${count} people, ${blocks} blocks, lean ${lean}, block ${k}`);
-            }
+      for (let people = Math.max(count, 2); people <= 12; people++) {
+        const label = `${count} at risk of ${people}`;
+        const all = riskSpots(count, people);
+        expect(all, label).toHaveLength(count);
+        const head = count <= 6 ? 120 : 100;
+        const tag = people === 2 ? 44 : count <= 6 ? 36 : 30;
+        for (const spot of all) {
+          expect(spot.size, label).toBe(head);
+          expect(spot.tag.size, label).toBe(tag);
+        }
+        // Left to right, half (rounded up) left of the tower.
+        expect(
+          all.map((spot) => spot.x),
+          label,
+        ).toEqual([...all.map((spot) => spot.x)].sort((a, b) => a - b));
+        expect(
+          all.filter((spot) => spot.x < 640),
+          label,
+        ).toHaveLength(Math.ceil(count / 2));
+        // Every normal name is set at its full size, never over another tag or a head.
+        for (let round = 0; round < count; round++) {
+          const called = all.map((_, index) => NORMAL[(index + round) % NORMAL.length]!);
+          const tags = called.map((name, index) => tagAt(name, all[index]!.tag));
+          const boxes = all.map((spot, index) =>
+            tagBox(spot, drawnWidth(called[index]!, tags[index]!)),
+          );
+          expect(anyOverlap(boxes), label).toBe(false);
+          tags.forEach((each) => expect(sizeOf(each), label).toBe(tag));
+          boxes.forEach((box, own) => {
+            all.forEach((spot, index) => {
+              if (index !== own) expect(overlap(box, headBox(spot)), label).toBe(false);
+            });
           });
         }
+      }
+    }
+  });
+
+  it("the pointer's whole box never covers a tag, over anyone at risk or on the bench", () => {
+    for (let people = 2; people <= 12; people++) {
+      for (let count = 2; count <= people; count++) {
+        const all = riskSpots(count, people);
+        const tags = all.map((spot) => tagBox(spot));
+        // Everyone else on the bench, with tags as wide as the slots allow.
+        const benched = people - count;
+        const bench = Array.from({ length: benched }, (_, slot) =>
+          tagBox(
+            benchSpot(
+              slot,
+              Array.from({ length: benched }, () => benchTag(benched).maxWidth),
+            ),
+          ),
+        );
+        for (const spot of all) {
+          const box = pointerBox(pointerTip(spot));
+          for (const tag of [...tags, ...bench]) {
+            expect(overlap(box, tag), `${count} at risk of ${people}`).toBe(false);
+          }
+        }
+      }
+    }
+  });
+
+  it('the held block and the pointer sit over the head', () => {
+    for (const spot of riskSpots(6, 6)) {
+      const block = heldBlock(spot);
+      expect(block.width).toBeCloseTo(0.96 * spot.size, 9);
+      expect(blockBox(block).bottom).toBeLessThan(headBox(spot).top);
+      expect(pointerTip(spot).y).toBeCloseTo(headBox(spot).top - 10, 9);
+      expect(pointerTip(spot, true).y).toBeCloseTo(blockBox(block).top - 10, 9);
+    }
+  });
+
+  it('the heap lies clear of every head at risk at the end', () => {
+    for (const count of [2, 3]) {
+      for (let people = count; people <= 12; people++) {
+        const all = riskSpots(count, people);
         for (const unlucky of all) {
-          for (const block of heap(unlucky, blocks)) {
-            const box = blockBox(block);
-            const label = `${count} people, heap of ${blocks}`;
-            expect(box.top, label).toBeGreaterThanOrEqual(HEAP_BAND.top);
-            expect(box.bottom, label).toBeLessThanOrEqual(HEAP_BAND.bottom);
-            expect(Math.sign(block.x - 640), label).toBe(sideOf(unlucky));
-            if (tags.some((tag) => overlap(box, tag))) failures.push(`${label} over a tag`);
-            if (all.some((spot) => overlap(box, headBox(spot)))) {
-              failures.push(`${label} over a head`);
+          for (let blocks = 4; blocks <= 15; blocks++) {
+            for (const block of heap(unlucky, blocks, blockHeight(blocks))) {
+              const box = blockBox(block);
+              const label = `${count} at risk of ${people}, heap of ${blocks}`;
+              expect(box.top, label).toBeGreaterThanOrEqual(HEAP_BAND.top);
+              expect(box.bottom, label).toBeLessThanOrEqual(HEAP_BAND.bottom);
+              expect(Math.sign(block.x - 640), label).toBe(sideOf(unlucky));
+              for (const spot of all) expect(overlap(box, headBox(spot)), label).toBe(false);
             }
           }
         }
       }
-    }
-    expect(failures).toEqual([]);
-  });
-
-  it("the pointer's tip never covers a tag", () => {
-    for (let count = 2; count <= 12; count++) {
-      const all = spots(count);
-      const everyCast = casts(count);
-      for (const spot of all) {
-        for (const holding of [false, true]) {
-          const tip = pointerTip(spot, holding);
-          for (const { boxes } of everyCast) {
-            for (const box of boxes) expect(inside(box, tip), `${count} people`).toBe(false);
-          }
-          expect(tip.y, `${count} people`).toBeGreaterThanOrEqual(120);
-        }
-        // The held block is 0.96 heads wide over the head; the tip is 10 px over head or block.
-        const block = heldBlock(spot);
-        expect(block.width).toBeCloseTo(0.96 * spot.size, 9);
-        expect(blockBox(block).bottom).toBeLessThan(headBox(spot).top);
-        expect(pointerTip(spot).y).toBeCloseTo(headBox(spot).top - 10, 9);
-        expect(pointerTip(spot, true).y).toBeCloseTo(blockBox(block).top - 10, 9);
-      }
-    }
-  });
-
-  it('normal names need no shift at 8 and 12', () => {
-    for (const count of [8, 12]) {
-      const all = spots(count);
-      for (const { boxes } of casts(count)) {
-        boxes.forEach((box, index) => {
-          expect((box.left + box.right) / 2, `${count} people`).toBeCloseTo(all[index]!.x, 9);
-        });
-      }
-    }
-  });
-
-  it('8 people match the storyboard', () => {
-    const all = spots(8);
-    expect(all.map((s) => [s.x, s.y, s.size, s.row])).toEqual([
-      ...[130, 340, 940, 1150].map((x) => [x, 430, 80, 'back']),
-      ...[150, 400, 880, 1130].map((x) => [x, 650, 104, 'front']),
-    ]);
-  });
-
-  it('12 and 2 people match the storyboard', () => {
-    expect(spots(12).map((s) => [s.x, s.y, s.size])).toEqual([
-      ...[90, 260, 430, 850, 1020, 1190].map((x) => [x, 430, 66]),
-      ...[115, 300, 480, 800, 990, 1170].map((x) => [x, 650, 92]),
-    ]);
-    expect(spots(2).map((s) => [s.x, s.y, s.size])).toEqual([
-      [260, 640, 200],
-      [1020, 640, 200],
-    ]);
-  });
-
-  it('other counts split each row either side of the tower', () => {
-    for (let count = 3; count <= 11; count++) {
-      const all = spots(count);
-      expect(
-        all.filter((s) => s.row === 'back'),
-        `${count} people`,
-      ).toHaveLength(Math.floor(count / 2));
-      for (const spot of all)
-        expect(Math.abs(spot.x - 640), `${count} people`).toBeGreaterThanOrEqual(150);
     }
   });
 
@@ -181,20 +308,21 @@ describe('The layout', () => {
     });
     expect(blocks.at(-1)!.x).toBeGreaterThan(blocks[0]!.x);
     expect(tower(11, -22).at(-1)!.x).toBeLessThan(640);
-    // Upright, a stack of 40 high blocks on y 610 (each a few pixels off centre).
+    // Upright, a stack of 40 high blocks on the plinth at y 650 (each a few pixels off centre).
     tower(11, 0).forEach((block, k) => {
-      expect(block.y).toBeCloseTo(590 - 40 * k, 9);
+      expect(block.y).toBeCloseTo(630 - 40 * k, 9);
       expect(Math.abs(block.x - 640)).toBeLessThanOrEqual(6);
     });
+    expect(PLINTH).toEqual({ left: 470, top: 650, right: 810, bottom: 706 });
   });
 
   it("a lean's side is a number or the side a person stands on", () => {
-    const order = names(8);
-    const all = spots(8);
-    expect(signedLean({ degrees: 7, toward: -1 }, order)).toBe(-7);
-    expect(signedLean({ degrees: 7, toward: 1 }, order)).toBe(7);
-    order.forEach((name, index) => {
-      expect(signedLean({ degrees: 22, toward: name }, order)).toBe(22 * sideOf(all[index]!));
+    const all = riskSpots(8, 8);
+    const where = (name: string) => all[names(8).indexOf(name)]!;
+    expect(signedLean({ degrees: 7, toward: -1 }, where)).toBe(-7);
+    expect(signedLean({ degrees: 7, toward: 1 }, where)).toBe(7);
+    names(8).forEach((name, index) => {
+      expect(signedLean({ degrees: 22, toward: name }, where)).toBe(22 * sideOf(all[index]!));
     });
   });
 });
@@ -453,18 +581,19 @@ describe('The stage', () => {
     }
   });
 
-  it("the pointer's whole box never covers a name tag at 8 and 12", async () => {
+  it("the pointers' whole boxes never cover a name tag at 8 and 12, as people move", async () => {
     for (const count of [8, 12]) {
       const team = NORMAL.slice(0, count);
       for (const seed of [1, 2, 3]) {
-        const { frames, plan } = await watch(team, team.at(-1)!, { seed });
-        const tags = tagsOf(plan.order);
-        for (const frame of frames.filter((each) => each.pointer.shown > 0)) {
-          for (const tag of tags) {
-            expect(
-              overlap(pointerBox(frame.pointer), tag),
-              `${count} people, seed ${seed}, at ${frame.time}`,
-            ).toBe(false);
+        const { frames } = await watch(team, team.at(-1)!, { seed });
+        for (const frame of frames) {
+          for (const pointer of pointersIn(frame)) {
+            for (const [name, { tag }] of Object.entries(frame.people)) {
+              expect(
+                overlap(pointer, tag),
+                `${count} people, seed ${seed}, ${name} at ${frame.time}`,
+              ).toBe(false);
+            }
           }
         }
       }
@@ -576,7 +705,6 @@ describe('Hops and tosses', () => {
       const label = `${count} people, seed ${seed}`;
       const { frames, plan } = await watch(names(count), unluckyOf(count), { seed });
       const stopped = stops(frames);
-      const tags = tagsOf(plan.order);
       const again = stopped.slice(1).filter((stop, index) => stop.name === stopped[index]!.name);
       expect(again.length, label).toBeGreaterThan(0);
       for (const stop of again) {
@@ -588,8 +716,9 @@ describe('Hops and tosses', () => {
           label,
         ).toBeGreaterThanOrEqual(10);
         for (const frame of hop.filter((each) => each.pointer.shown > 0)) {
-          for (const tag of tags)
+          for (const { tag } of Object.values(frame.people)) {
             expect(overlap(pointerBox(frame.pointer), tag), label).toBe(false);
+          }
         }
       }
     }
@@ -606,12 +735,11 @@ describe('Blocks and name tags', () => {
       { count: 8, seed: 2 },
       { count: 12, seed: 1 },
     ]) {
-      const { frames, plan } = await watch(names(count), unluckyOf(count), { seed });
-      const tags = tagsOf(plan.order);
+      const { frames } = await watch(names(count), unluckyOf(count), { seed });
       for (const frame of frames) {
         for (const block of frame.drawn) {
-          plan.order.forEach((name, index) => {
-            if (!blockOverlaps(block, tags[index]!)) return;
+          Object.entries(frame.people).forEach(([name, { tag }]) => {
+            if (!shows(tag) || !blockOverlaps(block, tag)) return;
             crossed++;
             expect(
               block.under,

@@ -1,10 +1,11 @@
 // Where everyone stands, where the tower is and how it bends, where the
-// fallen blocks lie, and where the pointer stops: two rows seen from a little
-// above, the back row drawn behind the tower and the front row in front of it.
-// In stage pixels (1280 × 720), from the handover's storyboard.
+// fallen blocks lie, and where the pointer stops. Those at risk stand either
+// side of the tower, drawn big; whoever goes safe hops up to the Safe bench
+// along the top of the stage. In stage pixels (1280 × 720), from the
+// handover's storyboard.
 
 import { STAGE, stagePx } from '../../scenario-kit';
-import type { Lean, Side } from './plan';
+import type { Lean, Plan, Side } from './plan';
 
 export interface Point {
   readonly x: number;
@@ -25,12 +26,12 @@ export interface Spot {
   readonly y: number;
   readonly size: number;
   readonly tag: { readonly size: number; readonly maxWidth: number };
-  /** The back row is drawn behind the tower, the front row in front of it. */
+  /** With 7 or more at risk, the back row stands further up the grass; otherwise everyone is in the front row. */
   readonly row: 'back' | 'front';
 }
 
-/** The tower stands on this y, centred on this x. */
-export const TOWER = { x: STAGE.width / 2, base: 610 } as const;
+/** The tower stands on this y, the top of its plinth, centred on this x. */
+export const TOWER = { x: STAGE.width / 2, base: 650 } as const;
 
 /** Every block is this high, unless the tower would grow too tall. */
 export const BLOCK_HEIGHT = 40;
@@ -48,142 +49,335 @@ const NUDGE = [3, -4, 5, -6, 4, -3, 6, -5, 3, -4, 5, -3] as const;
 
 /** Space kept between a name tag and its nearest neighbour in the row. */
 const TAG_GAP = 12;
+/** Space kept between a name tag and the furthest the tower reaches beside it. */
+const TOWER_GAP = 4;
+/** The most the tower leans before it falls: Nearly's lean. */
+const LEAN_BEFORE_FALL = 11;
 
-/**
- * A name tag is set at 0.22 of the head's size, never under 22. It is at most
- * max(198, 2.2 heads) wide, and narrower where `room` (the width it may take,
- * centred on the person) is less: the handover's twelve people stand closer
- * together than two such tags are wide. `spots` gives it the gap to the
- * nearest person in the row less TAG_GAP, and the room the stage's edges leave.
- */
-export function tagFor(size: number, room = Infinity): Spot['tag'] {
-  return {
-    size: Math.max(22, Math.round(0.22 * size)),
-    maxWidth: Math.floor(Math.min(Math.max(198, Math.round(2.2 * size)), room)),
-  };
-}
+/** The plinth under the tower, with the count of who is still at risk. */
+export const PLINTH: Box = { left: 470, top: 650, right: 810, bottom: 706 };
+/** The caption sticker's bottom edge: the bench's heads and tags stay below it. */
+export const CAPTION_BOTTOM = 112;
 
 interface Stand {
   readonly x: number;
   readonly y: number;
-  readonly size: number;
   readonly row: Spot['row'];
 }
 
-/** The handover's spots at 2, 8 and 12, as written. */
-const EXACT: Readonly<Record<number, readonly Stand[]>> = {
-  2: [
-    { x: 260, y: 640, size: 200, row: 'front' },
-    { x: 1020, y: 640, size: 200, row: 'front' },
-  ],
-  8: [
-    ...[130, 340, 940, 1150].map((x) => ({ x, y: 430, size: 80, row: 'back' as const })),
-    ...[150, 400, 880, 1130].map((x) => ({ x, y: 650, size: 104, row: 'front' as const })),
-  ],
-  12: [
-    ...[90, 260, 430, 850, 1020, 1190].map((x) => ({
-      x,
-      y: 430,
-      size: 66,
-      row: 'back' as const,
-    })),
-    ...[115, 300, 480, 800, 990, 1170].map((x) => ({
-      x,
-      y: 650,
-      size: 92,
-      row: 'front' as const,
-    })),
-  ],
-};
+type Range = readonly [outer: number, inner: number];
 
-type Range = readonly [number, number];
-
-/** The x range each side of each row uses at 8 and at 12: outermost to innermost person. */
-const RANGES: Record<Spot['row'], Record<'left' | 'right', readonly [Range, Range]>> = {
-  back: {
-    left: [
-      [130, 340],
-      [90, 430],
-    ],
-    right: [
-      [1150, 940],
-      [1190, 850],
-    ],
-  },
-  front: {
-    left: [
-      [150, 400],
-      [115, 480],
-    ],
-    right: [
-      [1130, 880],
-      [1170, 800],
-    ],
+/**
+ * Where people at risk stand, by how many are at risk: up to 6 in one row,
+ * from 7 in two, alternating along each side from the inner end, which is in
+ * the back row (so the front row's tags stay clear of the plinth). The front
+ * row stands far enough below the back row that the pointer over a front head
+ * clears the back row's tags, and the back row far enough below the bench that
+ * the pointer over a back head clears the bench's tags.
+ */
+const AT_RISK = {
+  few: { head: 120, y: 450, left: [260, 420] as Range, right: [1020, 860] as Range },
+  some: { head: 120, y: 450, left: [90, 420] as Range, right: [1190, 860] as Range },
+  many: {
+    head: 100,
+    back: 390,
+    front: 615,
+    left: [60, 440] as Range,
+    right: [1220, 840] as Range,
+    frontInner: { left: 360, right: 920 },
   },
 };
 
-/** A row of `count` people split either side of the tower, evenly spread over their ranges. */
-function row(kind: Spot['row'], count: number, t: number, y: number, size: number): Stand[] {
-  const side = (people: number, [at8, at12]: readonly [Range, Range]) => {
-    const from = at8[0] + t * (at12[0] - at8[0]);
-    const to = at8[1] + t * (at12[1] - at8[1]);
-    return Array.from({ length: people }, (_, k) =>
-      Math.round(people === 1 ? (from + to) / 2 : from + ((to - from) * k) / (people - 1)),
-    ).sort((a, b) => a - b);
-  };
-  const left = Math.ceil(count / 2);
-  const xs = [...side(left, RANGES[kind].left), ...side(count - left, RANGES[kind].right)];
-  return xs.map((x) => ({ x, y, size, row: kind }));
+/** `people` x positions spread evenly from `outer` to `inner`; one stands in the middle. */
+function spread([outer, inner]: Range, people: number): number[] {
+  return Array.from({ length: people }, (_, k) =>
+    Math.round(people === 1 ? (outer + inner) / 2 : outer + ((inner - outer) * k) / (people - 1)),
+  );
 }
 
-function stands(count: number): readonly Stand[] {
-  const exact = EXACT[count];
-  if (exact) return exact;
-  // 3–7 use the sizes and ranges of 8; 9–11 go from 8 towards 12.
-  const t = Math.max(0, Math.min(1, (count - 8) / 4));
-  const mix = (at8: number, at12: number) => Math.round(at8 + t * (at12 - at8));
-  const back = Math.floor(count / 2);
-  return [
-    ...row('back', back, t, 430, mix(80, 66)),
-    ...row('front', count - back, t, 650, mix(104, 92)),
-  ];
+/** Every pose the tower can take before it falls: any height, any lean up to Nearly's. */
+let poses: Box[] | undefined;
+const towerPoses = (): Box[] =>
+  (poses ??= Array.from({ length: 12 }, (_, index) => index + 4).flatMap((total) =>
+    Array.from({ length: total }, (_, index) => index + 1).flatMap((count) =>
+      Array.from({ length: 2 * LEAN_BEFORE_FALL + 1 }, (_, index) =>
+        tower(count, index - LEAN_BEFORE_FALL, blockHeight(total)).map(blockBox),
+      ).flat(),
+    ),
+  ));
+
+/** How far the tower, in any pose before the fall, or its plinth reaches to each side between `top` and `bottom`. */
+function reach(top: number, bottom: number): { left: number; right: number } {
+  let left = TOWER.x;
+  let right = TOWER.x;
+  for (const box of towerPoses()) {
+    if (box.top >= bottom || box.bottom <= top) continue;
+    left = Math.min(left, box.left);
+    right = Math.max(right, box.right);
+  }
+  if (PLINTH.top < bottom && PLINTH.bottom > top) {
+    left = Math.min(left, PLINTH.left);
+    right = Math.max(right, PLINTH.right);
+  }
+  return { left, right };
+}
+
+/** A name tag's height on someone `size` tall with a tag set at `tag`, and its top. */
+const tagBand = (y: number, size: number, tag: number) => {
+  const top = y - 0.04 * size;
+  return { top, bottom: top + 2.4 * tag + 8 };
+};
+
+/** With 2 people, each stands at the outer end of their side, their tag up to this wide. */
+const TWO_WIDE = 500;
+
+/** riskSpots, worked out once for each count and rows: the show asks for them every frame. */
+const placed = new Map<string, Spot[]>();
+
+/** The rows `count` people at risk start in: alternating along each side from the inner end, in the back row. */
+export function startingRows(count: number): Spot['row'][] {
+  const left = Math.ceil(count / 2);
+  const side = (people: number) =>
+    Array.from({ length: people }, (_, k): Spot['row'] =>
+      count >= 7 && (people - 1 - k) % 2 !== 0 ? 'front' : 'back',
+    );
+  // Left to right: the left side from its outer end, the right from its inner end.
+  return count >= 7 ? [...side(left), ...side(count - left).reverse()] : Array(count).fill('front');
 }
 
 /**
- * The spots for `count` people: the back row left to right, then the front
- * row left to right. Tags are capped by the gap to the nearest person in the
- * same row (less TAG_GAP) and by the stage's edges.
+ * Where `count` people at risk stand, left to right around the tower, in a
+ * show of `people`: `ceil(count / 2)` on the left, spread evenly from the
+ * outer end of their side to the inner. Heads are 120 with 6 or fewer at risk
+ * and 100 from 7; tags 0.3 of the head, 44 with 2 people, who stand at the
+ * outer ends with tags up to TWO_WIDE wide. From 7, `rows`
+ * says who stands in which row (`startingRows` unless given: people keep
+ * their row while it lasts, so nobody crosses a neighbour's path); a side
+ * whose innermost person is in the front row ends further out, clear of the
+ * plinth. A tag is at most max(198, 2.2 heads) wide, and narrower where the
+ * nearest person in its row (in either row with 8 or fewer, who may next
+ * stand in one; less TAG_GAP), the stage's edge, or the tower in
+ * any pose before the fall and the plinth leave less room.
  */
-export function spots(count: number): Spot[] {
-  const all = stands(count);
-  return all.map((stand, index) => {
-    const gaps = all
-      .filter((other, at) => at !== index && other.y === stand.y)
+export function riskSpots(
+  count: number,
+  people: number,
+  rows: readonly Spot['row'][] = startingRows(count),
+): Spot[] {
+  const key = `${count}/${people}/${count >= 7 ? rows.join() : ''}`;
+  const known = placed.get(key);
+  if (known) return known;
+  const left = Math.ceil(count / 2);
+  const few = count <= 3 ? AT_RISK.few : AT_RISK.some;
+  const layout = count >= 7 ? AT_RISK.many : few;
+  const head = layout.head;
+  const tag = people === 2 ? 44 : Math.max(22, Math.round(0.3 * head));
+  const side = (from: number, to: number, range: Range, frontInner: number): Stand[] => {
+    const own = rows.slice(from, to);
+    // The innermost is the last on the left and the first on the right.
+    const inner = range[0] < range[1] ? own.at(-1) : own[0];
+    const reach: Range =
+      people === 2
+        ? [range[0], range[0]]
+        : count >= 7 && inner === 'front'
+          ? [range[0], frontInner]
+          : range;
+    const xs = spread(reach, own.length).sort((a, b) => a - b);
+    return xs.map((x, k) => {
+      if (count < 7) return { x, y: AT_RISK.some.y, row: 'front' as const };
+      const row = own[k]!;
+      return { x, y: row === 'back' ? AT_RISK.many.back : AT_RISK.many.front, row };
+    });
+  };
+  const stands = [
+    ...side(0, left, layout.left, AT_RISK.many.frontInner.left),
+    ...side(left, count, layout.right, AT_RISK.many.frontInner.right),
+  ];
+  const all = stands.map((stand, index) => {
+    const band = tagBand(stand.y, head, tag);
+    const tower = reach(band.top, band.bottom);
+    const toTower =
+      stand.x < TOWER.x ? tower.left - TOWER_GAP - stand.x : stand.x - tower.right - TOWER_GAP;
+    // With 8 or fewer, the two rows may next become one: neighbours in both rows count.
+    const gaps = stands
+      .filter((other, at) => at !== index && (other.y === stand.y || count <= 8))
       .map((other) => Math.abs(other.x - stand.x) - TAG_GAP);
-    const edge = 2 * Math.min(stand.x, STAGE.width - stand.x);
-    return { ...stand, tag: tagFor(stand.size, Math.min(edge, ...gaps)) };
+    const edge = Math.min(stand.x, STAGE.width - stand.x);
+    const room = Math.min(2 * edge, 2 * toTower, ...gaps);
+    return {
+      ...stand,
+      size: head,
+      tag: {
+        size: tag,
+        maxWidth: Math.floor(
+          Math.min(people === 2 ? TWO_WIDE : Math.max(198, Math.round(2.2 * head)), room),
+        ),
+      },
+    };
   });
+  placed.set(key, all);
+  return all;
 }
+
+/** The Safe bench: its plank's top and left end, and where the heads sit. */
+export const BENCH = {
+  plank: 250,
+  from: 230,
+  head: 76,
+  headTop: 122,
+  first: 250,
+  apart: 125,
+  span: 870,
+  tagGap: 8,
+  edge: 16,
+} as const;
+
+/** Space between the plank's ends and the first and last person on it. */
+const PLANK_END = { left: 20, right: 60 };
+
+/** The name tag of everyone on a bench of `benched`: 0.3 of the head, and the slot gap less 8 wide. */
+export function benchTag(benched: number): Spot['tag'] {
+  const apart = benched <= 1 ? BENCH.apart : Math.min(BENCH.apart, BENCH.span / (benched - 1));
+  return {
+    size: Math.max(22, Math.round(0.3 * BENCH.head)),
+    maxWidth: Math.floor(apart - BENCH.tagGap),
+  };
+}
+
+/** Where everyone on a bench sits, left to right, for tags `widths` wide as drawn (benchTag's). */
+function benchXs(widths: readonly number[]): number[] {
+  const benched = widths.length;
+  const apart = benched <= 1 ? BENCH.apart : Math.min(BENCH.apart, BENCH.span / (benched - 1));
+  const xs: number[] = [BENCH.first];
+  for (let slot = 1; slot < benched; slot++) {
+    const touching = (widths[slot - 1]! + widths[slot]!) / 2 + BENCH.tagGap;
+    xs.push(xs[slot - 1]! + Math.max(apart, touching));
+  }
+  // A bench too long for the stage moves left as a whole.
+  const over = xs.at(-1)! + widths.at(-1)! / 2 - (STAGE.width - BENCH.edge);
+  return over > 0 ? xs.map((x) => x - over) : xs;
+}
+
+/**
+ * Slot `slot` of the Safe bench, whose tags are `widths` wide as drawn (one
+ * for each person it benches, in the order they go safe): slots fill left to
+ * right from x 250, at least min(125, 870 / (benched − 1)) apart and further
+ * where two tags would come closer than 8; a bench that would run off the
+ * stage moves left.
+ */
+export function benchSpot(slot: number, widths: readonly number[]): Spot {
+  const size = BENCH.head;
+  return {
+    x: benchXs(widths)[slot]!,
+    y: BENCH.headTop + 0.8 * size,
+    size,
+    tag: benchTag(widths.length),
+    row: 'back',
+  };
+}
+
+/** The bench's plank, from its left end to 60 past the last person on it. */
+export function plank(widths: readonly number[]): { left: number; right: number; top: number } {
+  const xs = widths.length > 0 ? benchXs(widths) : [BENCH.first];
+  return {
+    left: Math.min(BENCH.from, xs[0]! - PLANK_END.left),
+    right: xs.at(-1)! + PLANK_END.right,
+    top: BENCH.plank,
+  };
+}
+
+/** A spot `t` (0…1) of the way from `a` to `b`: place and sizes move together. */
+export function between(a: Spot, b: Spot, t: number): Spot {
+  const mix = (from: number, to: number) => from + (to - from) * t;
+  return {
+    x: mix(a.x, b.x),
+    y: mix(a.y, b.y),
+    size: mix(a.size, b.size),
+    tag: { size: mix(a.tag.size, b.tag.size), maxWidth: mix(a.tag.maxWidth, b.tag.maxWidth) },
+    row: t < 0.5 ? a.row : b.row,
+  };
+}
+
+/** Seconds the hop to the bench takes, and the gap closing with it. */
+export const HOP = 0.6;
+/** How far the hop to the bench arcs above the higher of its two ends. */
+const HOP_ARC = 80;
+const inOut = (u: number) => (u < 0.5 ? 2 * u * u : 1 - 2 * (1 - u) * (1 - u));
+
+/**
+ * Where everyone is over the show, from `plan`: at risk around the tower,
+ * then, from their `Safe!`, hopping up to their slot on the bench (in an arc,
+ * or a straight slide with `calm`) while those still at risk close the gap,
+ * keeping their order. `widths` are the bench tags' widths as drawn, in the
+ * order people go safe.
+ */
+export function placings(plan: Plan, widths: readonly number[] = [], calm = false) {
+  const people = plan.order.length;
+  const safeAt = new Map(
+    plan.turns.filter((turn) => turn.safe !== null).map((turn) => [turn.by, turn.safe!]),
+  );
+  const benching = [...safeAt.keys()];
+  const benchSpots = benching.map((_, slot) => benchSpot(slot, widths));
+  const moves = [...new Set(safeAt.values())].sort((a, b) => a - b);
+  // A moment comes in the frame it falls in, however its time is rounded.
+  const safeBy = (name: string, t: number) => (safeAt.get(name) ?? Infinity) <= t + 1e-9;
+  /** Who is at risk at `t`, in standing order: everyone who hasn't said Safe! yet. */
+  const atRisk = (t: number) => plan.order.filter((name) => !safeBy(name, t));
+  // Everyone keeps the row they start in.
+  const rowOf = new Map(plan.order.map((name, index) => [name, startingRows(people)[index]!]));
+  const riskSpotOf = (name: string, t: number) => {
+    const now = atRisk(t);
+    const rows = now.map((each) => rowOf.get(each)!);
+    return riskSpots(now.length, people, rows)[now.indexOf(name)]!;
+  };
+  return {
+    atRisk,
+    /** Whether `name` sits on the bench at `t`, the hop done. */
+    benched: (name: string, t: number) => (safeAt.get(name) ?? Infinity) + HOP <= t + 1e-9,
+    /** Whether `name` is on their way up to the bench at `t`. */
+    hopping: (name: string, t: number) => {
+      const safe = safeAt.get(name) ?? Infinity;
+      return safe <= t + 1e-9 && t + 1e-9 < safe + HOP;
+    },
+    /** Where `name` is at `t`. */
+    at(name: string, t: number): Spot {
+      const move = moves.findLast((at) => at <= t + 1e-9 && t + 1e-9 < at + HOP);
+      const safe = safeAt.get(name) ?? Infinity;
+      if (safe + HOP <= t + 1e-9) return benchSpots[benching.indexOf(name)]!;
+      if (move === undefined) return riskSpotOf(name, t);
+      const u = inOut(Math.max(0, (t - move) / HOP));
+      const from = riskSpotOf(name, move - 1e-6);
+      if (safe === move) {
+        const to = benchSpots[benching.indexOf(name)]!;
+        const spot = between(from, to, u);
+        if (calm) return spot;
+        // An arc over the higher end: a point on a curve through its top.
+        const top = Math.min(from.y, to.y) - HOP_ARC;
+        const v = 1 - u;
+        return { ...spot, y: v * v * from.y + 2 * v * u * top + u * u * to.y };
+      }
+      return between(from, riskSpotOf(name, move), u);
+    },
+  };
+}
+
+/** Where everyone is over a show: `placings`. */
+export type Places = ReturnType<typeof placings>;
 
 /** Which side of the stage a spot is on: -1 left, 1 right. */
 export function sideOf(spot: Pick<Spot, 'x'>): -1 | 1 {
   return spot.x < STAGE.width / 2 ? -1 : 1;
 }
 
-/**
- * -1 or 1 for a side, or for the side the named person stands on; `order` is
- * the plan's standing order, whose places `spots` gives their spots.
- */
-export function towards(toward: Side, order: readonly string[]): -1 | 1 {
+/** -1 or 1 for a side, or for the side the named person stands on, as `where` says. */
+export function towards(toward: Side, where: (name: string) => Spot): -1 | 1 {
   if (typeof toward === 'number') return toward === -1 ? -1 : 1;
-  const index = order.indexOf(toward);
-  if (index < 0) throw new Error(`${toward} is not in the order`);
-  return sideOf(spots(order.length)[index]!);
+  return sideOf(where(toward));
 }
 
 /** A lean's signed angle in degrees: positive leans to the right of the stage. */
-export function signedLean(lean: Lean, order: readonly string[]): number {
-  return lean.degrees * towards(lean.toward, order);
+export function signedLean(lean: Lean, where: (name: string) => Spot): number {
+  return lean.degrees * towards(lean.toward, where);
 }
 
 /** A head's box at `spot`. */
@@ -201,7 +395,7 @@ export function headBox(spot: Spot): Box {
  * A name tag's box on the chest, two lines high (the kit never sets three).
  * `width` is the width the kit sets (`nameTag`'s style.maxWidth, which is
  * more than `spot.tag.maxWidth` for a name that can't fit two lines), and
- * `shift` what `placeTags` gives, moving the whole tag sideways.
+ * `shift` what `tagShift` gives, moving the whole tag sideways.
  */
 export function tagBox(spot: Spot, width = spot.tag.maxWidth, shift = 0): Box {
   const top = spot.y - 0.04 * spot.size;
@@ -313,18 +507,18 @@ export function blockOverlaps(block: Block, box: Box): boolean {
 }
 
 /**
- * The heap's band: from below the back row's tags (at 8 they end at 488) to
- * above the front row's heads (at 8 they start at 567), which holds at every
- * head count; and how far from the tower's middle the blocks lie. A block
- * turned by at most 6° on one of the two rows stays inside the band.
+ * The heap's band: below the heads of the 2 or 3 still at risk when it falls
+ * (they end at 474), and above the plinth; and how far from the tower's
+ * middle the blocks lie. A block turned by at most 6° on one of the two rows
+ * stays inside the band.
  */
 export const HEAP_BAND = { top: 492, bottom: 564 } as const;
 const HEAP = { near: 100, far: 330, apart: 10, rows: [524, 532], turns: [3, 5, 6, 4] } as const;
 
 /**
  * Where `count` fallen blocks, `height` high, come to rest on the unlucky person's side,
- * between the tower and them, on the grass behind the front row and in front
- * of the back row: in HEAP_BAND, so clear of every head and tag. Block k of
+ * between the tower and them: in HEAP_BAND, so clear of every head (the name
+ * tags are drawn over it). Block k of
  * the tower lies at place k; the higher blocks fly further out.
  */
 export function heap(unlucky: Spot, count: number, height = BLOCK_HEIGHT): Block[] {
@@ -372,47 +566,14 @@ export function pointerTip(spot: Spot, holding = false): Point {
  * nothing can measure it: a single line is as wide as its name (0.6 em a
  * character, as the kit counts without a canvas), the padding and the
  * borders, and never wider than `set`, the width `nameTag` sets in
- * style.maxWidth; two lines take all of `set`. In a browser, pass
- * `placeTags` the tag's measured width instead.
+ * style.maxWidth; two lines take all of `set`. In a browser, the tag's
+ * measured width replaces it.
  */
 export function tagContentWidth(name: string, size: number, set: number, lines: 1 | 2): number {
   if (lines === 2) return set;
   const letters = [...new Intl.Segmenter('en', { granularity: 'grapheme' }).segment(name)].length;
   const own = letters * 0.6 * size + 0.6 * size + 2 * stagePx('--line') + 2;
   return Math.min(set, Math.ceil(own));
-}
-
-/** Every position the tower's blocks can take: 9 to 11 blocks, leans -22…22. */
-let envelope: Block[] | undefined;
-const sway = (): Block[] =>
-  (envelope ??= [9, 10, 11].flatMap((count) =>
-    Array.from({ length: 45 }, (_, index) => tower(count, index - 22)).flat(),
-  ));
-
-/**
- * How far to move each name tag sideways, in pixels (positive to the right; 0
- * when not needed), for `tagBox`: first inward, to stay on the stage, then
- * outward, away from the tower, where the tag would sit under a block at any
- * lean. `all` and `widths` (each tag's width as the kit sets it, see
- * `tagContentWidth`) are in the same order. A very long name can still touch
- * a neighbour or the pointer's tip: the kit never sets more than two lines.
- */
-export function placeTags(all: readonly Spot[], widths: readonly number[]): number[] {
-  return all.map((spot, index) => {
-    const width = widths[index]!;
-    const onStage = tagShift(spot, width);
-    const under = (shift: number) =>
-      sway().some((block) => blockOverlaps(block, tagBox(spot, width, shift)));
-    const away = sideOf(spot);
-    let shift = onStage;
-    for (let more = 2; under(shift); more += 2) {
-      const moved = onStage + away * more;
-      const box = tagBox(spot, width, moved);
-      if (box.left < 0 || box.right > STAGE.width) break;
-      shift = moved;
-    }
-    return shift;
-  });
 }
 
 /** The middle of a block's top edge. */

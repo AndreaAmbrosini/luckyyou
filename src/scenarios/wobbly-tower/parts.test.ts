@@ -1,6 +1,16 @@
 import { describe, expect, it } from 'vitest';
-import { BLOCK_HEIGHT } from './layout';
-import { block, dust, field, hardHat, pointer, POINTER } from './parts';
+import { BLOCK_HEIGHT, PLINTH } from './layout';
+import {
+  bench,
+  block,
+  dust,
+  field,
+  hardHat,
+  plinth,
+  PLINTH_LABEL,
+  pointer,
+  POINTER,
+} from './parts';
 
 describe('the field', () => {
   it('draws the sky with clouds and the grass', () => {
@@ -36,6 +46,29 @@ describe('a block', () => {
   it('takes its own height, for the one held overhead', () => {
     expect(block(100, 'var(--color-paper)', 40).style.height).toBe('40px');
     expect(block(100, 'var(--color-paper)', 25).style.height).toBe('25px');
+  });
+});
+
+describe('the bench and the plinth', () => {
+  it('draws the plank where it is asked', () => {
+    const el = bench({ left: 230, right: 870, top: 250 });
+    expect(el.dataset.part).toBe('bench');
+    expect([el.style.left, el.style.top, el.style.width]).toEqual(['230px', '250px', '640px']);
+  });
+
+  it('draws the plinth under the tower with the count at risk', () => {
+    const { el, count } = plinth();
+    expect(el.dataset.part).toBe('plinth');
+    expect([el.style.left, el.style.top, el.style.width, el.style.height]).toEqual([
+      `${PLINTH.left}px`,
+      `${PLINTH.top}px`,
+      `${PLINTH.right - PLINTH.left}px`,
+      `${PLINTH.bottom - PLINTH.top}px`,
+    ]);
+    count(7);
+    expect(el.textContent).toBe(`${PLINTH_LABEL}7`);
+    count(6);
+    expect(el.querySelector('[data-part="at-risk"]')!.textContent).toBe('6');
   });
 });
 

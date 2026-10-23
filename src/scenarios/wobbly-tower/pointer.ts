@@ -2,7 +2,7 @@
 // shows. Worked out from the plan's turns, so play.ts can draw it at any time.
 
 import { gsap } from 'gsap';
-import { pointerTip, tagBox, TOWER, type Point, type Spot } from './layout';
+import { benchTag, BENCH, pointerTip, tagBox, TOWER, type Places, type Point } from './layout';
 import { POINTER } from './parts';
 import { hopInto, type Turn } from './plan';
 
@@ -24,11 +24,9 @@ interface Span {
   readonly to: number;
 }
 
-/** Where the pointer can be, at a spot or anywhere else. */
-interface Anchor {
-  readonly tip: Point;
-  readonly row: Spot['row'] | null;
-}
+/** The bottom of the bench's name tags, two lines high: the pointer stays below it. */
+const BENCH_TAGS =
+  BENCH.headTop + 0.8 * BENCH.head - 0.04 * BENCH.head + 2.4 * benchTag(1).size + 8;
 
 /** One hop of the pointer, from where it was to someone. */
 interface Hop {
@@ -43,30 +41,28 @@ interface Hop {
  * The pointers' hops, the stops they make and when they show, for the turns.
  * The first pointer picks the first turn of each round; the second, the
  * second turn of a pair. Each starts at `startTip`, over the paper blocks.
- * Each round a pointer fades in where it was as the round starts, hops to
- * each of the turn's decoys in turn and on to the thrower, `hopInto(i)`
- * seconds into stop i, and fades out before they lift the block. Between rows
- * it goes by the tower, and within a row it hops low enough that its box
- * stays clear of the tags.
+ * Each round a pointer fades in where it was as the round starts (over the
+ * tower, at the height it's going to, when those at risk have changed from
+ * two rows to one since), hops to each of the turn's decoys in turn and on
+ * to the thrower, `hopInto(i)` seconds into stop i, and fades out before
+ * they lift the block. It stops over someone where `places` has them once
+ * they stop moving. Between rows it goes by the tower, and within a row it
+ * hops low enough that its box stays clear of the tags above.
  */
-export function planHops(
-  turns: readonly Turn[],
-  spotOf: (name: string) => Spot,
-  spots: readonly Spot[],
-  startTip: Point,
-) {
-  const back = spots.filter((spot) => spot.row === 'back');
-  const front = spots.filter((spot) => spot.row === 'front');
-  const backTags = Math.max(...back.map((spot) => tagBox(spot).bottom));
-  const frontTop = Math.min(...front.map((spot) => pointerTip(spot).y - POINTER.height));
-  const heights: Record<Spot['row'], number> = {
-    back: HOP_HEIGHT,
-    front:
-      back.length === 0 ? HOP_HEIGHT : Math.max(0, Math.min(HOP_HEIGHT, frontTop - backTags - 2)),
+export function planHops(turns: readonly Turn[], places: Places, startTip: Point) {
+  /** Those at risk at `t`, where they stand. */
+  const standing = (t: number) => places.atRisk(t).map((name) => places.at(name, t));
+  /** How high the pointer can hop along a row whose stops it reaches at `t`, from its tip's height. */
+  const rise = (y: number, t: number) => {
+    const top = y - POINTER.height;
+    const above = standing(t)
+      .map((spot) => tagBox(spot).bottom)
+      .filter((bottom) => bottom <= top);
+    return Math.max(0, Math.min(HOP_HEIGHT, top - Math.max(BENCH_TAGS, ...above) - 2));
   };
-  const route = (a: Anchor, b: Anchor): Pick<Hop, 'path' | 'height'> => {
-    if (a.row && a.row === b.row) return { path: [a.tip, b.tip], height: heights[a.row] };
-    const path = [a.tip, { x: TOWER.x, y: a.tip.y }, { x: TOWER.x, y: b.tip.y }, b.tip].filter(
+  const route = (a: Point, b: Point, t: number): Pick<Hop, 'path' | 'height'> => {
+    if (a.y === b.y) return { path: [a, b], height: rise(a.y, t) };
+    const path = [a, { x: TOWER.x, y: a.y }, { x: TOWER.x, y: b.y }, b].filter(
       (point, index, all) =>
         index === 0 || point.x !== all[index - 1]!.x || point.y !== all[index - 1]!.y,
     );
@@ -77,20 +73,26 @@ export function planHops(
     hops: [] as Hop[],
     stays: [] as { from: number; to: number; name: string }[],
     shows: [] as (Span & { fade: number })[],
-    here: { tip: startTip, row: null } as Anchor,
+    here: startTip,
   }));
   turns.forEach((turn, index) => {
     const second = index > 0 && turns[index - 1]!.round === turn.round;
     const pointer = pointers[second ? 1 : 0]!;
     const targets = [...turn.decoys, { name: turn.by, at: turn.stops }];
     pointer.shows.push({ from: turn.from, to: turn.stops, fade: fadeOf(turn) });
+    // Where it was is no stop of these rows: it comes back in over the tower.
+    const first = targets[0]!;
+    const heights = new Set(standing(first.at).map((spot) => pointerTip(spot).y));
+    if (pointer.stays.length > 0 && !heights.has(pointer.here.y)) {
+      pointer.here = { x: TOWER.x, y: pointerTip(places.at(first.name, first.at)).y };
+      pointer.hops.push({ leaves: turn.from, arrives: turn.from, path: [pointer.here], height: 0 });
+    }
     targets.forEach(({ name, at }, i) => {
       const leaves = at - hopInto(i);
       // The stop before ends as the pointer leaves it.
       if (pointer.stays.length > 0) pointer.stays.at(-1)!.to = leaves;
-      const spot = spotOf(name);
-      const there: Anchor = { tip: pointerTip(spot), row: spot.row };
-      pointer.hops.push({ leaves, arrives: at, ...route(pointer.here, there) });
+      const there = pointerTip(places.at(name, at));
+      pointer.hops.push({ leaves, arrives: at, ...route(pointer.here, there, at) });
       pointer.stays.push({ from: at, to: Infinity, name });
       pointer.here = there;
     });

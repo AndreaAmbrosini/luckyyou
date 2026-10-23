@@ -1,11 +1,12 @@
 // The director: builds the whole show as one timeline from the plan and plays
 // it on the show's clock. The plan says whose turn it is when; this says how
-// it looks. What moves (the tower's lean, the blocks and the pointer) and who
-// looks how are worked out from the show's time each frame,
+// it looks. What moves (the tower's lean, the blocks, the pointers and the
+// people) and who looks how are worked out from the show's time each frame,
 // so every frame follows from the plan alone. The stage tells its story in
 // data attributes too: the scene's beat, the tower's lean, its blocks and how
-// many lie in the heap, whom the pointer is over, and each person's mood and
-// whether they hold a block.
+// many lie in the heap, whom each pointer is over, how many are at risk, and
+// each person's mood, whether they hold a block and whether they sit on the
+// Safe bench.
 
 import { gsap } from 'gsap';
 import {
@@ -15,6 +16,7 @@ import {
   nameTag,
   popIn,
   speechAt,
+  speechBox,
   type Cue,
   type Head,
   type Look,
@@ -23,16 +25,19 @@ import {
 } from '../../scenario-kit';
 import {
   BLOCK_WIDTHS,
+  benchTag,
   blockHeight,
   heap,
   headBox,
   heldBlock,
   overlap,
-  placeTags,
+  placings,
+  plank,
+  riskSpots,
   signedLean,
-  spots as standing,
   tagBox,
   tagContentWidth,
+  tagShift,
   topOf,
   tower,
   towards,
@@ -43,10 +48,12 @@ import {
   type Spot,
 } from './layout';
 import {
+  bench as drawBench,
   block as drawBlock,
   dust,
   field,
   hardHat,
+  plinth as drawPlinth,
   pointer as drawPointer,
   POINTER,
   speedLines,
@@ -113,9 +120,15 @@ interface Person {
   readonly name: string;
   readonly el: HTMLElement;
   readonly face: Head;
-  readonly spot: Spot;
+  /** Where they were last drawn. */
+  spot: Spot;
   /** Their name tag, drawn over the blocks until they step in front at the fall. */
   readonly tag: HTMLElement;
+  /** The box their name tag's holder takes, the size and place of their head. */
+  readonly holder: HTMLElement;
+  benched: boolean;
+  /** On their way up to the bench: their name tag hides until they sit, so it never crosses another. */
+  hopping: boolean;
   mood: Mood | '';
   holding: boolean;
   raised: boolean;
@@ -156,40 +169,55 @@ export async function playWobblyTower(show: Show): Promise<void> {
   const scene = field();
   show.stage.append(scene);
 
-  // Everyone at their spot: the back row behind the tower, the front row in front.
-  const spots = standing(plan.order.length);
-  const people = new Map<string, Person>(
-    plan.order.map((name, index) => [name, createPerson(name, looks.get(name)!, spots[index]!)]),
-  );
-  const spotOf = (name: string) => people.get(name)!.spot;
-  const row = (kind: Spot['row']) => [...people.values()].filter((p) => p.spot.row === kind);
-  for (const person of row('back')) scene.append(person.el);
+  // The Safe bench along the top and the "At risk" plinth under the tower,
+  // with 4 or more; everyone at their spot, the tower in front of them, and
+  // every name tag over every block, flying or fallen: each in a holder the
+  // size and place of its person, in a layer above the tower.
+  const headCount = plan.order.length;
+  const benches = headCount >= 4;
+  const start = riskSpots(headCount, headCount);
+  const crowd = scene.appendChild(document.createElement('div'));
+  crowd.className = styles.tower;
+  const stand = benches ? drawPlinth() : null;
+  if (stand) scene.append(stand.el);
   const built = scene.appendChild(document.createElement('div'));
   built.className = styles.tower;
   built.dataset.part = 'tower';
-  for (const person of row('front')) scene.append(person.el);
-  /** Every head and name tag, which a bubble keeps clear of. */
-  const inTheWay = [
-    ...placeNameTags([...people.values()]),
-    ...[...people.values()].map((person) => headBox(person.spot)),
-  ];
-  // Every name tag is drawn over every block, flying or fallen: each in a
-  // holder the size and place of its person, in a layer above the tower.
   const tags = scene.appendChild(document.createElement('div'));
   tags.className = styles.tower;
   tags.dataset.part = 'tags';
-  for (const person of people.values()) {
-    const holder = tags.appendChild(document.createElement('div'));
-    holder.className = styles.person;
-    for (const key of ['left', 'top', 'width', 'height'] as const) {
-      holder.style[key] = person.el.style[key];
-    }
-    holder.append(person.tag);
-  }
+  const people = new Map<string, Person>(
+    plan.order.map((name, index) => {
+      const person = createPerson(name, looks.get(name)!, start[index]!);
+      crowd.append(person.el);
+      tags.append(person.holder);
+      return [name, person];
+    }),
+  );
+  // The bench seats everyone who goes safe, left to right as they do, by
+  // their tags' widths there.
+  const goingSafe = plan.turns.filter((turn) => turn.safe !== null).map((turn) => turn.by);
+  const seated = benchTag(goingSafe.length);
+  const widths = goingSafe.map((name) => {
+    const tag = tagFor(name, seated);
+    tags.append(tag);
+    const width = tagWidth(name, tag);
+    tag.remove();
+    return width;
+  });
+  const places = placings(plan, widths, show.reducedMotion);
+  const spotAt = (name: string, t: number) => places.at(name, t);
+  if (benches) scene.insertBefore(drawBench(plank(widths)), crowd);
+  /** Every head and name tag at `t`, which a bubble keeps clear of. */
+  const inTheWay = (t: number) =>
+    plan.order.flatMap((name) => {
+      const spot = spotAt(name, t);
+      return [headBox(spot), tagBox(spot)];
+    });
 
   // The tower's lean, sway by sway, in signed degrees.
   const lean = new Sway();
-  const side = (turn: Turn) => signedLean(turn.lean, plan.order);
+  const side = (turn: Turn) => signedLean(turn.lean, (name) => spotAt(name, turn.lands));
   /** After a round's last block: Nearly leans out, holds and swings back; any other sways. */
   const swayAfter = (turn: Turn) => {
     const peak = side(turn);
@@ -257,13 +285,15 @@ export async function playWobblyTower(show: Show): Promise<void> {
       lift,
       release: Math.max(lift, turn.lands - FLIGHT),
       lands: turn.lands,
-      from: heldBlock(spotOf(turn.by)),
+      from: heldBlock(spotAt(turn.by, lift)),
     });
     if (turn.beat === 'last-turn') lastTurnSway(turn);
     else if (plan.turns[index + 1]!.round !== turn.round) swayAfter(turn);
   });
-  const fallSide = towards(plan.falls, plan.order);
   const fallsAt = plan.still.to;
+  /** Where the unlucky person stands as it falls, and to the end. */
+  const theirSpot = spotAt(show.unlucky, fallsAt);
+  const fallSide = towards(plan.falls, () => theirSpot);
   const tip = show.reducedMotion ? FALL.calmTip : FALL.tip;
   const leaning = lean.at(fallsAt);
   /** The lean at `t`: the sways, then the tip toward the unlucky person. */
@@ -275,7 +305,7 @@ export async function playWobblyTower(show: Show): Promise<void> {
   };
   // A block lands in the frame its thunk sounds in, however its time is rounded.
   const landedBy = (t: number) => flights.filter((flight) => flight.lands <= t + 1e-9).length;
-  const tumbles = planTumble(plan, heap(spotOf(show.unlucky), flights.length, height), {
+  const tumbles = planTumble(plan, heap(theirSpot, flights.length, height), {
     fallsAt,
     tip,
     side: fallSide,
@@ -286,16 +316,21 @@ export async function playWobblyTower(show: Show): Promise<void> {
   /** When the last block lands in the heap. */
   const downAt = fallsAt + FALL.lands;
 
-  // The pointer: from above the tower, it hops to each round's stops and its
-  // thrower, fades out as they lift the block, and fades in where it was as
-  // the next round starts.
-  const pointer = drawPointer();
-  pointer.el.dataset.over = '';
-  const setPointerX = gsap.quickSetter(pointer.el, 'x', 'px') as (value: number) => void;
-  const setPointerY = gsap.quickSetter(pointer.el, 'y', 'px') as (value: number) => void;
+  // The pointers: from above the tower, each hops to its round's stops and
+  // thrower (the second to a pair's second thrower), fades out as they lift
+  // the block, and fades in where it was as its next round starts.
+  const pointers = [0, 1].map(() => {
+    const { el } = drawPointer();
+    el.dataset.over = '';
+    scene.append(el);
+    return {
+      el,
+      x: gsap.quickSetter(el, 'x', 'px') as (value: number) => void,
+      y: gsap.quickSetter(el, 'y', 'px') as (value: number) => void,
+    };
+  });
   const startTip = { x: TOWER.x, y: topOf(tower(PAPER.length, 0, height).at(-1)!).y - 10 };
-  const hops = planHops(plan.turns, spotOf, spots, startTip);
-  scene.append(pointer.el);
+  const hops = planHops(plan.turns, places, startTip);
 
   // Who looks how: everyone is scared while Nearly nearly topples; whoever
   // the pointer picks is worried, then scared once the spotlight is on;
@@ -346,16 +381,33 @@ export async function playWobblyTower(show: Show): Promise<void> {
     const down = tumbles.down(t);
     if (down !== fallen) built.dataset.fallen = String((fallen = down));
 
-    // The pointer.
-    const where = hops.at(t);
-    setPointerX(where.tip.x - POINTER.tip.x);
-    setPointerY(where.tip.y - POINTER.tip.y);
-    if (pointer.el.dataset.over !== where.over) pointer.el.dataset.over = where.over;
-    setShown(pointer.el, where.shown);
+    // The pointers.
+    const where = pointers.map((pointer, which) => {
+      const at = hops.at(t, which);
+      pointer.x(at.tip.x - POINTER.tip.x);
+      pointer.y(at.tip.y - POINTER.tip.y);
+      if (pointer.el.dataset.over !== at.over) pointer.el.dataset.over = at.over;
+      setShown(pointer.el, at.shown);
+      return at;
+    });
+
+    // Everyone where they are now, and how many are still at risk.
+    for (const person of people.values()) {
+      drawPerson(person, spotAt(person.name, t));
+      const benched = places.benched(person.name, t);
+      if (benched !== person.benched)
+        person.el.dataset.benched = String((person.benched = benched));
+      const hopping = places.hopping(person.name, t);
+      if (hopping !== person.hopping) {
+        person.hopping = hopping;
+        person.tag.style.visibility = hopping ? 'hidden' : '';
+      }
+    }
+    if (stand) stand.count(places.atRisk(t).length);
 
     // Everyone's look.
     const tossing = flights.find((flight) => flight.by && t >= flight.lift && t < flight.lands);
-    const picked = where.over || tossing?.by || '';
+    const picked = where[0]!.over || tossing?.by || '';
     for (const person of people.values()) {
       const mood = moodOf(person.name, t, picked);
       const holding = person.holding;
@@ -406,7 +458,6 @@ export async function playWobblyTower(show: Show): Promise<void> {
   cue(downAt + HAT_DROP, 'fanfare');
 
   // Captions, one at each moment; the kit holds each long enough to read.
-  const headCount = plan.order.length;
   caption(0, 'Whoever topples it gets the job!');
   // As the second paper block lands.
   caption(
@@ -447,12 +498,14 @@ export async function playWobblyTower(show: Show): Promise<void> {
 
   // Gags, in bubbles beside the tower's top or a head.
   const say = (time: number, text: string, beside: Box, clearOf: readonly Box[] = []) => {
-    const avoid = [...inTheWay.filter((box) => !overlap(box, beside)), ...clearOf];
-    const speech = bubble(text, speechAt(text, beside, avoid));
+    const avoid = [...inTheWay(time).filter((box) => !overlap(box, beside)), ...clearOf];
+    const anchor = speechAt(text, beside, avoid);
+    const speech = bubble(text, anchor);
     speech.dataset.part = 'bubble';
     scene.append(speech);
     timeline.add(popIn(speech), time);
     timeline.set(speech, { autoAlpha: 0 }, time + BUBBLE);
+    return anchor;
   };
   const around = (point: Point, half: number): Box => ({
     left: point.x - half,
@@ -462,8 +515,18 @@ export async function playWobblyTower(show: Show): Promise<void> {
   });
   say(PAPER[0], 'Thunk!', around(topOf(flights[0]!.to), 40));
   say(plan.turns[0]!.lands, 'Thunk!', around(topOf(flights[2]!.to), 40));
-  say(phewAt, 'Phew!', headBox(spotOf(nearly.by)));
-  const unluckyHead = headBox(spotOf(show.unlucky));
+  // "Safe!" beside each thrower whose block holds, as they set off for the
+  // bench; after Nearly, "Phew!" first. A pair's two keep clear of each other.
+  say(phewAt, 'Phew!', headBox(spotAt(nearly.by, phewAt)));
+  const saidSafe = new Map<number, Box[]>();
+  for (const turn of plan.turns) {
+    if (turn.safe === null) continue;
+    const others = saidSafe.get(turn.safe) ?? [];
+    const head = headBox(spotAt(turn.by, turn.safe));
+    others.push(speechBox('Safe!', say(turn.safe, 'Safe!', head, others)));
+    saidSafe.set(turn.safe, others);
+  }
+  const unluckyHead = headBox(theirSpot);
   const topAt = (t: number) => around(topOf(tower(flights.length, leanAt(t), height).at(-1)!), 40);
   if (plan.ending === 'dead-still') say(creakAt, 'creak…', topAt(creakAt));
   if (plan.ending === 'it-holds') say(plan.still.from, 'Phew!', unluckyHead);
@@ -474,12 +537,12 @@ export async function playWobblyTower(show: Show): Promise<void> {
   const unlucky = people.get(show.unlucky)!;
   // The hard hat, on the head's grid, hidden until it drops.
   const hat = hardHat();
-  hat.setAttribute('width', String(unlucky.spot.size));
-  hat.setAttribute('height', String(unlucky.spot.size));
+  hat.setAttribute('width', String(theirSpot.size));
+  hat.setAttribute('height', String(theirSpot.size));
   hat.classList.add(styles.hat);
   gsap.set(hat, { autoAlpha: 0 });
   unlucky.el.append(hat);
-  const standsOut = grownBoxes(unlucky.spot);
+  const standsOut = grownBoxes(theirSpot);
   say(fallsAt, 'Timber!', topAt(fallsAt), [standsOut.head, standsOut.tag]);
   // Forward only: the show never rewinds, so nothing moves them back.
   at(fallsAt, () => {
@@ -516,7 +579,7 @@ export async function playWobblyTower(show: Show): Promise<void> {
     timeline.to(puff, { autoAlpha: 0, duration: DUST.fade }, time + DUST.grow);
   }
   // Once it's down, the hard hat drops onto their head.
-  timeline.set(hat, { autoAlpha: 1, y: -1.5 * unlucky.spot.size }, downAt);
+  timeline.set(hat, { autoAlpha: 1, y: -1.5 * theirSpot.size }, downAt);
   timeline.to(hat, { y: 0, duration: HAT_DROP, ease: 'power2.in' }, downAt);
   timeline.set({}, {}, total);
 
@@ -722,43 +785,104 @@ function setShown(el: HTMLElement | SVGElement, opacity: number) {
   if (el.style.opacity !== value) el.style.opacity = value;
 }
 
-/** Someone standing at `spot`: their head on land and their name on their chest. */
+/** The kit's name tag for `name`, set as `tag` says: onto two lines rather than smaller. */
+function tagFor(name: string, tag: Spot['tag']): HTMLElement {
+  return nameTag(name, { ...tag, wrapBelow: tag.size, chest: true });
+}
+
+/** How wide `tag` is: as the browser draws it, or where nothing is drawn (jsdom), as the layout estimates. */
+function tagWidth(name: string, tag: HTMLElement): number {
+  return (
+    tag.offsetWidth ||
+    tagContentWidth(
+      name,
+      Number.parseFloat(tag.style.getPropertyValue('--tag-size')),
+      Number.parseFloat(tag.style.maxWidth),
+      tag.dataset.lines === '2' ? 2 : 1,
+    )
+  );
+}
+
+/** Someone standing at `spot`: their head on land, and their name tag in a holder for the tags' layer. */
 function createPerson(name: string, look: Look, spot: Spot): Person {
   const el = document.createElement('div');
   el.className = styles.person;
   el.dataset.person = name;
   el.dataset.holding = 'false';
-  el.style.left = `${spot.x - spot.size / 2}px`;
-  el.style.top = `${spot.y - 0.8 * spot.size}px`;
-  el.style.width = `${spot.size}px`;
-  el.style.height = `${spot.size}px`;
+  el.dataset.benched = 'false';
   const face = head(look, { land: true, mood: 'calm' });
-  face.el.setAttribute('width', String(spot.size));
-  face.el.setAttribute('height', String(spot.size));
-  const tag = nameTag(name, { ...spot.tag, chest: true });
-  el.append(face.el, tag);
-  return { name, el, face, spot, tag, mood: '', holding: false, raised: false, sweat: false };
+  el.append(face.el);
+  const holder = document.createElement('div');
+  holder.className = styles.person;
+  const tag = tagFor(name, spot.tag);
+  holder.append(tag);
+  const person: Person = {
+    name,
+    el,
+    face,
+    spot,
+    tag,
+    holder,
+    benched: false,
+    hopping: false,
+    mood: '',
+    holding: false,
+    raised: false,
+    sweat: false,
+  };
+  drawPerson(person, spot, true);
+  return person;
 }
 
+/** The sizes the kit sets a name tag at, for each name, size and width: it is slow to ask every frame. */
+const tagSizes = new Map<string, { size: string; maxWidth: string; lines: string }>();
+
 /**
- * Moves each name tag sideways as the layout says, to keep it on the stage
- * and clear of the tower. A tag is as wide as the browser draws it; where
- * nothing is drawn (jsdom), as the layout estimates.
+ * Draws `person` at `spot`: their head and their tag's holder, and the tag
+ * set for its size there, moved sideways only to stay on the stage. Styles
+ * are written only when the spot changes.
  */
-function placeNameTags(people: readonly Person[]): Box[] {
-  const tags = people.map((person) => person.tag);
-  const widths = people.map((person, index) => {
-    const tag = tags[index]!;
-    const set = Number.parseFloat(tag.style.maxWidth);
-    const lines = tag.dataset.lines === '2' ? 2 : 1;
-    return tag.offsetWidth || tagContentWidth(person.name, person.spot.tag.size, set, lines);
-  });
-  const shifts = placeTags(
-    people.map((person) => person.spot),
-    widths,
-  );
-  shifts.forEach((shift, index) => {
-    if (shift !== 0) tags[index]!.style.left = `calc(50% + ${shift}px)`;
-  });
-  return people.map((person, index) => tagBox(person.spot, widths[index], shifts[index]));
+function drawPerson(person: Person, spot: Spot, first = false) {
+  const was = person.spot;
+  const same =
+    was.x === spot.x &&
+    was.y === spot.y &&
+    was.size === spot.size &&
+    was.tag.size === spot.tag.size &&
+    was.tag.maxWidth === spot.tag.maxWidth;
+  if (same && !first) return;
+  person.spot = spot;
+  const place = {
+    left: `${spot.x - spot.size / 2}px`,
+    top: `${spot.y - 0.8 * spot.size}px`,
+    width: `${spot.size}px`,
+    height: `${spot.size}px`,
+  };
+  for (const el of [person.el, person.holder]) {
+    for (const key of ['left', 'top', 'width', 'height'] as const) el.style[key] = place[key];
+  }
+  person.face.el.setAttribute('width', String(spot.size));
+  person.face.el.setAttribute('height', String(spot.size));
+  const tag = {
+    size: Math.round(spot.tag.size * 10) / 10,
+    maxWidth: Math.round(spot.tag.maxWidth),
+  };
+  const key = `${person.name}|${tag.size}|${tag.maxWidth}`;
+  let set = tagSizes.get(key);
+  if (!set) {
+    const fresh = tagFor(person.name, tag);
+    set = {
+      size: fresh.style.getPropertyValue('--tag-size'),
+      maxWidth: fresh.style.maxWidth,
+      lines: fresh.dataset.lines!,
+    };
+    tagSizes.set(key, set);
+  }
+  const { style, dataset } = person.tag;
+  if (style.getPropertyValue('--tag-size') !== set.size) style.setProperty('--tag-size', set.size);
+  if (style.maxWidth !== set.maxWidth) style.maxWidth = set.maxWidth;
+  if (dataset.lines !== set.lines) dataset.lines = set.lines;
+  const shift = tagShift(spot, tagWidth(person.name, person.tag));
+  const left = shift === 0 ? '50%' : `calc(50% + ${shift}px)`;
+  if (style.left !== left) style.left = left;
 }
