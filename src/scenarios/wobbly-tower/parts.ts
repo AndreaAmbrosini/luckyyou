@@ -71,18 +71,12 @@ export const POINTER = {
 export interface Pointer {
   /**
    * The "Your turn!" sign, absolutely positioned at its container's 0,0 and
-   * POINTER.width × POINTER.height stage pixels big; data-part="pointer",
-   * data-ghost. Put its tip on a point P with left = P.x − tip.x and top =
-   * P.y − tip.y (for `pointerTip`: x − 75, y − 56). The whole body is above
-   * the tip, so it covers P.x ± 75 and P.y − 56 … P.y.
+   * POINTER.width × POINTER.height stage pixels big; data-part="pointer".
+   * Put its tip on a point P with left = P.x − POINTER.tip.x and top =
+   * P.y − POINTER.tip.y (for `pointerTip`: x − 75, y − 56). The whole body
+   * is above the tip, so it covers P.x ± 75 and P.y − 56 … P.y.
    */
   readonly el: HTMLElement;
-  readonly width: number;
-  readonly height: number;
-  /** The tip, from the sign's top left: bottom middle. */
-  readonly tip: Point;
-  /** A dashed, empty sign: where the pointer was or might go. */
-  setGhost(on: boolean): void;
 }
 
 /** A short sign "Your turn!" on a tail that points down. */
@@ -98,17 +92,7 @@ export function pointer(): Pointer {
   ]);
   tail.setAttribute('class', styles.pointerTailSvg);
   el.append(tail);
-  const api: Pointer = {
-    el,
-    width: POINTER.width,
-    height: POINTER.height,
-    tip: POINTER.tip,
-    setGhost(on) {
-      el.dataset.ghost = String(on);
-    },
-  };
-  api.setGhost(false);
-  return api;
+  return { el };
 }
 
 /**
@@ -135,28 +119,31 @@ export interface Pigeon {
   setPose(pose: Pose): void;
 }
 
-/** A pigeon, facing right. The feet stand on y 68 of its grid, near x 38. */
+/** Where the pigeon's feet stand on its 90 × 70 grid. */
+export const PIGEON_FEET: Point = { x: 38, y: 68 };
+
+/** A pigeon, facing right, its feet at PIGEON_FEET. */
 export function pigeon(): Pigeon {
   const el = drawing(90, 70, []);
   el.style.overflow = 'visible';
   el.dataset.part = 'pigeon';
 
   // Each pose has a layer behind the body (legs, tail) and one over it (wing).
-  const behind = (pose: Pose, shapes: readonly Shape[]) =>
+  const layer = (pose: Pose, shapes: readonly Shape[]) =>
     group(el, ['data-pose-part', pose], shapes);
   const back: SVGGElement[] = [
-    behind('perched', [
+    layer('perched', [
       ['path', styles.legs, { d: 'M30 58 V68 M46 58 V68', 'stroke-width': 5 }],
       ['path', styles.tail, { d: 'M14 36 L0 24 L2 46 Z', 'stroke-width': 4 }],
     ]),
-    behind('flying', [['path', styles.tail, { d: 'M14 36 L0 30 L2 50 Z', 'stroke-width': 4 }]]),
+    layer('flying', [['path', styles.tail, { d: 'M14 36 L0 30 L2 50 Z', 'stroke-width': 4 }]]),
   ];
   draw(el, [['ellipse', styles.bird, { cx: 38, cy: 42, rx: 28, ry: 18, 'stroke-width': 4 }]]);
   const front: SVGGElement[] = [
-    behind('perched', [
+    layer('perched', [
       ['path', styles.ink, { d: 'M22 40 Q36 30 52 42', 'data-wing': '', 'stroke-width': 4 }],
     ]),
-    behind('flying', [
+    layer('flying', [
       [
         'path',
         styles.wing,

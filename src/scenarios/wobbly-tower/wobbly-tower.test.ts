@@ -31,11 +31,12 @@ import {
   placeTags,
   tagContentWidth,
   tower,
+  type Block,
   type Box,
   type Point,
   type Spot,
 } from './layout';
-import { POINTER } from './parts';
+import { PIGEON_FEET, POINTER } from './parts';
 import { grownBoxes, speechBox } from './play';
 
 const POINTER_MOVES: readonly PointerMove[] = ['straight', 'fake-out', 'again'];
@@ -76,8 +77,7 @@ const only = (plan: Plan, beat: Beat): Turn => {
 };
 const total = (plan: Plan) => BEATS.reduce((seconds, beat) => seconds + plan.beats[beat], 0);
 /** When `beat` starts, in show seconds. */
-const startOf = (plan: Plan, beat: Beat) =>
-  BEATS.slice(0, BEATS.indexOf(beat)).reduce((seconds, each) => seconds + plan.beats[each], 0);
+const startOf = (plan: Plan, beat: Beat) => plan.starts[beat];
 /** Whether anyone takes two turns in a row, the last turn left out. */
 const repeatsBeforeLast = (plan: Plan) =>
   plan.turns.slice(0, -1).some((turn, index) => index > 0 && turn.by === plan.turns[index - 1]!.by);
@@ -179,6 +179,8 @@ interface Frame {
   readonly them: string;
   /** The unlucky person's hard hat, how far above its place on their head, while it shows. */
   readonly hat: { readonly y: number } | null;
+  /** Every block drawn, standing, flying, tumbling or in the heap, and whose name tags are drawn over it. */
+  readonly drawn: readonly (Block & { readonly under: readonly string[] })[];
 }
 
 /** In the last frame of a run: how the unlucky person and the blocks ended up. */
@@ -276,6 +278,7 @@ async function watch(
         hat: SVGElement | null;
         speedLines: HTMLElement | null;
         dust: HTMLElement[];
+        tags: HTMLElement[];
       }
     | undefined;
   let end: End = { inFront: false, scale: 0, rests: [] };
@@ -316,8 +319,10 @@ async function watch(
         hat: stage.querySelector<SVGElement>('[data-part="hard-hat"]'),
         speedLines: stage.querySelector<HTMLElement>('[data-part="speed-lines"]'),
         dust: [...stage.querySelectorAll<HTMLElement>('[data-part="dust"]')],
+        tags: [...stage.querySelectorAll<HTMLElement>('[data-on="chest"]')],
       };
       const { scene, tower: drawn, blocks, people, pointer, pigeon, bubbles, them, hat } = parts;
+      const theirTag = parts.tags.find((tag) => tag.textContent === unlucky)!;
       for (const cue of asked) cues.push({ cue, time });
       asked = [];
       if (!sign) {
@@ -380,8 +385,21 @@ async function watch(
         fallen: Number(drawn.dataset.fallen ?? 0),
         speedLines: parts.speedLines !== null && opacityOf(parts.speedLines) > 0,
         dust: parts.dust.filter((puff) => opacityOf(puff) > 0).length,
-        them: placementOf(them),
+        them: placementOf(them, theirTag),
         hat: hat && opacityOf(hat) > 0 ? { y: Number(gsap.getProperty(hat, 'y')) } : null,
+        drawn: blocks
+          .filter((block) => opacityOf(block) > 0)
+          .map((block) => ({
+            ...placed(block)!,
+            width: Number.parseFloat(block.style.width),
+            height: Number.parseFloat(block.style.height),
+            under: parts!.tags
+              .filter(
+                (tag) =>
+                  (block.compareDocumentPosition(tag) & Node.DOCUMENT_POSITION_FOLLOWING) !== 0,
+              )
+              .map((tag) => tag.textContent!),
+          })),
       });
       const follows = (element: Element) =>
         (them.compareDocumentPosition(element) & Node.DOCUMENT_POSITION_PRECEDING) !== 0;
@@ -410,14 +428,10 @@ async function watch(
 }
 
 /** Where `person` is drawn and how big, with their name tag: the same string while they hold still. */
-function placementOf(person: HTMLElement): string {
-  const tag = person.querySelector<HTMLElement>('[data-on="chest"]')!;
+function placementOf(person: HTMLElement, tag: HTMLElement): string {
   const { left, top, transform } = person.style;
   return [left, top, transform, tag.style.left, tag.style.transform].join(' | ');
 }
-
-/** The pigeon's feet on its 90 × 70 grid (parts.ts). */
-const PIGEON_FEET = { x: 38, y: 68 } as const;
 
 /** Each time a block lands: the frame's time and how many have landed. */
 const landings = (frames: readonly Frame[]) =>
@@ -648,11 +662,21 @@ function expectEndingPlayed(
   ]);
   const [shown, pointerCaption, ...rest] = fromNearly;
   expect(shown!.from, label).toBeLessThanOrEqual(nearly.lands + STEP + 1e-9);
-  expect(pointerCaption!.from, label).toBeLessThanOrEqual(startOf(plan, 'last-turn') + 0.15);
+  // It names them once the pointer is on its way to them: as it hops on
+  // from the decoy, as it stops over them, or as the turn starts when it
+  // stays on them.
+  const named = pointerCaption!.from;
+  const lastStops = stops(frames.filter((frame) => frame.time >= startOf(plan, 'last-turn')));
   if (plan.pointer === 'fake-out') {
-    // Up while the pointer is on the decoy.
-    const at = frames.find((frame) => frame.time >= pointerCaption!.from - 1e-9)!;
-    expect(at.over, label).toBe(plan.phew);
+    const decoy = lastStops.find((stop) => stop.name === plan.phew)!;
+    expect(named, label).toBeGreaterThan(decoy.to);
+    expect(named, label).toBeLessThanOrEqual(decoy.to + STEP + 1e-9);
+  } else if (plan.pointer === 'straight') {
+    expect(named, label).toBeGreaterThanOrEqual(last.stops - 1e-9);
+    expect(named, label).toBeLessThanOrEqual(last.stops + STEP + 1e-9);
+    expect(frames.find((frame) => frame.time >= named - 1e-9)!.over, label).toBe(unlucky);
+  } else {
+    expect(named, label).toBeLessThanOrEqual(startOf(plan, 'last-turn') + 0.15);
   }
   const toppled = rest.at(-1)!;
   const onTime = (caption: { from: number }, time: number, text: string) => {
@@ -663,11 +687,11 @@ function expectEndingPlayed(
     onTime(rest[0]!, plan.still.from, 'It holds!');
     onTime(rest[1]!, falls, '…or not!');
   } else {
-    // At the freeze or the lean, before the fall.
+    // At the freeze or the lean, or as soon after as the pointer caption's
+    // second allows, before the fall.
     expect(rest[0]!.from, label).toBeGreaterThanOrEqual(last.lands - 1e-9);
-    expect(rest[0]!.from, label).toBeLessThan(
-      plan.still.from + (plan.ending === 'dead-still' ? 0.5 : 0),
-    );
+    expect(rest[0]!.from, label).toBeLessThanOrEqual(Math.max(last.lands, named + 1) + STEP + 1e-9);
+    expect(rest[0]!.from, label).toBeLessThan(falls);
   }
   const down = heaped(frames, plan);
   expect(down, label).toBeDefined();
@@ -1601,8 +1625,10 @@ describeSpec(await loadFeature('./wobbly-tower.feature'), ({ Rule }) => {
       );
       Then('the caption is {string}', (_, text: string) => {
         const up = lastTurnCaption(run, text);
-        // Up as the pointer stops on the decoy, and still up as it hops on.
-        expect(up[0]!.over).toBe(run.plan.phew);
+        // Up as the pointer hops on from the decoy, and still up as it stops over them.
+        const before = run.frames.filter((frame) => frame.time < up[0]!.time).at(-1)!;
+        expect(before.over).toBe(run.plan.phew);
+        expect(up[0]!.over).toBe('');
         expect(up.some((frame) => frame.over === unlucky)).toBe(true);
       });
       And(
@@ -1884,10 +1910,11 @@ describe('The layout', () => {
   it("the pointer's tip never covers a tag", () => {
     for (let count = 2; count <= 12; count++) {
       const all = spots(count);
+      const everyCast = casts(count);
       for (const spot of all) {
         for (const holding of [false, true]) {
           const tip = pointerTip(spot, holding);
-          for (const { boxes } of casts(count)) {
+          for (const { boxes } of everyCast) {
             for (const box of boxes) expect(inside(box, tip), `${count} people`).toBe(false);
           }
           expect(tip.y, `${count} people`).toBeGreaterThanOrEqual(120);
@@ -2072,6 +2099,11 @@ describe('The plan', () => {
         expect(turn.stops, label).toBeGreaterThan(turn.from);
         expect(turn.lands, label).toBeGreaterThan(turn.stops);
         expect(turn.lands, label).toBeLessThanOrEqual(turn.from + turn.seconds + 1e-9);
+      });
+      // The beats start one after another.
+      BEATS.forEach((beat, index) => {
+        const before = BEATS.slice(0, index).reduce((sum, each) => sum + plan.beats[each], 0);
+        expect(plan.starts[beat], `${label}, ${beat}`).toBeCloseTo(before, 9);
       });
       // Each beat's turns fill it, and the last ends where timber starts.
       const wobble = only(plan, 'wobble');
@@ -2431,5 +2463,34 @@ describe('The last turn and the fall', () => {
       expect(frame.time).toBeGreaterThanOrEqual(plan.still.to);
       expect(frame.time).toBeLessThan(down.time + 1);
     }
+  });
+});
+
+describe('Blocks and name tags', () => {
+  it('a name tag a block crosses, in the air, on the tower or in the heap, is drawn over it', async () => {
+    // Blocks do cross tags at 8: a front-row toss, and the tumble.
+    let crossed = 0;
+    for (const { count, seed } of [
+      { count: 2, seed: 1 },
+      { count: 8, seed: 1 },
+      { count: 8, seed: 2 },
+      { count: 12, seed: 1 },
+    ]) {
+      const { frames, plan } = await watch(names(count), unluckyOf(count), { seed });
+      const tags = tagsOf(plan.order);
+      for (const frame of frames) {
+        for (const block of frame.drawn) {
+          plan.order.forEach((name, index) => {
+            if (!blockOverlaps(block, tags[index]!)) return;
+            crossed++;
+            expect(
+              block.under,
+              `${count} people, seed ${seed}, ${name}'s tag at ${frame.time}`,
+            ).toContain(name);
+          });
+        }
+      }
+    }
+    expect(crossed).toBeGreaterThan(0);
   });
 });

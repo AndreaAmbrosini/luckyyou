@@ -19,20 +19,11 @@ describe('the pointer', () => {
   it('is a compact sign whose tip is the bottom middle', () => {
     const p = pointer();
     expect(p.el.dataset.part).toBe('pointer');
-    expect(p.height).toBeLessThanOrEqual(60);
-    expect(p.tip).toEqual({ x: p.width / 2, y: p.height });
+    expect(POINTER.height).toBeLessThanOrEqual(60);
+    expect(POINTER.tip).toEqual({ x: POINTER.width / 2, y: POINTER.height });
     expect(p.el.style.width).toBe(`${POINTER.width}px`);
     expect(p.el.style.height).toBe(`${POINTER.height}px`);
     expect(p.el.textContent).toContain('Your turn!');
-  });
-
-  it('can be a dashed ghost', () => {
-    const p = pointer();
-    expect(p.el.dataset.ghost).toBe('false');
-    p.setGhost(true);
-    expect(p.el.dataset.ghost).toBe('true');
-    p.setGhost(false);
-    expect(p.el.dataset.ghost).toBe('false');
   });
 });
 

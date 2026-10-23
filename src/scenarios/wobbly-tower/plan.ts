@@ -56,8 +56,9 @@ export interface Turn {
   /**
    * Show seconds when the turn starts. Each turn starts where the one before
    * ends, except the first careful turn, which starts after the pigeon's beat.
-   * The pointer leaves for this turn earlier, as the previous block lands
-   * (the first turn's at its start, the paper blocks down).
+   * The pointer leaves for this turn at max(the previous block's landing,
+   * or stack's start for the first turn, its first stop − play.ts's
+   * LONGEST_HOP).
    */
   readonly from: number;
   /** Show seconds when the pointer stops on the decoy; null without one. */
@@ -81,6 +82,8 @@ export interface Plan {
   readonly ending: Ending;
   /** Show seconds per beat; the pigeon's is 0 without the pigeon. */
   readonly beats: Readonly<Record<Beat, number>>;
+  /** Show seconds when each beat starts; the show ends at timber's start plus its seconds. */
+  readonly starts: Readonly<Record<Beat, number>>;
   /**
    * Every turn, in order: the quick turns, the big wobble, two careful turns,
    * Nearly and the last turn. The thunk's two paper blocks are nobody's turn,
@@ -115,10 +118,10 @@ const QUICKER = 0.9;
 /** The careful turns, in proportion. */
 const CAREFUL = [1, 1.25];
 /**
- * The pointer hops from the previous block's landing, while the tower
- * settles. Every hop and toss lasts 0.4 s or more (DESIGN.md: movement that
- * matters), except a quick turn's hop, which gets what its toss leaves, 0.2 s
- * or more.
+ * The pointer hops while the tower settles, leaving at max(the previous
+ * block's landing, its first stop − play.ts's LONGEST_HOP). Every hop and
+ * toss lasts 0.4 s or more (DESIGN.md: movement that matters), except a
+ * quick turn's hop, which gets what its toss leaves, 0.2 s or more.
  */
 const TOSS = 0.4;
 /** A quick turn lands as it ends, and its toss takes this much of it, at least `TOSS`. */
@@ -208,8 +211,13 @@ export function planShow(names: readonly string[], unlucky: string, random: () =
     },
     SHORTEST,
   );
-  const start = (beat: Beat) =>
-    BEATS.slice(0, BEATS.indexOf(beat)).reduce((seconds, each) => seconds + beats[each], 0);
+  const starts = Object.fromEntries(
+    BEATS.map((beat, index) => [
+      beat,
+      BEATS.slice(0, index).reduce((seconds, each) => seconds + beats[each], 0),
+    ]),
+  ) as Record<Beat, number>;
+  const start = (beat: Beat) => starts[beat];
 
   // Backwards from the fall: who takes each turn, its decoy and its lean,
   // from the last turn to the first. At 3 or more nobody takes the turn
@@ -345,6 +353,7 @@ export function planShow(names: readonly string[], unlucky: string, random: () =
     pointer,
     ending,
     beats,
+    starts,
     turns,
     phew: fakeOut,
     hold,

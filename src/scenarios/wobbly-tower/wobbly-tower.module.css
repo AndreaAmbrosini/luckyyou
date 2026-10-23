@@ -111,21 +111,6 @@
   stroke-linejoin: round;
 }
 
-.pointer[data-ghost='true'] {
-  opacity: 0.6;
-}
-
-.pointer[data-ghost='true'] .pointerLabel {
-  border-style: dashed;
-  background-color: transparent;
-  box-shadow: none;
-}
-
-.pointer[data-ghost='true'] .pointerTail {
-  fill: none;
-  stroke-dasharray: 6 6;
-}
-
 .block {
   position: absolute;
   top: 0;

@@ -48,6 +48,7 @@ import {
   field,
   hardHat,
   pigeon as drawPigeon,
+  PIGEON_FEET,
   pointer as drawPointer,
   POINTER,
   speedLines,
@@ -96,8 +97,6 @@ const PIGEON = {
   from: { x: -120, y: 90 },
   to: { x: STAGE.width + 140, y: 40 },
 } as const;
-/** The pigeon's feet on its 90 × 70 grid (parts.ts). */
-const FEET = { x: 38, y: 68 } as const;
 /** Seconds Nearly takes to swing back upright after its hold. */
 const NEARLY_BACK = 0.5;
 /** Seconds the pointer takes to fade in or out. */
@@ -109,6 +108,11 @@ const LONGEST_HOP = 0.6;
  * hop on to the taker leaves over `hop` seconds.
  */
 const DWELL = { least: 0.25, hop: 0.5 };
+/** How long the pointer rests on a stop at `stops` before hopping on to the next at `next`. */
+const restBetween = (stops: number, next: number) =>
+  Math.max(DWELL.least, next - stops - DWELL.hop);
+/** When the pointer hops on from `turn`'s decoy. */
+const movesOn = (turn: Turn) => turn.decoyStops! + restBetween(turn.decoyStops!, turn.stops);
 /** How high the pointer hops between two people of the same row, at most. */
 const HOP_HEIGHT = 40;
 /**
@@ -159,6 +163,8 @@ interface Person {
   readonly el: HTMLElement;
   readonly face: Head;
   readonly spot: Spot;
+  /** Their name tag, drawn over the blocks until they step in front at the fall. */
+  readonly tag: HTMLElement;
   mood: Mood | '';
   holding: boolean;
   raised: boolean;
@@ -193,12 +199,8 @@ export async function playWobblyTower(show: Show): Promise<void> {
   const caption = (time: number, text: string) => at(time, () => show.caption(text));
 
   /** When each beat starts, in show seconds. */
-  const starts = {} as Record<Beat, number>;
-  let total = 0;
-  for (const beat of BEATS) {
-    starts[beat] = total;
-    total += plan.beats[beat];
-  }
+  const { starts } = plan;
+  const total = starts.timber + plan.beats.timber;
 
   const scene = field();
   show.stage.append(scene);
@@ -220,6 +222,19 @@ export async function playWobblyTower(show: Show): Promise<void> {
     ...placeNameTags([...people.values()]),
     ...[...people.values()].map((person) => headBox(person.spot)),
   ];
+  // Every name tag is drawn over every block, flying or fallen: each in a
+  // holder the size and place of its person, in a layer above the tower.
+  const tags = scene.appendChild(document.createElement('div'));
+  tags.className = styles.tower;
+  tags.dataset.part = 'tags';
+  for (const person of people.values()) {
+    const holder = tags.appendChild(document.createElement('div'));
+    holder.className = styles.person;
+    for (const key of ['left', 'top', 'width', 'height'] as const) {
+      holder.style[key] = person.el.style[key];
+    }
+    holder.append(person.tag);
+  }
 
   // The tower's lean, sway by sway, in signed degrees.
   const lean = new Sway();
@@ -447,8 +462,8 @@ export async function playWobblyTower(show: Show): Promise<void> {
                   ease.fly((t - leavesAt) / (P + plan.beats.pigeon - leavesAt)),
                   60,
                 );
-        setBirdX!(feet.x - FEET.x);
-        setBirdY!(feet.y - FEET.y);
+        setBirdX!(feet.x - PIGEON_FEET.x);
+        setBirdY!(feet.y - PIGEON_FEET.y);
       }
     }
 
@@ -514,7 +529,16 @@ export async function playWobblyTower(show: Show): Promise<void> {
     caption(turn.stops, `${turn.by}…`);
   }
   caption(nearly.lands, 'Nearly!');
-  caption(starts['last-turn'], pointerCaption(plan, show.unlucky));
+  // The last turn's caption names the unlucky person once the pointer is on
+  // its way to them: as it hops on from the decoy, as it stops over them, or
+  // as the turn starts when it stays on them.
+  const named =
+    plan.pointer === 'fake-out'
+      ? movesOn(last)
+      : plan.pointer === 'straight'
+        ? last.stops
+        : starts['last-turn'];
+  caption(named, pointerCaption(plan, show.unlucky));
   if (plan.ending === 'dead-still') caption(last.lands, 'Uh-oh…');
   if (plan.ending === 'it-holds') {
     caption(plan.still.from, 'It holds!');
@@ -548,8 +572,7 @@ export async function playWobblyTower(show: Show): Promise<void> {
   if (plan.phew && plan.phew !== nearly.by) {
     // The decoy is let off as the pointer hops on from them. When they threw
     // Nearly, they are saying it already.
-    const rest = Math.max(DWELL.least, last.stops - last.decoyStops! - DWELL.hop);
-    say(last.decoyStops! + rest, 'Phew!', headBox(spotOf(plan.phew)));
+    say(movesOn(last), 'Phew!', headBox(spotOf(plan.phew)));
   }
   if (plan.pointer === 'again') say(last.stops + fadeOf(last), 'Me again?!', unluckyHead);
   const topAt = (t: number) => around(topOf(tower(flights.length, leanAt(t)).at(-1)!), 40);
@@ -560,9 +583,20 @@ export async function playWobblyTower(show: Show): Promise<void> {
   // and "Timber!" goes up by the tower's top, clear of their grown head and
   // name tag, where the hard hat lands too.
   const unlucky = people.get(show.unlucky)!;
+  // The hard hat, on the head's grid, hidden until it drops.
+  const hat = hardHat();
+  hat.setAttribute('width', String(unlucky.spot.size));
+  hat.setAttribute('height', String(unlucky.spot.size));
+  hat.classList.add(styles.hat);
+  gsap.set(hat, { autoAlpha: 0 });
+  unlucky.el.append(hat);
   const standsOut = grownBoxes(unlucky.spot);
   say(fallsAt, 'Timber!', topAt(fallsAt), [standsOut.head, standsOut.tag]);
-  at(fallsAt, () => scene.append(unlucky.el));
+  // Forward only: the show never rewinds, so nothing moves them back.
+  at(fallsAt, () => {
+    unlucky.el.insertBefore(unlucky.tag, hat);
+    scene.append(unlucky.el);
+  });
   timeline.to(
     unlucky.el,
     { scale: GROWN, duration: GROW, ease: show.reducedMotion ? 'power2.out' : 'back.out(1.4)' },
@@ -592,13 +626,7 @@ export async function playWobblyTower(show: Show): Promise<void> {
     timeline.to(puff, { scale: 1.3, duration: DUST.grow, ease: 'power2.out' }, time);
     timeline.to(puff, { autoAlpha: 0, duration: DUST.fade }, time + DUST.grow);
   }
-  // Once it's down, the hard hat drops onto their head, on the head's grid.
-  const hat = hardHat();
-  hat.setAttribute('width', String(unlucky.spot.size));
-  hat.setAttribute('height', String(unlucky.spot.size));
-  hat.classList.add(styles.hat);
-  gsap.set(hat, { autoAlpha: 0 });
-  unlucky.el.append(hat);
+  // Once it's down, the hard hat drops onto their head.
   timeline.set(hat, { autoAlpha: 1, y: -1.5 * unlucky.spot.size }, downAt);
   timeline.to(hat, { y: 0, duration: HAT_DROP, ease: 'power2.in' }, downAt);
   timeline.set({}, {}, total);
@@ -710,10 +738,7 @@ function planHops(
       const spot = spotOf(name);
       const there: Anchor = { tip: pointerTip(spot), row: spot.row };
       hops.push({ leaves: from, arrives: time, ...route(here, there) });
-      const rest =
-        at < targets.length - 1
-          ? Math.max(DWELL.least, targets[at + 1]!.time - time - DWELL.hop)
-          : Infinity;
+      const rest = at < targets.length - 1 ? restBetween(time, targets[at + 1]!.time) : Infinity;
       stays.push({ from: time, to: time + rest, name });
       here = there;
       from = time + rest;
@@ -930,8 +955,9 @@ function createPerson(name: string, look: Look, spot: Spot): Person {
   const face = head(look, { land: true, mood: 'calm' });
   face.el.setAttribute('width', String(spot.size));
   face.el.setAttribute('height', String(spot.size));
-  el.append(face.el, nameTag(name, { ...spot.tag, chest: true }));
-  return { name, el, face, spot, mood: '', holding: false, raised: false, sweat: false };
+  const tag = nameTag(name, { ...spot.tag, chest: true });
+  el.append(face.el, tag);
+  return { name, el, face, spot, tag, mood: '', holding: false, raised: false, sweat: false };
 }
 
 /**
@@ -940,7 +966,7 @@ function createPerson(name: string, look: Look, spot: Spot): Person {
  * nothing is drawn (jsdom), as the layout estimates.
  */
 function placeNameTags(people: readonly Person[]): Box[] {
-  const tags = people.map((person) => person.el.querySelector<HTMLElement>('[data-on="chest"]')!);
+  const tags = people.map((person) => person.tag);
   const widths = people.map((person, index) => {
     const tag = tags[index]!;
     const set = Number.parseFloat(tag.style.maxWidth);
