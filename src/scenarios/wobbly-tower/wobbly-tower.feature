@@ -91,7 +91,6 @@ Feature: Wobbly Tower
         | 9     |
         | 12    |
 
-  @pending
   Rule: The final three
 
     Scenario: The spotlight
@@ -122,7 +121,6 @@ Feature: Wobbly Tower
       Then on the last turn the pointer stops on the unlucky person before the end of its round in some runs, and not in others
       And on a turn in the final that ends in "Safe!", it stops on the unlucky person in some runs
 
-  @pending
   Rule: With 2 or 3 people it is the final from the start
 
     Scenario Outline: <count> people
@@ -232,7 +230,6 @@ Feature: Wobbly Tower
 
   Rule: It reads without sound
 
-    @pending
     Scenario: Captions tell the Safe! story to the end
       Given 6 people, the unlucky person is "Fabio", the turns before the final three go to "Elena", "Ben" and "Anna", Anna has "Nearly!", the pointer stops on "Dario" and "Carla" before "Fabio", and the tower goes dead still at the end
       When the show runs

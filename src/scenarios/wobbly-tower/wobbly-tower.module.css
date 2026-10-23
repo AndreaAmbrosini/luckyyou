@@ -205,6 +205,18 @@
   left: 0;
 }
 
+/* The final's spotlight: ink round an ellipse of light on the tower. */
+.spotlight {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background-image: radial-gradient(
+    ellipse 640px 330px at 640px 520px,
+    transparent 72%,
+    color-mix(in srgb, var(--color-ink) 62%, transparent) 100%
+  );
+}
+
 .speedLines {
   position: absolute;
   top: 0;

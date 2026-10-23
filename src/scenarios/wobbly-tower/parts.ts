@@ -1,6 +1,6 @@
 // Wobbly Tower's drawings, from the Design canvas: the "Your turn!" pointer,
-// the blocks, the Safe bench, the "At risk" plinth, the hard hat, the dust
-// puffs, the speed lines and the field.
+// the blocks, the Safe bench, the "At risk" plinth, the spotlight, the hard
+// hat, the dust puffs, the speed lines and the field.
 // Every colour comes from a class in wobbly-tower.module.css, or from the
 // `var(--…)` a block is given.
 
@@ -146,6 +146,14 @@ export function plinth(): Plinth {
       if (number.textContent !== text) number.textContent = text;
     },
   };
+}
+
+/**
+ * The final's spotlight: the whole stage dimmed but for an ellipse of light
+ * on the tower and those at risk; data-part="spotlight".
+ */
+export function spotlight(): HTMLElement {
+  return part(styles.spotlight, 'spotlight');
 }
 
 /** A hard hat for a head on a 100 grid. */

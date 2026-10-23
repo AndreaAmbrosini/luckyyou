@@ -8,10 +8,20 @@ import {
   marcoRun,
   heaped,
   expectEndingPlayed,
+  STEP,
 } from './watching';
 
 /** How many can be left at risk when it falls: 3 or 2, or everyone with 2 or 3 people. */
 const leftAt = (count: number) => (count <= 3 ? [count] : [3, 2]);
+
+/** Each run, once: the same show is watched by more than one test. */
+const runs = new Map<string, ReturnType<typeof watch>>();
+const runOf = (team: readonly string[], unlucky: string, seed: number) => {
+  const key = `${team.join()}|${unlucky}|${seed}`;
+  let run = runs.get(key);
+  if (!run) runs.set(key, (run = watch(team, unlucky, { seed })));
+  return run;
+};
 
 describe('The last turn and the fall', () => {
   // Every ending, falling with 3 left and with 2 left, at 2, 8 and 12: the
@@ -27,7 +37,7 @@ describe('The last turn and the fall', () => {
             unlucky,
             (plan) => plan.ending === ending && plan.fallsWith === left,
           );
-          const run = await watch(team, unlucky, { seed });
+          const run = await runOf(team, unlucky, seed);
           expectEndingPlayed(
             run,
             unlucky,
@@ -55,6 +65,24 @@ describe('The last turn and the fall', () => {
           calm.frames.filter((frame) => frame.speedLines),
           label,
         ).toEqual([]);
+      }
+    }
+  });
+
+  it("the run ends on the plan's time", async () => {
+    for (const count of [2, 6, 12]) {
+      const team = names(count);
+      const unlucky = unluckyOf(count);
+      for (const left of leftAt(count)) {
+        // The first ending's seed, as above where it has run already.
+        const seed = seedOf(
+          team,
+          unlucky,
+          (plan) => plan.ending === ENDINGS[0] && plan.fallsWith === left,
+        );
+        const { record, plan } = await runOf(team, unlucky, seed);
+        const label = `${count} people, ${left} left, seed ${seed}`;
+        expect(Math.abs(record.duration - plan.end), label).toBeLessThanOrEqual(STEP + 1e-9);
       }
     }
   });

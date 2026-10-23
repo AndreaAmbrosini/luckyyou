@@ -142,6 +142,16 @@ export interface Frame {
   /** The top landed block's centre and turn, as drawn; null before the first lands. */
   readonly top: (Point & { readonly turn: number }) | null;
   readonly moods: Readonly<Record<string, string>>;
+  /** Who sweats. */
+  readonly sweat: readonly string[];
+  /** How opaque the spotlight's dimming is drawn: 0 hidden, 1 fully. */
+  readonly spotlight: number;
+  /** Whose head comes before the spotlight in the document, so is dimmed by it. */
+  readonly dimmed: readonly string[];
+  /** Whose head and name tag come after the spotlight, so are drawn over it, undimmed. */
+  readonly lit: readonly string[];
+  /** Whether the Safe bench is drawn. */
+  readonly bench: boolean;
   /** Who holds a block overhead. */
   readonly holding: readonly string[];
   /** The speech bubbles showing, and where their tails point. */
@@ -260,6 +270,10 @@ export async function watch(
         speedLines: HTMLElement | null;
         dust: HTMLElement[];
         tags: HTMLElement[];
+        /** Each person's name tag and sweat drops. */
+        own: Map<HTMLElement, { tag: HTMLElement; sweat: Element }>;
+        spotlight: HTMLElement;
+        bench: boolean;
       }
     | undefined;
   let end: End = { inFront: false, scale: 0, rests: [] };
@@ -303,6 +317,19 @@ export async function watch(
         speedLines: stage.querySelector<HTMLElement>('[data-part="speed-lines"]'),
         dust: [...stage.querySelectorAll<HTMLElement>('[data-part="dust"]')],
         tags: [...stage.querySelectorAll<HTMLElement>('[data-on="chest"]')],
+        own: new Map(
+          [...stage.querySelectorAll<HTMLElement>('[data-person]')].map((person) => [
+            person,
+            {
+              tag: [...stage.querySelectorAll<HTMLElement>('[data-on="chest"]')].find(
+                (tag) => tag.textContent === person.dataset.person,
+              )!,
+              sweat: person.querySelector('[data-part="sweat"]')!,
+            },
+          ]),
+        ),
+        spotlight: stage.querySelector<HTMLElement>('[data-part="spotlight"]')!,
+        bench: stage.querySelector('[data-part="bench"]') !== null,
       };
       const { scene, tower: drawn, blocks, people, pointer, bubbles, them, hat } = parts;
       // The tags over every block, found at once, and the few in between.
@@ -357,13 +384,7 @@ export async function watch(
         people: Object.fromEntries(
           people.map((person) => {
             const name = person.dataset.person!;
-            return [
-              name,
-              drawnAs(
-                person,
-                parts!.tags.find((tag) => tag.textContent === name)!,
-              ),
-            ];
+            return [name, drawnAs(person, parts!.own.get(person)!.tag)];
           }),
         ),
         atRisk: parts.atRisk ? Number(parts.atRisk.textContent) : people.length,
@@ -373,6 +394,21 @@ export async function watch(
         moods: Object.fromEntries(
           people.map((person) => [person.dataset.person!, person.dataset.mood!]),
         ),
+        sweat: people
+          .filter((person) => parts!.own.get(person)!.sweat.getAttribute('display') !== 'none')
+          .map((person) => person.dataset.person!),
+        spotlight: opacityOf(parts.spotlight),
+        dimmed: people
+          .filter((person) => after(person, parts!.spotlight))
+          .map((person) => person.dataset.person!),
+        lit: people
+          .filter(
+            (person) =>
+              after(parts!.spotlight, person) &&
+              after(parts!.spotlight, parts!.own.get(person)!.tag),
+          )
+          .map((person) => person.dataset.person!),
+        bench: parts.bench,
         holding: people
           .filter((person) => person.dataset.holding === 'true')
           .map((person) => person.dataset.person!),

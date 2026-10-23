@@ -57,8 +57,9 @@ import {
   pointer as drawPointer,
   POINTER,
   speedLines,
+  spotlight as drawSpotlight,
 } from './parts';
-import { BEATS, planShow, READ, type Beat, type Plan, type Turn } from './plan';
+import { BEATS, hopInto, planShow, READ, type Beat, type Plan, type Turn } from './plan';
 import { FLIGHT, planHops, startTipOf } from './pointer';
 import styles from './wobbly-tower.module.css';
 
@@ -87,6 +88,8 @@ const NEARLY = { whoa: 0.25, caption: 1.3, back: 0.5 };
 const ARC = 140;
 /** Seconds a bubble stays up. */
 const BUBBLE = 0.8;
+/** Seconds the spotlight takes to fade in. */
+const SPOTLIGHT = 0.6;
 /**
  * The fall, in seconds from `plan.still.to`: the tower tips to `lean` degrees
  * toward the unlucky person in `tip`, while on `it-holds` the top block
@@ -127,6 +130,8 @@ interface Person {
   /** The box their name tag's holder takes, the size and place of their head. */
   readonly holder: HTMLElement;
   benched: boolean;
+  /** Whether they're behind the spotlight. */
+  dimmed: boolean;
   mood: Mood | '';
   holding: boolean;
   raised: boolean;
@@ -168,11 +173,16 @@ export async function playWobblyTower(show: Show): Promise<void> {
   show.stage.append(scene);
 
   // The Safe bench along the top and the "At risk" plinth under the tower,
-  // with 4 or more; everyone at their spot, the tower in front of them, and
-  // every name tag over every block, flying or fallen: each in a holder the
-  // size and place of its person, in a layer above the tower.
+  // with 4 or more; the heads of those gone safe behind the spotlight, and
+  // those at risk in front of it, the tower in front of them; and every name
+  // tag over every block, flying or fallen, tossed past the bench too: each
+  // in a holder the size and place of its person, in a layer above the tower.
   const headCount = plan.order.length;
   const benches = headCount >= 4;
+  const dimmed = scene.appendChild(document.createElement('div'));
+  dimmed.className = styles.tower;
+  const light = scene.appendChild(drawSpotlight());
+  setShown(light, 0);
   const crowd = scene.appendChild(document.createElement('div'));
   crowd.className = styles.tower;
   const stand = benches ? drawPlinth() : null;
@@ -214,7 +224,7 @@ export async function playWobblyTower(show: Show): Promise<void> {
   const goingSafe = plan.turns.filter((turn) => turn.safe !== null).map((turn) => turn.by);
   const seat = benchTag(goingSafe.length);
   const plankFor = plank(goingSafe.map((name) => setTag(name, seat).width));
-  if (benches) scene.insertBefore(drawBench(plankFor), crowd);
+  if (benches) scene.insertBefore(drawBench(plankFor), dimmed);
   /** Every head and name tag at `t`, which a bubble keeps clear of. */
   const inTheWay = (t: number) =>
     plan.order.flatMap((name) => {
@@ -339,9 +349,9 @@ export async function playWobblyTower(show: Show): Promise<void> {
   const hops = planHops(plan.turns, places, startTipOf(height, PAPER.length));
 
   // Who looks how: everyone is scared while Nearly nearly topples; whoever
-  // the pointer picks is worried, then scared once the spotlight is on;
-  // Nearly's thrower is relieved; at the end the unlucky person parties and
-  // everyone else cheers.
+  // the pointer picks is worried, then scared once the spotlight is on, when
+  // everyone else at risk is worried; Nearly's thrower is relieved; at the
+  // end the unlucky person parties and everyone else cheers.
   const nearly = plan.turns.find((turn) => turn.nearly)!;
   const alarm: Span = { from: nearly.lands, to: plan.hold.to + NEARLY.back };
   // Nearly's thrower says "Phew!" as it swings back.
@@ -352,14 +362,14 @@ export async function playWobblyTower(show: Show): Promise<void> {
       name === show.unlucky &&
       t >= plan.still.from &&
       t < plan.still.from + BUBBLE);
-  const moodOf = (name: string, t: number, picked: string): Mood => {
+  const moodOf = (name: string, t: number, picked: string, atRisk: boolean): Mood => {
     if (t >= downAt) return name === show.unlucky ? 'party' : 'happy';
     if (t >= fallsAt) return 'scared';
     if (relieved(name, t)) return 'happy';
     if (t >= alarm.from - 1e-9 && t < alarm.to) return 'scared';
     const final = t >= plan.spotlight;
     if (name === picked) return final ? 'scared' : 'worried';
-    return final ? 'worried' : 'calm';
+    return final && atRisk ? 'worried' : 'calm';
   };
 
   let beat = '';
@@ -397,23 +407,30 @@ export async function playWobblyTower(show: Show): Promise<void> {
       return at;
     });
 
-    // Everyone where they are now, and how many are still at risk.
+    // Everyone where they are now, and how many are still at risk; once the
+    // spotlight is on, whoever has gone safe is behind it.
+    const atRisk = new Set(places.atRisk(t));
     for (const person of people.values()) {
       drawPerson(person, spotAt(person.name, t), places.tag(person.name, t));
-      const benched = places.benched(person.name, t);
-      if (benched !== person.benched)
-        person.el.dataset.benched = String((person.benched = benched));
+      if (!person.benched && places.benched(person.name, t))
+        person.el.dataset.benched = String((person.benched = true));
+      if (!person.dimmed && t >= plan.spotlight && !atRisk.has(person.name)) {
+        person.dimmed = true;
+        dimmed.append(person.el);
+      }
     }
-    if (stand) stand.count(places.atRisk(t).length);
+    if (stand) stand.count(atRisk.size);
+    // Faded in from the spotlight; a hair over, so it's full on time however t is rounded.
+    setShown(light, Math.min(1, Math.max(0, (t - plan.spotlight) / SPOTLIGHT + 1e-9)));
 
     // Everyone's look.
     const tossing = flights.find((flight) => flight.by && t >= flight.lift && t < flight.lands);
     const picked = where[0]!.over || tossing?.by || '';
     for (const person of people.values()) {
-      const mood = moodOf(person.name, t, picked);
+      const risky = atRisk.has(person.name);
+      const mood = moodOf(person.name, t, picked, risky);
       const holding = person.holding;
-      const sweat =
-        t < fallsAt && (mood === 'scared' || (person.name === picked && t >= plan.spotlight));
+      const sweat = t < fallsAt && (mood === 'scared' || (risky && t >= plan.spotlight));
       const raised = holding || t >= downAt;
       if (mood !== person.mood) {
         person.mood = mood;
@@ -519,6 +536,13 @@ export async function playWobblyTower(show: Show): Promise<void> {
   // "Safe!" beside each thrower whose block holds, as they set off for the
   // bench; after Nearly, "Phew!" first. A pair's two keep clear of each other.
   say(phewAt, 'Phew!', headBox(spotAt(nearly.by, phewAt)));
+  // In the final, whoever the pointer leaves just before the thrower.
+  for (const turn of plan.turns) {
+    const before = turn.decoys.at(-1);
+    if (!before) continue;
+    const leaves = turn.stops - hopInto(turn.decoys.length);
+    say(leaves, 'Phew!', headBox(spotAt(before.name, leaves)));
+  }
   const saidSafe = new Map<number, Box[]>();
   for (const turn of plan.turns) {
     if (turn.safe === null) continue;
@@ -805,6 +829,7 @@ function createPerson(name: string, look: Look, spot: Spot, tag: DrawnTag): Pers
     tag: holder.appendChild(nameTagFor(name, spot.tag)),
     holder,
     benched: false,
+    dimmed: false,
     mood: '',
     holding: false,
     raised: false,

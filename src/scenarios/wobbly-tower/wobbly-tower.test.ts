@@ -4,7 +4,7 @@ import { describeSpec, type ShowRecord } from '../../scenario-kit/testing';
 import { createRandom } from '../../scenario-kit/random';
 import { speechBox, stagePx } from '../../scenario-kit';
 import wobblyTower from './index';
-import { LEANS as PEAKS, planShow, type Ending, type Plan, type Turn } from './plan';
+import { hopInto, LEANS as PEAKS, planShow, type Ending, type Plan, type Turn } from './plan';
 import {
   blockHeight,
   blockOverlaps,
@@ -25,6 +25,7 @@ import {
   unluckyOf,
   plans,
   only,
+  during,
   nearlyOf,
   firstTurns,
   stopsOf,
@@ -60,6 +61,7 @@ import {
   heaped,
   said,
   hatBox,
+  seedOf,
 } from './watching';
 
 describeSpec(await loadFeature('./wobbly-tower.feature'), ({ Rule }) => {
@@ -426,6 +428,323 @@ describeSpec(await loadFeature('./wobbly-tower.feature'), ({ Rule }) => {
     );
   });
 
+  Rule('The final three', ({ RuleScenario }) => {
+    /** 8 people, Luca unlucky, the first seed that falls with 2 left: run once. */
+    let twoLeft: ReturnType<typeof watch> | undefined;
+    const twoLeftRun = () =>
+      (twoLeft ??= watch(names(8), 'Luca', {
+        seed: seedOf(names(8), 'Luca', (plan) => plan.fallsWith === 2),
+      }));
+    /** The first frame at or after `t`. */
+    const frameAt = (frames: readonly Frame[], t: number) =>
+      frames.find((frame) => frame.time >= t - 1e-9)!;
+    /** The rounds from the final three on: the pointer goes round those at risk. */
+    const finalRounds = (plan: Plan) => firstTurns(plan).filter((turn) => turn.beat !== 'safe');
+
+    RuleScenario('The spotlight', ({ Given, When, Then, And }) => {
+      let run: Awaited<ReturnType<typeof watch>>;
+      /** The frames from the spotlight to the fall. */
+      let lit: Frame[];
+      Given('8 people', () => {});
+      When('3 people are left at risk', async () => {
+        run = await eightRun();
+        const { plan, frames } = run;
+        expect(placesOf(plan).atRisk(plan.spotlight)).toHaveLength(3);
+        lit = frames.filter(
+          (frame) => frame.time >= plan.spotlight - 1e-9 && frame.time < plan.still.to,
+        );
+      });
+      Then('the caption is {string}', (_, text: string) => {
+        const caption = run.record.captions.find((each) => each.text === text)!;
+        expect(caption).toBeDefined();
+        expect(caption.from).toBeGreaterThanOrEqual(run.plan.spotlight - 1e-9);
+        expect(caption.from).toBeLessThanOrEqual(run.plan.spotlight + STEP + 1e-9);
+      });
+      And('the stage dims, except for a spotlight on the tower and the three', () => {
+        const { frames, plan } = run;
+        // Faded in over 0.6 s from "Final three!", and on to the end.
+        for (const frame of frames) {
+          const at = `at ${frame.time}`;
+          if (frame.time < plan.spotlight - 1e-9) expect(frame.spotlight, at).toBe(0);
+          if (frame.time >= plan.spotlight + 0.6 - 1e-9) expect(frame.spotlight, at).toBe(1);
+        }
+        const fading = frames.filter(
+          (frame) => frame.time >= plan.spotlight - 1e-9 && frame.time < plan.spotlight + 0.6,
+        );
+        fading.slice(1).forEach((frame, index) => {
+          expect(frame.spotlight, `at ${frame.time}`).toBeGreaterThan(fading[index]!.spotlight);
+        });
+        // The three are drawn over it, head and name tag.
+        for (const frame of lit) {
+          expect([...frame.lit].sort(), `at ${frame.time}`).toEqual([...plan.final].sort());
+        }
+      });
+      And('the Safe bench stays in view, dimmed', () => {
+        const { plan } = run;
+        // The five safe, Nearly's thrower on the way up as it comes on; their
+        // name tags stay over the blocks, which are tossed past the bench.
+        const safe = plan.order.filter((name) => !plan.final.includes(name)).sort();
+        for (const frame of lit) {
+          expect(frame.bench).toBe(true);
+          expect([...frame.dimmed].sort(), `at ${frame.time}`).toEqual(safe);
+          if (frame.time < plan.spotlight + HOP) continue;
+          for (const name of safe) expect(frame.people[name]!.benched, name).toBe(true);
+        }
+      });
+      And('the three look worried and sweat', () => {
+        const { plan } = run;
+        for (const frame of lit) {
+          for (const name of plan.final) {
+            const at = `${name} at ${frame.time}`;
+            expect(frame.sweat, at).toContain(name);
+            const mood = frame.moods[name];
+            // Scared while the pointer is over them, and as they throw.
+            if (frame.pointers.some((pointer) => pointer.over === name)) {
+              expect(mood, at).toBe('scared');
+              continue;
+            }
+            const throwing = plan.turns.some(
+              (turn) =>
+                turn.by === name &&
+                frame.time >= turn.stops - STEP &&
+                frame.time <= turn.lands + STEP,
+            );
+            if (throwing) expect(['worried', 'scared'], at).toContain(mood);
+            // The it-holds "Phew!" as it settles.
+            else if (
+              plan.ending === 'it-holds' &&
+              name === plan.falls &&
+              frame.time >= plan.still.from - STEP
+            )
+              expect(['worried', 'happy'], at).toContain(mood);
+            else expect(mood, at).toBe('worried');
+          }
+        }
+      });
+      And('the heartbeat starts, and comes quicker and quicker until the fall', () => {
+        const { plan, cues } = run;
+        const beats = plan.heartbeats;
+        expect(beats[0]).toBe(plan.spotlight);
+        expect(beats.at(-1)!).toBeLessThan(plan.turns.at(-1)!.lands);
+        const gaps = beats.slice(1).map((t, index) => t - beats[index]!);
+        expect(gaps.length).toBeGreaterThan(3);
+        gaps.slice(1).forEach((gap, index) => expect(gap).toBeLessThan(gaps[index]!));
+        const heard = cues.filter((each) => each.cue === 'heartbeat');
+        expect(heard).toHaveLength(beats.length);
+        beats.forEach((t, index) => {
+          expect(heard[index]!.time, `beat at ${t}`).toBeGreaterThanOrEqual(t - 1e-9);
+          expect(heard[index]!.time, `beat at ${t}`).toBeLessThanOrEqual(t + STEP + 1e-9);
+        });
+      });
+    });
+
+    RuleScenario('Final two', ({ Given, When, Then }) => {
+      let run: Awaited<ReturnType<typeof watch>>;
+      let first: Turn;
+      Given('8 people, and the tower falls with 2 left', async () => {
+        run = await twoLeftRun();
+        expect(run.plan.fallsWith).toBe(2);
+      });
+      When(
+        'the first turn after {string} ends in {string}',
+        (_, finalThree: string, safe: string) => {
+          const { frames, plan, record } = run;
+          const shown = record.captions.find((caption) => caption.text === finalThree)!;
+          first = plan.turns.find((turn) => turn.from >= shown.from - STEP)!;
+          expect(first.safe).not.toBeNull();
+          const spot = frameAt(frames, first.safe!).people[first.by]!.spot;
+          expectBeside(said(frames), safe, first.safe!, spot, safe);
+        },
+      );
+      Then('the caption is {string}', (_, text: string) => {
+        const { plan, record } = run;
+        const caption = record.captions.find((each) => each.text === text)!;
+        expect(caption).toBeDefined();
+        expect(plan.finalTwo).toBeGreaterThan(first.safe!);
+        expect(caption.from).toBeGreaterThanOrEqual(plan.finalTwo! - 1e-9);
+        expect(caption.from).toBeLessThanOrEqual(plan.finalTwo! + STEP + 1e-9);
+      });
+    });
+
+    RuleScenario('The pointer goes round the last ones', ({ Given, When, Then, And }) => {
+      let runs: Awaited<ReturnType<typeof watch>>[];
+      Given('8 people', () => {});
+      When('a turn starts with 3 or 2 people at risk', async () => {
+        // Falling with 3, and with 2: rounds with 3 at risk, and with 2.
+        runs = [await eightRun(), await twoLeftRun()];
+        for (const { plan } of runs) {
+          for (const turn of finalRounds(plan)) {
+            expect([2, 3]).toContain(placesOf(plan).atRisk(turn.from).length);
+          }
+        }
+      });
+      Then(
+        'the pointer stops on 2 to 4 of them before the thrower, each stop longer than the one before, never on the same person twice running',
+        () => {
+          for (const { frames, plan } of runs) {
+            for (const turn of finalRounds(plan)) {
+              const label = `${turn.by}'s turn at ${turn.from}`;
+              expect(turn.decoys.length, label).toBeGreaterThanOrEqual(2);
+              expect(turn.decoys.length, label).toBeLessThanOrEqual(4);
+              const atRisk = placesOf(plan).atRisk(turn.from);
+              const names = stopsOf(turn);
+              for (const name of names) expect(atRisk, label).toContain(name);
+              names.slice(1).forEach((name, index) => expect(name, label).not.toBe(names[index]));
+              // As drawn: whom it stays over, and how long, the thrower last.
+              const stayed = stops(frames).filter(
+                (stop) => stop.from >= turn.from - 1e-9 && stop.from <= turn.stops + STEP,
+              );
+              expect(
+                stayed.map((stop) => stop.name),
+                label,
+              ).toEqual(names);
+              const stays = stayed.slice(0, -1).map((stop) => stop.to - stop.from);
+              stays.slice(1).forEach((stay, index) => {
+                expect(stay, label).toBeGreaterThan(stays[index]!);
+              });
+            }
+          }
+        },
+      );
+      And(
+        'the caption names each stop, as {string}, {string}, then {string} for the thrower',
+        (_, first: string, second: string, thrower: string) => {
+          for (const example of [first, second]) expect(example).toMatch(/^\S+…$/);
+          expect(thrower).toMatch(/^…\S+!$/);
+          for (const { plan, record } of runs) {
+            for (const turn of finalRounds(plan)) {
+              const named = [
+                ...turn.decoys.map((stop) => ({ text: `${stop.name}…`, at: stop.at })),
+                { text: `…${turn.by}!`, at: turn.stops },
+              ];
+              for (const { text, at } of named) {
+                const shown = record.captions.find(
+                  (caption) =>
+                    caption.text === text &&
+                    caption.from >= at - 1e-9 &&
+                    caption.from <= at + STEP + 1e-9,
+                );
+                expect(shown, `${text} at ${at}`).toBeDefined();
+              }
+            }
+          }
+        },
+      );
+      And('whoever it leaves just before the thrower says {string}', (_, phew: string) => {
+        for (const { frames, plan } of runs) {
+          const bubbles = said(frames);
+          for (const turn of finalRounds(plan)) {
+            const leaves = turn.stops - hopInto(turn.decoys.length);
+            const name = turn.decoys.at(-1)!.name;
+            expectBeside(bubbles, phew, leaves, frameAt(frames, leaves).people[name]!.spot, name);
+          }
+        }
+      });
+      And('whoever it stops on looks scared while it stays', () => {
+        for (const { frames, plan } of runs) {
+          for (const turn of finalRounds(plan)) {
+            const during = frames.filter(
+              (frame) => frame.time >= turn.from && frame.time <= turn.stops + STEP && frame.over,
+            );
+            expect(during.length).toBeGreaterThan(0);
+            for (const frame of during) {
+              expect(frame.moods[frame.over], `${frame.over} at ${frame.time}`).toBe('scared');
+            }
+          }
+        }
+      });
+    });
+
+    RuleScenario('The pointer gives nothing away', ({ Given, When, Then, And }) => {
+      let runs: Plan[];
+      Given('8 people, with the same unlucky person every time', () => {});
+      When('the show runs with 30 different random seeds', () => {
+        runs = plans(8, 30, 'Luca');
+      });
+      Then(
+        'on the last turn the pointer stops on the unlucky person before the end of its round in some runs, and not in others',
+        () => {
+          const onThem = runs.map((plan) =>
+            plan.turns.at(-1)!.decoys.some((stop) => stop.name === 'Luca'),
+          );
+          expect(onThem).toContain(true);
+          expect(onThem).toContain(false);
+        },
+      );
+      And(
+        'on a turn in the final that ends in {string}, it stops on the unlucky person in some runs',
+        (_, safe: string) => {
+          expect(safe).toBe('Safe!');
+          const turns = runs.flatMap((plan) =>
+            plan.turns.filter((turn) => turn.beat === 'final' && turn.safe !== null),
+          );
+          expect(turns.length).toBeGreaterThan(0);
+          expect(turns.some((turn) => turn.decoys.some((stop) => stop.name === 'Luca'))).toBe(true);
+        },
+      );
+    });
+  });
+
+  Rule('With 2 or 3 people it is the final from the start', ({ RuleScenarioOutline }) => {
+    RuleScenarioOutline('<count> people', ({ Given, When, Then, And }, variables) => {
+      let count: number;
+      let runs: Plan[];
+      let run: Awaited<ReturnType<typeof watch>>;
+      Given('<count> people', () => {
+        count = Number(variables.count);
+      });
+      When('the show runs with 20 different random seeds', async () => {
+        runs = plans(count);
+        run = await watch(names(count), unluckyOf(count));
+      });
+      Then('there is no Safe bench, and nobody goes safe', () => {
+        for (const plan of [...runs, run.plan]) {
+          expect(plan.turns.every((turn) => turn.safe === null)).toBe(true);
+        }
+        for (const frame of run.frames) {
+          expect(frame.bench).toBe(false);
+          expect(Object.values(frame.people).some((them) => them.benched)).toBe(false);
+        }
+      });
+      And(
+        'the caption after the opening is "<caption>", and the spotlight and the heartbeat start before the first turn',
+        () => {
+          const { frames, plan, record, cues } = run;
+          expect(texts(record).slice(0, 2)).toEqual([
+            'Whoever topples it gets the job!',
+            variables.caption,
+          ]);
+          for (const each of [...runs, plan]) {
+            expect(each.spotlight).toBeLessThan(each.turns[0]!.from);
+            expect(each.heartbeats[0]).toBe(each.spotlight);
+          }
+          const first = plan.turns[0]!.from;
+          expect(frames.find((frame) => frame.time >= first - 1e-9)!.spotlight).toBe(1);
+          expect(cues.find((each) => each.cue === 'heartbeat')!.time).toBeLessThan(first);
+        },
+      );
+      And(
+        "there are 4 or 5 turns, the last one the unlucky person's, and nobody has three in a row",
+        () => {
+          for (const plan of runs) {
+            expect([4, 5]).toContain(plan.turns.length);
+            expect(plan.turns.at(-1)!.by).toBe(unluckyOf(count));
+            plan.turns.slice(2).forEach((turn, index) => {
+              const [a, b] = [plan.turns[index]!.by, plan.turns[index + 1]!.by];
+              expect(a === b && b === turn.by).toBe(false);
+            });
+          }
+        },
+      );
+      And('before each turn the pointer stops on 2 or 3 people', () => {
+        for (const plan of runs) {
+          for (const turn of plan.turns) expect([2, 3]).toContain(stopsOf(turn).length);
+        }
+        expect(stops(run.frames).map((stop) => stop.name)).toEqual(run.plan.turns.flatMap(stopsOf));
+      });
+    });
+  });
+
   Rule('The pointer picks each turn', ({ RuleScenario }) => {
     RuleScenario("Nobody knows who's next until it stops", ({ Given, When, Then, And }) => {
       let frames: Frame[];
@@ -620,8 +939,10 @@ describeSpec(await loadFeature('./wobbly-tower.feature'), ({ Rule }) => {
       });
       And('the thrower says {string}', (_, phew: string) => {
         const thrower = spotOf(plan, nearly.by, plan.hold.to);
+        // As it swings back, before the next round.
+        const next = plan.turns[plan.turns.indexOf(nearly) + 1]!;
         const said = frames
-          .filter((frame) => frame.time > furthest.at(-1)!.time)
+          .filter((frame) => frame.time > furthest.at(-1)!.time && frame.time < next.from)
           .flatMap((frame) => frame.bubbles)
           .filter((bubble) => bubble.text === phew);
         expect(said.length).toBeGreaterThan(0);
@@ -877,6 +1198,59 @@ describeSpec(await loadFeature('./wobbly-tower.feature'), ({ Rule }) => {
   });
 
   Rule('It reads without sound', ({ RuleScenario }) => {
+    RuleScenario('Captions tell the Safe! story to the end', ({ Given, When, Then }) => {
+      let team: string[];
+      let seed: number;
+      let record: ShowRecord;
+      Given(
+        '6 people, the unlucky person is "Fabio", the turns before the final three go to "Elena", "Ben" and "Anna", Anna has "Nearly!", the pointer stops on "Dario" and "Carla" before "Fabio", and the tower goes dead still at the end',
+        () => {
+          // A plan picks people by their place in the list, never by name: a
+          // plan that goes this way with any names is given these, by role.
+          // At 6 falling with 3 the last turn always makes 3 stops, so
+          // "Dario" and "Carla" are its last two.
+          const base = ['Anna', 'Ben', 'Carla', 'Dario', 'Elena', 'Fabio'];
+          seed = seedOf(
+            base,
+            'Fabio',
+            (plan) =>
+              plan.fallsWith === 3 &&
+              plan.ending === 'dead-still' &&
+              plan.turns.at(-1)!.decoys.at(-2)!.name !== 'Fabio',
+          );
+          const found = planShow(base, 'Fabio', createRandom(seed));
+          const last = found.turns.at(-1)!.decoys;
+          const roles = new Map([
+            ['Fabio', 'Fabio'],
+            ...during(found, 'safe').map((turn, index) => [
+              turn.by,
+              ['Elena', 'Ben', 'Anna'][index]!,
+            ]),
+            [last.at(-2)!.name, 'Dario'],
+            [last.at(-1)!.name, 'Carla'],
+          ] as [string, string][]);
+          team = base.map((name) => roles.get(name)!);
+          const plan = planShow(team, 'Fabio', createRandom(seed));
+          expect(during(plan, 'safe').map((turn) => turn.by)).toEqual(['Elena', 'Ben', 'Anna']);
+          expect(nearlyOf(plan).by).toBe('Anna');
+          expect(stopsOf(plan.turns.at(-1)!).slice(-3)).toEqual(['Dario', 'Carla', 'Fabio']);
+          expect(plan.ending).toBe('dead-still');
+        },
+      );
+      When('the show runs', async () => {
+        ({ record } = await watch(team, 'Fabio', { seed }));
+      });
+      Then('the captions include, in this order:', (_, table: { caption: string }[]) => {
+        const shown = texts(record);
+        let from = 0;
+        for (const { caption } of table) {
+          const at = shown.indexOf(caption, from);
+          expect(at, `${caption} in ${shown.join(' / ')}`).toBeGreaterThanOrEqual(0);
+          from = at + 1;
+        }
+      });
+    });
+
     RuleScenario('Each ending has its caption', ({ When, Then }) => {
       let runs: Awaited<ReturnType<typeof endingRuns>>;
       When('the show runs with each ending', async () => {
