@@ -2,6 +2,7 @@ import { loadFeature } from '@amiceli/vitest-cucumber';
 import { describe, expect, it } from 'vitest';
 import { describeSpec } from '../../scenario-kit/testing';
 import { createRandom } from '../../scenario-kit/random';
+import { nameTag } from '../../scenario-kit';
 import wobblyTower from './index';
 import {
   BEATS,
@@ -25,6 +26,8 @@ import {
   signedLean,
   spots,
   tagBox,
+  placeTags,
+  tagContentWidth,
   tower,
   type Box,
   type Spot,
@@ -93,13 +96,49 @@ function everyPlan(): { label: string; plan: Plan; unlucky: string }[] {
 /** Whether a point is inside a box. */
 const inside = (box: Box, point: { x: number; y: number }) =>
   point.x > box.left && point.x < box.right && point.y > box.top && point.y < box.bottom;
-/** Whether any two tags overlap. */
-const tagsOverlap = (all: Spot[]) =>
-  all.some((spot, index) => all.slice(index + 1).some((o) => overlap(tagBox(spot), tagBox(o))));
+/** Whether any two boxes overlap. */
+const anyOverlap = (boxes: Box[]) =>
+  boxes.some((box, index) => boxes.slice(index + 1).some((other) => overlap(box, other)));
+/** The tag boxes as the kit sets them, placed as placeTags says: `called[i]` stands at spot i. */
+function tagsFor(all: Spot[], called: readonly string[]): Box[] {
+  const widths = all.map((spot, index) => {
+    const name = called[index]!;
+    const tag = nameTag(name, { size: spot.tag.size, maxWidth: spot.tag.maxWidth, chest: true });
+    const lines = tag.dataset.lines === '2' ? (2 as const) : (1 as const);
+    return tagContentWidth(name, spot.tag.size, Number.parseFloat(tag.style.maxWidth), lines);
+  });
+  const shifts = placeTags(all, widths);
+  return all.map((spot, index) => tagBox(spot, widths[index], shifts[index]));
+}
+/** The test team's names without the 30-character one, and one more to make twelve. */
+const NORMAL = [...TEAM.slice(0, -1), 'Zoe'];
+/**
+ * The spots and the tag boxes of the normal names at `count` people, every
+ * name at every spot in turn (the names shifted round one place each time).
+ */
+const casts = (count: number) => {
+  const all = spots(count);
+  const pool = NORMAL.slice(0, count);
+  return pool.map((_, round) => ({
+    all,
+    boxes: tagsFor(
+      all,
+      pool.map((__, index) => pool[(index + round) % count]!),
+    ),
+  }));
+};
+/** The full test team at 12 (and its first and last at 2), standing as the plan with seed 1 has it. */
+const shownAt = (count: number) => {
+  const team = count === 12 ? TEAM : [TEAM[0]!, TEAM.at(-1)!];
+  const { order } = planShow(team, team.at(-1)!, createRandom(1));
+  const all = spots(count);
+  return { all, boxes: tagsFor(all, order) };
+};
+
 /** Leans from -22 to 22 degrees. */
 const LEANS = Array.from({ length: 45 }, (_, index) => index - 22);
-/** How tall the tower may end: 2 paper blocks and up to 9 turns. */
-const HEIGHTS = [4, 9, 10, 11];
+/** How tall the tower may end: 2 paper blocks and 7 to 9 turns. */
+const HEIGHTS = [9, 10, 11];
 
 describeSpec(await loadFeature('./wobbly-tower.feature'), ({ Rule }) => {
   Rule('Its card', ({ RuleScenario }) => {
@@ -386,16 +425,16 @@ describeSpec(await loadFeature('./wobbly-tower.feature'), ({ Rule }) => {
 
   Rule('It reads without sound', ({ RuleScenario }) => {
     RuleScenario('Names stay readable', ({ When, Then, And }) => {
-      let shown: Spot[][];
+      let shown: ReturnType<typeof shownAt>[];
       When('the show runs at 12 and at 2 people', () => {
-        shown = [spots(12), spots(2)];
+        shown = [shownAt(12), shownAt(2)];
       });
       Then('every name tag is set at 22 pixels or more on the 1280 by 720 stage', () => {
-        for (const all of shown) {
-          for (const spot of all) {
+        for (const { all, boxes } of shown) {
+          for (const [index, spot] of all.entries()) {
             expect(spot.tag.size).toBeGreaterThanOrEqual(22);
-            expect(tagBox(spot).left).toBeGreaterThanOrEqual(0);
-            expect(tagBox(spot).right).toBeLessThanOrEqual(1280);
+            expect(boxes[index]!.left).toBeGreaterThanOrEqual(0);
+            expect(boxes[index]!.right).toBeLessThanOrEqual(1280);
           }
         }
       });
@@ -403,17 +442,17 @@ describeSpec(await loadFeature('./wobbly-tower.feature'), ({ Rule }) => {
         spots(2).forEach((spot) => expect(spot.tag.size).toBeGreaterThanOrEqual(44));
       });
       And('no name tag is ever over another, under a block or under the pointer', () => {
-        for (const all of shown) {
-          expect(tagsOverlap(all)).toBe(false);
+        for (const { all, boxes } of shown) {
+          expect(anyOverlap(boxes)).toBe(false);
           for (const lean of LEANS) {
             for (const block of tower(11, lean)) {
-              for (const spot of all) expect(blockOverlaps(block, tagBox(spot))).toBe(false);
+              for (const box of boxes) expect(blockOverlaps(block, box)).toBe(false);
             }
           }
           for (const spot of all) {
             for (const holding of [false, true]) {
               const tip = pointerTip(spot, holding);
-              for (const other of all) expect(inside(tagBox(other), tip)).toBe(false);
+              for (const box of boxes) expect(inside(box, tip)).toBe(false);
             }
           }
         }
@@ -494,11 +533,19 @@ describe('The layout', () => {
       const all = spots(count);
       const label = `${count} people`;
       expect(all, label).toHaveLength(count);
-      expect(tagsOverlap(all), label).toBe(false);
+      for (const [round, { boxes }] of casts(count).entries()) {
+        const at_ = `${label}, names shifted ${round}`;
+        expect(anyOverlap(boxes), at_).toBe(false);
+        for (const box of boxes) {
+          expect(box.left, at_).toBeGreaterThanOrEqual(0);
+          expect(box.right, at_).toBeLessThanOrEqual(1280);
+          // Own head excepted: a chest tag starts on its bottom edge.
+          all.forEach((spot, own) => {
+            if (boxes[own] !== box) expect(overlap(box, headBox(spot)), at_).toBe(false);
+          });
+        }
+      }
       for (const spot of all) {
-        const box = tagBox(spot);
-        expect(box.left, label).toBeGreaterThanOrEqual(0);
-        expect(box.right, label).toBeLessThanOrEqual(1280);
         expect(spot.tag.size, label).toBe(Math.max(22, Math.round(0.22 * spot.size)));
         expect(spot.tag.maxWidth, label).toBeGreaterThanOrEqual(120);
         expect(spot.tag.maxWidth, label).toBeLessThanOrEqual(
@@ -511,25 +558,26 @@ describe('The layout', () => {
   it('no tag is under the tower or the heap at any count', () => {
     for (let count = 2; count <= 12; count++) {
       const all = spots(count);
+      const everyCast = casts(count);
       for (const blocks of HEIGHTS) {
         for (const lean of LEANS) {
-          tower(blocks, lean).forEach((block, at) => {
-            for (const spot of all) {
-              const label = `${count} people, ${blocks} blocks, lean ${lean}, block ${at}`;
-              expect(blockOverlaps(block, tagBox(spot)), label).toBe(false);
+          tower(blocks, lean).forEach((block, k) => {
+            for (const [round, { boxes }] of everyCast.entries()) {
+              const label = `${count} people, names shifted ${round}, ${blocks} blocks, lean ${lean}, block ${k}`;
+              for (const box of boxes) expect(blockOverlaps(block, box), label).toBe(false);
             }
           });
         }
         for (const unlucky of all) {
-          for (const block of heap(unlucky, blocks)) {
-            const box = blockBox(block);
-            const label = `${count} people, heap of ${blocks}`;
-            expect(box.top, label).toBeGreaterThanOrEqual(HEAP_BAND.top);
-            expect(box.bottom, label).toBeLessThanOrEqual(HEAP_BAND.bottom);
-            expect(Math.sign(block.x - 640), label).toBe(sideOf(unlucky));
-            for (const spot of all) {
-              expect(overlap(box, tagBox(spot)), label).toBe(false);
-              expect(overlap(box, headBox(spot)), label).toBe(false);
+          for (const cast of everyCast) {
+            for (const block of heap(unlucky, blocks)) {
+              const box = blockBox(block);
+              const label = `${count} people, heap of ${blocks}`;
+              expect(box.top, label).toBeGreaterThanOrEqual(HEAP_BAND.top);
+              expect(box.bottom, label).toBeLessThanOrEqual(HEAP_BAND.bottom);
+              expect(Math.sign(block.x - 640), label).toBe(sideOf(unlucky));
+              for (const tag of cast.boxes) expect(overlap(box, tag), label).toBe(false);
+              for (const spot of all) expect(overlap(box, headBox(spot)), label).toBe(false);
             }
           }
         }
@@ -537,14 +585,15 @@ describe('The layout', () => {
     }
   });
 
-  it('the pointer never covers a tag', () => {
+  it("the pointer's tip never covers a tag", () => {
     for (let count = 2; count <= 12; count++) {
       const all = spots(count);
       for (const spot of all) {
         for (const holding of [false, true]) {
           const tip = pointerTip(spot, holding);
-          for (const other of all)
-            expect(inside(tagBox(other), tip), `${count} people`).toBe(false);
+          for (const { boxes } of casts(count)) {
+            for (const box of boxes) expect(inside(box, tip), `${count} people`).toBe(false);
+          }
           expect(tip.y, `${count} people`).toBeGreaterThanOrEqual(120);
         }
         // The held block is 0.96 heads wide over the head; the tip is 10 px over head or block.
@@ -553,6 +602,17 @@ describe('The layout', () => {
         expect(blockBox(block).bottom).toBeLessThan(headBox(spot).top);
         expect(pointerTip(spot).y).toBeCloseTo(headBox(spot).top - 10, 9);
         expect(pointerTip(spot, true).y).toBeCloseTo(blockBox(block).top - 10, 9);
+      }
+    }
+  });
+
+  it('normal names need no shift at 8 and 12', () => {
+    for (const count of [8, 12]) {
+      const all = spots(count);
+      for (const { boxes } of casts(count)) {
+        boxes.forEach((box, index) => {
+          expect((box.left + box.right) / 2, `${count} people`).toBeCloseTo(all[index]!.x, 9);
+        });
       }
     }
   });

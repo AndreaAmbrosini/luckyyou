@@ -3,7 +3,7 @@
 // above, the back row drawn behind the tower and the front row in front of it.
 // In stage pixels (1280 × 720), from the handover's storyboard.
 
-import { STAGE } from '../../scenario-kit';
+import { STAGE, stagePx } from '../../scenario-kit';
 import type { Lean, Side } from './plan';
 
 export interface Point {
@@ -192,15 +192,34 @@ export function headBox(spot: Spot): Box {
   };
 }
 
-/** A name tag's box on the chest: as wide as it may grow, two lines high (the kit never sets three). */
-export function tagBox(spot: Spot): Box {
+/**
+ * A name tag's box on the chest, two lines high (the kit never sets three).
+ * `width` is the width the kit sets (`nameTag`'s style.maxWidth, which is
+ * more than `spot.tag.maxWidth` for a name that can't fit two lines), and
+ * `shift` what `placeTags` gives, moving the whole tag sideways.
+ */
+export function tagBox(spot: Spot, width = spot.tag.maxWidth, shift = 0): Box {
   const top = spot.y - 0.04 * spot.size;
   return {
-    left: spot.x - spot.tag.maxWidth / 2,
-    right: spot.x + spot.tag.maxWidth / 2,
+    left: spot.x + shift - width / 2,
+    right: spot.x + shift + width / 2,
     top,
     bottom: top + 2.4 * spot.tag.size + 8,
   };
+}
+
+/** Space kept between a shifted name tag and the stage's edge. */
+const TAG_EDGE = 0;
+
+/**
+ * How far to move a name tag sideways, in pixels (positive to the right; 0
+ * when not needed), so a tag `width` wide (what the kit sets, not always
+ * `spot.tag.maxWidth`) stays fully on the stage.
+ */
+export function tagShift(spot: Spot, width: number): number {
+  const left = spot.x - width / 2;
+  const right = spot.x + width / 2;
+  return Math.max(0, TAG_EDGE - left) + Math.min(0, STAGE.width - TAG_EDGE - right);
 }
 
 export function overlap(one: Box, two: Box): boolean {
@@ -347,4 +366,52 @@ export function heldBlock(spot: Spot): Block {
 export function pointerTip(spot: Spot, holding = false): Point {
   const top = holding ? blockBox(heldBlock(spot)).top : spot.y - 0.8 * spot.size;
   return { x: spot.x, y: top - TIP_GAP };
+}
+
+/**
+ * A name tag's width in stage pixels as the kit sets it, estimated where
+ * nothing can measure it: a single line is as wide as its name (0.6 em a
+ * character, as the kit counts without a canvas), the padding and the
+ * borders, and never wider than `set`, the width `nameTag` sets in
+ * style.maxWidth; two lines take all of `set`. In a browser, pass
+ * `placeTags` the tag's measured width instead.
+ */
+export function tagContentWidth(name: string, size: number, set: number, lines: 1 | 2): number {
+  if (lines === 2) return set;
+  const letters = [...new Intl.Segmenter('en', { granularity: 'grapheme' }).segment(name)].length;
+  const own = letters * 0.6 * size + 0.6 * size + 2 * stagePx('--line') + 2;
+  return Math.min(set, Math.ceil(own));
+}
+
+/** Every position the tower's blocks can take: 9 to 11 blocks, leans -22…22. */
+let envelope: Block[] | undefined;
+const sway = (): Block[] =>
+  (envelope ??= [9, 10, 11].flatMap((count) =>
+    Array.from({ length: 45 }, (_, index) => tower(count, index - 22)).flat(),
+  ));
+
+/**
+ * How far to move each name tag sideways, in pixels (positive to the right; 0
+ * when not needed), for `tagBox`: first inward, to stay on the stage, then
+ * outward, away from the tower, where the tag would sit under a block at any
+ * lean. `all` and `widths` (each tag's width as the kit sets it, see
+ * `tagContentWidth`) are in the same order. A very long name can still touch
+ * a neighbour or the pointer's tip: the kit never sets more than two lines.
+ */
+export function placeTags(all: readonly Spot[], widths: readonly number[]): number[] {
+  return all.map((spot, index) => {
+    const width = widths[index]!;
+    const onStage = tagShift(spot, width);
+    const under = (shift: number) =>
+      sway().some((block) => blockOverlaps(block, tagBox(spot, width, shift)));
+    const away = sideOf(spot);
+    let shift = onStage;
+    for (let more = 2; under(shift); more += 2) {
+      const moved = onStage + away * more;
+      const box = tagBox(spot, width, moved);
+      if (box.left < 0 || box.right > STAGE.width) break;
+      shift = moved;
+    }
+    return shift;
+  });
 }
