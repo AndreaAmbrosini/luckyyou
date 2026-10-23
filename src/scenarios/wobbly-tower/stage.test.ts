@@ -642,9 +642,10 @@ describe('Moving people', () => {
 });
 
 describe('The stage', () => {
-  it('the stage plays the plan for its seed', async () => {
-    for (const count of [2, 8, 12]) {
-      for (const seed of [1, 2]) {
+  // One test a show, each in its own time; shows that other tests watch too are run once.
+  for (const count of [2, 8, 12]) {
+    for (const seed of [1, 2]) {
+      it(`the stage plays the plan for its seed: ${count} people, seed ${seed}`, async () => {
         const label = `${count} people, seed ${seed}`;
         const team = names(count);
         const { plan, built, shirts, lifts } = await watch(team, unluckyOf(count), { seed });
@@ -671,14 +672,14 @@ describe('The stage', () => {
         for (const name of team) {
           expect(shirts[name], label).toBe(`var(--color-${looks.get(name)!.ring})`);
         }
-      }
+      });
     }
-  });
+  }
 
-  it("the pointers' whole boxes never cover a name tag at 8 and 12, as people move", async () => {
-    for (const count of [8, 12]) {
-      const team = NORMAL.slice(0, count);
-      for (const seed of [1, 2, 3]) {
+  for (const count of [8, 12]) {
+    for (const seed of [1, 2, 3]) {
+      it(`the pointers' whole boxes never cover a name tag, as people move: ${count} people, seed ${seed}`, async () => {
+        const team = NORMAL.slice(0, count);
         const { frames } = await watch(team, team.at(-1)!, { seed });
         for (const frame of frames) {
           for (const pointer of pointersIn(frame)) {
@@ -690,9 +691,9 @@ describe('The stage', () => {
             }
           }
         }
-      }
+      });
     }
-  });
+  }
 
   it('the pointer has faded out by the lift, so it never sits over a held block', async () => {
     for (const count of [2, 8, 12]) {
@@ -705,17 +706,16 @@ describe('The stage', () => {
     }
   });
 
-  it('the tower never sways more than 3 times a second, and settles after each block', async () => {
-    // At 2 and 5, at 12 with pairs, and at 8 falling with 2 left: Nearly in the final.
-    const runs = [
-      { count: 2, seed: 1 },
-      { count: 5, seed: 1 },
-      { count: 12, seed: 1 },
-      { count: 8, seed: seedOf(names(8), unluckyOf(8), (plan) => plan.fallsWith === 2) },
-    ];
-    for (const { count, seed } of runs) {
-      for (const reducedMotion of [false, true]) {
-        const label = `${count} people, seed ${seed}${reducedMotion ? ', reduced motion' : ''}`;
+  // At 2 and 5, at 12 with pairs, and at 8 falling with 2 left: Nearly in the final.
+  for (const { count, seed } of [
+    { count: 2, seed: 1 },
+    { count: 5, seed: 1 },
+    { count: 12, seed: 1 },
+    { count: 8, seed: seedOf(names(8), unluckyOf(8), (plan) => plan.fallsWith === 2) },
+  ]) {
+    for (const reducedMotion of [false, true]) {
+      const label = `${count} people, seed ${seed}${reducedMotion ? ', reduced motion' : ''}`;
+      it(`the tower never sways more than 3 times a second, and settles after each block: ${label}`, async () => {
         const { frames, plan } = await watch(names(count), unluckyOf(count), {
           seed,
           reducedMotion,
@@ -725,9 +725,9 @@ describe('The stage', () => {
         for (const swing of swings(before))
           expect(swing, label).toBeGreaterThanOrEqual(0.34 - STEP);
         expectSwaysAndSettles(frames, plan, label);
-      }
+      });
     }
-  });
+  }
 });
 
 describe('Hops and tosses', () => {
@@ -736,7 +736,10 @@ describe('Hops and tosses', () => {
   /** The first seed from 1 whose plan at `count` with the usual unlucky person passes `test`. */
   const seedFor = (count: number, test: (plan: Plan) => boolean) =>
     seedOf(names(count), unluckyOf(count), test);
-  /** A run at 2, at 8 falling with 2 left, and at 12 with pairs, finely timed. */
+  /**
+   * A run at 2, at 8 falling with 2 left, and at 12 with pairs, finely timed,
+   * up to just after the last block lands: every hop and toss is over by then.
+   */
   let shows: Promise<{ label: string; run: Awaited<ReturnType<typeof watch>> }[]> | undefined;
   const fineRuns = () =>
     (shows ??= (async () => {
@@ -747,7 +750,9 @@ describe('Hops and tosses', () => {
         { count: 8, seed: seedFor(8, (plan) => plan.fallsWith === 2) },
         { count: 12, seed: 1 },
       ]) {
-        const run = await watch(names(count), unluckyOf(count), { seed, step: FINE });
+        const plan = planShow(names(count), unluckyOf(count), createRandom(seed));
+        const until = plan.turns.at(-1)!.lands + 0.1;
+        const run = await watch(names(count), unluckyOf(count), { seed, step: FINE, until });
         all.push({ label: `${count} people, seed ${seed}`, run });
       }
       return all;
@@ -820,15 +825,15 @@ describe('Hops and tosses', () => {
 });
 
 describe('Blocks and name tags', () => {
-  it('a name tag a block crosses, in the air, on the tower or in the heap, is drawn over it', async () => {
-    // Blocks do cross tags at 8: a front-row toss, and the tumble.
-    let crossed = 0;
-    for (const { count, seed } of [
-      { count: 2, seed: 1 },
-      { count: 8, seed: 1 },
-      { count: 8, seed: 2 },
-      { count: 12, seed: 1 },
-    ]) {
+  // Blocks do cross tags at 8: a front-row toss, and the tumble.
+  let crossed = 0;
+  for (const { count, seed } of [
+    { count: 2, seed: 1 },
+    { count: 8, seed: 1 },
+    { count: 8, seed: 2 },
+    { count: 12, seed: 1 },
+  ]) {
+    it(`a name tag a block crosses, in the air, on the tower or in the heap, is drawn over it: ${count} people, seed ${seed}`, async () => {
       const { frames } = await watch(names(count), unluckyOf(count), { seed });
       for (const frame of frames) {
         for (const block of frame.drawn) {
@@ -842,7 +847,9 @@ describe('Blocks and name tags', () => {
           });
         }
       }
-    }
+    });
+  }
+  it('blocks do cross name tags in those runs', () => {
     expect(crossed).toBeGreaterThan(0);
   });
 });

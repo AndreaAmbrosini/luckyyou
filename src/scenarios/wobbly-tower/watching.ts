@@ -108,13 +108,17 @@ export const anyOverlap = (boxes: Box[]) =>
 export const sizeOf = (tag: HTMLElement) =>
   Number.parseFloat(tag.style.getPropertyValue('--tag-size'));
 /** How wide the kit sets `tag`, for `name`. */
-export const drawnWidth = (name: string, tag: HTMLElement) =>
-  tagContentWidth(
-    name,
-    sizeOf(tag),
-    Number.parseFloat(tag.style.maxWidth),
-    tag.dataset.lines === '2' ? 2 : 1,
-  );
+export const drawnWidth = (name: string, tag: HTMLElement) => {
+  const size = sizeOf(tag);
+  const maxWidth = Number.parseFloat(tag.style.maxWidth);
+  const lines = tag.dataset.lines === '2' ? 2 : 1;
+  // Worked out once for each way a tag is set: most frames set it as the last did.
+  const key = `${name}|${size}|${maxWidth}|${lines}`;
+  let width = widths.get(key);
+  if (width === undefined) widths.set(key, (width = tagContentWidth(name, size, maxWidth, lines)));
+  return width;
+};
+const widths = new Map<string, number>();
 /** The test team's names without the 30-character one, and one more to make twelve. */
 export const NORMAL = [...TEAM.slice(0, -1), 'Zoe'];
 
@@ -219,19 +223,40 @@ export function placed(block: HTMLElement): (Point & { turn: number }) | null {
   };
 }
 
+/** How a show is watched: its seed, seconds per frame, when it's cancelled, and reduced motion. */
+interface Watching {
+  seed?: number;
+  step?: number;
+  until?: number;
+  reducedMotion?: boolean;
+}
+
+/** Every show watched in this test file, by its team, unlucky person and how it's watched. */
+const watched = new Map<string, ReturnType<typeof recordShow>>();
+
 /**
  * Runs Wobbly Tower and notes what the stage showed every frame. With
- * `until`, the show is cancelled at that many show seconds.
+ * `until`, the show is cancelled at that many show seconds. Each show is run
+ * once per test file: the same show asked for again is the same recording,
+ * so tests that watch it share it.
  */
-export async function watch(
+export function watch(
   team: readonly string[],
   unlucky: string,
-  {
-    seed = 1,
-    step = STEP,
-    until,
-    reducedMotion = false,
-  }: { seed?: number; step?: number; until?: number; reducedMotion?: boolean } = {},
+  watching: Watching = {},
+): ReturnType<typeof recordShow> {
+  const { seed = 1, step = STEP, until, reducedMotion = false } = watching;
+  const key = JSON.stringify([team, unlucky, seed, step, until ?? null, reducedMotion]);
+  let run = watched.get(key);
+  if (!run)
+    watched.set(key, (run = recordShow(team, unlucky, { seed, step, until, reducedMotion })));
+  return run;
+}
+
+async function recordShow(
+  team: readonly string[],
+  unlucky: string,
+  { seed = 1, step = STEP, until, reducedMotion = false }: Watching,
 ): Promise<{
   frames: Frame[];
   record: ShowRecord;
@@ -448,8 +473,13 @@ export async function watch(
     },
   });
   holding.disconnect();
-  expect(record.error).toBeUndefined();
-  if (until === undefined) expect(record.outcome).toBe('finished');
+  // Cancelled at `until`, the show stops on the abort it's sent; otherwise it plays out cleanly.
+  if (until === undefined) {
+    expect(record.error).toBeUndefined();
+    expect(record.outcome).toBe('finished');
+  } else {
+    expect(record.outcome).toBe('cancelled');
+  }
   return {
     frames,
     record,
