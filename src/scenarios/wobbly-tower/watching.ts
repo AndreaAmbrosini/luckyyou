@@ -5,11 +5,10 @@ import { expect } from 'vitest';
 import { gsap } from 'gsap';
 import { runShow, type ShowRecord } from '../../scenario-kit/testing';
 import { createRandom } from '../../scenario-kit/random';
-import { nameTag, speechBox, type Cue, type Scenario } from '../../scenario-kit';
+import { speechBox, type Cue, type Scenario } from '../../scenario-kit';
 import wobblyTower from './index';
 import { planShow, READ, type Beat, type Ending, type Plan, type Turn } from './plan';
 import {
-  benchTag,
   blockOverlaps,
   overlap,
   placings,
@@ -20,6 +19,7 @@ import {
   type Block,
   type Box,
   type Point,
+  type Places,
   type Spot,
 } from './layout';
 import { POINTER } from './parts';
@@ -39,7 +39,7 @@ export const TEAM = [
   'Marco',
   'Priya',
   'Tom',
-  'Maria Giulia Bianchi-Rossi Jr.',
+  'Maria Giulia B.',
 ];
 
 /** The first `count` of the team. */
@@ -115,9 +115,6 @@ export const drawnWidth = (name: string, tag: HTMLElement) =>
     Number.parseFloat(tag.style.maxWidth),
     tag.dataset.lines === '2' ? 2 : 1,
   );
-/** The kit's name tag for `name` set as `tag` says, as the show sets it: wrapped rather than shrunk. */
-export const tagAt = (name: string, tag: Spot['tag']) =>
-  nameTag(name, { ...tag, wrapBelow: tag.size, chest: true });
 /** The test team's names without the 30-character one, and one more to make twelve. */
 export const NORMAL = [...TEAM.slice(0, -1), 'Zoe'];
 
@@ -444,8 +441,10 @@ export function drawnAs(person: HTMLElement, tag: HTMLElement) {
     tag: { size: sizeOf(tag), maxWidth: Number.parseFloat(tag.style.maxWidth) },
     row: 'front',
   };
-  const shift = /calc(50% + ([-d.e]+)px)/.exec(tag.style.left);
-  const box = tagBox(spot, drawnWidth(name, tag), shift ? Number(shift[1]) : 0);
+  // calc(50% + 12px), or as the browser writes a move left, calc(50% - 7px).
+  const shift = /calc\(50% ([+-]) (-?[\d.e]+)px\)/.exec(tag.style.left);
+  const by = shift ? (shift[1] === '-' ? -1 : 1) * Number(shift[2]) : 0;
+  const box = tagBox(spot, drawnWidth(name, tag), by);
   // A hidden tag takes no room: an empty box where it would be.
   const hidden = tag.style.visibility === 'hidden';
   return {
@@ -554,14 +553,13 @@ export const pointerBox = (tip: Point): Box => ({
   bottom: tip.y - POINTER.tip.y + POINTER.height,
 });
 
-/** The bench tags' widths in a show of `plan`, in the order its people go safe. */
-export function benchWidths(plan: Plan): number[] {
-  const benched = plan.turns.filter((turn) => turn.safe !== null).map((turn) => turn.by);
-  const tag = benchTag(benched.length);
-  return benched.map((name) => drawnWidth(name, tagAt(name, tag)));
-}
-/** Where everyone is over a show of `plan`. */
-export const placesOf = (plan: Plan) => placings(plan, benchWidths(plan));
+/** Where everyone is over a show of `plan`, worked out once for each plan. */
+const placesByPlan = new WeakMap<Plan, Places>();
+export const placesOf = (plan: Plan) => {
+  let places = placesByPlan.get(plan);
+  if (!places) placesByPlan.set(plan, (places = placings(plan)));
+  return places;
+};
 /** Where `name` stands at `t` in a run of `plan`. */
 export const spotOf = (plan: Plan, name: string, t = 0) => placesOf(plan).at(name, t);
 

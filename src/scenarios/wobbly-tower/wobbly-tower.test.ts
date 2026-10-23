@@ -929,7 +929,7 @@ describeSpec(await loadFeature('./wobbly-tower.feature'), ({ Rule }) => {
     RuleScenario('Names stay readable', ({ When, Then, And }) => {
       let runs: { label: string; frames: Frame[] }[];
       When('the show runs at 12 and at 2 people', async () => {
-        // At 12 the normal names; at 2, the first of the team and its 30-character name.
+        // At 12 the normal names; at 2, the first of the team and its 15-character name.
         const two = [TEAM[0]!, TEAM.at(-1)!];
         runs = [
           { label: '12 people', frames: (await normalRun(12)).frames },

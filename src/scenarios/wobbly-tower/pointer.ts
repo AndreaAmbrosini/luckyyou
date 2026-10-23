@@ -2,7 +2,17 @@
 // shows. Worked out from the plan's turns, so play.ts can draw it at any time.
 
 import { gsap } from 'gsap';
-import { benchTag, BENCH, pointerTip, tagBox, TOWER, type Places, type Point } from './layout';
+import {
+  benchTag,
+  BENCH,
+  pointerTip,
+  tagBox,
+  topOf,
+  tower,
+  TOWER,
+  type Places,
+  type Point,
+} from './layout';
 import { POINTER } from './parts';
 import { hopInto, type Turn } from './plan';
 
@@ -27,6 +37,12 @@ interface Span {
 /** The bottom of the bench's name tags, two lines high: the pointer stays below it. */
 const BENCH_TAGS =
   BENCH.headTop + 0.8 * BENCH.head - 0.04 * BENCH.head + 2.4 * benchTag(1).size + 8;
+
+/** Where the pointers start: 10 px over the top of the `paper` blocks the show starts with, each `height` high. */
+export const startTipOf = (height: number, paper: number): Point => ({
+  x: TOWER.x,
+  y: topOf(tower(paper, 0, height).at(-1)!).y - 10,
+});
 
 /** One hop of the pointer, from where it was to someone. */
 interface Hop {

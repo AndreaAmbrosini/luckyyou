@@ -4,7 +4,7 @@
 // along the top of the stage. In stage pixels (1280 × 720), from the
 // handover's storyboard.
 
-import { STAGE, stagePx } from '../../scenario-kit';
+import { nameTag, STAGE, stagePx } from '../../scenario-kit';
 import type { Lean, Plan, Side } from './plan';
 
 export interface Point {
@@ -219,6 +219,38 @@ export function riskSpots(
   return all;
 }
 
+/** How the kit sets a name tag: its font size, the width it allows, its lines, and how wide it is drawn. */
+export interface TagSet {
+  readonly size: number;
+  readonly maxWidth: number;
+  readonly lines: 1 | 2;
+  readonly width: number;
+}
+
+/** How a show sets `name`'s tag for `tag`: the kit's sizes, and its width as drawn. */
+export type SetTag = (name: string, tag: Spot['tag']) => TagSet;
+
+/** The kit's name tag for `name`, set as `tag` says: onto two lines rather than smaller. */
+export const nameTagFor = (name: string, tag: Spot['tag']): HTMLElement =>
+  nameTag(name, { ...tag, wrapBelow: tag.size, chest: true });
+
+/** What the kit set `el`, `name`'s tag, at; its width as `tagContentWidth` estimates it. */
+export function tagSetOf(name: string, el: HTMLElement): TagSet {
+  const size = Number.parseFloat(el.style.getPropertyValue('--tag-size'));
+  const maxWidth = Number.parseFloat(el.style.maxWidth);
+  const lines = el.dataset.lines === '2' ? 2 : 1;
+  return { size, maxWidth, lines, width: tagContentWidth(name, size, maxWidth, lines) };
+}
+
+const estimates = new Map<string, TagSet>();
+/** How the kit sets `name`'s tag for `tag`, its width estimated, where nothing is drawn. */
+export const estimateTag: SetTag = (name, tag) => {
+  const key = `${name}|${tag.size}|${tag.maxWidth}`;
+  let set = estimates.get(key);
+  if (!set) estimates.set(key, (set = tagSetOf(name, nameTagFor(name, tag))));
+  return set;
+};
+
 /** The Safe bench: its plank's top and left end, and where the heads sit. */
 export const BENCH = {
   plank: 250,
@@ -300,63 +332,152 @@ export function between(a: Spot, b: Spot, t: number): Spot {
 
 /** Seconds the hop to the bench takes, and the gap closing with it. */
 export const HOP = 0.6;
-/** How far the hop to the bench arcs above the higher of its two ends. */
-const HOP_ARC = 80;
+/** How far the hop to the bench rises over the higher of its two ends. */
+export const HOP_ARC = 80;
 const inOut = (u: number) => (u < 0.5 ? 2 * u * u : 1 - 2 * (1 - u) * (1 - u));
 
 /**
- * Where everyone is over the show, from `plan`: at risk around the tower,
- * then, from their `Safe!`, hopping up to their slot on the bench (in an arc,
- * or a straight slide with `calm`) while those still at risk close the gap,
- * keeping their order. `widths` are the bench tags' widths as drawn, in the
- * order people go safe.
+ * The height `u` (0…1) of the way along a curve from `from` to `to` whose
+ * highest point is `top` (above both): a quadratic one, its control point
+ * placed so its peak is `top` exactly.
  */
-export function placings(plan: Plan, widths: readonly number[] = [], calm = false) {
+function overArc(from: number, to: number, top: number, u: number): number {
+  const control = top - Math.sqrt((from - top) * (to - top));
+  const v = 1 - u;
+  return v * v * from + 2 * v * u * control + u * u * to;
+}
+
+/** A name tag as drawn at a moment: the kit's size, width allowed and lines, and its shift onto the stage. */
+export interface DrawnTag {
+  readonly size: number;
+  readonly maxWidth: number;
+  readonly lines: 1 | 2;
+  readonly shift: number;
+}
+
+/**
+ * Where everyone is over the show, from `plan`: at risk around the tower,
+ * then, from their `Safe!`, hopping up to their slot on the bench (in an arc
+ * peaking HOP_ARC over the higher end, or a straight slide with `calm`)
+ * while those still at risk close the gap, keeping their order. `setTag`
+ * says how the show sets each tag (the kit's sizes and the width as drawn);
+ * every layout is worked out, and every tag set, before the show starts.
+ */
+export function placings(plan: Plan, setTag: SetTag = estimateTag, calm = false) {
   const people = plan.order.length;
   const safeAt = new Map(
     plan.turns.filter((turn) => turn.safe !== null).map((turn) => [turn.by, turn.safe!]),
   );
   const benching = [...safeAt.keys()];
-  const benchSpots = benching.map((_, slot) => benchSpot(slot, widths));
+  const seat = benchTag(benching.length);
+  const seats = benching.map((name) => setTag(name, seat));
+  const benchSpots = new Map(
+    benching.map((name, slot) => [
+      name,
+      benchSpot(
+        slot,
+        seats.map((set) => set.width),
+      ),
+    ]),
+  );
   const moves = [...new Set(safeAt.values())].sort((a, b) => a - b);
-  // A moment comes in the frame it falls in, however its time is rounded.
-  const safeBy = (name: string, t: number) => (safeAt.get(name) ?? Infinity) <= t + 1e-9;
-  /** Who is at risk at `t`, in standing order: everyone who hasn't said Safe! yet. */
-  const atRisk = (t: number) => plan.order.filter((name) => !safeBy(name, t));
   // Everyone keeps the row they start in.
   const rowOf = new Map(plan.order.map((name, index) => [name, startingRows(people)[index]!]));
-  const riskSpotOf = (name: string, t: number) => {
-    const now = atRisk(t);
-    const rows = now.map((each) => rowOf.get(each)!);
-    return riskSpots(now.length, people, rows)[now.indexOf(name)]!;
+  /** Who is at risk before the first move (0) and after each: everyone who hasn't said Safe! by then. */
+  const risking = [-Infinity, ...moves].map((at) =>
+    plan.order.filter((name) => (safeAt.get(name) ?? Infinity) > at),
+  );
+  /** Where they stand then. */
+  const layouts = risking.map((names) => {
+    const spots = riskSpots(
+      names.length,
+      people,
+      names.map((name) => rowOf.get(name)!),
+    );
+    return new Map(names.map((name, index) => [name, spots[index]!]));
+  });
+  /** How many moves have started by `t`: a moment comes in the frame it falls in, however its time is rounded. */
+  const stage = (t: number) => {
+    let k = 0;
+    while (k < moves.length && moves[k]! <= t + 1e-9) k++;
+    return k;
   };
+  /** A still spot's tag as drawn. */
+  const stills = new WeakMap<Spot, DrawnTag & { width: number }>();
+  const still = (name: string, spot: Spot) => {
+    let drawn = stills.get(spot);
+    if (!drawn) {
+      const set = setTag(name, spot.tag);
+      stills.set(spot, (drawn = { ...set, shift: tagShift(spot, set.width) }));
+    }
+    return drawn;
+  };
+  // Every tag set before the show.
+  for (const layout of layouts) for (const [name, spot] of layout) still(name, spot);
+  for (const [name, spot] of benchSpots) still(name, spot);
+
+  const benched = (name: string, t: number) => (safeAt.get(name) ?? Infinity) + HOP <= t + 1e-9;
+  const hopping = (name: string, t: number) => {
+    const safe = safeAt.get(name) ?? Infinity;
+    return safe <= t + 1e-9 && t + 1e-9 < safe + HOP;
+  };
+  /** The move under way at `t`, if any: the layouts it goes from and to, and how far along it is. */
+  const moving = (t: number) => {
+    const k = stage(t);
+    if (k === 0 || t + 1e-9 >= moves[k - 1]! + HOP) return null;
+    return {
+      from: layouts[k - 1]!,
+      to: layouts[k]!,
+      u: inOut(Math.max(0, (t - moves[k - 1]!) / HOP)),
+    };
+  };
+
+  const at = (name: string, t: number): Spot => {
+    if (benched(name, t)) return benchSpots.get(name)!;
+    const move = moving(t);
+    if (!move) return layouts[stage(t)]!.get(name)!;
+    const from = move.from.get(name)!;
+    if (!hopping(name, t)) return between(from, move.to.get(name)!, move.u);
+    const to = benchSpots.get(name)!;
+    const spot = between(from, to, move.u);
+    if (calm) return spot;
+    const top = Math.min(from.y, to.y) - HOP_ARC;
+    return { ...spot, y: overArc(from.y, to.y, top, move.u) };
+  };
+
+  /** `name`'s tag as drawn at `t`: between the two still ones while they move; null while it hides, on the hop. */
+  const tag = (name: string, t: number): (DrawnTag & { width?: number }) | null => {
+    if (benched(name, t)) return still(name, benchSpots.get(name)!);
+    if (hopping(name, t)) return null;
+    const move = moving(t);
+    if (!move) return still(name, layouts[stage(t)]!.get(name)!);
+    const a = still(name, move.from.get(name)!);
+    const b = still(name, move.to.get(name)!);
+    const mix = (x: number, y: number) => x + (y - x) * move.u;
+    return {
+      size: mix(a.size, b.size),
+      maxWidth: mix(a.maxWidth, b.maxWidth),
+      lines: a.lines === 2 || b.lines === 2 ? 2 : 1,
+      shift: mix(a.shift, b.shift),
+    };
+  };
+
   return {
-    atRisk,
+    /** Who is at risk at `t`, in standing order: everyone who hasn't said Safe! yet. */
+    atRisk: (t: number) => risking[stage(t)]!,
     /** Whether `name` sits on the bench at `t`, the hop done. */
-    benched: (name: string, t: number) => (safeAt.get(name) ?? Infinity) + HOP <= t + 1e-9,
+    benched,
     /** Whether `name` is on their way up to the bench at `t`. */
-    hopping: (name: string, t: number) => {
-      const safe = safeAt.get(name) ?? Infinity;
-      return safe <= t + 1e-9 && t + 1e-9 < safe + HOP;
-    },
+    hopping,
     /** Where `name` is at `t`. */
-    at(name: string, t: number): Spot {
-      const move = moves.findLast((at) => at <= t + 1e-9 && t + 1e-9 < at + HOP);
-      const safe = safeAt.get(name) ?? Infinity;
-      if (safe + HOP <= t + 1e-9) return benchSpots[benching.indexOf(name)]!;
-      if (move === undefined) return riskSpotOf(name, t);
-      const u = inOut(Math.max(0, (t - move) / HOP));
-      const from = riskSpotOf(name, move - 1e-6);
-      if (safe === move) {
-        const to = benchSpots[benching.indexOf(name)]!;
-        const spot = between(from, to, u);
-        if (calm) return spot;
-        // An arc over the higher end: a point on a curve through its top.
-        const top = Math.min(from.y, to.y) - HOP_ARC;
-        const v = 1 - u;
-        return { ...spot, y: v * v * from.y + 2 * v * u * top + u * u * to.y };
-      }
-      return between(from, riskSpotOf(name, move), u);
+    at,
+    tag,
+    /** The box of `name`'s tag as drawn at `t` (its width as `tagContentWidth` estimates it); null while it hides. */
+    tagBox(name: string, t: number): Box | null {
+      const drawn = tag(name, t);
+      if (!drawn) return null;
+      const width = drawn.width ?? tagContentWidth(name, drawn.size, drawn.maxWidth, drawn.lines);
+      return tagBox(at(name, t), width, drawn.shift);
     },
   };
 }

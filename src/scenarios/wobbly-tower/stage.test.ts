@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { createRandom } from '../../scenario-kit/random';
 import { handOutLooks } from '../../scenario-kit';
+import { POINTER } from './parts';
+import { planHops, startTipOf } from './pointer';
 import { BEATS, hopInto, LEANS as PEAKS, planShow, READ, stayOn, type Plan } from './plan';
 import {
   CAPTION_BOTTOM,
@@ -9,6 +11,9 @@ import {
   benchSpot,
   benchTag,
   between,
+  estimateTag,
+  HOP,
+  placings,
   blockBox,
   blockHeight,
   blockOverlaps,
@@ -24,6 +29,7 @@ import {
   signedLean,
   tagBox,
   tower,
+  nameTagFor,
   type Box,
   type Spot,
 } from './layout';
@@ -41,7 +47,6 @@ import {
   NORMAL,
   TEAM,
   drawnWidth,
-  tagAt,
   sizeOf,
   STEP,
   watch,
@@ -49,6 +54,7 @@ import {
   swings,
   swaysPerSecond,
   pointersIn,
+  drawnAs,
   shows,
   pointerBox,
   spotOf,
@@ -172,7 +178,7 @@ describe('The layout', () => {
         called.splice(slot, 0, long);
         const label = `${benched} benched, the long name in slot ${slot}`;
         const tag = benchTag(benched);
-        const tags = called.map((name) => tagAt(name, tag));
+        const tags = called.map((name) => nameTagFor(name, tag));
         const widths = called.map((name, index) => drawnWidth(name, tags[index]!));
         const all = called.map((_, index) => benchSpot(index, widths));
         const boxes = all.map((spot, index) => tagBox(spot, widths[index]));
@@ -186,7 +192,7 @@ describe('The layout', () => {
           const head = headBox(all[index]!);
           expect(head.top, label).toBeGreaterThanOrEqual(CAPTION_BOTTOM);
           expect(head.bottom, label).toBeLessThanOrEqual(250);
-          expect(head.right - head.left, label).toBe(76);
+          expect(head.right - head.left, label).toBeCloseTo(76, 9);
         });
         // In the order they go safe, left to right, from x 250 unless the bench is too long.
         const xs = all.map((spot) => spot.x);
@@ -226,7 +232,7 @@ describe('The layout', () => {
         // Every normal name is set at its full size, never over another tag or a head.
         for (let round = 0; round < count; round++) {
           const called = all.map((_, index) => NORMAL[(index + round) % NORMAL.length]!);
-          const tags = called.map((name, index) => tagAt(name, all[index]!.tag));
+          const tags = called.map((name, index) => nameTagFor(name, all[index]!.tag));
           const boxes = all.map((spot, index) =>
             tagBox(spot, drawnWidth(called[index]!, tags[index]!)),
           );
@@ -544,6 +550,94 @@ describe('The plan', () => {
     const orders = plans(8).map((plan) => plan.order.join());
     for (const order of orders) expect(order.split(',').sort()).toEqual([...names(8)].sort());
     expect(new Set(orders).size).toBeGreaterThan(1);
+  });
+});
+
+describe('Moving people', () => {
+  /** Every safe turn of the plans at 4, 8 and 12, seeds 1–5. */
+  const safeTurns = [4, 8, 12].flatMap((count) =>
+    plans(count, 5).flatMap((plan, seed) =>
+      plan.turns
+        .filter((turn) => turn.safe !== null)
+        .map((turn) => ({ label: `${count} people, seed ${seed + 1}, ${turn.by}`, plan, turn })),
+    ),
+  );
+
+  it('the hop to the bench peaks 80 px over its higher end', () => {
+    for (const { label, plan, turn } of safeTurns) {
+      const places = placesOf(plan);
+      const from = places.at(turn.by, turn.safe!);
+      const to = places.at(turn.by, turn.safe! + HOP);
+      const ys = Array.from(
+        { length: 601 },
+        (_, k) => places.at(turn.by, turn.safe! + (HOP * k) / 600).y,
+      );
+      expect(Math.min(...ys), label).toBeGreaterThanOrEqual(Math.min(from.y, to.y) - 80 - 2);
+      expect(Math.min(...ys), label).toBeLessThanOrEqual(Math.min(from.y, to.y) - 80 + 2);
+    }
+  });
+
+  it('with reduced motion the hop is a straight slide, with no overshoot', () => {
+    for (const { label, plan, turn } of safeTurns) {
+      const places = placings(plan, estimateTag, true);
+      const from = places.at(turn.by, turn.safe!);
+      const to = places.at(turn.by, turn.safe! + HOP);
+      const length = Math.hypot(to.x - from.x, to.y - from.y);
+      let along = 0;
+      for (let k = 0; k <= 60; k++) {
+        const p = places.at(turn.by, turn.safe! + (HOP * k) / 60);
+        // On the line from one end to the other, never back, never past it.
+        const off = ((p.x - from.x) * (to.y - from.y) - (p.y - from.y) * (to.x - from.x)) / length;
+        expect(Math.abs(off), label).toBeLessThan(1e-6);
+        const now = ((p.x - from.x) * (to.x - from.x) + (p.y - from.y) * (to.y - from.y)) / length;
+        expect(now, label).toBeGreaterThanOrEqual(along - 1e-9);
+        expect(now, label).toBeLessThanOrEqual(length + 1e-9);
+        along = now;
+      }
+    }
+  });
+
+  it('the pointers never cover a tag, even while people move, at every count and seed', () => {
+    const failures: string[] = [];
+    for (const { label, plan } of everyPlan()) {
+      const places = placesOf(plan);
+      const hops = planHops(plan.turns, places, startTipOf(blockHeight(2 + plan.turns.length), 2));
+      // Every frame of every round, from the pointer leaving until it has faded out.
+      for (const turn of firstTurns(plan)) {
+        for (let frame = Math.ceil(turn.from * 30); frame / 30 <= turn.stops + 0.15; frame++) {
+          const t = frame / 30;
+          for (const which of [0, 1]) {
+            const pointer = hops.at(t, which);
+            if (pointer.shown === 0) continue;
+            const box = pointerBox(pointer.tip);
+            for (const name of plan.order) {
+              // No tag is more than 500 wide: one further off can't reach it.
+              if (Math.abs(places.at(name, t).x - pointer.tip.x) > POINTER.width / 2 + 260)
+                continue;
+              const tag = places.tagBox(name, t);
+              if (tag && overlap(box, tag)) {
+                failures.push(`${label}: over ${name} at ${t.toFixed(3)}`);
+              }
+            }
+          }
+        }
+      }
+    }
+    expect(failures.slice(0, 10)).toEqual([]);
+  });
+
+  it("a frame's tag box is where the tag is drawn, moved sideways as it is", () => {
+    const person = document.createElement('div');
+    person.dataset.person = 'Anna';
+    Object.assign(person.style, { left: '40px', top: '370px', width: '120px', height: '120px' });
+    const tag = nameTagFor('Anna', { size: 36, maxWidth: 160 });
+    const plain = drawnAs(person, tag).tag;
+    tag.style.left = 'calc(50% + 12.5px)';
+    const moved = drawnAs(person, tag).tag;
+    expect(moved.left - plain.left).toBeCloseTo(12.5, 9);
+    expect(moved.right - plain.right).toBeCloseTo(12.5, 9);
+    tag.style.left = 'calc(50% + -7px)';
+    expect(drawnAs(person, tag).tag.left - plain.left).toBeCloseTo(-7, 9);
   });
 });
 

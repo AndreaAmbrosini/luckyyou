@@ -13,7 +13,6 @@ import {
   bubble,
   handOutLooks,
   head,
-  nameTag,
   popIn,
   speechAt,
   speechBox,
@@ -33,18 +32,19 @@ import {
   overlap,
   placings,
   plank,
-  riskSpots,
+  nameTagFor,
   signedLean,
   tagBox,
-  tagContentWidth,
-  tagShift,
+  tagSetOf,
   topOf,
   tower,
   towards,
-  TOWER,
   type Block,
   type Box,
+  type DrawnTag,
   type Point,
+  type SetTag,
+  type TagSet,
   type Spot,
 } from './layout';
 import {
@@ -59,7 +59,7 @@ import {
   speedLines,
 } from './parts';
 import { BEATS, planShow, READ, type Beat, type Plan, type Turn } from './plan';
-import { FLIGHT, planHops } from './pointer';
+import { FLIGHT, planHops, startTipOf } from './pointer';
 import styles from './wobbly-tower.module.css';
 
 /** The two paper blocks land at these show seconds, each after falling for DROP seconds. */
@@ -127,8 +127,6 @@ interface Person {
   /** The box their name tag's holder takes, the size and place of their head. */
   readonly holder: HTMLElement;
   benched: boolean;
-  /** On their way up to the bench: their name tag hides until they sit, so it never crosses another. */
-  hopping: boolean;
   mood: Mood | '';
   holding: boolean;
   raised: boolean;
@@ -175,7 +173,6 @@ export async function playWobblyTower(show: Show): Promise<void> {
   // size and place of its person, in a layer above the tower.
   const headCount = plan.order.length;
   const benches = headCount >= 4;
-  const start = riskSpots(headCount, headCount);
   const crowd = scene.appendChild(document.createElement('div'));
   crowd.className = styles.tower;
   const stand = benches ? drawPlinth() : null;
@@ -186,9 +183,27 @@ export async function playWobblyTower(show: Show): Promise<void> {
   const tags = scene.appendChild(document.createElement('div'));
   tags.className = styles.tower;
   tags.dataset.part = 'tags';
+  // How the kit sets each tag, each way the show sets it, worked out once
+  // before the show: as wide as the browser draws it, or where nothing is
+  // drawn (jsdom), as the layout estimates.
+  const sets = new Map<string, TagSet>();
+  const setTag: SetTag = (name, tag) => {
+    const key = `${name}|${tag.size}|${tag.maxWidth}`;
+    let set = sets.get(key);
+    if (!set) {
+      const el = tags.appendChild(nameTagFor(name, tag));
+      const kit = tagSetOf(name, el);
+      set = { ...kit, width: el.offsetWidth || kit.width };
+      el.remove();
+      sets.set(key, set);
+    }
+    return set;
+  };
+  const places = placings(plan, setTag, show.reducedMotion);
+  const spotAt = (name: string, t: number) => places.at(name, t);
   const people = new Map<string, Person>(
-    plan.order.map((name, index) => {
-      const person = createPerson(name, looks.get(name)!, start[index]!);
+    plan.order.map((name) => {
+      const person = createPerson(name, looks.get(name)!, spotAt(name, 0), places.tag(name, 0)!);
       crowd.append(person.el);
       tags.append(person.holder);
       return [name, person];
@@ -197,22 +212,14 @@ export async function playWobblyTower(show: Show): Promise<void> {
   // The bench seats everyone who goes safe, left to right as they do, by
   // their tags' widths there.
   const goingSafe = plan.turns.filter((turn) => turn.safe !== null).map((turn) => turn.by);
-  const seated = benchTag(goingSafe.length);
-  const widths = goingSafe.map((name) => {
-    const tag = tagFor(name, seated);
-    tags.append(tag);
-    const width = tagWidth(name, tag);
-    tag.remove();
-    return width;
-  });
-  const places = placings(plan, widths, show.reducedMotion);
-  const spotAt = (name: string, t: number) => places.at(name, t);
-  if (benches) scene.insertBefore(drawBench(plank(widths)), crowd);
+  const seat = benchTag(goingSafe.length);
+  const plankFor = plank(goingSafe.map((name) => setTag(name, seat).width));
+  if (benches) scene.insertBefore(drawBench(plankFor), crowd);
   /** Every head and name tag at `t`, which a bubble keeps clear of. */
   const inTheWay = (t: number) =>
     plan.order.flatMap((name) => {
-      const spot = spotAt(name, t);
-      return [headBox(spot), tagBox(spot)];
+      const tag = places.tagBox(name, t);
+      return tag ? [headBox(spotAt(name, t)), tag] : [headBox(spotAt(name, t))];
     });
 
   // The tower's lean, sway by sway, in signed degrees.
@@ -329,8 +336,7 @@ export async function playWobblyTower(show: Show): Promise<void> {
       y: gsap.quickSetter(el, 'y', 'px') as (value: number) => void,
     };
   });
-  const startTip = { x: TOWER.x, y: topOf(tower(PAPER.length, 0, height).at(-1)!).y - 10 };
-  const hops = planHops(plan.turns, places, startTip);
+  const hops = planHops(plan.turns, places, startTipOf(height, PAPER.length));
 
   // Who looks how: everyone is scared while Nearly nearly topples; whoever
   // the pointer picks is worried, then scared once the spotlight is on;
@@ -393,15 +399,10 @@ export async function playWobblyTower(show: Show): Promise<void> {
 
     // Everyone where they are now, and how many are still at risk.
     for (const person of people.values()) {
-      drawPerson(person, spotAt(person.name, t));
+      drawPerson(person, spotAt(person.name, t), places.tag(person.name, t));
       const benched = places.benched(person.name, t);
       if (benched !== person.benched)
         person.el.dataset.benched = String((person.benched = benched));
-      const hopping = places.hopping(person.name, t);
-      if (hopping !== person.hopping) {
-        person.hopping = hopping;
-        person.tag.style.visibility = hopping ? 'hidden' : '';
-      }
     }
     if (stand) stand.count(places.atRisk(t).length);
 
@@ -785,26 +786,8 @@ function setShown(el: HTMLElement | SVGElement, opacity: number) {
   if (el.style.opacity !== value) el.style.opacity = value;
 }
 
-/** The kit's name tag for `name`, set as `tag` says: onto two lines rather than smaller. */
-function tagFor(name: string, tag: Spot['tag']): HTMLElement {
-  return nameTag(name, { ...tag, wrapBelow: tag.size, chest: true });
-}
-
-/** How wide `tag` is: as the browser draws it, or where nothing is drawn (jsdom), as the layout estimates. */
-function tagWidth(name: string, tag: HTMLElement): number {
-  return (
-    tag.offsetWidth ||
-    tagContentWidth(
-      name,
-      Number.parseFloat(tag.style.getPropertyValue('--tag-size')),
-      Number.parseFloat(tag.style.maxWidth),
-      tag.dataset.lines === '2' ? 2 : 1,
-    )
-  );
-}
-
 /** Someone standing at `spot`: their head on land, and their name tag in a holder for the tags' layer. */
-function createPerson(name: string, look: Look, spot: Spot): Person {
+function createPerson(name: string, look: Look, spot: Spot, tag: DrawnTag): Person {
   const el = document.createElement('div');
   el.className = styles.person;
   el.dataset.person = name;
@@ -814,75 +797,55 @@ function createPerson(name: string, look: Look, spot: Spot): Person {
   el.append(face.el);
   const holder = document.createElement('div');
   holder.className = styles.person;
-  const tag = tagFor(name, spot.tag);
-  holder.append(tag);
   const person: Person = {
     name,
     el,
     face,
     spot,
-    tag,
+    tag: holder.appendChild(nameTagFor(name, spot.tag)),
     holder,
     benched: false,
-    hopping: false,
     mood: '',
     holding: false,
     raised: false,
     sweat: false,
   };
-  drawPerson(person, spot, true);
+  drawPerson(person, spot, tag, true);
   return person;
 }
 
-/** The sizes the kit sets a name tag at, for each name, size and width: it is slow to ask every frame. */
-const tagSizes = new Map<string, { size: string; maxWidth: string; lines: string }>();
-
 /**
- * Draws `person` at `spot`: their head and their tag's holder, and the tag
- * set for its size there, moved sideways only to stay on the stage. Styles
- * are written only when the spot changes.
+ * Draws `person` at `spot`, their head and their tag's holder, with their
+ * tag drawn as `tag` says (hidden when null, on the hop to the bench).
+ * Styles are written only when they change, and nothing is measured: the
+ * tags were all set before the show.
  */
-function drawPerson(person: Person, spot: Spot, first = false) {
+function drawPerson(person: Person, spot: Spot, tag: DrawnTag | null, first = false) {
   const was = person.spot;
-  const same =
-    was.x === spot.x &&
-    was.y === spot.y &&
-    was.size === spot.size &&
-    was.tag.size === spot.tag.size &&
-    was.tag.maxWidth === spot.tag.maxWidth;
-  if (same && !first) return;
-  person.spot = spot;
-  const place = {
-    left: `${spot.x - spot.size / 2}px`,
-    top: `${spot.y - 0.8 * spot.size}px`,
-    width: `${spot.size}px`,
-    height: `${spot.size}px`,
-  };
-  for (const el of [person.el, person.holder]) {
-    for (const key of ['left', 'top', 'width', 'height'] as const) el.style[key] = place[key];
-  }
-  person.face.el.setAttribute('width', String(spot.size));
-  person.face.el.setAttribute('height', String(spot.size));
-  const tag = {
-    size: Math.round(spot.tag.size * 10) / 10,
-    maxWidth: Math.round(spot.tag.maxWidth),
-  };
-  const key = `${person.name}|${tag.size}|${tag.maxWidth}`;
-  let set = tagSizes.get(key);
-  if (!set) {
-    const fresh = tagFor(person.name, tag);
-    set = {
-      size: fresh.style.getPropertyValue('--tag-size'),
-      maxWidth: fresh.style.maxWidth,
-      lines: fresh.dataset.lines!,
+  if (first || was.x !== spot.x || was.y !== spot.y || was.size !== spot.size) {
+    person.spot = spot;
+    const place = {
+      left: `${spot.x - spot.size / 2}px`,
+      top: `${spot.y - 0.8 * spot.size}px`,
+      width: `${spot.size}px`,
+      height: `${spot.size}px`,
     };
-    tagSizes.set(key, set);
+    for (const el of [person.el, person.holder]) {
+      for (const key of ['left', 'top', 'width', 'height'] as const) el.style[key] = place[key];
+    }
+    person.face.el.setAttribute('width', String(spot.size));
+    person.face.el.setAttribute('height', String(spot.size));
   }
   const { style, dataset } = person.tag;
-  if (style.getPropertyValue('--tag-size') !== set.size) style.setProperty('--tag-size', set.size);
-  if (style.maxWidth !== set.maxWidth) style.maxWidth = set.maxWidth;
-  if (dataset.lines !== set.lines) dataset.lines = set.lines;
-  const shift = tagShift(spot, tagWidth(person.name, person.tag));
-  const left = shift === 0 ? '50%' : `calc(50% + ${shift}px)`;
+  const visibility = tag ? '' : 'hidden';
+  if (style.visibility !== visibility) style.visibility = visibility;
+  if (!tag) return;
+  const size = `${tag.size}px`;
+  if (style.getPropertyValue('--tag-size') !== size) style.setProperty('--tag-size', size);
+  const maxWidth = `${tag.maxWidth}px`;
+  if (style.maxWidth !== maxWidth) style.maxWidth = maxWidth;
+  const lines = String(tag.lines);
+  if (dataset.lines !== lines) dataset.lines = lines;
+  const left = tag.shift === 0 ? '50%' : `calc(50% + ${tag.shift}px)`;
   if (style.left !== left) style.left = left;
 }
