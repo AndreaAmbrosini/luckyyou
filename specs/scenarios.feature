@@ -64,6 +64,23 @@ Feature: Scenarios
         | largest  | first    |
         | largest  | last     |
 
+    # Shows may now last up to 30 seconds. The build deletes the outline above,
+    # with its steps, when this one passes.
+    @pending
+    Scenario Outline: At its <size> head count, unlucky person <position>, the show ends within 30 seconds and cleans up
+      Given the scenario's <size> head count, with the unlucky person <position> in the list
+      When the show runs
+      Then it ends between 10 and 30 seconds after it started
+      And the stage is empty
+      And no element, animation, timer or listener it added is left
+
+      Examples:
+        | size     | position |
+        | smallest | first    |
+        | smallest | last     |
+        | largest  | first    |
+        | largest  | last     |
+
     Scenario: Everyone is shown, and the show ends on the unlucky person
       When the show runs at the scenario's largest head count
       Then every name appears on stage at some point

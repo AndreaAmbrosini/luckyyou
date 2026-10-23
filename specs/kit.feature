@@ -72,6 +72,20 @@ Feature: The scenario kit
         | 16      | stays quiet                   |
         | 21      | warns that it left 10 to 20 s |
 
+    # Shows may now last up to 30 seconds. The build deletes the outline above,
+    # with its steps, when this one passes.
+    @pending
+    Scenario Outline: In development, a <seconds>-second show <warns> about 10 to 30 s
+      Given a show that lasts <seconds> seconds
+      When it runs in development
+      Then the console <warns>
+
+      Examples:
+        | seconds | warns                         |
+        | 9       | warns that it left 10 to 30 s |
+        | 25      | stays quiet                   |
+        | 31      | warns that it left 10 to 30 s |
+
   Rule: Who leaves when
 
     Scenario: Everyone leaves once, the unlucky person last

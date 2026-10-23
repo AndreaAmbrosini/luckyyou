@@ -43,3 +43,12 @@ Feature: The show
       When the show has run for 25 seconds
       Then the scenario is stopped
       And the result names the app's pick
+
+    # Shows may now last up to 30 seconds. The build deletes the scenario above,
+    # with its steps, when this one passes.
+    @pending
+    Scenario: A scenario that never ends is stopped after 35 seconds
+      Given a scenario that never finishes
+      When the show has run for 35 seconds
+      Then the scenario is stopped
+      And the result names the app's pick
