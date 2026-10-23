@@ -13,6 +13,8 @@ import {
   between,
   estimateTag,
   HOP,
+  HOP_ARC,
+  HOP_CLEAR,
   placings,
   blockBox,
   blockHeight,
@@ -273,6 +275,9 @@ describe('The layout', () => {
         );
         for (const spot of all) {
           const box = pointerBox(pointerTip(spot));
+          // On the stage, over the outermost spots too.
+          expect(box.left, `${count} at risk of ${people}`).toBeGreaterThanOrEqual(0);
+          expect(box.right, `${count} at risk of ${people}`).toBeLessThanOrEqual(1280);
           for (const tag of [...tags, ...bench]) {
             expect(overlap(box, tag), `${count} at risk of ${people}`).toBe(false);
           }
@@ -576,9 +581,9 @@ describe('Moving people', () => {
       const places = placesOf(plan);
       const headTop = (t: number) => headBox(places.at(turn.by, t)).top;
       const higher = Math.min(headTop(turn.safe!), headTop(turn.safe! + HOP));
-      const peak = Math.max(higher - 80, CAPTION_BOTTOM + 8);
+      const peak = Math.max(higher - HOP_ARC, CAPTION_BOTTOM + HOP_CLEAR);
       const tops = Array.from({ length: 601 }, (_, k) => headTop(turn.safe! + (HOP * k) / 600));
-      expect(Math.min(...tops), label).toBeGreaterThanOrEqual(CAPTION_BOTTOM + 8 - 1e-9);
+      expect(Math.min(...tops), label).toBeGreaterThanOrEqual(CAPTION_BOTTOM + HOP_CLEAR - 1e-9);
       expect(Math.min(...tops), label).toBeGreaterThanOrEqual(peak - 2);
       expect(Math.min(...tops), label).toBeLessThanOrEqual(peak + 2);
     }
@@ -626,6 +631,45 @@ describe('Moving people', () => {
                 failures.push(`${label}: over ${name} at ${t.toFixed(3)}`);
               }
             }
+          }
+        }
+      }
+    }
+    expect(failures.slice(0, 10)).toEqual([]);
+  });
+
+  it('the 15-character name keeps its tag apart, wherever it stands, at 8 to 12', () => {
+    const long = TEAM.at(-1)!;
+    const failures: string[] = [];
+    for (let count = 8; count <= 12; count++) {
+      for (let seed = 1; seed <= 20; seed++) {
+        // The plan goes by place in the list, not by name: the long name in each place in turn.
+        for (let place = 0; place < count; place++) {
+          const team = NORMAL.slice(0, count).map((name, index) => (index === place ? long : name));
+          const plan = planShow(team, team.at(-1)!, createRandom(seed));
+          const places = placings(plan);
+          const moves = [
+            ...new Set(plan.turns.flatMap((turn) => (turn.safe === null ? [] : [turn.safe]))),
+          ];
+          // Standing, before the first close and after each; and every moment of each close.
+          const times = [
+            0,
+            ...moves.flatMap((at) => Array.from({ length: 21 }, (_, k) => at + (HOP * k) / 20)),
+          ];
+          for (const t of times) {
+            const boxes = plan.order.flatMap((name) => {
+              const box = places.tagBox(name, t);
+              return box ? [{ name, box }] : [];
+            });
+            boxes.forEach(({ name, box }, index) => {
+              for (const other of boxes.slice(index + 1)) {
+                if (overlap(box, other.box)) {
+                  failures.push(
+                    `${count} people, seed ${seed}, ${long} in place ${place}: ${name} and ${other.name} at ${t.toFixed(3)}`,
+                  );
+                }
+              }
+            });
           }
         }
       }

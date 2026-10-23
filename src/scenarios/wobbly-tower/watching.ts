@@ -119,7 +119,7 @@ export const drawnWidth = (name: string, tag: HTMLElement) => {
   return width;
 };
 const widths = new Map<string, number>();
-/** The test team's names without the 30-character one, and one more to make twelve. */
+/** The test team's names without its 15-character one, and one more to make twelve. */
 export const NORMAL = [...TEAM.slice(0, -1), 'Zoe'];
 
 /** Show seconds per recorded frame. */
@@ -137,7 +137,8 @@ export interface Frame {
   readonly pointers: readonly (Point & { readonly shown: number; readonly over: string })[];
   /** Where each person is drawn, their name tag's box as the kit sets it, and whether they sit on the bench. */
   readonly people: Readonly<Record<string, { spot: Spot; tag: Box; benched: boolean }>>;
-  /** The number on the "At risk" plinth; everyone, with no plinth (2 or 3 people). */
+  /** Whether the "At risk" plinth is drawn, and the number on it (everyone, without it). */
+  readonly plinth: boolean;
   readonly atRisk: number;
   /** The tower's lean in degrees, positive to the right of the stage. */
   readonly lean: number;
@@ -418,6 +419,7 @@ async function recordShow(
             return [name, drawnAs(person, parts!.own.get(person)!.tag)];
           }),
         ),
+        plinth: parts.atRisk !== null,
         atRisk: parts.atRisk ? Number(parts.atRisk.textContent) : people.length,
         lean: Number(drawn.dataset.lean),
         blocks: landed,
@@ -960,4 +962,22 @@ export function expectBeside(
   );
   expect(found, `${label}: ${text} at ${at}`).toBeDefined();
   expect(found!.to + STEP - found!.from, label).toBeGreaterThanOrEqual(0.8 - STEP - 1e-6);
+}
+
+/** In every frame, no two bubbles showing overlap. */
+export function expectBubblesApart(frames: readonly Frame[], label: string) {
+  for (const frame of frames) {
+    const boxes = frame.bubbles.map((bubble) => ({
+      text: bubble.text,
+      box: speechBox(bubble.text, bubble),
+    }));
+    boxes.forEach(({ text, box }, index) => {
+      for (const other of boxes.slice(index + 1)) {
+        expect(
+          overlap(box, other.box),
+          `${label} at ${frame.time.toFixed(3)}: ${text} and ${other.text}`,
+        ).toBe(false);
+      }
+    });
+  }
 }

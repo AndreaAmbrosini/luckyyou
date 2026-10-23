@@ -127,6 +127,7 @@ Feature: Wobbly Tower
       Given <count> people
       When the show runs with 20 different random seeds
       Then there is no Safe bench, and nobody goes safe
+      And the "At risk" plinth under the tower shows <count> throughout
       And the caption after the opening is "<caption>", and the spotlight and the heartbeat start before the first turn
       And there are 4 or 5 turns, the last one the unlucky person's, and nobody has three in a row
       And before each turn the pointer stops on 2 or 3 people
@@ -258,15 +259,16 @@ Feature: Wobbly Tower
       Then every caption stays on screen for at least 1 second
 
     Scenario: Names stay readable
-      When the show runs at 12 and at 2 people
+      When the show runs at 12, at 8 and at 2 people
       Then every name tag is set at 22 pixels or more on the 1280 by 720 stage
       And with 2 people, both name tags are set at 44 pixels or more
       And no name tag is ever over another, under a block or under the pointer
 
     Scenario: Whoever is at risk is drawn big
-      When the show runs at 6 and at 12 people
+      When the show runs at 6 and at 12 people, a 15-character name among the 12
       Then with 6 or fewer at risk, their heads are 120 pixels tall and their name tags 36 pixels or more, on the 1280 by 720 stage
       And with 7 or more at risk, their heads are 100 pixels tall and their name tags 30 pixels or more
+      And the 15-character name's tag is 22 pixels or more, at risk or not
       And on the Safe bench, name tags are 22 pixels or more
       And the "At risk" number is 48 pixels or more
       And no name tag is ever over another, under a block or under the pointer

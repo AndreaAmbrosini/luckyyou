@@ -82,8 +82,8 @@ const AT_RISK = {
     head: 100,
     back: 390,
     front: 615,
-    left: [60, 440] as Range,
-    right: [1220, 840] as Range,
+    left: [75, 440] as Range,
+    right: [1205, 840] as Range,
     frontInner: { left: 360, right: 920 },
   },
 };
@@ -373,6 +373,52 @@ function overArc(from: number, to: number, top: number, u: number): number {
   return v * v * from + 2 * v * u * control + u * u * to;
 }
 
+/**
+ * `layout` with room for every tag as wide as `width` says the kit sets it:
+ * a name that can't fit two lines in its planned width (15 characters at 7
+ * or more at risk) is set wider, so along each side and row the people
+ * further out step out until neighbouring tags are TAG_GAP apart; if the
+ * outermost tag would then leave the stage, they step back in from the
+ * edge. The innermost stays put, clear of the tower, unless pushed back.
+ * Most layouts come back as they were.
+ */
+function roomFor(
+  layout: ReadonlyMap<string, Spot>,
+  width: (name: string, spot: Spot) => number,
+): Map<string, Spot> {
+  const moved = new Map(layout);
+  const groups = new Map<string, { name: string; spot: Spot; width: number }[]>();
+  for (const [name, spot] of layout) {
+    // With 8 or fewer, the two rows may next become one: both rows count, as in riskSpots.
+    const key = layout.size <= 8 ? `${sideOf(spot)}` : `${sideOf(spot)}/${spot.y}`;
+    const group = groups.get(key) ?? [];
+    group.push({ name, spot, width: width(name, spot) });
+    groups.set(key, group);
+  }
+  for (const group of groups.values()) {
+    const side = sideOf(group[0]!.spot);
+    // Inner first: the outward one is the next.
+    group.sort((a, b) => side * (a.spot.x - b.spot.x));
+    const xs = group.map((each) => each.spot.x);
+    const apart = (k: number) => (group[k - 1]!.width + group[k]!.width) / 2 + TAG_GAP;
+    for (let k = 1; k < group.length; k++) {
+      if (side * (xs[k]! - xs[k - 1]!) < apart(k)) xs[k] = xs[k - 1]! + side * apart(k);
+    }
+    const last = group.length - 1;
+    const edge = side === -1 ? group[last]!.width / 2 : STAGE.width - group[last]!.width / 2;
+    if (side * (xs[last]! - edge) > 0) {
+      xs[last] = edge;
+      for (let k = last; k > 0; k--) {
+        if (side * (xs[k]! - xs[k - 1]!) < apart(k)) xs[k - 1] = xs[k]! - side * apart(k);
+      }
+    }
+    group.forEach((each, k) => {
+      if (xs[k] !== each.spot.x) moved.set(each.name, { ...each.spot, x: xs[k]! });
+    });
+  }
+  return moved;
+}
+
 /** A name tag as drawn at a moment: the kit's size, width allowed and lines, and its shift onto the stage. */
 export interface DrawnTag {
   readonly size: number;
@@ -414,14 +460,17 @@ export function placings(plan: Plan, setTag: SetTag = estimateTag, calm = false)
   const risking = [-Infinity, ...moves].map((at) =>
     plan.order.filter((name) => (safeAt.get(name) ?? Infinity) > at),
   );
-  /** Where they stand then. */
+  /** Where they stand then, moved apart where a tag is set wider than planned. */
   const layouts = risking.map((names) => {
     const spots = riskSpots(
       names.length,
       people,
       names.map((name) => rowOf.get(name)!),
     );
-    return new Map(names.map((name, index) => [name, spots[index]!]));
+    return roomFor(
+      new Map(names.map((name, index) => [name, spots[index]!])),
+      (name, spot) => setTag(name, spot.tag).maxWidth,
+    );
   });
   /** How many moves have started by `t`: a moment comes in the frame it falls in, however its time is rounded. */
   const stage = (t: number) => {

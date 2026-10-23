@@ -37,6 +37,7 @@ import {
   pointersIn,
   expectTagsClear,
   expectBeside,
+  expectBubblesApart,
   startingRowsOf,
   placesOf,
   STEP,
@@ -411,6 +412,8 @@ describeSpec(await loadFeature('./wobbly-tower.feature'), ({ Rule }) => {
                 const tip = pointerTip(stopped.people[turn.by]!.spot);
                 expect(stopped.pointers[which]!.x).toBeCloseTo(tip.x, 6);
                 expect(stopped.pointers[which]!.y).toBeCloseTo(tip.y, 6);
+                // Both picked, so both look it.
+                expect(stopped.moods[turn.by], turn.by).toBe('worried');
               }
               const lifted = lifts.filter(
                 (lift) => lift.name === first.by || lift.name === second.by,
@@ -733,6 +736,12 @@ describeSpec(await loadFeature('./wobbly-tower.feature'), ({ Rule }) => {
           expect(Object.values(frame.people).some((them) => them.benched)).toBe(false);
         }
       });
+      And('the "At risk" plinth under the tower shows <count> throughout', () => {
+        for (const frame of run.frames) {
+          expect(frame.plinth, `at ${frame.time}`).toBe(true);
+          expect(frame.atRisk, `at ${frame.time}`).toBe(count);
+        }
+      });
       And(
         'the caption after the opening is "<caption>", and the spotlight and the heartbeat start before the first turn',
         () => {
@@ -965,16 +974,18 @@ describeSpec(await loadFeature('./wobbly-tower.feature'), ({ Rule }) => {
         expect(back.some((frame) => Math.abs(frame.lean) < 0.5)).toBe(true);
       });
       And('the thrower says {string}', (_, phew: string) => {
-        const thrower = spotOf(plan, nearly.by, plan.hold.to);
         // As it swings back, before the next round.
         const next = plan.turns[plan.turns.indexOf(nearly) + 1]!;
         const said = frames
           .filter((frame) => frame.time > furthest.at(-1)!.time && frame.time < next.from)
-          .flatMap((frame) => frame.bubbles)
-          .filter((bubble) => bubble.text === phew);
+          .flatMap((frame) =>
+            frame.bubbles
+              .filter((bubble) => bubble.text === phew)
+              .map((bubble) => ({ bubble, thrower: frame.people[nearly.by]!.spot })),
+          );
         expect(said.length).toBeGreaterThan(0);
-        // Beside the thrower's head.
-        for (const bubble of said) {
+        // Beside the thrower's head, wherever it is: on the hop it goes up with them.
+        for (const { bubble, thrower } of said) {
           expect(Math.abs(bubble.x - thrower.x)).toBeLessThan(thrower.size + 260);
           expect(Math.abs(bubble.y - thrower.y)).toBeLessThan(thrower.size + 120);
         }
@@ -1010,6 +1021,25 @@ describeSpec(await loadFeature('./wobbly-tower.feature'), ({ Rule }) => {
           expect(there.benched).toBe(true);
           expect(headBox(there.spot).bottom).toBeLessThanOrEqual(250);
           expect(frames.at(-1)!.people[nearly.by]!.benched).toBe(true);
+          // "Phew!" goes up with them too, as far from their head all the way.
+          const offsets = frames
+            .filter((frame) => frame.time >= plan.hold.to - 1e-9 && frame.time < plan.hold.to + 0.8)
+            .flatMap((frame) => {
+              const spot = frame.people[nearly.by]!.spot;
+              return frame.bubbles
+                .filter((bubble) => bubble.text === phew)
+                .map((bubble) => ({
+                  x: bubble.x - spot.x,
+                  y: bubble.y - (spot.y - 0.3 * spot.size),
+                }));
+            });
+          expect(offsets.length).toBeGreaterThan(20);
+          for (const offset of offsets) {
+            expect(offset.x).toBeCloseTo(offsets[0]!.x, 6);
+            expect(offset.y).toBeCloseTo(offsets[0]!.y, 6);
+          }
+          // "Phew!" and "Safe!" side by side, never one over the other; nor any two bubbles.
+          expectBubblesApart(frames, '8 people');
         },
       );
     });
@@ -1329,12 +1359,15 @@ describeSpec(await loadFeature('./wobbly-tower.feature'), ({ Rule }) => {
     });
     RuleScenario('Names stay readable', ({ When, Then, And }) => {
       let runs: { label: string; frames: Frame[] }[];
-      When('the show runs at 12 and at 2 people', async () => {
-        // At 12 the normal names; at 2, the first of the team and its 15-character name.
-        const two = [TEAM[0]!, TEAM.at(-1)!];
+      When('the show runs at 12, at 8 and at 2 people', async () => {
+        // The team, with its 15-character name: all of it at 12; at 8 and at 2, its first and that name.
+        const long = TEAM.at(-1)!;
+        const eight = [...TEAM.slice(0, 7), long];
+        const two = [TEAM[0]!, long];
         runs = [
-          { label: '12 people', frames: (await normalRun(12)).frames },
-          { label: '2 people', frames: (await watch(two, two[1]!)).frames },
+          { label: '12 people', frames: (await watch(TEAM, long)).frames },
+          { label: '8 people', frames: (await watch(eight, TEAM[0]!)).frames },
+          { label: '2 people', frames: (await watch(two, long)).frames },
         ];
       });
       Then('every name tag is set at 22 pixels or more on the 1280 by 720 stage', () => {
@@ -1350,7 +1383,7 @@ describeSpec(await loadFeature('./wobbly-tower.feature'), ({ Rule }) => {
         }
       });
       And('with 2 people, both name tags are set at 44 pixels or more', () => {
-        for (const frame of runs[1]!.frames) {
+        for (const frame of runs[2]!.frames) {
           for (const { spot } of Object.values(frame.people)) {
             expect(spot.tag.size, `at ${frame.time}`).toBeGreaterThanOrEqual(44);
           }
@@ -1370,26 +1403,29 @@ describeSpec(await loadFeature('./wobbly-tower.feature'), ({ Rule }) => {
           for (const frame of run.frames) {
             if (moves.some((at) => frame.time >= at - 1e-9 && frame.time < at + HOP)) continue;
             for (const [name, them] of Object.entries(frame.people)) {
-              if (!them.benched) yield { at: `${label}, ${name} at ${frame.time}`, frame, them };
+              if (!them.benched)
+                yield { at: `${label}, ${name} at ${frame.time}`, name, frame, them };
             }
           }
         }
       }
-      When('the show runs at 6 and at 12 people', async () => {
+      /** The 15-character name: too long for two lines at 30 or 36, it may be set smaller. */
+      const long = TEAM.at(-1)!;
+      When('the show runs at 6 and at 12 people, a 15-character name among the 12', async () => {
         runs = [
           { label: '6 people', run: await normalRun(6) },
-          { label: '12 people', run: await normalRun(12) },
+          { label: '12 people', run: await watch(TEAM, long) },
         ];
       });
       Then(
         'with 6 or fewer at risk, their heads are 120 pixels tall and their name tags 36 pixels or more, on the 1280 by 720 stage',
         () => {
           let seen = 0;
-          for (const { at, frame, them } of standing()) {
+          for (const { at, name, frame, them } of standing()) {
             if (frame.atRisk > 6) continue;
             seen++;
             expect(them.spot.size, at).toBe(120);
-            expect(them.spot.tag.size, at).toBeGreaterThanOrEqual(36);
+            if (name !== long) expect(them.spot.tag.size, at).toBeGreaterThanOrEqual(36);
             expect(them.tag.left, at).toBeGreaterThanOrEqual(0);
             expect(them.tag.right, at).toBeLessThanOrEqual(1280);
           }
@@ -1400,15 +1436,21 @@ describeSpec(await loadFeature('./wobbly-tower.feature'), ({ Rule }) => {
         'with 7 or more at risk, their heads are 100 pixels tall and their name tags 30 pixels or more',
         () => {
           let seen = 0;
-          for (const { at, frame, them } of standing()) {
+          for (const { at, name, frame, them } of standing()) {
             if (frame.atRisk < 7) continue;
             seen++;
             expect(them.spot.size, at).toBe(100);
-            expect(them.spot.tag.size, at).toBeGreaterThanOrEqual(30);
+            if (name !== long) expect(them.spot.tag.size, at).toBeGreaterThanOrEqual(30);
           }
           expect(seen).toBeGreaterThan(0);
         },
       );
+      And("the 15-character name's tag is 22 pixels or more, at risk or not", () => {
+        const { frames } = runs[1]!.run;
+        for (const frame of frames) {
+          expect(frame.people[long]!.spot.tag.size, `at ${frame.time}`).toBeGreaterThanOrEqual(22);
+        }
+      });
       And('on the Safe bench, name tags are 22 pixels or more', () => {
         let seen = 0;
         for (const { label, run } of runs) {
