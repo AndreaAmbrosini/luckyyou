@@ -431,7 +431,7 @@ describe('The plan', () => {
       for (const turn of during(plan, 'stack')) {
         expect(turn.seconds, label).toBeGreaterThanOrEqual(0.6);
         // The toss, from the pointer's stop to the landing, stays readable.
-        expect(turn.lands - turn.stops, label).toBeGreaterThanOrEqual(0.4);
+        expect(turn.lands - turn.stops, label).toBeGreaterThanOrEqual(0.4 - 1e-9);
       }
     }
   });
@@ -521,13 +521,44 @@ describe('The plan', () => {
         }
         expect(turn.stops, label).toBeGreaterThan(turn.from);
         expect(turn.lands, label).toBeGreaterThan(turn.stops);
-        expect(turn.lands, label).toBeLessThan(turn.from + turn.seconds);
+        expect(turn.lands, label).toBeLessThanOrEqual(turn.from + turn.seconds + 1e-9);
       });
       // Each beat's turns fill it, and the last ends where timber starts.
       const wobble = only(plan, 'wobble');
       expect(wobble.from + wobble.seconds, label).toBeCloseTo(startOf(plan, 'pigeon'), 9);
       const last = turns.at(-1)!;
       expect(last.from + last.seconds, label).toBeCloseTo(startOf(plan, 'timber'), 9);
+    }
+  });
+
+  it('every pointer hop and toss lasts long enough to follow', () => {
+    for (const { label, plan } of all) {
+      plan.turns.forEach((turn, index) => {
+        const at = `${label}, turn ${index + 1} (${turn.beat})`;
+        // The hop leaves as the previous block lands; the first, at its start.
+        const leaves = index === 0 ? startOf(plan, 'stack') : plan.turns[index - 1]!.lands;
+        expect(turn.lands - turn.stops, at).toBeGreaterThanOrEqual(0.4 - 1e-9);
+        if (turn.beat === 'stack') {
+          expect(turn.stops - leaves, at).toBeGreaterThanOrEqual(0.2 - 1e-9);
+        } else if (turn.beat === 'last-turn' && plan.pointer === 'again') {
+          // The pointer stays on them: no hop.
+        } else if (turn.decoyStops !== null) {
+          expect(turn.decoyStops - leaves, at).toBeGreaterThanOrEqual(0.4 - 1e-9);
+          expect(turn.stops - turn.decoyStops, at).toBeGreaterThanOrEqual(0.4 - 1e-9);
+        } else {
+          expect(turn.stops - leaves, at).toBeGreaterThanOrEqual(0.4 - 1e-9);
+        }
+      });
+    }
+  });
+
+  it("Nearly's lean holds still for half a second inside its beat", () => {
+    for (const { label, plan } of all) {
+      const nearly = only(plan, 'nearly');
+      expect(plan.hold.from - nearly.lands, label).toBeGreaterThanOrEqual(0.4 - 1e-9);
+      expect(plan.hold.to - plan.hold.from, label).toBeGreaterThanOrEqual(0.5);
+      expect(plan.hold.from, label).toBeGreaterThan(startOf(plan, 'nearly'));
+      expect(plan.hold.to, label).toBeLessThanOrEqual(startOf(plan, 'last-turn') + 1e-9);
     }
   });
 

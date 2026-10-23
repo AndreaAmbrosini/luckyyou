@@ -54,9 +54,10 @@ export interface Turn {
   /** Whom the pointer stops on first, before it hops to `by`; null when it goes straight there. */
   readonly decoy: string | null;
   /**
-   * Show seconds when the turn starts: the pointer leaves where it was. Each
-   * turn starts where the one before ends, except the first careful turn,
-   * which starts after the pigeon's beat.
+   * Show seconds when the turn starts. Each turn starts where the one before
+   * ends, except the first careful turn, which starts after the pigeon's beat.
+   * The pointer leaves for this turn earlier, as the previous block lands
+   * (the first turn's at its start, the paper blocks down).
    */
   readonly from: number;
   /** Show seconds when the pointer stops on the decoy; null without one. */
@@ -88,6 +89,12 @@ export interface Plan {
   readonly turns: readonly Turn[];
   /** Who says "Phew!" when the pointer moves on from them: the fake-out's decoy; null otherwise. */
   readonly phew: string | null;
+  /**
+   * Show seconds while Nearly's lean holds still at its peak, inside the
+   * Nearly beat; it leans out from its landing to `hold.from` and swings back
+   * after `hold.to`.
+   */
+  readonly hold: { readonly from: number; readonly to: number };
   /** Show seconds of each heartbeat, from the careful turns' start to the last block, closer and closer. */
   readonly heartbeats: readonly number[];
   /** Show seconds while the tower barely moves before it falls; it falls at `still.to`. */
@@ -103,21 +110,30 @@ const QUICKER = 0.9;
 /** The careful turns, in proportion. */
 const CAREFUL = [1, 1.25];
 /**
- * Where the pointer stops and the block lands, as parts of a turn from its
- * start; the decoy's stop too, where the turn has one. The rest of the turn
- * is the tower swaying and settling.
+ * The pointer hops from the previous block's landing, while the tower
+ * settles. Every hop and toss lasts 0.4 s or more (DESIGN.md: movement that
+ * matters), except a quick turn's hop, which gets what its toss leaves, 0.2 s
+ * or more.
  */
-const PACE = {
-  quick: { stops: 0.1, lands: 0.8 },
-  wobble: { stops: 0.1, lands: 0.35 },
-  careful: { decoy: 0.15, stops: 0.45, lands: 0.75 },
-  nearly: { stops: 0.12, lands: 0.38 },
-} as const;
+const TOSS = 0.4;
+/** A quick turn lands as it ends, and its toss takes this much of it, at least `TOSS`. */
+const QUICK_TOSS = 0.55;
+/** The big wobble, in seconds from its start: the pointer stops, then the block lands. */
+const WOBBLE = { stops: 0.45, lands: 0.9 };
+/** A careful turn, as parts of it from its start: the decoy, the taker, the landing. */
+const CAREFUL_PACE = { decoy: 0.305, stops: 0.61, lands: 0.915 };
+/**
+ * Nearly, in seconds from its start: the pointer stops, the block lands, the
+ * tower leans out for `leanOut` and holds still until the beat ends. It
+ * swings back while the pointer hops for the last turn.
+ */
+const NEARLY = { stops: 0.27, lands: 0.67, leanOut: 0.4 };
 /**
  * The last turn, in seconds from its start: where the pointer stops (the
- * fake-out stops on the decoy first), and how long the toss takes.
+ * fake-out stops on the decoy first). "Again?!" doesn't hop: the pointer
+ * bounces on the spot.
  */
-const LAST = { decoy: 0.2, straight: 0.3, fakeOut: 0.6, toss: 0.4 };
+const LAST = { decoy: 0.15, straight: 0.3, fakeOut: 0.6 };
 /** Seconds the tower barely moves before it falls, unless it froze earlier. */
 const STILL = 0.6;
 /** Peak leans, in degrees. */
@@ -206,14 +222,15 @@ export function planShow(names: readonly string[], unlucky: string, random: () =
     quickTurns.unshift({ by: after, lean: sway(LEANS.quick) });
   }
 
-  // Forwards, the times.
+  // Forwards, the times. Each turn: when the pointer stops on the decoy and
+  // on the taker, and when the block lands, all in show seconds.
   const turns: Turn[] = [];
   const add = (
     by: string,
     beat: Beat,
     from: number,
     seconds: number,
-    pace: { readonly decoy?: number; readonly stops: number; readonly lands: number },
+    times: { readonly decoyStops?: number; readonly stops: number; readonly lands: number },
     decoy: string | null,
     lean: Lean,
   ) => {
@@ -222,9 +239,9 @@ export function planShow(names: readonly string[], unlucky: string, random: () =
       beat,
       decoy,
       from,
-      decoyStops: decoy === null ? null : from + pace.decoy! * seconds,
-      stops: from + pace.stops * seconds,
-      lands: from + pace.lands * seconds,
+      decoyStops: decoy === null ? null : times.decoyStops!,
+      stops: times.stops,
+      lands: times.lands,
       seconds,
       lean,
     });
@@ -233,40 +250,58 @@ export function planShow(names: readonly string[], unlucky: string, random: () =
   let from = start('stack');
   lengths(beats.stack, quick, QUICKER).forEach((seconds, index) => {
     const { by, lean } = quickTurns[index]!;
-    add(by, 'stack', from, seconds, PACE.quick, null, lean);
-    from += seconds;
+    const lands = from + seconds;
+    const stops = lands - Math.max(TOSS, QUICK_TOSS * seconds);
+    add(by, 'stack', from, seconds, { stops, lands }, null, lean);
+    from = lands;
   });
-  add(wobble, 'wobble', from, beats.wobble, PACE.wobble, null, {
-    degrees: LEANS.wobble,
-    toward: wobbleSide,
-  });
+  add(
+    wobble,
+    'wobble',
+    from,
+    beats.wobble,
+    { stops: from + WOBBLE.stops, lands: from + WOBBLE.lands },
+    null,
+    { degrees: LEANS.wobble, toward: wobbleSide },
+  );
   from = start('careful');
   const careful = CAREFUL.map((part) => (part * beats.careful) / (CAREFUL[0]! + CAREFUL[1]!));
   [careful1, careful2].forEach(({ by, decoy, lean }, index) => {
-    add(by, 'careful', from, careful[index]!, PACE.careful, decoy, lean);
-    from += careful[index]!;
+    const seconds = careful[index]!;
+    const at = (part: number) => from + part * seconds;
+    const times = {
+      decoyStops: at(CAREFUL_PACE.decoy),
+      stops: at(CAREFUL_PACE.stops),
+      lands: at(CAREFUL_PACE.lands),
+    };
+    add(by, 'careful', from, seconds, times, decoy, lean);
+    from += seconds;
   });
-  add(nearly, 'nearly', from, beats.nearly, PACE.nearly, null, {
-    degrees: LEANS.nearly,
-    toward: nearly,
-  });
+  add(
+    nearly,
+    'nearly',
+    from,
+    beats.nearly,
+    { stops: from + NEARLY.stops, lands: from + NEARLY.lands },
+    null,
+    { degrees: LEANS.nearly, toward: nearly },
+  );
+  const hold = { from: from + NEARLY.lands + NEARLY.leanOut, to: from + beats.nearly };
 
   // The last turn, from its start: the pointer's move, then the toss.
   from = start('last-turn');
   const stops = from + (fakeOut ? LAST.fakeOut : LAST.straight);
-  const lands = stops + LAST.toss;
+  const lands = stops + TOSS;
   const fall = start('timber');
-  turns.push({
-    by: unlucky,
-    beat: 'last-turn',
-    decoy: fakeOut,
+  add(
+    unlucky,
+    'last-turn',
     from,
-    decoyStops: fakeOut ? from + LAST.decoy : null,
-    stops,
-    lands,
-    seconds: beats['last-turn'],
-    lean: lastLean,
-  });
+    beats['last-turn'],
+    { decoyStops: from + LAST.decoy, stops, lands },
+    fakeOut,
+    lastLean,
+  );
 
   const heartbeats: number[] = [];
   for (let time = start('careful'), k = 0; time < lands; k++) {
@@ -282,6 +317,7 @@ export function planShow(names: readonly string[], unlucky: string, random: () =
     beats,
     turns,
     phew: fakeOut,
+    hold,
     heartbeats,
     // Dead still freezes as the block lands; the others settle or lean first.
     still: { from: ending === 'dead-still' ? lands : fall - STILL, to: fall },
