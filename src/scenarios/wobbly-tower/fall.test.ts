@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest';
 import {
-  POINTER_MOVES,
   ENDINGS,
   names,
   unluckyOf,
@@ -11,45 +10,45 @@ import {
   expectEndingPlayed,
 } from './watching';
 
+/** How many can be left at risk when it falls: 3 or 2, or everyone with 2 or 3 people. */
+const leftAt = (count: number) => (count <= 3 ? [count] : [3, 2]);
+
 describe('The last turn and the fall', () => {
-  // Every pointer move with every ending, at 2, 8 and 12, with and without
-  // the pigeon: the seed for each found by search.
+  // Every ending, falling with 3 left and with 2 left, at 2, 8 and 12: the
+  // seed for each found by search.
   for (const count of [2, 8, 12]) {
-    for (const pigeon of [true, false]) {
-      it(`plays every last turn in time at ${count} people, ${pigeon ? 'with' : 'without'} the pigeon`, async () => {
+    for (const left of leftAt(count)) {
+      it(`plays every ending in time at ${count} people, falling with ${left} left`, async () => {
         const team = names(count);
         const unlucky = unluckyOf(count);
-        for (const pointer of POINTER_MOVES) {
-          for (const ending of ENDINGS) {
-            const seed = seedOf(
-              team,
-              unlucky,
-              (plan) =>
-                plan.pointer === pointer && plan.ending === ending && plan.pigeon === pigeon,
-            );
-            const run = await watch(team, unlucky, { seed });
-            expectEndingPlayed(
-              run,
-              unlucky,
-              `${count} people, ${pointer}, ${ending}, seed ${seed}`,
-            );
-          }
+        for (const ending of ENDINGS) {
+          const seed = seedOf(
+            team,
+            unlucky,
+            (plan) => plan.ending === ending && plan.fallsWith === left,
+          );
+          const run = await watch(team, unlucky, { seed });
+          expectEndingPlayed(
+            run,
+            unlucky,
+            `${count} people, ${left} left, ${ending}, seed ${seed}`,
+          );
         }
       });
     }
   }
 
-  it('plays every last turn in time with reduced motion, its captions in the same order', async () => {
+  it('plays every ending in time with reduced motion, its captions in the same order', async () => {
     const team = names(8);
     const unlucky = unluckyOf(8);
-    for (const pointer of POINTER_MOVES) {
+    for (const left of leftAt(8)) {
       for (const ending of ENDINGS) {
         const seed = seedOf(
           team,
           unlucky,
-          (plan) => plan.pointer === pointer && plan.ending === ending,
+          (plan) => plan.ending === ending && plan.fallsWith === left,
         );
-        const label = `8 people, ${pointer}, ${ending}, seed ${seed}, reduced motion`;
+        const label = `8 people, ${left} left, ${ending}, seed ${seed}, reduced motion`;
         const calm = await watch(team, unlucky, { seed, reducedMotion: true });
         expectEndingPlayed(calm, unlucky, label);
         expect(

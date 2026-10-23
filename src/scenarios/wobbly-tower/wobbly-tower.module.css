@@ -14,12 +14,6 @@
   inset: 0;
 }
 
-.pigeon {
-  position: absolute;
-  top: 0;
-  left: 0;
-}
-
 .scene {
   position: absolute;
   top: 0;
@@ -132,45 +126,12 @@
   background-color: var(--color-paper);
 }
 
-.ink,
-.legs {
-  fill: none;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-}
-
-.ink {
-  stroke: var(--color-ink);
-}
-
-.legs {
-  stroke: var(--color-orange);
-}
-
-.inkFill {
-  fill: var(--color-ink);
-}
-
-.bird,
-.tail,
-.wing,
-.beak,
 .sun,
 .orange {
   stroke: var(--color-ink);
   stroke-linejoin: round;
 }
 
-.bird {
-  fill: var(--color-shark);
-}
-
-.tail,
-.wing {
-  fill: var(--color-ink-soft);
-}
-
-.beak,
 .orange {
   fill: var(--color-orange);
 }

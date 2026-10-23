@@ -1,10 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { BLOCK_HEIGHT } from './layout';
-import { block, dust, field, hardHat, pigeon, pointer, POINTER, type Pose } from './parts';
-
-const POSES: readonly Pose[] = ['perched', 'flying'];
-
-const hidden = (el: Element | null) => el?.getAttribute('display') === 'none';
+import { block, dust, field, hardHat, pointer, POINTER } from './parts';
 
 describe('the field', () => {
   it('draws the sky with clouds and the grass', () => {
@@ -40,41 +36,6 @@ describe('a block', () => {
   it('takes its own height, for the one held overhead', () => {
     expect(block(100, 'var(--color-paper)', 40).style.height).toBe('40px');
     expect(block(100, 'var(--color-paper)', 25).style.height).toBe('25px');
-  });
-});
-
-describe('the pigeon', () => {
-  it('shows exactly one pose at a time', () => {
-    const bird = pigeon();
-    expect(bird.el.dataset.part).toBe('pigeon');
-    for (const pose of POSES) {
-      bird.setPose(pose);
-      expect(bird.el.dataset.pose).toBe(pose);
-      for (const other of POSES) {
-        const groups = [...bird.el.querySelectorAll(`[data-pose-part="${other}"]`)];
-        expect(groups.length, other).toBeGreaterThan(0);
-        for (const group of groups) {
-          expect(hidden(group), `${other} while ${pose}`).toBe(other !== pose);
-        }
-      }
-    }
-  });
-
-  it('paints each wing over the body', () => {
-    const bird = pigeon();
-    const body = bird.el.querySelector('ellipse')!;
-    for (const pose of POSES) {
-      const wing = bird.el.querySelector(`[data-pose-part="${pose}"] [data-wing]`);
-      expect(wing, pose).not.toBeNull();
-      expect(
-        body.compareDocumentPosition(wing!) & Node.DOCUMENT_POSITION_FOLLOWING,
-        pose,
-      ).toBeTruthy();
-    }
-  });
-
-  it('starts perched', () => {
-    expect(pigeon().el.dataset.pose).toBe('perched');
   });
 });
 

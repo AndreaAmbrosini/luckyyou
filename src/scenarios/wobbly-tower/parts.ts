@@ -1,7 +1,7 @@
 // Wobbly Tower's drawings, from the Design canvas: the "Your turn!" pointer,
-// the blocks, the pigeon in two poses, the hard hat, the dust puffs, the
-// speed lines and the field. Every colour comes from a class in
-// wobbly-tower.module.css, or from the `var(--…)` a block is given.
+// the blocks, the hard hat, the dust puffs, the speed lines and the field.
+// Every colour comes from a class in wobbly-tower.module.css, or from the
+// `var(--…)` a block is given.
 
 import { BLOCK_HEIGHT, type Point } from './layout';
 import styles from './wobbly-tower.module.css';
@@ -26,23 +26,6 @@ function drawing(width: number, height: number, shapes: readonly Shape[]): SVGSV
   draw(svg, shapes);
   return svg;
 }
-
-/** A group of `shapes` inside `parent`, marked by `attribute`. */
-function group(
-  parent: Element,
-  attribute: [name: string, value: string],
-  shapes: readonly Shape[],
-): SVGGElement {
-  const g = parent.appendChild(document.createElementNS(SVG, 'g'));
-  g.setAttribute(attribute[0], attribute[1]);
-  draw(g, shapes);
-  return g;
-}
-
-const show = (el: Element, on: boolean) => {
-  if (on) el.removeAttribute('display');
-  else el.setAttribute('display', 'none');
-};
 
 const part = (className: string, name?: string) => {
   const element = document.createElement('div');
@@ -108,70 +91,6 @@ export function block(width: number, fill: string, height = BLOCK_HEIGHT): HTMLE
   el.style.setProperty('--block-fill', fill);
   el.dataset.fill = fill;
   return el;
-}
-
-export type Pose = 'perched' | 'flying';
-
-export interface Pigeon {
-  /** 90 × 70 grid, overflow visible, facing right; data-part="pigeon", data-pose. */
-  readonly el: SVGSVGElement;
-  /** Perched shows legs and a folded wing; flying a raised wing and no legs. */
-  setPose(pose: Pose): void;
-}
-
-/** Where the pigeon's feet stand on its 90 × 70 grid. */
-export const PIGEON_FEET: Point = { x: 38, y: 68 };
-
-/** A pigeon, facing right, its feet at PIGEON_FEET. */
-export function pigeon(): Pigeon {
-  const el = drawing(90, 70, []);
-  el.style.overflow = 'visible';
-  el.dataset.part = 'pigeon';
-
-  // Each pose has a layer behind the body (legs, tail) and one over it (wing).
-  const layer = (pose: Pose, shapes: readonly Shape[]) =>
-    group(el, ['data-pose-part', pose], shapes);
-  const back: SVGGElement[] = [
-    layer('perched', [
-      ['path', styles.legs, { d: 'M30 58 V68 M46 58 V68', 'stroke-width': 5 }],
-      ['path', styles.tail, { d: 'M14 36 L0 24 L2 46 Z', 'stroke-width': 4 }],
-    ]),
-    layer('flying', [['path', styles.tail, { d: 'M14 36 L0 30 L2 50 Z', 'stroke-width': 4 }]]),
-  ];
-  draw(el, [['ellipse', styles.bird, { cx: 38, cy: 42, rx: 28, ry: 18, 'stroke-width': 4 }]]);
-  const front: SVGGElement[] = [
-    layer('perched', [
-      ['path', styles.ink, { d: 'M22 40 Q36 30 52 42', 'data-wing': '', 'stroke-width': 4 }],
-    ]),
-    layer('flying', [
-      [
-        'path',
-        styles.wing,
-        { d: 'M24 38 Q18 8 44 -8 Q50 16 56 38 Z', 'data-wing': '', 'stroke-width': 4 },
-      ],
-    ]),
-  ];
-  const poses: Record<Pose, SVGGElement[]> = {
-    perched: [back[0]!, front[0]!],
-    flying: [back[1]!, front[1]!],
-  };
-  draw(el, [
-    ['circle', styles.bird, { cx: 64, cy: 22, r: 14, 'stroke-width': 4 }],
-    ['path', styles.beak, { d: 'M76 18 L89 24 L76 29 Z', 'stroke-width': 4 }],
-    ['circle', styles.inkFill, { cx: 67, cy: 19, r: 3.5 }],
-  ]);
-
-  const api: Pigeon = {
-    el,
-    setPose(pose) {
-      el.dataset.pose = pose;
-      for (const [name, layers] of Object.entries(poses)) {
-        for (const g of layers) show(g, name === pose);
-      }
-    },
-  };
-  api.setPose('perched');
-  return api;
 }
 
 /** A hard hat for a head on a 100 grid. */

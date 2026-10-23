@@ -1,7 +1,7 @@
 // The director: builds the whole show as one timeline from the plan and plays
 // it on the show's clock. The plan says whose turn it is when; this says how
-// it looks. What moves (the tower's lean, the blocks, the pointer and the
-// pigeon) and who looks how are worked out from the show's time each frame,
+// it looks. What moves (the tower's lean, the blocks and the pointer) and who
+// looks how are worked out from the show's time each frame,
 // so every frame follows from the plan alone. The stage tells its story in
 // data attributes too: the scene's beat, the tower's lean, its blocks and how
 // many lie in the heap, whom the pointer is over, and each person's mood and
@@ -15,7 +15,6 @@ import {
   nameTag,
   popIn,
   speechAt,
-  STAGE,
   type Cue,
   type Head,
   type Look,
@@ -24,6 +23,7 @@ import {
 } from '../../scenario-kit';
 import {
   BLOCK_WIDTHS,
+  blockHeight,
   heap,
   headBox,
   heldBlock,
@@ -47,14 +47,12 @@ import {
   dust,
   field,
   hardHat,
-  pigeon as drawPigeon,
-  PIGEON_FEET,
   pointer as drawPointer,
   POINTER,
   speedLines,
 } from './parts';
 import { BEATS, planShow, READ, type Beat, type Plan, type Turn } from './plan';
-import { fadeOf, FLIGHT, movesOn, planHops } from './pointer';
+import { FLIGHT, planHops } from './pointer';
 import styles from './wobbly-tower.module.css';
 
 /** The two paper blocks land at these show seconds, each after falling for DROP seconds. */
@@ -69,37 +67,15 @@ const PAPER_SWAY = [-1.5, 1.5] as const;
  * Each lasts at least 0.34 s, so the tower never turns back more than three
  * times a second (DESIGN.md).
  */
-const QUICK = { out: 0.34, back: 0.34 };
-const CAREFUL = { out: 0.36, back: 0.4 };
+const SWAY = { out: 0.34, back: 0.34 };
+/** The thrower lifts the block this long after the pointer stops over them. */
+const LIFT = 0.15;
 /**
- * The big wobble, from its landing: the three wide swings, as seconds and
- * parts of the turn's lean, each the other way and smaller; upright and
- * still at `settled`, when "…it holds!" goes up a second after "Wobble…
- * wobble…".
+ * Nearly, from its landing: "Whoa…" at `whoa` and "Nearly!" at `caption`;
+ * after its hold it swings back upright in `back` seconds, overshooting a
+ * little unless motion is reduced.
  */
-const WOBBLE = {
-  swings: [
-    [0.22, 1],
-    [0.56, -0.57],
-    [0.9, 0.21],
-  ],
-  settled: 1.0,
-} as const;
-/**
- * The pigeon, in seconds from its beat's start: it lands on top, dips the
- * tower `dip` degrees to the right and back, a `swing` each way, and flies off.
- * It flies in from `from` and out to `to`, where its feet are.
- */
-const PIGEON = {
-  lands: 0.45,
-  leaves: 0.95,
-  dip: 3,
-  swing: 0.34,
-  from: { x: -120, y: 90 },
-  to: { x: STAGE.width + 140, y: 40 },
-} as const;
-/** Seconds Nearly takes to swing back upright after its hold. */
-const NEARLY_BACK = 0.5;
+const NEARLY = { whoa: 0.25, caption: 1.3, back: 0.5 };
 /** How far a toss arcs above the higher of its two ends. */
 const ARC = 140;
 /** Seconds a bubble stays up. */
@@ -130,7 +106,7 @@ const ease = {
   sway: gsap.parseEase('sine.inOut'),
   toss: gsap.parseEase('sine.inOut'),
   drop: gsap.parseEase('power2.in'),
-  fly: gsap.parseEase('sine.inOut'),
+  back: gsap.parseEase('back.out'),
 };
 
 interface Person {
@@ -173,9 +149,9 @@ export async function playWobblyTower(show: Show): Promise<void> {
   const cue = (time: number, sound: Cue) => at(time, () => void show.sound.play(sound));
   const caption = (time: number, text: string) => at(time, () => show.caption(text));
 
-  /** When each beat starts, in show seconds. */
-  const { starts } = plan;
-  const total = starts.timber + plan.beats.timber;
+  const total = plan.end;
+  /** Every block's height: the tower stays under the bench however many land. */
+  const height = blockHeight(2 + plan.turns.length);
 
   const scene = field();
   show.stage.append(scene);
@@ -214,28 +190,20 @@ export async function playWobblyTower(show: Show): Promise<void> {
   // The tower's lean, sway by sway, in signed degrees.
   const lean = new Sway();
   const side = (turn: Turn) => signedLean(turn.lean, plan.order);
+  /** After a round's last block: Nearly leans out, holds and swings back; any other sways. */
   const swayAfter = (turn: Turn) => {
     const peak = side(turn);
-    if (turn.beat === 'wobble') {
-      const moves = show.reducedMotion
-        ? [
-            [WOBBLE.settled / 2, peak],
-            [WOBBLE.settled, 0],
-          ]
-        : [...WOBBLE.swings.map(([after, part]) => [after, part * peak]), [WOBBLE.settled, 0]];
-      return lean.sway(turn.lands, moves as [number, number][]);
-    }
-    if (turn.beat === 'nearly') {
-      return lean.sway(turn.lands, [
+    if (turn.nearly) {
+      lean.sway(turn.lands, [
         [plan.hold.from - turn.lands, peak],
         [plan.hold.to - turn.lands, peak],
-        [plan.hold.to + NEARLY_BACK - turn.lands, 0],
+        [plan.hold.to + NEARLY.back - turn.lands, 0, show.reducedMotion ? ease.sway : ease.back],
       ]);
+      return;
     }
-    const { out, back } = turn.beat === 'stack' ? QUICK : CAREFUL;
-    return lean.sway(turn.lands, [
-      [out, peak],
-      [out + back, 0],
+    lean.sway(turn.lands, [
+      [SWAY.out, peak],
+      [SWAY.out + SWAY.back, 0],
     ]);
   };
 
@@ -257,12 +225,12 @@ export async function playWobblyTower(show: Show): Promise<void> {
     }
   };
 
-  // Each block's way onto the tower, in the order they land, with the sways
-  // after them; the pigeon's dip comes between the big wobble and the careful turns.
+  // Each block's way onto the tower, in the order they land, with the sway
+  // after each round's last block.
   const flights: Flight[] = [];
   const add = (by: string | null, flight: Omit<Flight, 'el' | 'by' | 'to'>) => {
     const k = flights.length;
-    const to = tower(k + 1, lean.at(flight.lands))[k]!;
+    const to = tower(k + 1, lean.at(flight.lands), height)[k]!;
     const fill = by ? `var(--color-${looks.get(by)!.ring})` : 'var(--color-paper)';
     const el = drawBlock(BLOCK_WIDTHS[k % BLOCK_WIDTHS.length]!, fill);
     el.dataset.by = by ?? '';
@@ -271,7 +239,7 @@ export async function playWobblyTower(show: Show): Promise<void> {
     flights.push({ ...flight, el, by, to });
   };
   PAPER.forEach((lands, k) => {
-    const to = tower(k + 1, 0)[k]!;
+    const to = tower(k + 1, 0, height)[k]!;
     add(null, {
       lift: lands - DROP,
       release: lands - DROP,
@@ -279,35 +247,21 @@ export async function playWobblyTower(show: Show): Promise<void> {
       from: { ...to, y: DROP_FROM, turn: 0 },
     });
     lean.sway(lands, [
-      [QUICK.out, PAPER_SWAY[k]!],
-      [QUICK.out + QUICK.back, 0],
+      [SWAY.out, PAPER_SWAY[k]!],
+      [SWAY.out + SWAY.back, 0],
     ]);
   });
-  /** When the big wobble's sway starts and the pigeon's dip, for the moods. */
-  let wobbleFrom = 0;
-  let dipFrom = 0;
-  for (const turn of plan.turns) {
+  plan.turns.forEach((turn, index) => {
+    const lift = turn.stops + LIFT;
     add(turn.by, {
-      lift: turn.stops + fadeOf(turn),
-      release: Math.max(turn.stops + fadeOf(turn), turn.lands - FLIGHT),
+      lift,
+      release: Math.max(lift, turn.lands - FLIGHT),
       lands: turn.lands,
       from: heldBlock(spotOf(turn.by)),
     });
-    if (turn.beat === 'last-turn') {
-      lastTurnSway(turn);
-      continue;
-    }
-    const from = swayAfter(turn);
-    if (turn.beat === 'wobble') {
-      wobbleFrom = from;
-      if (plan.pigeon) {
-        dipFrom = lean.sway(starts.pigeon + PIGEON.lands, [
-          [PIGEON.swing, PIGEON.dip],
-          [2 * PIGEON.swing, 0],
-        ]);
-      }
-    }
-  }
+    if (turn.beat === 'last-turn') lastTurnSway(turn);
+    else if (plan.turns[index + 1]!.round !== turn.round) swayAfter(turn);
+  });
   const fallSide = towards(plan.falls, plan.order);
   const fallsAt = plan.still.to;
   const tip = show.reducedMotion ? FALL.calmTip : FALL.tip;
@@ -321,55 +275,35 @@ export async function playWobblyTower(show: Show): Promise<void> {
   };
   // A block lands in the frame its thunk sounds in, however its time is rounded.
   const landedBy = (t: number) => flights.filter((flight) => flight.lands <= t + 1e-9).length;
-  const tumbles = planTumble(plan, heap(spotOf(show.unlucky), flights.length), {
+  const tumbles = planTumble(plan, heap(spotOf(show.unlucky), flights.length, height), {
     fallsAt,
     tip,
     side: fallSide,
     calm: show.reducedMotion,
     leanAt,
+    height,
   });
   /** When the last block lands in the heap. */
   const downAt = fallsAt + FALL.lands;
 
-  // The pointer: from above the tower, it hops to each turn's decoy and
-  // taker, fades out as they lift the block, and fades in where it was as it
-  // hops on.
+  // The pointer: from above the tower, it hops to each round's stops and its
+  // thrower, fades out as they lift the block, and fades in where it was as
+  // the next round starts.
   const pointer = drawPointer();
   pointer.el.dataset.over = '';
   const setPointerX = gsap.quickSetter(pointer.el, 'x', 'px') as (value: number) => void;
   const setPointerY = gsap.quickSetter(pointer.el, 'y', 'px') as (value: number) => void;
-  const startTip = { x: TOWER.x, y: topOf(tower(PAPER.length, 0).at(-1)!).y - 10 };
-  const hops = planHops(plan.turns, starts.stack, spotOf, spots, startTip);
-
-  // The pigeon flies in, perches on the top block wherever it leans, and flies off.
-  const bird = plan.pigeon ? drawPigeon() : null;
-  const perch = (t: number) => topOf(tower(landedBy(t), leanAt(t)).at(-1)!);
-  const setBirdX = bird && (gsap.quickSetter(bird.el, 'x', 'px') as (value: number) => void);
-  const setBirdY = bird && (gsap.quickSetter(bird.el, 'y', 'px') as (value: number) => void);
-  const P = starts.pigeon;
-  const landsAt = P + PIGEON.lands;
-  const leavesAt = P + PIGEON.leaves;
-  if (bird) {
-    bird.el.setAttribute('width', '90');
-    bird.el.setAttribute('height', '70');
-    bird.el.classList.add(styles.pigeon);
-    bird.el.style.visibility = 'hidden';
-    scene.append(bird.el);
-  }
+  const startTip = { x: TOWER.x, y: topOf(tower(PAPER.length, 0, height).at(-1)!).y - 10 };
+  const hops = planHops(plan.turns, spotOf, spots, startTip);
   scene.append(pointer.el);
 
-  // Who looks how: everyone is scared while the tower sways wide, dips or
-  // nearly topples; whoever the pointer picks is worried, then scared once
-  // it's careful; Nearly's thrower is relieved; at the end the unlucky person
-  // parties and everyone else cheers.
-  const nearly = plan.turns.find((turn) => turn.beat === 'nearly')!;
-  const alarms: Span[] = [
-    { from: wobbleFrom, to: wobbleFrom + WOBBLE.settled },
-    { from: nearly.lands, to: plan.hold.to + NEARLY_BACK },
-  ];
-  if (plan.pigeon) alarms.push({ from: dipFrom, to: dipFrom + 2 * PIGEON.swing });
-  // Nearly's thrower says "Phew!" as it swings back, so that "Me again?!"
-  // can follow before the toss when the pointer stays on them.
+  // Who looks how: everyone is scared while Nearly nearly topples; whoever
+  // the pointer picks is worried, then scared once the spotlight is on;
+  // Nearly's thrower is relieved; at the end the unlucky person parties and
+  // everyone else cheers.
+  const nearly = plan.turns.find((turn) => turn.nearly)!;
+  const alarm: Span = { from: nearly.lands, to: plan.hold.to + NEARLY.back };
+  // Nearly's thrower says "Phew!" as it swings back.
   const phewAt = plan.hold.to;
   const relieved = (name: string, t: number) =>
     (name === nearly.by && t >= phewAt && t < phewAt + BUBBLE) ||
@@ -381,10 +315,10 @@ export async function playWobblyTower(show: Show): Promise<void> {
     if (t >= downAt) return name === show.unlucky ? 'party' : 'happy';
     if (t >= fallsAt) return 'scared';
     if (relieved(name, t)) return 'happy';
-    if (alarms.some((span) => t >= span.from - 1e-9 && t < span.to)) return 'scared';
-    const careful = t >= starts.careful;
-    if (name === picked) return careful ? 'scared' : 'worried';
-    return careful ? 'worried' : 'calm';
+    if (t >= alarm.from - 1e-9 && t < alarm.to) return 'scared';
+    const final = t >= plan.spotlight;
+    if (name === picked) return final ? 'scared' : 'worried';
+    return final ? 'worried' : 'calm';
   };
 
   let beat = '';
@@ -393,7 +327,7 @@ export async function playWobblyTower(show: Show): Promise<void> {
   let fallen = -1;
   const draw = (t: number) => {
     let now: Beat = BEATS[0];
-    for (const each of BEATS) if (plan.beats[each] > 0 && starts[each] <= t) now = each;
+    for (const each of BEATS) if (plan.beats[each] > 0 && plan.starts[each] <= t) now = each;
     if (now !== beat) scene.dataset.beat = beat = now;
 
     // The tower, and each block on its way to it.
@@ -402,7 +336,7 @@ export async function playWobblyTower(show: Show): Promise<void> {
     if (rounded !== shownLean) built.dataset.lean = shownLean = rounded;
     const count = landedBy(t);
     if (count !== landed) built.dataset.blocks = String((landed = count));
-    const poses = tower(count, degrees);
+    const poses = tower(count, degrees, height);
     flights.forEach((flight, k) => {
       if (t >= fallsAt) return place(flight.el, tumbles.at(k, t));
       if (k < count) return place(flight.el, poses[k]!);
@@ -419,31 +353,6 @@ export async function playWobblyTower(show: Show): Promise<void> {
     if (pointer.el.dataset.over !== where.over) pointer.el.dataset.over = where.over;
     setShown(pointer.el, where.shown);
 
-    // The pigeon.
-    if (bird) {
-      const on = t >= P && t < P + plan.beats.pigeon;
-      setShown(bird.el, on ? 1 : 0);
-      if (on) {
-        const flying = t < landsAt || t >= leavesAt;
-        if (bird.el.dataset.pose !== (flying ? 'flying' : 'perched')) {
-          bird.setPose(flying ? 'flying' : 'perched');
-        }
-        const feet =
-          t < landsAt
-            ? arc(PIGEON.from, perch(landsAt), ease.fly((t - P) / PIGEON.lands), 60)
-            : t < leavesAt
-              ? perch(t)
-              : arc(
-                  perch(leavesAt),
-                  PIGEON.to,
-                  ease.fly((t - leavesAt) / (P + plan.beats.pigeon - leavesAt)),
-                  60,
-                );
-        setBirdX!(feet.x - PIGEON_FEET.x);
-        setBirdY!(feet.y - PIGEON_FEET.y);
-      }
-    }
-
     // Everyone's look.
     const tossing = flights.find((flight) => flight.by && t >= flight.lift && t < flight.lands);
     const picked = where.over || tossing?.by || '';
@@ -451,7 +360,7 @@ export async function playWobblyTower(show: Show): Promise<void> {
       const mood = moodOf(person.name, t, picked);
       const holding = person.holding;
       const sweat =
-        t < fallsAt && (mood === 'scared' || (person.name === picked && t >= starts.careful));
+        t < fallsAt && (mood === 'scared' || (person.name === picked && t >= plan.spotlight));
       const raised = holding || t >= downAt;
       if (mood !== person.mood) {
         person.mood = mood;
@@ -482,12 +391,13 @@ export async function playWobblyTower(show: Show): Promise<void> {
     }
   }
 
-  // Sounds: a thunk as each block lands, a whoosh as it's tossed, the
-  // heartbeat from the careful turns on, and the fall.
+  // Sounds: a thunk as each block lands, a whoosh as it's tossed, a creak as
+  // Nearly leans out, the heartbeat from the spotlight on, and the fall.
   for (const flight of flights) {
     if (flight.by) cue(flight.release, 'whoosh');
     cue(flight.lands, 'thunk');
   }
+  cue(plan.hold.from, 'creak');
   for (const time of plan.heartbeats) cue(time, 'heartbeat');
   const last = plan.turns.at(-1)!;
   const creakAt = last.lands + CREAK;
@@ -496,26 +406,37 @@ export async function playWobblyTower(show: Show): Promise<void> {
   cue(downAt + HAT_DROP, 'fanfare');
 
   // Captions, one at each moment; the kit holds each long enough to read.
-  const wobble = plan.turns.find((turn) => turn.beat === 'wobble')!;
+  const headCount = plan.order.length;
   caption(0, 'Whoever topples it gets the job!');
-  caption(starts.stack, 'Stack it up!');
-  caption(wobble.lands, 'Wobble… wobble…');
-  caption(wobbleFrom + WOBBLE.settled, '…it holds!');
-  if (plan.pigeon) caption(starts.pigeon, 'A pigeon?!');
-  for (const turn of plan.turns.filter((each) => each.beat === 'careful')) {
-    caption(turn.stops, `${turn.by}…`);
-  }
-  caption(nearly.lands, 'Nearly!');
-  // The last turn's caption names the unlucky person once the pointer is on
-  // its way to them: as it hops on from the decoy, as it stops over them, or
-  // as the turn starts when it stays on them.
-  const named =
-    plan.pointer === 'fake-out'
-      ? movesOn(last)
-      : plan.pointer === 'straight'
-        ? last.stops
-        : starts['last-turn'];
-  caption(named, pointerCaption(plan, show.unlucky));
+  // As the second paper block lands.
+  caption(
+    PAPER[1],
+    headCount === 2
+      ? 'Just the two of you…'
+      : headCount === 3
+        ? 'Just the three of you…'
+        : "Hold the tower, and you're safe!",
+  );
+  plan.turns.forEach((turn, index) => {
+    const previous = plan.turns[index - 1];
+    if (previous?.round === turn.round) return;
+    if (turn.beat === 'safe') {
+      // A safe round names its thrower, or its pair in their standing order.
+      const pair = plan.turns
+        .filter((each) => each.round === turn.round)
+        .map((each) => each.by)
+        .sort((a, b) => plan.order.indexOf(a) - plan.order.indexOf(b));
+      caption(turn.stops, pair.length === 2 ? `${pair[0]} & ${pair[1]}!` : `${turn.by}'s turn`);
+    } else {
+      // A final round names each stop, and the thrower last.
+      for (const stop of turn.decoys) caption(stop.at, `${stop.name}…`);
+      caption(turn.stops, `…${turn.by}!`);
+    }
+  });
+  caption(nearly.lands + NEARLY.whoa, 'Whoa…');
+  caption(nearly.lands + NEARLY.caption, 'Nearly!');
+  if (headCount >= 4) caption(plan.spotlight, 'Final three!');
+  if (plan.finalTwo !== null) caption(plan.finalTwo, 'Final two!');
   if (plan.ending === 'dead-still') caption(last.lands, 'Uh-oh…');
   if (plan.ending === 'it-holds') {
     caption(plan.still.from, 'It holds!');
@@ -524,7 +445,7 @@ export async function playWobblyTower(show: Show): Promise<void> {
   if (plan.ending === 'slow-lean') caption(last.lands, "It's leaning…");
   caption(downAt, `${show.unlucky} toppled it!`);
 
-  // Gags, in bubbles beside the tower's top, a head or the pigeon.
+  // Gags, in bubbles beside the tower's top or a head.
   const say = (time: number, text: string, beside: Box, clearOf: readonly Box[] = []) => {
     const avoid = [...inTheWay.filter((box) => !overlap(box, beside)), ...clearOf];
     const speech = bubble(text, speechAt(text, beside, avoid));
@@ -539,20 +460,11 @@ export async function playWobblyTower(show: Show): Promise<void> {
     top: point.y - half,
     bottom: point.y + half,
   });
-  const firstQuick = plan.turns[0]!;
   say(PAPER[0], 'Thunk!', around(topOf(flights[0]!.to), 40));
-  say(firstQuick.lands, 'Thunk!', around(topOf(flights[2]!.to), 40));
-  say(wobble.lands, 'Eek!', headBox(spotOf(wobble.by)));
-  if (plan.pigeon) say(landsAt, 'Coo?', around(perch(landsAt), 45));
+  say(plan.turns[0]!.lands, 'Thunk!', around(topOf(flights[2]!.to), 40));
   say(phewAt, 'Phew!', headBox(spotOf(nearly.by)));
   const unluckyHead = headBox(spotOf(show.unlucky));
-  if (plan.phew && plan.phew !== nearly.by) {
-    // The decoy is let off as the pointer hops on from them. When they threw
-    // Nearly, they are saying it already.
-    say(movesOn(last), 'Phew!', headBox(spotOf(plan.phew)));
-  }
-  if (plan.pointer === 'again') say(last.stops + fadeOf(last), 'Me again?!', unluckyHead);
-  const topAt = (t: number) => around(topOf(tower(flights.length, leanAt(t)).at(-1)!), 40);
+  const topAt = (t: number) => around(topOf(tower(flights.length, leanAt(t), height).at(-1)!), 40);
   if (plan.ending === 'dead-still') say(creakAt, 'creak…', topAt(creakAt));
   if (plan.ending === 'it-holds') say(plan.still.from, 'Phew!', unluckyHead);
 
@@ -581,7 +493,7 @@ export async function playWobblyTower(show: Show): Promise<void> {
   );
   if (!show.reducedMotion) {
     const lines = speedLines();
-    const top = topOf(tower(flights.length, fallSide * FALL.lean).at(-1)!);
+    const top = topOf(tower(flights.length, fallSide * FALL.lean, height).at(-1)!);
     lines.style.left = `${top.x - fallSide * 90}px`;
     lines.style.top = `${top.y}px`;
     gsap.set(lines, { autoAlpha: 0, xPercent: -50, yPercent: -50 });
@@ -618,15 +530,23 @@ export async function playWobblyTower(show: Show): Promise<void> {
  * short and turns back sooner than it should.
  */
 class Sway {
-  private readonly keys: { at: number; lean: number }[] = [{ at: 0, lean: 0 }];
+  private readonly keys: { at: number; lean: number; ease?: (u: number) => number }[] = [
+    { at: 0, lean: 0 },
+  ];
 
-  /** Sways from `start` through `moves` ([seconds after the start, lean]); returns when it starts. */
-  sway(start: number, moves: readonly (readonly [number, number])[]): number {
+  /**
+   * Sways from `start` through `moves` ([seconds after the start, lean, and
+   * the ease into it, sine.inOut unless given]).
+   */
+  sway(
+    start: number,
+    moves: readonly (readonly [number, number, ((u: number) => number)?])[],
+  ): void {
     const last = this.keys.at(-1)!;
     const from = Math.max(start, last.at);
     if (from > last.at) this.keys.push({ at: from, lean: last.lean });
-    for (const [after, lean] of moves) this.keys.push({ at: from + after, lean });
-    return from;
+    for (const [after, lean, eased] of moves)
+      this.keys.push({ at: from + after, lean, ease: eased });
   }
 
   at(t: number): number {
@@ -641,7 +561,7 @@ class Sway {
     }
     const a = keys[low]!;
     const b = keys[high]!;
-    return a.lean + (b.lean - a.lean) * ease.sway((t - a.at) / (b.at - a.at));
+    return a.lean + (b.lean - a.lean) * (b.ease ?? ease.sway)((t - a.at) / (b.at - a.at));
   }
 }
 
@@ -670,13 +590,6 @@ function inFlight(flight: Flight, t: number): Block {
     height: from.height + (to.height - from.height) * u,
     turn: from.turn + (to.turn - from.turn) * u,
   };
-}
-
-/** The caption as the last turn starts, for how the pointer moves. */
-function pointerCaption(plan: Plan, unlucky: string): string {
-  if (plan.pointer === 'fake-out') return `${plan.phew}… nope, ${unlucky}!`;
-  if (plan.pointer === 'again') return `${unlucky}… again?!`;
-  return `${unlucky}…`;
 }
 
 /**
@@ -710,12 +623,14 @@ function planTumble(
     side,
     calm,
     leanAt,
+    height,
   }: {
     fallsAt: number;
     tip: number;
     side: -1 | 1;
     calm: boolean;
     leanAt: (t: number) => number;
+    height: number;
   },
 ) {
   const count = rests.length;
@@ -728,7 +643,7 @@ function planTumble(
       : FALL.first + (FALL.lands - FALL.first) * (count === 1 ? 1 : k / (count - 1)));
   /** Block k standing on the tipping tower at `t`; the top one slides off on `it-holds`. */
   const standing = (k: number, t: number): Block => {
-    const block = tower(count, leanAt(t))[k]!;
+    const block = tower(count, leanAt(t), height)[k]!;
     if (!slides || k !== count - 1) return block;
     const u = ease.sway(Math.max(0, Math.min(1, (t - fallsAt) / tip)));
     const a = (block.turn * Math.PI) / 180;

@@ -1,8 +1,9 @@
 // People stand around a tower of blocks. A pointer picks whose turn it is,
-// anyone at any time, and they toss a block on top. The tower sways and
-// holds, a pigeon may land on it, and the turns slow down. The biggest wobble
-// is a false alarm, and the last turn could end three ways. The tower falls
-// on the unlucky person's turn, toward them, and they get a hard hat.
+// and they toss a block on top. If the tower holds, they are safe and hop up
+// to the Safe bench, so fewer and fewer are at risk while the tower grows
+// shakier. With three left the stage dims to a spotlight. The tower falls
+// with three or two left, on the unlucky person's turn, toward them, and they
+// get a hard hat. With 2 or 3 people it is the final from the start.
 
 import { defineScenario } from '../../scenario-kit';
 import { playWobblyTower } from './play';

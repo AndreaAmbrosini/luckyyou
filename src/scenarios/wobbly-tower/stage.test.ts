@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { createRandom } from '../../scenario-kit/random';
 import { handOutLooks } from '../../scenario-kit';
-import { BEATS, planShow, READ, type Plan } from './plan';
+import { BEATS, hopInto, LEANS as PEAKS, planShow, READ, stayOn, type Plan } from './plan';
 import {
   HEAP_BAND,
   blockOverlaps,
@@ -17,17 +17,15 @@ import {
   tower,
 } from './layout';
 import {
-  POINTER_MOVES,
-  ENDINGS,
   names,
   unluckyOf,
   plans,
-  during,
-  only,
-  total,
-  startOf,
-  repeatsBeforeLast,
   everyPlan,
+  roundsOf,
+  firstTurns,
+  stopsOf,
+  nearlyOf,
+  plannedCaptions,
   inside,
   anyOverlap,
   NORMAL,
@@ -37,12 +35,12 @@ import {
   STEP,
   watch,
   stops,
-  turnsBack,
   swings,
   swaysPerSecond,
   tagsOf,
   pointerBox,
   spotOf,
+  seedOf,
   eightRun,
   expectSwaysAndSettles,
 } from './watching';
@@ -204,193 +202,180 @@ describe('The layout', () => {
 describe('The plan', () => {
   const all = everyPlan();
 
-  it('quick turns never drop under 0.6 s', () => {
+  it('the fit stays in bounds', () => {
+    for (let count = 4; count <= 12; count++) {
+      const ways = all
+        .filter(({ plan }) => plan.order.length === count)
+        .map(({ plan }) => plan.fallsWith);
+      expect(new Set(ways), `${count} people`).toEqual(new Set([3, 2]));
+    }
     for (const { label, plan } of all) {
-      for (const turn of during(plan, 'stack')) {
-        expect(turn.seconds, label).toBeGreaterThanOrEqual(0.6);
-        // The toss, from the pointer's stop to the landing, stays readable.
-        expect(turn.lands - turn.stops, label).toBeGreaterThanOrEqual(0.4 - 1e-9);
+      const small = plan.order.length <= 3;
+      const rounds = roundsOf(plan);
+      // The safe rounds that take r: all but the one that leads into "Final three!".
+      const paced = rounds.filter(
+        (round, index) => round[0]!.beat === 'safe' && rounds[index + 1]![0]!.beat === 'safe',
+      );
+      for (const round of paced) {
+        const { seconds } = round[0]!;
+        expect(seconds, label).toBeGreaterThanOrEqual((round.length === 2 ? 2.1 : 2.0) - 1e-9);
+        expect(seconds, label).toBeLessThanOrEqual(2.6 + 1e-9);
       }
+      const finals = rounds.filter((round) => round[0]!.beat !== 'safe');
+      const [least, most] = small ? [1, 2] : [2, 4];
+      for (const [turn] of finals) {
+        expect(turn!.decoys.length, label).toBeGreaterThanOrEqual(least!);
+        expect(turn!.decoys.length, label).toBeLessThanOrEqual(most!);
+      }
+      expect(plan.end, label).toBeLessThanOrEqual(28 + 1e-9);
+      const stretched =
+        finals.every(([turn]) => turn!.decoys.length === most) &&
+        paced.every((round) => Math.abs(round[0]!.seconds - 2.6) < 1e-9);
+      if (!stretched) expect(plan.end, label).toBeGreaterThanOrEqual(21.5 - 1e-9);
     }
   });
 
-  it('every turn follows the turn rules', () => {
-    for (let count = 2; count <= 12; count++) {
-      const unlucky = unluckyOf(count);
-      const seeds = Array.from({ length: 50 }, (_, index) => index + 1);
-      // Every pointer move with every ending, the first seed past 50 that
-      // has it when seeds 1–50 don't.
-      for (const pointer of POINTER_MOVES) {
-        for (const ending of ENDINGS) {
-          const has = (seed: number) => {
-            const plan = planShow(names(count), unlucky, createRandom(seed));
-            return plan.pointer === pointer && plan.ending === ending;
-          };
-          if (!seeds.some(has)) {
-            let seed = 51;
-            while (!has(seed)) seed++;
-            seeds.push(seed);
-          }
+  it('no stop repeats the one before', () => {
+    for (const { label, plan } of all) {
+      const safe = new Set<string>();
+      for (const round of roundsOf(plan)) {
+        const turn = round[0]!;
+        const stopped = stopsOf(turn);
+        stopped.slice(1).forEach((name, index) => expect(name, label).not.toBe(stopped[index]));
+        // A final round stops only on those still at risk.
+        if (turn.beat !== 'safe') {
+          const atRisk = plan.final.filter((name) => !safe.has(name));
+          for (const name of stopped) expect(atRisk, label).toContain(name);
+        } else {
+          for (const each of round) expect(plan.final, label).not.toContain(each.by);
         }
-      }
-      for (const seed of seeds) {
-        const label = `${count} people, seed ${seed}`;
-        const plan = planShow(names(count), unlucky, createRandom(seed));
-        const { turns } = plan;
-        expect(turns.at(-1)!.by, label).toBe(unlucky);
-        expect(turns.at(-1)!.beat, label).toBe('last-turn');
-        expect(
-          turns.filter((turn) => turn.beat === 'last-turn'),
-          label,
-        ).toHaveLength(1);
-        turns.forEach((turn, index) => {
-          expect(names(count), label).toContain(turn.by);
-          if (turn.decoy !== null) {
-            expect(names(count), label).toContain(turn.decoy);
-            expect(turn.decoy, label).not.toBe(turn.by);
-          }
-          const again = plan.pointer === 'again' && turn.beat === 'last-turn';
-          if (count >= 3 && index > 0 && !again) {
-            expect(turn.by, label).not.toBe(turns[index - 1]!.by);
-          }
-        });
-        for (const turn of during(plan, 'careful')) expect(turn.decoy, label).not.toBeNull();
-        for (const beat of ['stack', 'wobble', 'nearly'] as const) {
-          for (const turn of during(plan, beat)) expect(turn.decoy, label).toBeNull();
-        }
-        const last = turns.at(-1)!;
-        expect(last.decoy !== null, label).toBe(plan.pointer === 'fake-out');
-        expect(plan.phew, label).toBe(last.decoy);
-        expect(only(plan, 'nearly').by === unlucky, label).toBe(plan.pointer === 'again');
-        expect(plan.falls, label).toBe(unlucky);
+        for (const each of round) if (each.safe !== null) safe.add(each.by);
       }
     }
   });
 
   it('the turns add up', () => {
     for (const { label, plan } of all) {
-      const { turns } = plan;
-      expect(
-        turns.map((turn) => turn.beat),
-        label,
-      ).toEqual([
-        ...during(plan, 'stack').map(() => 'stack'),
-        'wobble',
-        'careful',
-        'careful',
-        'nearly',
-        'last-turn',
-      ]);
-      // Each turn starts where the one before ends; the careful turns start
-      // after the pigeon's beat.
-      turns.forEach((turn, index) => {
-        const previous = turns[index - 1];
-        const from =
-          index === 0
-            ? startOf(plan, 'stack')
-            : turn.beat === 'careful' && previous!.beat === 'wobble'
-              ? startOf(plan, 'careful')
-              : previous!.from + previous!.seconds;
-        expect(turn.from, label).toBeCloseTo(from, 9);
-        expect(turn.from, label).toBeGreaterThanOrEqual(startOf(plan, turn.beat) - 1e-9);
-        if (turn.decoyStops !== null) {
-          expect(turn.decoyStops, label).toBeGreaterThan(turn.from);
-          expect(turn.decoyStops, label).toBeLessThan(turn.stops);
+      const small = plan.order.length <= 3;
+      const rounds = roundsOf(plan);
+      const nearly = nearlyOf(plan);
+      const last = plan.turns.at(-1)!;
+      rounds.forEach((round, index) => {
+        const first = round[0]!;
+        const at = `${label}, round ${index}`;
+        // Each round starts where the one before ends.
+        const previous = rounds[index - 1]?.[0];
+        expect(first.from, at).toBeCloseTo(previous ? previous.from + previous.seconds : 2.4, 9);
+        expect(round.length, at).toBeLessThanOrEqual(plan.order.length >= 9 ? 2 : 1);
+        for (const turn of round) {
+          expect(turn.round, at).toBe(index);
+          expect(turn.from, at).toBe(first.from);
+          expect(turn.seconds, at).toBe(first.seconds);
+          expect(turn.stops, at).toBeGreaterThan(turn.from);
+          expect(turn.stops, at).toBeLessThan(turn.lands);
+          expect(turn.lands - turn.stops, at).toBeGreaterThanOrEqual(0.8 - 1e-9);
         }
-        expect(turn.stops, label).toBeGreaterThan(turn.from);
-        expect(turn.lands, label).toBeGreaterThan(turn.stops);
-        expect(turn.lands, label).toBeLessThanOrEqual(turn.from + turn.seconds + 1e-9);
+        if (first.beat === 'safe') {
+          // The pointer stops at 0.35, the blocks land at 1.15 and 1.25, and
+          // "Safe!" comes 0.45 after the round's last block, or 1.9 after Nearly's.
+          const landed = round.at(-1)!.lands;
+          round.forEach((turn, k) => {
+            expect(turn.decoys, at).toEqual([]);
+            expect(turn.stops, at).toBeCloseTo(first.from + 0.35, 9);
+            expect(turn.lands, at).toBeCloseTo(first.from + 1.15 + 0.1 * k, 9);
+            expect(turn.safe, at).toBeCloseTo(landed + (turn.nearly ? 1.9 : 0.45), 9);
+          });
+        } else {
+          // A round of stops: each hop 0.05 s and each stay 0.1 s longer than the one before.
+          const times = [...first.decoys.map((stop) => stop.at), first.stops];
+          times.forEach((time, i) => {
+            const before = i === 0 ? first.from : times[i - 1]! + stayOn(i - 1);
+            expect(time - before, at).toBeCloseTo(hopInto(i), 9);
+          });
+          expect(first.lands - first.stops, at).toBeCloseTo(first === last ? 1.05 : 0.8, 9);
+          if (first.nearly && !small) expect(first.safe, at).toBeCloseTo(first.lands + 1.9, 9);
+          else expect(first.safe, at).toBeNull();
+        }
       });
-      // The beats start one after another.
+      // The spotlight, "Final two!", Nearly's hold and the beats.
+      const lastSafe = rounds.filter((round) => round[0]!.beat === 'safe').at(-1)?.[0];
+      const spotlight = small ? 1.2 : lastSafe!.lands + (plan.fallsWith === 3 ? 2.35 : 1.05);
+      expect(plan.spotlight, label).toBeCloseTo(spotlight, 9);
+      expect(plan.finalTwo === null, label).toBe(small || plan.fallsWith === 3);
+      if (plan.finalTwo !== null) expect(plan.finalTwo, label).toBeCloseTo(nearly.lands + 2.35, 9);
+      expect(plan.hold.from, label).toBeCloseTo(nearly.lands + 0.6, 9);
+      expect(plan.hold.to, label).toBeCloseTo(nearly.lands + 1.4, 9);
+      expect(plan.starts.final, label).toBeCloseTo(plan.spotlight, 9);
+      expect(plan.starts['last-turn'], label).toBeCloseTo(last.from, 9);
+      expect(plan.starts.timber, label).toBeCloseTo(last.lands + 1.3, 9);
+      expect(last.from + last.seconds, label).toBeCloseTo(plan.starts.timber, 9);
       BEATS.forEach((beat, index) => {
         const before = BEATS.slice(0, index).reduce((sum, each) => sum + plan.beats[each], 0);
         expect(plan.starts[beat], `${label}, ${beat}`).toBeCloseTo(before, 9);
       });
-      // Each beat's turns fill it, and the last ends where timber starts.
-      const wobble = only(plan, 'wobble');
-      expect(wobble.from + wobble.seconds, label).toBeCloseTo(startOf(plan, 'pigeon'), 9);
-      const last = turns.at(-1)!;
-      expect(last.from + last.seconds, label).toBeCloseTo(startOf(plan, 'timber'), 9);
-    }
-  });
-
-  it('every pointer hop and toss lasts long enough to follow', () => {
-    for (const { label, plan } of all) {
-      plan.turns.forEach((turn, index) => {
-        const at = `${label}, turn ${index + 1} (${turn.beat})`;
-        // The hop leaves as the previous block lands; the first, at its start.
-        const leaves = index === 0 ? startOf(plan, 'stack') : plan.turns[index - 1]!.lands;
-        expect(turn.lands - turn.stops, at).toBeGreaterThanOrEqual(0.4 - 1e-9);
-        if (turn.beat === 'stack') {
-          expect(turn.stops - leaves, at).toBeGreaterThanOrEqual(0.2 - 1e-9);
-        } else if (turn.beat === 'last-turn' && plan.pointer === 'again') {
-          // The pointer stays on them: no hop.
-        } else if (turn.decoyStops !== null) {
-          // A hop to the decoy, a rest of 0.25 s on them and a hop on, each hop 0.4 s or more.
-          expect(turn.decoyStops - leaves, at).toBeGreaterThanOrEqual(0.4 - 1e-9);
-          expect(turn.stops - turn.decoyStops, at).toBeGreaterThanOrEqual(0.65 - 1e-9);
-        } else {
-          expect(turn.stops - leaves, at).toBeGreaterThanOrEqual(0.4 - 1e-9);
-        }
-      });
-    }
-  });
-
-  it("Nearly's lean holds still for half a second inside its beat", () => {
-    for (const { label, plan } of all) {
-      const nearly = only(plan, 'nearly');
-      expect(plan.hold.from - nearly.lands, label).toBeGreaterThanOrEqual(0.4 - 1e-9);
-      expect(plan.hold.to - plan.hold.from, label).toBeGreaterThanOrEqual(0.5);
-      expect(plan.hold.from, label).toBeGreaterThan(startOf(plan, 'nearly'));
-      expect(plan.hold.to, label).toBeLessThanOrEqual(startOf(plan, 'last-turn') + 1e-9);
-    }
-  });
-
-  it('Nearly is the biggest lean before the fall', () => {
-    for (const { label, plan } of all) {
-      const nearly = only(plan, 'nearly');
-      expect(nearly.lean).toEqual({ degrees: 22, toward: nearly.by });
-      for (const turn of plan.turns) {
-        if (turn !== nearly) expect(turn.lean.degrees, label).toBeLessThan(nearly.lean.degrees);
-      }
-      for (const turn of during(plan, 'stack')) {
-        expect(turn.lean.degrees, label).toBeGreaterThanOrEqual(2);
-        expect(turn.lean.degrees, label).toBeLessThanOrEqual(3);
-        expect([-1, 1], label).toContain(turn.lean.toward);
-      }
-      const wobble = only(plan, 'wobble');
-      expect(wobble.lean.degrees, label).toBe(7);
-      expect([-1, 1], label).toContain(wobble.lean.toward);
-    }
-    const sides = all.map(({ plan }) => only(plan, 'wobble').lean.toward);
-    expect(sides).toContain(-1);
-    expect(sides).toContain(1);
-  });
-
-  it('the heartbeat quickens until the last block, and the tower is still before the fall', () => {
-    for (const { label, plan } of all) {
-      const last = plan.turns.at(-1)!;
-      const T = startOf(plan, 'timber');
-      const { heartbeats } = plan;
-      expect(heartbeats[0], label).toBeCloseTo(startOf(plan, 'careful'), 9);
-      expect(heartbeats.at(-1)!, label).toBeLessThan(last.lands);
-      const gaps = heartbeats.slice(1).map((time, index) => time - heartbeats[index]!);
-      expect(gaps[0], label).toBeCloseTo(0.9, 9);
-      gaps.forEach((gap, index) => {
-        expect(gap, label).toBeGreaterThanOrEqual(0.4 - 1e-9);
-        if (index > 0) expect(gap, label).toBeLessThanOrEqual(gaps[index - 1]! + 1e-9);
-      });
-      // It falls as timber starts; on it-holds, once "It holds!" has had its
-      // second, and early enough that the unlucky person has grown (in 0.5 s)
-      // by the show's last 1.5 s.
+      expect(plan.beats.timber, label).toBe(2.6);
+      expect(plan.end, label).toBeCloseTo(plan.starts.timber + plan.beats.timber, 9);
+      // The tower is still before the fall; on it-holds it falls once "It holds!" has had its second.
+      const T = plan.starts.timber;
       if (plan.ending === 'it-holds') {
+        expect(plan.still.from, label).toBeCloseTo(last.lands + 0.68, 9);
         expect(plan.still.to, label).toBeCloseTo(Math.max(T, plan.still.from + READ), 9);
-        expect(plan.still.to + 0.5, label).toBeLessThanOrEqual(total(plan) - 1.5);
+        expect(plan.still.to + 0.5, label).toBeLessThanOrEqual(plan.end - 1.5);
       } else {
         expect(plan.still.to, label).toBeCloseTo(T, 9);
       }
       expect(plan.still.to - plan.still.from, label).toBeGreaterThanOrEqual(0.5);
       expect(plan.still.from, label).toBeGreaterThanOrEqual(last.lands - 1e-9);
+      // The captions, planned at least READ apart.
+      const times = plannedCaptions(plan).map((caption) => caption.at);
+      times.slice(1).forEach((time, index) => {
+        expect(time - times[index]!, label).toBeGreaterThanOrEqual(READ - 1e-9);
+      });
+    }
+  });
+
+  it('Nearly is the turn before the last and leans furthest before the fall', () => {
+    for (const { label, plan, unlucky } of all) {
+      const nearly = nearlyOf(plan);
+      const last = plan.turns.at(-1)!;
+      expect(plan.turns.indexOf(nearly), label).toBe(plan.turns.length - 2);
+      expect(nearly.lean, label).toEqual({ degrees: PEAKS.nearly, toward: nearly.by });
+      if (plan.order.length >= 4) expect(nearly.by, label).not.toBe(unlucky);
+      plan.turns.forEach((turn, index) => {
+        if (turn === nearly) return;
+        expect(turn.lean.degrees, label).toBeLessThan(PEAKS.nearly);
+        if (turn === last) return;
+        // Every other sway leans out further as the tower grows.
+        expect(turn.lean.degrees, label).toBeCloseTo(1.5 + 0.45 * (3 + index), 9);
+        expect([-1, 1], label).toContain(turn.lean.toward);
+      });
+      expect(last.beat, label).toBe('last-turn');
+      expect(last.lean, label).toEqual(
+        plan.ending === 'slow-lean'
+          ? { degrees: PEAKS.slowLean, toward: unlucky }
+          : plan.ending === 'it-holds'
+            ? { degrees: PEAKS.itHolds, toward: last.lean.toward }
+            : { degrees: 0, toward: unlucky },
+      );
+    }
+  });
+
+  it('the heartbeat quickens until the last block', () => {
+    for (const { label, plan } of all) {
+      const { heartbeats, spotlight } = plan;
+      const landed = plan.turns.at(-1)!.lands;
+      const gap = (t: number) => 0.85 - (0.4 * (t - spotlight)) / (landed - spotlight);
+      expect(heartbeats[0], label).toBe(spotlight);
+      heartbeats.slice(1).forEach((time, index) => {
+        expect(time - heartbeats[index]!, label).toBeCloseTo(gap(heartbeats[index]!), 9);
+        if (index > 0) {
+          expect(time - heartbeats[index]!, label).toBeLessThan(
+            heartbeats[index]! - heartbeats[index - 1]!,
+          );
+        }
+      });
+      expect(heartbeats.at(-1)!, label).toBeLessThan(landed);
+      expect(heartbeats.at(-1)! + gap(heartbeats.at(-1)!), label).toBeGreaterThanOrEqual(landed);
     }
   });
 
@@ -402,13 +387,6 @@ describe('The plan', () => {
 });
 
 describe('The stage', () => {
-  /** The first seed from 1 whose plan at `count` passes `test`. */
-  const seedWhere = (count: number, test: (plan: Plan) => boolean) => {
-    let seed = 1;
-    while (!test(planShow(names(count), unluckyOf(count), createRandom(seed)))) seed++;
-    return seed;
-  };
-
   it('the stage plays the plan for its seed', async () => {
     for (const count of [2, 8, 12]) {
       for (const seed of [1, 2]) {
@@ -472,12 +450,12 @@ describe('The stage', () => {
   });
 
   it('the tower never sways more than 3 times a second, and settles after each block', async () => {
-    // The quickest quick turns: four of them, at 2 and at 5 people.
+    // At 2 and 5, at 12 with pairs, and at 8 falling with 2 left: Nearly in the final.
     const runs = [
-      { count: 2, seed: seedWhere(2, (plan) => during(plan, 'stack').length === 4) },
-      { count: 5, seed: seedWhere(5, (plan) => during(plan, 'stack').length === 4) },
-      { count: 12, seed: seedWhere(12, (plan) => during(plan, 'stack').length === 4) },
-      { count: 8, seed: 3 },
+      { count: 2, seed: 1 },
+      { count: 5, seed: 1 },
+      { count: 12, seed: 1 },
+      { count: 8, seed: seedOf(names(8), unluckyOf(8), (plan) => plan.fallsWith === 2) },
     ];
     for (const { count, seed } of runs) {
       for (const reducedMotion of [false, true]) {
@@ -490,19 +468,9 @@ describe('The stage', () => {
         expect(swaysPerSecond(before), label).toBeLessThanOrEqual(3);
         for (const swing of swings(before))
           expect(swing, label).toBeGreaterThanOrEqual(0.34 - STEP);
-        expectSwaysAndSettles(frames, label);
+        expectSwaysAndSettles(frames, plan, label);
       }
     }
-  });
-
-  it('with reduced motion the big wobble is one slow lean and settle', async () => {
-    const { frames, plan } = await watch(names(8), 'Luca', { reducedMotion: true });
-    const wobble = only(plan, 'wobble');
-    const wobbling = frames.filter(
-      (frame) => frame.time >= wobble.lands && frame.time < wobble.from + wobble.seconds,
-    );
-    expect(turnsBack(wobbling)).toHaveLength(1);
-    expect(Math.max(...wobbling.map((frame) => Math.abs(frame.lean)))).toBeCloseTo(7, 1);
   });
 });
 
@@ -510,21 +478,18 @@ describe('Hops and tosses', () => {
   /** Show seconds per frame in these runs: fine enough to time a hop to the frame. */
   const FINE = 1 / 120;
   /** The first seed from 1 whose plan at `count` with the usual unlucky person passes `test`. */
-  const seedFor = (count: number, test: (plan: Plan) => boolean) => {
-    let seed = 1;
-    while (!test(planShow(names(count), unluckyOf(count), createRandom(seed)))) seed++;
-    return seed;
-  };
-  /** A run at 2, at 8 with the fake-out, and at 12 with 4 quick turns, finely timed. */
+  const seedFor = (count: number, test: (plan: Plan) => boolean) =>
+    seedOf(names(count), unluckyOf(count), test);
+  /** A run at 2, at 8 falling with 2 left, and at 12 with pairs, finely timed. */
   let shows: Promise<{ label: string; run: Awaited<ReturnType<typeof watch>> }[]> | undefined;
   const fineRuns = () =>
     (shows ??= (async () => {
       const all = [];
       // One at a time: every run drives the one GSAP clock.
       for (const { count, seed } of [
-        { count: 2, seed: seedFor(2, (plan) => during(plan, 'stack').length === 4) },
-        { count: 8, seed: seedFor(8, (plan) => plan.pointer === 'fake-out') },
-        { count: 12, seed: seedFor(12, (plan) => during(plan, 'stack').length === 4) },
+        { count: 2, seed: 1 },
+        { count: 8, seed: seedFor(8, (plan) => plan.fallsWith === 2) },
+        { count: 12, seed: 1 },
       ]) {
         const run = await watch(names(count), unluckyOf(count), { seed, step: FINE });
         all.push({ label: `${count} people, seed ${seed}`, run });
@@ -532,28 +497,22 @@ describe('Hops and tosses', () => {
       return all;
     })());
 
-  it('every hop lasts 0.4 s or more (0.2 s in a quick turn), and the pointer rests 0.25 s or more on a decoy', async () => {
+  it('every hop lasts 0.35 s or more, and every stay 0.15 s or more', async () => {
     for (const { label, run } of await fineRuns()) {
       const { frames, plan } = run;
       const stopped = stops(frames);
-      // Each stop, with the turn it belongs to.
-      const turnOf = plan.turns.flatMap((turn) => (turn.decoy ? [turn, turn] : [turn]));
       expect(
         stopped.map((stop) => stop.name),
         label,
-      ).toEqual(plan.turns.flatMap((turn) => (turn.decoy ? [turn.decoy, turn.by] : [turn.by])));
+      ).toEqual(firstTurns(plan).flatMap(stopsOf));
       stopped.forEach((stop, index) => {
-        const turn = turnOf[index]!;
-        const at = `${label}, stop ${index + 1} on ${stop.name} (${turn.beat})`;
+        const at = `${label}, stop ${index + 1} on ${stop.name}`;
         const after = index === 0 ? -1 : stopped[index - 1]!.to;
         const leaves = frames.find(
           (frame) => frame.time > after && frame.over === '' && frame.pointer.shown > 0,
         )!;
-        const least = turn.beat === 'stack' ? 0.2 : 0.4;
-        expect(stop.from - leaves.time, at).toBeGreaterThanOrEqual(least - FINE);
-        if (turn.decoy === stop.name && turn.by !== stop.name) {
-          expect(stop.to + FINE - stop.from, at).toBeGreaterThanOrEqual(0.25 - FINE);
-        }
+        expect(stop.from - leaves.time, at).toBeGreaterThanOrEqual(0.35 - FINE);
+        expect(stop.to + FINE - stop.from, at).toBeGreaterThanOrEqual(0.15 - FINE);
       });
     }
   });
@@ -574,22 +533,20 @@ describe('Hops and tosses', () => {
   });
 
   it('a bounce in place is a visible hop, clear of the name tags', async () => {
-    // "Again?!" at 8 and 12 with the unlucky person in the front row, and a repeat turn at 2.
-    const front = (count: number) => (plan: Plan) =>
-      plan.pointer === 'again' && spotOf(plan, unluckyOf(count)).row === 'front';
-    const runs = [
-      { count: 8, seed: seedFor(8, front(8)) },
-      { count: 12, seed: seedFor(12, front(12)) },
-      { count: 2, seed: seedFor(2, repeatsBeforeLast) },
-    ];
-    for (const { count, seed } of runs) {
+    // With 2 or 3 people a round can start on the last round's thrower.
+    const bounces = (plan: Plan) =>
+      firstTurns(plan).some(
+        (turn, index, all) => index > 0 && stopsOf(turn)[0] === all[index - 1]!.by,
+      );
+    for (const count of [2, 3]) {
+      const seed = seedFor(count, bounces);
       const label = `${count} people, seed ${seed}`;
       const { frames, plan } = await watch(names(count), unluckyOf(count), { seed });
       const stopped = stops(frames);
       const tags = tagsOf(plan.order);
-      const bounces = stopped.slice(1).filter((stop, index) => stop.name === stopped[index]!.name);
-      expect(bounces.length, label).toBeGreaterThan(0);
-      for (const stop of bounces) {
+      const again = stopped.slice(1).filter((stop, index) => stop.name === stopped[index]!.name);
+      expect(again.length, label).toBeGreaterThan(0);
+      for (const stop of again) {
         const before = stopped[stopped.indexOf(stop) - 1]!;
         const hop = frames.filter((frame) => frame.time > before.to && frame.time < stop.from);
         const tip = pointerTip(spotOf(plan, stop.name));

@@ -1,30 +1,14 @@
-// Whose turn it is when, and how long each beat lasts. The show only acts out
-// the app's pick: the plan is built backwards from the fall, which always
-// comes on the unlucky person's turn.
+// Whose turn it is when, who goes safe, and how long each moment lasts. The
+// show only acts out the app's pick: the plan is built backwards from the
+// fall, which always comes on the unlucky person's turn, then fitted to a
+// length and timed forwards.
 
-import { fitBeats, pickOne, shuffle } from '../../scenario-kit';
+import { pickOne, shuffle } from '../../scenario-kit';
 
 /** The show's beats, in the order they play. */
-export const BEATS = [
-  'thunk',
-  'stack',
-  'wobble',
-  'pigeon',
-  'careful',
-  'nearly',
-  'last-turn',
-  'timber',
-] as const;
+export const BEATS = ['opening', 'safe', 'final', 'last-turn', 'timber'] as const;
 
 export type Beat = (typeof BEATS)[number];
-
-/**
- * How the pointer picks the last turn: `straight` to the unlucky person;
- * `fake-out`, it stops on someone else first, who says "Phew!", then hops to
- * the unlucky person; `again`, the unlucky person had Nearly and it stays on
- * them.
- */
-export type PointerMove = 'straight' | 'fake-out' | 'again';
 
 /**
  * How the last turn ends before the fall: `dead-still`, the block lands and
@@ -47,322 +31,396 @@ export interface Lean {
   readonly toward: Side;
 }
 
+/** A stop of the pointer: over whom, at what show seconds. */
+export interface Stop {
+  readonly name: string;
+  readonly at: number;
+}
+
 export interface Turn {
   /** Who tosses the block on top. */
   readonly by: string;
-  readonly beat: Beat;
-  /** Whom the pointer stops on first, before it hops to `by`; null when it goes straight there. */
-  readonly decoy: string | null;
-  /**
-   * Show seconds when the turn starts. Each turn starts where the one before
-   * ends, except the first careful turn, which starts after the pigeon's beat.
-   * The pointer leaves for this turn at max(the previous block's landing,
-   * or stack's start for the first turn, its first stop − pointer.ts's
-   * LONGEST_HOP).
-   */
+  /** Turns that share a round go together: a pair at 9 or more. */
+  readonly round: number;
+  readonly beat: Exclude<Beat, 'opening' | 'timber'>;
+  /** Where the pointer stops before `by` this round, in order; empty in a safe round. */
+  readonly decoys: readonly Stop[];
+  /** Show seconds the round starts: the pointer leaves. */
   readonly from: number;
-  /** Show seconds when the pointer stops on the decoy; null without one. */
-  readonly decoyStops: number | null;
-  /** Show seconds when the pointer stops over `by`, before they lift the block. */
+  /** Show seconds the pointer stops over `by`, before they lift the block. */
   readonly stops: number;
-  /** Show seconds when the block lands on top. */
+  /** Show seconds the block lands on top. */
   readonly lands: number;
-  /** How long the turn takes, from `from` until the tower has settled for the next. */
+  /** The round's length, from `from` to the next round's start. */
   readonly seconds: number;
   /** How far the tower leans after the block lands. */
   readonly lean: Lean;
+  /** Show seconds `by` says "Safe!" and starts the hop to the bench; null if they stay at risk. */
+  readonly safe: number | null;
+  readonly nearly: boolean;
 }
 
 export interface Plan {
   /** Everyone, in their standing order; the layout gives each place in it a spot. */
   readonly order: readonly string[];
-  /** Whether a pigeon lands on top after the big wobble. */
-  readonly pigeon: boolean;
-  readonly pointer: PointerMove;
   readonly ending: Ending;
-  /** Show seconds per beat; the pigeon's is 0 without the pigeon. */
+  /** How many are at risk when it falls: 3 or 2 at 4+; everyone with 2 or 3. */
+  readonly fallsWith: number;
+  /** Who is left for the final, the unlucky person among them. */
+  readonly final: readonly string[];
+  /** Show seconds per beat. */
   readonly beats: Readonly<Record<Beat, number>>;
-  /** Show seconds when each beat starts; the show ends at timber's start plus its seconds. */
+  /** Show seconds when each beat starts. */
   readonly starts: Readonly<Record<Beat, number>>;
-  /**
-   * Every turn, in order: the quick turns, the big wobble, two careful turns,
-   * Nearly and the last turn. The thunk's two paper blocks are nobody's turn,
-   * so the tower ends at 2 + `turns.length` blocks.
-   */
+  /** Every turn, in order; the tower ends at 2 paper blocks + `turns.length`. */
   readonly turns: readonly Turn[];
-  /** Who says "Phew!" when the pointer moves on from them: the fake-out's decoy; null otherwise. */
-  readonly phew: string | null;
+  /** Show seconds of "Final three!" or "Just the … of you…": the spotlight and the heartbeat start. */
+  readonly spotlight: number;
+  /** Show seconds of "Final two!"; null unless it falls with 2 at 4+. */
+  readonly finalTwo: number | null;
   /**
-   * Show seconds while Nearly's lean holds still at its peak, inside the
-   * Nearly beat; it leans out from its landing to `hold.from` and swings back
-   * after `hold.to`.
+   * Show seconds while Nearly's lean holds still at its peak: it leans out
+   * from its landing to `hold.from` and swings back after `hold.to`.
    */
   readonly hold: { readonly from: number; readonly to: number };
-  /** Show seconds of each heartbeat, from the careful turns' start to the last block, closer and closer. */
+  /** Show seconds of each heartbeat, from the spotlight to the last block, closer and closer. */
   readonly heartbeats: readonly number[];
   /**
    * Show seconds while the tower barely moves before it falls; it falls at
-   * `still.to`. That is timber's start, or later for `it-holds`, so "…or
-   * not!" as it falls comes a second after "It holds!" as it settles, at
-   * `still.from`.
+   * `still.to`: timber's start, or later on `it-holds`, so "…or not!" as it
+   * falls comes a READ after "It holds!" as it settles, at `still.from`.
    */
   readonly still: { readonly from: number; readonly to: number };
   /** The tower falls toward the side of the stage this person stands on: the unlucky person. */
   readonly falls: string;
+  /** Show seconds the show ends. */
+  readonly end: number;
 }
 
-/** Every show is stretched to at least this many seconds. */
-const SHORTEST = 16.8;
-/** Each quick turn is this much of the one before. */
-const QUICKER = 0.9;
-/** The careful turns, in proportion. */
-const CAREFUL = [1, 1.25];
-/**
- * The pointer hops while the tower settles, leaving at max(the previous
- * block's landing, its first stop − pointer.ts's LONGEST_HOP). Every hop and
- * toss lasts 0.4 s or more (DESIGN.md: movement that matters), except a
- * quick turn's hop, which gets what its toss leaves, 0.2 s or more. Before
- * each toss the pointer stays over the taker for `POINTED`, so it's seen to
- * stop before it fades.
- */
-const TOSS = 0.4;
-const POINTED = 0.1;
-/** A quick turn lands as it ends, and its toss takes this much of it, at least `TOSS` + `POINTED`. */
-const QUICK_TOSS = 0.55;
-/** The big wobble, in seconds from its start: the pointer stops, then the block lands. */
-const WOBBLE = { stops: 0.4, lands: 0.9 };
-/**
- * Each careful turn, as parts of it from its start: the decoy, the taker, the
- * landing. A decoy stop is a hop of 0.4 s or more to them, a rest of 0.25 s
- * or more, and a hop on of 0.4 s or more, so the decoy and the taker are 0.65 s
- * or more apart. The first turn's decoy comes early, as its hop starts in the
- * beat before; the second's leaves room for the hop from the first landing,
- * and its landing for Nearly's hop. Laid out for the shortest careful beat,
- * 3.0 s.
- */
-const CAREFUL_PACE = [
-  { decoy: 0.08, stops: 0.57, lands: 0.965 },
-  { decoy: 0.215, stops: 0.61, lands: 0.92 },
-] as const;
-/**
- * Nearly, in seconds from its start: the pointer stops, the block lands, the
- * tower leans out for `leanOut` and holds still until the beat ends. It
- * swings back while the pointer hops for the last turn.
- */
-const NEARLY = { stops: 0.27, lands: 0.77, leanOut: 0.4 };
-/**
- * The last turn, in seconds from its start: where the pointer stops (the
- * fake-out stops on the decoy first, rests and hops on, as a careful turn
- * does), and how long the toss takes. "Again?!" doesn't hop: the pointer
- * bounces on the spot, once Nearly's thrower has said "Phew!". The fake-out
- * and "Again?!" land 1.2 s in: on `it-holds` the tower settles 0.68 s later
- * and falls READ after that, 0.52 s into timber, so the unlucky person has
- * grown (0.5 s) before the show's last 1.5 s.
- */
-const LAST = { decoy: 0.05, straight: 0.3, fakeOut: 0.7, again: 0.7, toss: 0.5 };
-/** Seconds the tower barely moves before it falls, unless it froze earlier. */
-const STILL = 0.6;
-/** `it-holds`: the tower sways out to its lean and back upright, in seconds, then holds. */
-const HOLDS = { out: 0.34, back: 0.34 };
 /**
  * Seconds from one caption to the next that must not wait: the kit keeps
  * each up for a second, and a frame more covers the frame they're asked in.
  */
 export const READ = 1.04;
 /** Peak leans, in degrees. */
-const LEANS = {
-  quick: { least: 2, most: 3 },
-  careful: { least: 3, most: 4 },
-  wobble: 7,
-  nearly: 22,
-  itHolds: 4,
-  slowLean: 20,
-};
-/** The first heartbeat gap, how much shorter each next one is, and the shortest. */
-const HEARTBEAT = { first: 0.9, quicker: 0.88, shortest: 0.4 };
+export const LEANS = { nearly: 11, itHolds: 4, slowLean: 10 } as const;
+/** The pointer's hop into a final round's stop i, and its stay there. */
+export const hopInto = (i: number) => 0.35 + 0.05 * i;
+export const stayOn = (i: number) => 0.65 + 0.1 * i;
 
-/** Lengths that change by `ratio` each time and add up to `total` exactly. */
-function lengths(total: number, count: number, ratio: number): number[] {
-  const first = (total * (1 - ratio)) / (1 - ratio ** count);
-  return Array.from({ length: count }, (_, index) => first * ratio ** index);
-}
+const ENDINGS: readonly Ending[] = ['dead-still', 'it-holds', 'slow-lean'];
+
+/** The first round starts here, after the paper blocks; with 2 or 3 the spotlight comes at `just`. */
+const OPENING = { first: 2.4, just: 1.2 };
+/**
+ * A safe round, from its start: the pointer stops, the block lands (a pair's
+ * second a little later, on top), and "Safe!" comes after the last landing.
+ * The round lasts r, 2.0 to 2.6 s, and a pair's at least 2.1 s.
+ */
+const SAFE = { stops: 0.35, lands: 1.15, second: 0.1, safe: 0.45 };
+const ROUND = { most: 2.6, least: 2.0, pair: 2.1 };
+/** A final round's block lands this long after the thrower's stop; on the last turn, `last`. */
+const TOSS = { final: 0.8, last: 1.05 };
+/** How many stops a final round makes before the thrower: 2 to 4, or 1 to 2 with 2 or 3 people. */
+const STOPS = { least: 2, most: 4, smallLeast: 1, smallMost: 2 };
+/**
+ * Nearly, from its landing: out to its lean by `out`, held to `back`, and
+ * "Safe!" at `safe` (4+). "Final three!" or "Final two!" follows at `next`.
+ */
+const NEARLY = { out: 0.6, back: 1.4, safe: 1.9, next: 2.35 };
+/**
+ * "Final three!" after a safe round's landing, and the round after it,
+ * sooner when it falls with 2; the last round after "Final two!".
+ */
+const FINAL_THREE = { afterSafe: 1.05, fallsWith3: 1.8, fallsWith2: 1.0 };
+const FINAL_TWO = { last: 0.7 };
+/** With 2 or 3 people the next round starts this long after a landing; after Nearly, `nearly`. */
+const SMALL = { next: 0.85, nearly: 2.0 };
+/** Timber comes this long after the last landing, and the show ends `end` after timber. */
+const TIMBER = { after: 1.3, end: 2.6 };
+/** Every show is fitted between these lengths where the head count allows. */
+const SHORTEST = 21.5;
+const LONGEST = 28.0;
+/** Seconds the tower barely moves before it falls, unless it froze earlier. */
+const STILL = 0.6;
+/** `it-holds`: the tower sways out to its lean and back upright, in seconds, then holds. */
+const HOLDS = { out: 0.34, back: 0.34 };
+/** A sway leans out this far, plus `perBlock` for each block on the tower. */
+const SWAY = { base: 1.5, perBlock: 0.45 };
+/** The first heartbeat gap, and how much shorter the last one is, by the last landing. */
+const HEARTBEAT = { first: 0.85, quicker: 0.4 };
 
 /** A random side of the stage. */
 const side = (random: () => number): -1 | 1 => (random() < 0.5 ? -1 : 1);
 
+/** Seconds from a final round's start to the thrower's stop, after `k` stops. */
+function stopTimes(k: number): number[] {
+  const times = [hopInto(0)];
+  for (let i = 1; i <= k; i++) times.push(times[i - 1]! + stayOn(i - 1) + hopInto(i));
+  return times;
+}
+
+/** A round as drawn: who throws, and what kind of round it is. */
+interface Round {
+  readonly by: readonly string[];
+  readonly final: boolean;
+  readonly nearly: boolean;
+}
+
+/** A round as timed. */
+interface Timed {
+  readonly from: number;
+  /** The pointer's stops, the thrower's last, in show seconds. */
+  readonly stops: readonly number[];
+  readonly lands: readonly number[];
+  readonly seconds: number;
+  readonly safe: number | null;
+}
+
 export function planShow(names: readonly string[], unlucky: string, random: () => number): Plan {
   const count = names.length;
+  const small = count <= 3;
   const order = shuffle(names, random);
-  const pigeon = random() < 0.5;
-  const pointer = pickOne<PointerMove>(['straight', 'fake-out', 'again'], random);
-  const ending = pickOne<Ending>(['dead-still', 'it-holds', 'slow-lean'], random);
-  const quick = pickOne([2, 3, 4], random);
+  const ending = pickOne(ENDINGS, random);
+  const fallsWith = small ? count : pickOne([3, 2], random);
+  const others = names.filter((name) => name !== unlucky);
+  const final = small
+    ? [...names]
+    : shuffle([unlucky, ...shuffle(others, random).slice(0, 2)], random);
+  const safeOrder = small
+    ? []
+    : shuffle(
+        names.filter((name) => !final.includes(name)),
+        random,
+      );
 
-  // With the pigeon the show is 18.3 s and nothing stretches; without it,
-  // 16.9 s, so stack and careful only stretch if the total ever drops.
-  const stack = 3.35 + 0.025 * (count - 2);
-  const beats = fitBeats<Beat>(
-    {
-      thunk: { seconds: 1.6 },
-      stack: { seconds: stack, flexible: true },
-      wobble: { seconds: 2.0 },
-      pigeon: { seconds: pigeon ? 1.4 : 0 },
-      careful: { seconds: 6.6 - stack, flexible: true },
-      nearly: { seconds: 1.7 },
-      'last-turn': { seconds: 2.4 },
-      timber: { seconds: 2.6 },
-    },
-    SHORTEST,
+  // Backwards from the fall: who throws in each round.
+  const rounds: Round[] = [];
+  if (small) {
+    const throwers = [unlucky];
+    const turns = pickOne([4, 5], random);
+    while (throwers.length < turns) {
+      let by = pickOne(names, random);
+      while (by === throwers[0] && by === throwers[1]) by = pickOne(names, random);
+      throwers.unshift(by);
+    }
+    throwers.forEach((by, index) =>
+      rounds.push({ by: [by], final: true, nearly: index === turns - 2 }),
+    );
+  } else {
+    const nearlyBy =
+      fallsWith === 2
+        ? pickOne(
+            final.filter((name) => name !== unlucky),
+            random,
+          )
+        : null;
+    // At 9 or more, the safe rounds but the last go in pairs from the front,
+    // with one single round at a random place among them when the count is odd.
+    const rest = safeOrder.slice(0, -1);
+    const single =
+      count >= 9 && rest.length % 2 === 1
+        ? pickOne(
+            Array.from({ length: (rest.length + 1) / 2 }, (_, index) => index),
+            random,
+          )
+        : -1;
+    for (let at = 0; at < rest.length;) {
+      const size = count >= 9 && rounds.length !== single ? 2 : 1;
+      rounds.push({ by: rest.slice(at, at + size), final: false, nearly: false });
+      at += size;
+    }
+    rounds.push({ by: [safeOrder.at(-1)!], final: false, nearly: fallsWith === 3 });
+    if (nearlyBy) rounds.push({ by: [nearlyBy], final: true, nearly: true });
+    rounds.push({ by: [unlucky], final: true, nearly: false });
+  }
+
+  // The fit: each final round's stops and the safe rounds' length r.
+  const finals = rounds.filter((round) => round.final);
+  const [least, most] = small ? [STOPS.smallLeast, STOPS.smallMost] : [STOPS.least, STOPS.most];
+  const ks = finals.map(() =>
+    pickOne(
+      Array.from({ length: most - least + 1 }, (_, i) => least + i),
+      random,
+    ),
   );
+  let r = ROUND.most;
+  const lengthNow = () => time(rounds, ks, r, small).end;
+  while (lengthNow() > LONGEST && ks.some((k) => k > least)) {
+    const top = Math.max(...ks);
+    ks[ks.lastIndexOf(top)] = top - 1;
+  }
+  // The safe rounds that take r: all but the one into "Final three!".
+  const paced = rounds.filter((round, index) => !round.final && !rounds[index + 1]!.final).length;
+  if (lengthNow() > LONGEST && paced > 0) {
+    r = Math.max(ROUND.least, r - (lengthNow() - LONGEST) / paced);
+  }
+  while (lengthNow() < SHORTEST && ks.some((k) => k < most)) {
+    const bottom = Math.min(...ks);
+    ks[ks.indexOf(bottom)] = bottom + 1;
+  }
+  const timed = time(rounds, ks, r, small);
+
+  // Each final round's stops, backwards from the thrower: never the same
+  // person twice running, and only those still at risk.
+  const benched = new Set<string>();
+  const stopNames: string[][] = rounds.map((round, index) => {
+    const atRisk = final.filter((name) => !benched.has(name));
+    if (timed.rounds[index]!.safe !== null) for (const by of round.by) benched.add(by);
+    if (!round.final) return [];
+    const k = ks[finals.indexOf(round)]!;
+    const chain = [round.by[0]!];
+    while (chain.length <= k) {
+      chain.unshift(
+        pickOne(
+          atRisk.filter((name) => name !== chain[0]),
+          random,
+        ),
+      );
+    }
+    return chain.slice(0, -1);
+  });
+
+  // The turns, with their leans.
+  const turns: Turn[] = [];
+  const last = rounds.length - 1;
+  rounds.forEach((round, index) => {
+    const times = timed.rounds[index]!;
+    round.by.forEach((by, k) => {
+      const blocks = 3 + turns.length;
+      const lean: Lean =
+        index === last
+          ? lastLean(ending, unlucky, random)
+          : round.nearly
+            ? { degrees: LEANS.nearly, toward: by }
+            : { degrees: SWAY.base + SWAY.perBlock * blocks, toward: side(random) };
+      turns.push({
+        by,
+        round: index,
+        beat: index === last ? 'last-turn' : round.final ? 'final' : 'safe',
+        decoys: stopNames[index]!.map((name, i) => ({ name, at: times.stops[i]! })),
+        from: times.from,
+        stops: times.stops.at(-1)!,
+        lands: times.lands[k]!,
+        seconds: times.seconds,
+        lean,
+        safe: times.safe,
+        nearly: round.nearly,
+      });
+    });
+  });
+
+  const lastTurn = turns.at(-1)!;
+  const timber = lastTurn.lands + TIMBER.after;
+  const { spotlight } = timed;
+  const beats: Record<Beat, number> = {
+    opening: small ? spotlight : OPENING.first,
+    safe: small ? 0 : spotlight - OPENING.first,
+    final: lastTurn.from - spotlight,
+    'last-turn': timber - lastTurn.from,
+    timber: TIMBER.end,
+  };
   const starts = Object.fromEntries(
     BEATS.map((beat, index) => [
       beat,
       BEATS.slice(0, index).reduce((seconds, each) => seconds + beats[each], 0),
     ]),
   ) as Record<Beat, number>;
-  const start = (beat: Beat) => starts[beat];
-
-  // Backwards from the fall: who takes each turn, its decoy and its lean,
-  // from the last turn to the first. At 3 or more nobody takes the turn
-  // right after their own, except the unlucky person after "Again?!"; at 2
-  // anyone may.
-  const other = (not: string) =>
-    pickOne(
-      names.filter((name) => name !== not),
-      random,
-    );
-  const next = (after: string) => (count === 2 ? pickOne(names, random) : other(after));
-  const sway = (range: { least: number; most: number }): Lean => ({
-    degrees: range.least + (range.most - range.least) * random(),
-    toward: side(random),
-  });
-
-  const fakeOut = pointer === 'fake-out' ? other(unlucky) : null;
-  const lastLean: Lean =
-    ending === 'slow-lean'
-      ? { degrees: LEANS.slowLean, toward: unlucky }
-      : ending === 'it-holds'
-        ? { degrees: LEANS.itHolds, toward: side(random) }
-        : { degrees: 0, toward: unlucky };
-  const nearly = pointer === 'again' ? unlucky : other(unlucky);
-  const carefully = (after: string) => {
-    const by = next(after);
-    return { by, decoy: other(by), lean: sway(LEANS.careful) };
-  };
-  const careful2 = carefully(nearly);
-  const careful1 = carefully(careful2.by);
-  const wobble = next(careful1.by);
-  const wobbleSide = side(random);
-  const quickTurns: { by: string; lean: Lean }[] = [];
-  let after = wobble;
-  while (quickTurns.length < quick) {
-    after = next(after);
-    quickTurns.unshift({ by: after, lean: sway(LEANS.quick) });
-  }
-
-  // Forwards, the times. Each turn: when the pointer stops on the decoy and
-  // on the taker, and when the block lands, all in show seconds.
-  const turns: Turn[] = [];
-  const add = (
-    by: string,
-    beat: Beat,
-    from: number,
-    seconds: number,
-    times: { readonly decoyStops?: number; readonly stops: number; readonly lands: number },
-    decoy: string | null,
-    lean: Lean,
-  ) => {
-    turns.push({
-      by,
-      beat,
-      decoy,
-      from,
-      decoyStops: decoy === null ? null : times.decoyStops!,
-      stops: times.stops,
-      lands: times.lands,
-      seconds,
-      lean,
-    });
-  };
-
-  let from = start('stack');
-  lengths(beats.stack, quick, QUICKER).forEach((seconds, index) => {
-    const { by, lean } = quickTurns[index]!;
-    const lands = from + seconds;
-    const stops = lands - Math.max(TOSS + POINTED, QUICK_TOSS * seconds);
-    add(by, 'stack', from, seconds, { stops, lands }, null, lean);
-    from = lands;
-  });
-  add(
-    wobble,
-    'wobble',
-    from,
-    beats.wobble,
-    { stops: from + WOBBLE.stops, lands: from + WOBBLE.lands },
-    null,
-    { degrees: LEANS.wobble, toward: wobbleSide },
-  );
-  from = start('careful');
-  const careful = CAREFUL.map((part) => (part * beats.careful) / (CAREFUL[0]! + CAREFUL[1]!));
-  [careful1, careful2].forEach(({ by, decoy, lean }, index) => {
-    const seconds = careful[index]!;
-    const at = (part: number) => from + part * seconds;
-    const pace = CAREFUL_PACE[index]!;
-    const times = {
-      decoyStops: at(pace.decoy),
-      stops: at(pace.stops),
-      lands: at(pace.lands),
-    };
-    add(by, 'careful', from, seconds, times, decoy, lean);
-    from += seconds;
-  });
-  add(
-    nearly,
-    'nearly',
-    from,
-    beats.nearly,
-    { stops: from + NEARLY.stops, lands: from + NEARLY.lands },
-    null,
-    { degrees: LEANS.nearly, toward: nearly },
-  );
-  const hold = { from: from + NEARLY.lands + NEARLY.leanOut, to: from + beats.nearly };
-
-  // The last turn, from its start: the pointer's move, then the toss.
-  from = start('last-turn');
-  const stops =
-    from +
-    (pointer === 'fake-out' ? LAST.fakeOut : pointer === 'again' ? LAST.again : LAST.straight);
-  const lands = stops + LAST.toss;
-  const fall = start('timber');
-  add(
-    unlucky,
-    'last-turn',
-    from,
-    beats['last-turn'],
-    { decoyStops: from + LAST.decoy, stops, lands },
-    fakeOut,
-    lastLean,
-  );
 
   const heartbeats: number[] = [];
-  for (let time = start('careful'), k = 0; time < lands; k++) {
-    heartbeats.push(time);
-    time += Math.max(HEARTBEAT.shortest, HEARTBEAT.first * HEARTBEAT.quicker ** k);
+  for (let t = spotlight; t < lastTurn.lands;) {
+    heartbeats.push(t);
+    t += HEARTBEAT.first - (HEARTBEAT.quicker * (t - spotlight)) / (lastTurn.lands - spotlight);
   }
 
   return {
     order,
-    pigeon,
-    pointer,
     ending,
+    fallsWith,
+    final,
     beats,
     starts,
     turns,
-    phew: fakeOut,
-    hold,
+    spotlight,
+    finalTwo: timed.finalTwo,
+    hold: timed.hold,
     heartbeats,
-    still: stillness(ending, lands, fall),
+    still: stillness(ending, lastTurn.lands, timber),
     falls: unlucky,
+    end: timber + TIMBER.end,
+  };
+}
+
+/** The last turn's lean, for its ending. */
+function lastLean(ending: Ending, unlucky: string, random: () => number): Lean {
+  if (ending === 'slow-lean') return { degrees: LEANS.slowLean, toward: unlucky };
+  if (ending === 'it-holds') return { degrees: LEANS.itHolds, toward: side(random) };
+  return { degrees: 0, toward: unlucky };
+}
+
+/**
+ * The rounds timed forwards from the opening, with `ks[i]` stops before the
+ * thrower in final round i and safe rounds r long: when each round starts,
+ * its stops and landings, its length and its "Safe!", the spotlight, "Final
+ * two!", Nearly's hold, and when the show ends.
+ */
+function time(rounds: readonly Round[], ks: readonly number[], r: number, small: boolean) {
+  const timed: Timed[] = [];
+  let spotlight = OPENING.just;
+  let finalTwo: number | null = null;
+  let hold = { from: 0, to: 0 };
+  let s = OPENING.first;
+  let finalIndex = 0;
+  rounds.forEach((round, index) => {
+    const next = rounds[index + 1];
+    let stops: number[];
+    let lands: number[];
+    if (round.final) {
+      const k = ks[finalIndex++]!;
+      stops = stopTimes(k).map((at) => s + at);
+      lands = [stops.at(-1)! + (next ? TOSS.final : TOSS.last)];
+    } else {
+      stops = [s + SAFE.stops];
+      lands = round.by.map((_, k) => s + SAFE.lands + SAFE.second * k);
+    }
+    const L = lands.at(-1)!;
+    if (round.nearly) hold = { from: L + NEARLY.out, to: L + NEARLY.back };
+    let seconds: number;
+    let safe: number | null = null;
+    if (!next) {
+      seconds = L + TIMBER.after - s;
+    } else if (small) {
+      seconds = L + (round.nearly ? SMALL.nearly : SMALL.next) - s;
+    } else if (round.nearly) {
+      // Nearly, then "Final three!" (falls with 3) or "Final two!" (falls with 2).
+      safe = L + NEARLY.safe;
+      const after = L + NEARLY.next;
+      if (round.final) {
+        finalTwo = after;
+        seconds = after + FINAL_TWO.last - s;
+      } else {
+        spotlight = after;
+        seconds = after + FINAL_THREE.fallsWith3 - s;
+      }
+    } else if (next.final) {
+      // The last safe round before "Final three!", when it falls with 2.
+      safe = L + SAFE.safe;
+      spotlight = L + FINAL_THREE.afterSafe;
+      seconds = spotlight + FINAL_THREE.fallsWith2 - s;
+    } else {
+      safe = L + SAFE.safe;
+      seconds = round.by.length === 2 ? Math.max(r, ROUND.pair) : r;
+    }
+    timed.push({ from: s, stops, lands, seconds, safe });
+    s += seconds;
+  });
+  const lastLands = timed.at(-1)!.lands.at(-1)!;
+  return {
+    rounds: timed,
+    spotlight,
+    finalTwo,
+    hold,
+    end: lastLands + TIMBER.after + TIMBER.end,
   };
 }
 

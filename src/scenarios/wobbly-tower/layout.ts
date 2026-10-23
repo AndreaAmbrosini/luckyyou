@@ -32,8 +32,13 @@ export interface Spot {
 /** The tower stands on this y, centred on this x. */
 export const TOWER = { x: STAGE.width / 2, base: 610 } as const;
 
-/** Every block is this high. */
+/** Every block is this high, unless the tower would grow too tall. */
 export const BLOCK_HEIGHT = 40;
+
+/** How high each block is in a show that builds `total` blocks: the tower stays 360 px or lower. */
+export function blockHeight(total: number): number {
+  return Math.min(BLOCK_HEIGHT, 360 / total);
+}
 
 /** Block widths from the bottom up. */
 export const BLOCK_WIDTHS = [200, 184, 150, 170, 124, 164, 140, 112, 156, 132, 150, 128] as const;
@@ -242,28 +247,22 @@ export interface Block {
 const rad = (degrees: number) => (degrees * Math.PI) / 180;
 
 /**
- * The tower's blocks, bottom to top, for `count` blocks leaning `lean`
- * degrees (positive to the right). Block k turns lean × (0.4 + 0.6 × (k + 1) /
+ * The tower's blocks, bottom to top, for `count` blocks `height` high
+ * leaning `lean` degrees (positive to the right). Block k turns lean × (0.4 + 0.6 × (k + 1) /
  * count) and rests on the top edge of the one below; the bottom one turns
  * about the middle of its foot on the ground. So the top leans most.
  */
-export function tower(count: number, lean: number): Block[] {
+export function tower(count: number, lean: number, height = BLOCK_HEIGHT): Block[] {
   const blocks: Block[] = [];
   let foot: Point = { x: TOWER.x, y: TOWER.base };
   for (let k = 0; k < count; k++) {
     const turn = lean * (0.4 + (0.6 * (k + 1)) / count);
     const a = rad(turn);
     const nudge = NUDGE[k % NUDGE.length]!;
-    const x = foot.x + nudge * Math.cos(a) + (BLOCK_HEIGHT / 2) * Math.sin(a);
-    const y = foot.y + nudge * Math.sin(a) - (BLOCK_HEIGHT / 2) * Math.cos(a);
-    blocks.push({
-      x,
-      y,
-      width: BLOCK_WIDTHS[k % BLOCK_WIDTHS.length]!,
-      height: BLOCK_HEIGHT,
-      turn,
-    });
-    foot = { x: x + (BLOCK_HEIGHT / 2) * Math.sin(a), y: y - (BLOCK_HEIGHT / 2) * Math.cos(a) };
+    const x = foot.x + nudge * Math.cos(a) + (height / 2) * Math.sin(a);
+    const y = foot.y + nudge * Math.sin(a) - (height / 2) * Math.cos(a);
+    blocks.push({ x, y, width: BLOCK_WIDTHS[k % BLOCK_WIDTHS.length]!, height, turn });
+    foot = { x: x + (height / 2) * Math.sin(a), y: y - (height / 2) * Math.cos(a) };
   }
   return blocks;
 }
@@ -323,12 +322,12 @@ export const HEAP_BAND = { top: 492, bottom: 564 } as const;
 const HEAP = { near: 100, far: 330, apart: 10, rows: [524, 532], turns: [3, 5, 6, 4] } as const;
 
 /**
- * Where `count` fallen blocks come to rest on the unlucky person's side,
+ * Where `count` fallen blocks, `height` high, come to rest on the unlucky person's side,
  * between the tower and them, on the grass behind the front row and in front
  * of the back row: in HEAP_BAND, so clear of every head and tag. Block k of
  * the tower lies at place k; the higher blocks fly further out.
  */
-export function heap(unlucky: Spot, count: number): Block[] {
+export function heap(unlucky: Spot, count: number, height = BLOCK_HEIGHT): Block[] {
   const side = sideOf(unlucky);
   const head = headBox(unlucky);
   // A head that reaches into the band (2 people's, 200 wide) stops the heap short of it.
@@ -340,7 +339,7 @@ export function heap(unlucky: Spot, count: number): Block[] {
       x: 0,
       y: HEAP.rows[k % HEAP.rows.length]!,
       width: BLOCK_WIDTHS[k % BLOCK_WIDTHS.length]!,
-      height: BLOCK_HEIGHT,
+      height,
       turn: HEAP.turns[k % HEAP.turns.length]! * (k % 2 === 0 ? 1 : -1),
     };
     const half = (blockBox(block).right - blockBox(block).left) / 2;

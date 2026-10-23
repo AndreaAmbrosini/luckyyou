@@ -1,35 +1,19 @@
-// The pointer: when it hops to whom, where it is on the way, and when it
+// The pointers: when each hops to whom, where it is on the way, and when it
 // shows. Worked out from the plan's turns, so play.ts can draw it at any time.
 
 import { gsap } from 'gsap';
 import { pointerTip, tagBox, TOWER, type Point, type Spot } from './layout';
 import { POINTER } from './parts';
-import type { Turn } from './plan';
+import { hopInto, type Turn } from './plan';
 
 /** Seconds the pointer takes to fade in or out. */
 const FADE = 0.12;
-/** The longest a hop takes: it waits where it is until then. */
-const LONGEST_HOP = 0.6;
-/**
- * How long the pointer rests on a decoy: at least `least`, and whatever the
- * hop on to the taker leaves over `hop` seconds.
- */
-const DWELL = { least: 0.25, hop: 0.5 };
-/** How long the pointer rests on a stop at `stops` before hopping on to the next at `next`. */
-const restBetween = (stops: number, next: number) =>
-  Math.max(DWELL.least, next - stops - DWELL.hop);
-/** When the pointer hops on from `turn`'s decoy. */
-export const movesOn = (turn: Turn) => turn.decoyStops! + restBetween(turn.decoyStops!, turn.stops);
 /** How high the pointer hops between two people of the same row, at most. */
 const HOP_HEIGHT = 40;
-/**
- * A tossed block flies at least this long, from the whoosh to the thunk. What
- * the toss has beyond that goes first to the pointer fading out, up to FADE,
- * and then to holding the block overhead.
- */
+/** A tossed block flies at least this long, from the whoosh to the thunk. */
 export const FLIGHT = 0.4;
 
-/** How long the pointer takes to fade out as `turn`'s taker is about to lift. */
+/** How long the pointer takes to fade out from its stop over `turn`'s thrower, before the lift. */
 export const fadeOf = (turn: Turn) => Math.min(FADE, Math.max(0, turn.lands - turn.stops - FLIGHT));
 
 const ease = { hop: gsap.parseEase('power1.inOut') };
@@ -56,16 +40,17 @@ interface Hop {
 }
 
 /**
- * The pointer's hops, the stops it makes and when it shows, for the turns.
- * It starts at `startTip`, over the paper blocks. Each turn it fades in
- * where it was as it leaves (the previous block's landing, or later so a hop
- * never drags on), hops to the decoy, rests there and hops on, or straight
- * to the taker, and fades out before they lift the block. Between rows it goes by the tower,
- * and within a row it hops low enough that its box stays clear of the tags.
+ * The pointers' hops, the stops they make and when they show, for the turns.
+ * The first pointer picks the first turn of each round; the second, the
+ * second turn of a pair. Each starts at `startTip`, over the paper blocks.
+ * Each round a pointer fades in where it was as the round starts, hops to
+ * each of the turn's decoys in turn and on to the thrower, `hopInto(i)`
+ * seconds into stop i, and fades out before they lift the block. Between rows
+ * it goes by the tower, and within a row it hops low enough that its box
+ * stays clear of the tags.
  */
 export function planHops(
   turns: readonly Turn[],
-  stackStart: number,
   spotOf: (name: string) => Spot,
   spots: readonly Spot[],
   startTip: Point,
@@ -88,37 +73,36 @@ export function planHops(
     return { path, height: 0 };
   };
 
-  const hops: Hop[] = [];
-  const stays: { from: number; to: number; name: string }[] = [];
-  const shows: (Span & { fade: number })[] = [];
-  let here: Anchor = { tip: startTip, row: null };
+  const pointers = [0, 1].map(() => ({
+    hops: [] as Hop[],
+    stays: [] as { from: number; to: number; name: string }[],
+    shows: [] as (Span & { fade: number })[],
+    here: { tip: startTip, row: null } as Anchor,
+  }));
   turns.forEach((turn, index) => {
-    const left = index === 0 ? stackStart : turns[index - 1]!.lands;
-    const targets: { name: string; time: number }[] = turn.decoy
-      ? [
-          { name: turn.decoy, time: turn.decoyStops! },
-          { name: turn.by, time: turn.stops },
-        ]
-      : [{ name: turn.by, time: turn.stops }];
-    const leaves = Math.max(left, targets[0]!.time - LONGEST_HOP);
-    // The stop before ends as this turn's pointer leaves.
-    if (stays.length > 0) stays.at(-1)!.to = leaves;
-    shows.push({ from: leaves, to: turn.stops, fade: fadeOf(turn) });
-    let from = leaves;
-    targets.forEach(({ name, time }, at) => {
+    const second = index > 0 && turns[index - 1]!.round === turn.round;
+    const pointer = pointers[second ? 1 : 0]!;
+    const targets = [...turn.decoys, { name: turn.by, at: turn.stops }];
+    pointer.shows.push({ from: turn.from, to: turn.stops, fade: fadeOf(turn) });
+    targets.forEach(({ name, at }, i) => {
+      const leaves = at - hopInto(i);
+      // The stop before ends as the pointer leaves it.
+      if (pointer.stays.length > 0) pointer.stays.at(-1)!.to = leaves;
       const spot = spotOf(name);
       const there: Anchor = { tip: pointerTip(spot), row: spot.row };
-      hops.push({ leaves: from, arrives: time, ...route(here, there) });
-      const rest = at < targets.length - 1 ? restBetween(time, targets[at + 1]!.time) : Infinity;
-      stays.push({ from: time, to: time + rest, name });
-      here = there;
-      from = time + rest;
+      pointer.hops.push({ leaves, arrives: at, ...route(pointer.here, there) });
+      pointer.stays.push({ from: at, to: Infinity, name });
+      pointer.here = there;
     });
   });
 
   return {
-    /** Where the pointer's tip is at `t`, whom it's over, and how opaque it's drawn. */
-    at(t: number): { tip: Point; over: string; shown: number } {
+    /**
+     * Where pointer `which`'s tip is at `t` (0 the first, 1 the second),
+     * whom it's over, and how opaque it's drawn.
+     */
+    at(t: number, which = 0): { tip: Point; over: string; shown: number } {
+      const { hops, stays, shows } = pointers[which]!;
       let tip = startTip;
       for (const hop of hops) {
         if (t < hop.leaves) break;
