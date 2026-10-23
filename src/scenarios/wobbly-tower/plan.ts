@@ -121,13 +121,16 @@ const CAREFUL = [1, 1.25];
  * The pointer hops while the tower settles, leaving at max(the previous
  * block's landing, its first stop − play.ts's LONGEST_HOP). Every hop and
  * toss lasts 0.4 s or more (DESIGN.md: movement that matters), except a
- * quick turn's hop, which gets what its toss leaves, 0.2 s or more.
+ * quick turn's hop, which gets what its toss leaves, 0.2 s or more. Before
+ * each toss the pointer stays over the taker for `POINTED`, so it's seen to
+ * stop before it fades.
  */
 const TOSS = 0.4;
-/** A quick turn lands as it ends, and its toss takes this much of it, at least `TOSS`. */
+const POINTED = 0.1;
+/** A quick turn lands as it ends, and its toss takes this much of it, at least `TOSS` + `POINTED`. */
 const QUICK_TOSS = 0.55;
 /** The big wobble, in seconds from its start: the pointer stops, then the block lands. */
-const WOBBLE = { stops: 0.45, lands: 0.9 };
+const WOBBLE = { stops: 0.4, lands: 0.9 };
 /**
  * Each careful turn, as parts of it from its start: the decoy, the taker, the
  * landing. A decoy stop is a hop of 0.4 s or more to them, a rest of 0.25 s
@@ -146,7 +149,7 @@ const CAREFUL_PACE = [
  * tower leans out for `leanOut` and holds still until the beat ends. It
  * swings back while the pointer hops for the last turn.
  */
-const NEARLY = { stops: 0.27, lands: 0.67, leanOut: 0.4 };
+const NEARLY = { stops: 0.27, lands: 0.77, leanOut: 0.4 };
 /**
  * The last turn, in seconds from its start: where the pointer stops (the
  * fake-out stops on the decoy first, rests and hops on, as a careful turn
@@ -195,9 +198,9 @@ export function planShow(names: readonly string[], unlucky: string, random: () =
   const ending = pickOne<Ending>(['dead-still', 'it-holds', 'slow-lean'], random);
   const quick = pickOne([2, 3, 4], random);
 
-  // With the pigeon the show is 18.2 s and nothing stretches; without it,
-  // 16.8 s, so stack and careful only stretch if the total ever drops.
-  const stack = 3.0 + 0.06 * (count - 2);
+  // With the pigeon the show is 18.3 s and nothing stretches; without it,
+  // 16.9 s, so stack and careful only stretch if the total ever drops.
+  const stack = 3.35 + 0.025 * (count - 2);
   const beats = fitBeats<Beat>(
     {
       thunk: { seconds: 1.6 },
@@ -205,7 +208,7 @@ export function planShow(names: readonly string[], unlucky: string, random: () =
       wobble: { seconds: 2.0 },
       pigeon: { seconds: pigeon ? 1.4 : 0 },
       careful: { seconds: 6.6 - stack, flexible: true },
-      nearly: { seconds: 1.6 },
+      nearly: { seconds: 1.7 },
       'last-turn': { seconds: 2.4 },
       timber: { seconds: 2.6 },
     },
@@ -286,7 +289,7 @@ export function planShow(names: readonly string[], unlucky: string, random: () =
   lengths(beats.stack, quick, QUICKER).forEach((seconds, index) => {
     const { by, lean } = quickTurns[index]!;
     const lands = from + seconds;
-    const stops = lands - Math.max(TOSS, QUICK_TOSS * seconds);
+    const stops = lands - Math.max(TOSS + POINTED, QUICK_TOSS * seconds);
     add(by, 'stack', from, seconds, { stops, lands }, null, lean);
     from = lands;
   });

@@ -344,7 +344,8 @@ export async function playWobblyTower(show: Show): Promise<void> {
     const u = (show.reducedMotion ? ease.sway : ease.drop)(Math.min(1, tipping));
     return leaning + (fallSide * FALL.lean - leaning) * u;
   };
-  const landedBy = (t: number) => flights.filter((flight) => flight.lands <= t).length;
+  // A block lands in the frame its thunk sounds in, however its time is rounded.
+  const landedBy = (t: number) => flights.filter((flight) => flight.lands <= t + 1e-9).length;
   const tumbles = planTumble(plan, heap(spotOf(show.unlucky), flights.length), {
     fallsAt,
     tip,
@@ -404,7 +405,7 @@ export async function playWobblyTower(show: Show): Promise<void> {
     if (t >= downAt) return name === show.unlucky ? 'party' : 'happy';
     if (t >= fallsAt) return 'scared';
     if (relieved(name, t)) return 'happy';
-    if (alarms.some((span) => t >= span.from && t < span.to)) return 'scared';
+    if (alarms.some((span) => t >= span.from - 1e-9 && t < span.to)) return 'scared';
     const careful = t >= starts.careful;
     if (name === picked) return careful ? 'scared' : 'worried';
     return careful ? 'worried' : 'calm';
@@ -688,9 +689,8 @@ interface Hop {
  * It starts over the paper blocks. Each turn it fades in where it was as it
  * leaves (the previous block's landing, or later so a hop never drags on),
  * hops to the decoy, rests there and hops on, or straight to the taker, and
- * fades out before they lift the block (at once when the toss has no time to
- * spare). Between rows it goes by the tower, and
- * within a row it hops low enough that its box stays clear of the tags.
+ * fades out before they lift the block. Between rows it goes by the tower,
+ * and within a row it hops low enough that its box stays clear of the tags.
  */
 function planHops(
   turns: readonly Turn[],
@@ -759,7 +759,8 @@ function planHops(
       const over = stays.find((stay) => t >= stay.from && t < stay.to)?.name ?? '';
       let shown = 0;
       for (const { from, to, fade } of shows) {
-        if (t < from || t >= to + fade) continue;
+        // Gone by the lift, however its time is rounded.
+        if (t < from || t >= to + fade - 1e-9) continue;
         const out = t < to ? 1 : 1 - (t - to) / fade;
         shown = Math.max(shown, Math.min(1, (t - from) / FADE, out));
       }

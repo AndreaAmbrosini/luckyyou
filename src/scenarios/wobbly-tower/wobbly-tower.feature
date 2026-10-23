@@ -61,6 +61,7 @@ Feature: Wobbly Tower
       When the show runs
       Then before each turn the "Your turn!" pointer hops from where it was to the next person
       And it stops over their head before they lift a block
+      And it stays there a tenth of a second or more before it's gone, even on the quickest turns
       And it never covers a name tag
 
     Scenario: Careful now, the pointer wavers
@@ -198,11 +199,11 @@ Feature: Wobbly Tower
       Then its beats take these seconds, give or take 0.3:
         | beat           | 12 people | 8 people | 2 people |
         | thunk          | 1.6       | 1.6      | 1.6      |
-        | stack it up    | 3.6       | 3.4      | 3.0      |
+        | stack it up    | 3.6       | 3.5      | 3.35     |
         | the big wobble | 2.0       | 2.0      | 2.0      |
         | a pigeon       | 1.4       | 1.4      | 1.4      |
-        | careful now    | 3.0       | 3.2      | 3.6      |
-        | nearly         | 1.6       | 1.6      | 1.6      |
+        | careful now    | 3.0       | 3.1      | 3.25     |
+        | nearly         | 1.7       | 1.7      | 1.7      |
         | the last turn  | 2.4       | 2.4      | 2.4      |
         | timber         | 2.6       | 2.6      | 2.6      |
 

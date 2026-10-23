@@ -739,11 +739,11 @@ function expectEndingPlayed(
   }
   if (plan.ending === 'it-holds') {
     // Level with them: beside them where there's room, else pushed along their row.
-    const phew = saying('Phew!', plan.still.from, plan.still.from + STEP);
+    const phew = saying('Phew!', plan.still.from, plan.still.from + STEP + 1e-9);
     const them = spotOf(plan, unlucky);
     expect(Math.abs(phew.y - them.y), label).toBeLessThan(them.size + 120);
   }
-  const timber = saying('Timber!', falls, falls + STEP);
+  const timber = saying('Timber!', falls, falls + STEP + 1e-9);
   const box = speechBox('Timber!', timber);
   const spot = spotOf(plan, unlucky);
   expect(overlap(box, grownBoxes(spot).head), label).toBe(false);
@@ -947,6 +947,31 @@ describeSpec(await loadFeature('./wobbly-tower.feature'), ({ Rule }) => {
           expect(frame.pointer.shown, `${name} at ${time}`).toBe(0);
         }
       });
+      And(
+        "it stays there a tenth of a second or more before it's gone, even on the quickest turns",
+        () => {
+          for (const turn of plan.turns) {
+            const after = frames.filter(
+              (frame) => frame.time >= turn.stops && frame.time < turn.stops + 0.1 - 1e-6,
+            );
+            for (const frame of after) {
+              expect(frame.over, `${turn.by} at ${frame.time}`).toBe(turn.by);
+              expect(frame.pointer.shown, `${turn.by} at ${frame.time}`).toBeGreaterThan(0);
+            }
+          }
+          // Every turn of every plan leaves the pointer that long before the toss.
+          for (const count of [2, 5, 8, 12]) {
+            for (let seed = 1; seed <= 20; seed++) {
+              const each = planShow(names(count), unluckyOf(count), createRandom(seed));
+              for (const turn of each.turns) {
+                expect(turn.lands - turn.stops, `${count} people, seed ${seed}`).toBeGreaterThan(
+                  0.5 - 1e-9,
+                );
+              }
+            }
+          }
+        },
+      );
       And('it never covers a name tag', () => {
         const tags = tagsOf(plan.order);
         for (const frame of frames.filter((each) => each.pointer.shown > 0)) {
