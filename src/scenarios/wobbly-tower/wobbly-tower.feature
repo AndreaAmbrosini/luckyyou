@@ -220,9 +220,9 @@ Feature: Wobbly Tower
       Then each run with the pigeon lasts between 17.9 and 18.5 seconds
       And each run without it lasts between 16.5 and 17.1 seconds
 
-  @pending
   Rule: It reads without sound
 
+    @pending
     Scenario: Captions tell the story to the end
       Given 8 people, the unlucky person is "Marco", a pigeon comes, the careful turns go to "Luca" and "Priya", the pointer goes straight to "Marco", and the tower goes dead still at the end
       When the show runs
@@ -240,16 +240,19 @@ Feature: Wobbly Tower
         | Uh-oh…                           |
         | Marco toppled it!                |
 
+    @pending
     Scenario: Each pointer twist has its caption
       Given the unlucky person is "Marco"
       When the pointer stops on "Ben" before hopping to "Marco"
       Then the caption is "Ben… nope, Marco!"
       And when the pointer stays on "Marco", the caption is "Marco… again?!"
 
+    @pending
     Scenario: Each ending has its caption
       When the show runs with each ending
       Then before the fall the caption is "Uh-oh…", "It holds!" then "…or not!", or "It's leaning…", for each ending in turn
 
+    @pending
     Scenario: Each caption stays up long enough to read
       When the show runs
       Then every caption stays on screen for at least 1 second

@@ -12,6 +12,23 @@ import {
   type PointerMove,
   type Turn,
 } from './plan';
+import {
+  HEAP_BAND,
+  blockOverlaps,
+  blockBox,
+  headBox,
+  heap,
+  heldBlock,
+  overlap,
+  pointerTip,
+  sideOf,
+  signedLean,
+  spots,
+  tagBox,
+  tower,
+  type Box,
+  type Spot,
+} from './layout';
 
 const POINTER_MOVES: readonly PointerMove[] = ['straight', 'fake-out', 'again'];
 const ENDINGS: readonly Ending[] = ['dead-still', 'it-holds', 'slow-lean'];
@@ -72,6 +89,17 @@ function everyPlan(): { label: string; plan: Plan; unlucky: string }[] {
   }
   return all;
 }
+
+/** Whether a point is inside a box. */
+const inside = (box: Box, point: { x: number; y: number }) =>
+  point.x > box.left && point.x < box.right && point.y > box.top && point.y < box.bottom;
+/** Whether any two tags overlap. */
+const tagsOverlap = (all: Spot[]) =>
+  all.some((spot, index) => all.slice(index + 1).some((o) => overlap(tagBox(spot), tagBox(o))));
+/** Leans from -22 to 22 degrees. */
+const LEANS = Array.from({ length: 45 }, (_, index) => index - 22);
+/** How tall the tower may end: 2 paper blocks and up to 9 turns. */
+const HEIGHTS = [4, 9, 10, 11];
 
 describeSpec(await loadFeature('./wobbly-tower.feature'), ({ Rule }) => {
   Rule('Its card', ({ RuleScenario }) => {
@@ -356,6 +384,43 @@ describeSpec(await loadFeature('./wobbly-tower.feature'), ({ Rule }) => {
     );
   });
 
+  Rule('It reads without sound', ({ RuleScenario }) => {
+    RuleScenario('Names stay readable', ({ When, Then, And }) => {
+      let shown: Spot[][];
+      When('the show runs at 12 and at 2 people', () => {
+        shown = [spots(12), spots(2)];
+      });
+      Then('every name tag is set at 22 pixels or more on the 1280 by 720 stage', () => {
+        for (const all of shown) {
+          for (const spot of all) {
+            expect(spot.tag.size).toBeGreaterThanOrEqual(22);
+            expect(tagBox(spot).left).toBeGreaterThanOrEqual(0);
+            expect(tagBox(spot).right).toBeLessThanOrEqual(1280);
+          }
+        }
+      });
+      And('with 2 people, both name tags are set at 44 pixels or more', () => {
+        spots(2).forEach((spot) => expect(spot.tag.size).toBeGreaterThanOrEqual(44));
+      });
+      And('no name tag is ever over another, under a block or under the pointer', () => {
+        for (const all of shown) {
+          expect(tagsOverlap(all)).toBe(false);
+          for (const lean of LEANS) {
+            for (const block of tower(11, lean)) {
+              for (const spot of all) expect(blockOverlaps(block, tagBox(spot))).toBe(false);
+            }
+          }
+          for (const spot of all) {
+            for (const holding of [false, true]) {
+              const tip = pointerTip(spot, holding);
+              for (const other of all) expect(inside(tagBox(other), tip)).toBe(false);
+            }
+          }
+        }
+      });
+    });
+  });
+
   Rule('The beats keep every show a second or more inside the limit', ({ RuleScenario }) => {
     RuleScenario('Each beat takes about this long now', ({ When, Then }) => {
       const runs = new Map<number, Plan>();
@@ -419,6 +484,135 @@ describeSpec(await loadFeature('./wobbly-tower.feature'), ({ Rule }) => {
           expect(total(plan), label).toBeLessThanOrEqual(17.1);
         }
       });
+    });
+  });
+});
+
+describe('The layout', () => {
+  it('no tag overlaps at any count', () => {
+    for (let count = 2; count <= 12; count++) {
+      const all = spots(count);
+      const label = `${count} people`;
+      expect(all, label).toHaveLength(count);
+      expect(tagsOverlap(all), label).toBe(false);
+      for (const spot of all) {
+        const box = tagBox(spot);
+        expect(box.left, label).toBeGreaterThanOrEqual(0);
+        expect(box.right, label).toBeLessThanOrEqual(1280);
+        expect(spot.tag.size, label).toBe(Math.max(22, Math.round(0.22 * spot.size)));
+        expect(spot.tag.maxWidth, label).toBeGreaterThanOrEqual(120);
+        expect(spot.tag.maxWidth, label).toBeLessThanOrEqual(
+          Math.max(198, Math.round(2.2 * spot.size)),
+        );
+      }
+    }
+  });
+
+  it('no tag is under the tower or the heap at any count', () => {
+    for (let count = 2; count <= 12; count++) {
+      const all = spots(count);
+      for (const blocks of HEIGHTS) {
+        for (const lean of LEANS) {
+          tower(blocks, lean).forEach((block, at) => {
+            for (const spot of all) {
+              const label = `${count} people, ${blocks} blocks, lean ${lean}, block ${at}`;
+              expect(blockOverlaps(block, tagBox(spot)), label).toBe(false);
+            }
+          });
+        }
+        for (const unlucky of all) {
+          for (const block of heap(unlucky, blocks)) {
+            const box = blockBox(block);
+            const label = `${count} people, heap of ${blocks}`;
+            expect(box.top, label).toBeGreaterThanOrEqual(HEAP_BAND.top);
+            expect(box.bottom, label).toBeLessThanOrEqual(HEAP_BAND.bottom);
+            expect(Math.sign(block.x - 640), label).toBe(sideOf(unlucky));
+            for (const spot of all) {
+              expect(overlap(box, tagBox(spot)), label).toBe(false);
+              expect(overlap(box, headBox(spot)), label).toBe(false);
+            }
+          }
+        }
+      }
+    }
+  });
+
+  it('the pointer never covers a tag', () => {
+    for (let count = 2; count <= 12; count++) {
+      const all = spots(count);
+      for (const spot of all) {
+        for (const holding of [false, true]) {
+          const tip = pointerTip(spot, holding);
+          for (const other of all)
+            expect(inside(tagBox(other), tip), `${count} people`).toBe(false);
+          expect(tip.y, `${count} people`).toBeGreaterThanOrEqual(120);
+        }
+        // The held block is 0.96 heads wide over the head; the tip is 10 px over head or block.
+        const block = heldBlock(spot);
+        expect(block.width).toBeCloseTo(0.96 * spot.size, 9);
+        expect(blockBox(block).bottom).toBeLessThan(headBox(spot).top);
+        expect(pointerTip(spot).y).toBeCloseTo(headBox(spot).top - 10, 9);
+        expect(pointerTip(spot, true).y).toBeCloseTo(blockBox(block).top - 10, 9);
+      }
+    }
+  });
+
+  it('8 people match the storyboard', () => {
+    const all = spots(8);
+    expect(all.map((s) => [s.x, s.y, s.size, s.row])).toEqual([
+      ...[130, 340, 940, 1150].map((x) => [x, 430, 80, 'back']),
+      ...[150, 400, 880, 1130].map((x) => [x, 650, 104, 'front']),
+    ]);
+  });
+
+  it('12 and 2 people match the storyboard', () => {
+    expect(spots(12).map((s) => [s.x, s.y, s.size])).toEqual([
+      ...[90, 260, 430, 850, 1020, 1190].map((x) => [x, 430, 66]),
+      ...[115, 300, 480, 800, 990, 1170].map((x) => [x, 650, 92]),
+    ]);
+    expect(spots(2).map((s) => [s.x, s.y, s.size])).toEqual([
+      [260, 640, 200],
+      [1020, 640, 200],
+    ]);
+  });
+
+  it('other counts split each row either side of the tower', () => {
+    for (let count = 3; count <= 11; count++) {
+      const all = spots(count);
+      expect(
+        all.filter((s) => s.row === 'back'),
+        `${count} people`,
+      ).toHaveLength(Math.floor(count / 2));
+      for (const spot of all)
+        expect(Math.abs(spot.x - 640), `${count} people`).toBeGreaterThanOrEqual(150);
+    }
+  });
+
+  it('the tower bends: the top leans most and each block rests on the one below', () => {
+    const blocks = tower(11, 22);
+    expect(blocks.map((b) => b.width)).toEqual([
+      200, 184, 150, 170, 124, 164, 140, 112, 156, 132, 150,
+    ]);
+    blocks.forEach((block, k) => {
+      expect(block.turn).toBeCloseTo(22 * (0.4 + (0.6 * (k + 1)) / 11), 9);
+      if (k > 0) expect(block.turn).toBeGreaterThan(blocks[k - 1]!.turn);
+    });
+    expect(blocks.at(-1)!.x).toBeGreaterThan(blocks[0]!.x);
+    expect(tower(11, -22).at(-1)!.x).toBeLessThan(640);
+    // Upright, a stack of 40 high blocks on y 610 (each a few pixels off centre).
+    tower(11, 0).forEach((block, k) => {
+      expect(block.y).toBeCloseTo(590 - 40 * k, 9);
+      expect(Math.abs(block.x - 640)).toBeLessThanOrEqual(6);
+    });
+  });
+
+  it("a lean's side is a number or the side a person stands on", () => {
+    const order = names(8);
+    const all = spots(8);
+    expect(signedLean({ degrees: 7, toward: -1 }, order)).toBe(-7);
+    expect(signedLean({ degrees: 7, toward: 1 }, order)).toBe(7);
+    order.forEach((name, index) => {
+      expect(signedLean({ degrees: 22, toward: name }, order)).toBe(22 * sideOf(all[index]!));
     });
   });
 });
