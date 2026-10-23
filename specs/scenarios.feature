@@ -50,23 +50,6 @@ Feature: Scenarios
     Scenario: Its metadata is valid
       Then the scenario's metadata has none of the problems above
 
-    Scenario Outline: At its <size> head count, unlucky person <position>, the show keeps time and cleans up
-      Given the scenario's <size> head count, with the unlucky person <position> in the list
-      When the show runs
-      Then it ends between 10 and 20 seconds after it started
-      And the stage is empty
-      And no element, animation, timer or listener it added is left
-
-      Examples:
-        | size     | position |
-        | smallest | first    |
-        | smallest | last     |
-        | largest  | first    |
-        | largest  | last     |
-
-    # Shows may now last up to 30 seconds. The build deletes the outline above,
-    # with its steps, when this one passes.
-    @pending
     Scenario Outline: At its <size> head count, unlucky person <position>, the show ends within 30 seconds and cleans up
       Given the scenario's <size> head count, with the unlucky person <position> in the list
       When the show runs

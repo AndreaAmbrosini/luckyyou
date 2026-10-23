@@ -15,9 +15,9 @@ test('a whole pick', async ({ page }) => {
   await page.getByRole('button', { name: 'Next: pick a show' }).click();
   await page.getByRole('button', { name: 'Shark Bait' }).click();
 
-  // A show lasts at most 20 seconds.
+  // A show lasts at most 30 seconds.
   const heading = page.getByRole('heading', { level: 1, name: /^Lucky you, .+ 🎉$/ });
-  await expect(heading).toBeVisible({ timeout: 21_000 });
+  await expect(heading).toBeVisible({ timeout: 36_000 });
   const unlucky = /^Lucky you, (.+) 🎉$/.exec((await heading.textContent()) ?? '')?.[1];
   expect(team).toContain(unlucky);
 });

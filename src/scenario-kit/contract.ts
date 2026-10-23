@@ -8,7 +8,7 @@ import type { SoundPlayer } from './sound';
 export const HEAD_COUNT = { min: 2, max: 12 } as const;
 
 /** How long a show lasts, in seconds, at every head count it accepts. */
-export const SHOW_LENGTH = { min: 10, max: 20 } as const;
+export const SHOW_LENGTH = { min: 10, max: 30 } as const;
 
 /** How a scenario shows up in the picker. */
 export interface ScenarioMeta {

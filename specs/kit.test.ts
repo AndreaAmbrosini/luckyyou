@@ -309,7 +309,7 @@ describeSpec(await loadFeature('./kit.feature'), ({ Rule }) => {
     });
 
     RuleScenarioOutline(
-      'In development, a <seconds>-second show <warns>',
+      'In development, a <seconds>-second show <warns> about 10 to 30 s',
       ({ Given, When, Then }, { seconds, warns }) => {
         let scenario: ReturnType<typeof fakeScenario>;
         let warn: ReturnType<typeof vi.spyOn>;
@@ -318,14 +318,14 @@ describeSpec(await loadFeature('./kit.feature'), ({ Rule }) => {
         });
         When('it runs in development', async () => {
           warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
-          await runShow(scenario, { ...PICK, development: true, limit: 25 });
+          await runShow(scenario, { ...PICK, development: true, limit: 35 });
         });
         Then('the console <warns>', () => {
           if (warns === 'stays quiet') {
             expect(warn).not.toHaveBeenCalled();
           } else {
             expect(warn).toHaveBeenCalledExactlyOnceWith(
-              `Slowpoke lasted ${seconds}.0 s. A show must last 10 to 20 s.`,
+              `Slowpoke lasted ${seconds}.0 s. A show must last 10 to 30 s.`,
             );
           }
         });

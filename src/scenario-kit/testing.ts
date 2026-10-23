@@ -34,7 +34,7 @@ export interface RunShowOptions {
   readonly cancelAt?: number;
   /** Show seconds per frame: 1/30 unless given. */
   readonly step?: number;
-  /** A show still running after this many show seconds is cancelled: 30 unless given. */
+  /** A show still running after this many show seconds is cancelled: 35 unless given. */
   readonly limit?: number;
   /** Runs the show as the dev server would, with its warnings. */
   readonly development?: boolean;
@@ -46,7 +46,7 @@ export interface RunShowOptions {
 
 /** Plays `scenario` to its end, or until it is cancelled, and says what it did. */
 export async function runShow(scenario: Scenario, options: RunShowOptions): Promise<ShowRecord> {
-  const { step = 1 / 30, limit = 30, cancelAt } = options;
+  const { step = 1 / 30, limit = 35, cancelAt } = options;
   const elementsBefore = document.body.querySelectorAll('*').length;
   const animationsBefore = new Set(allAnimations());
   const clock = driveClockByHand();

@@ -61,20 +61,6 @@ Feature: The scenario kit
       When the beats are fitted to 10 seconds
       Then the fixed beat takes 6 seconds and the flexible beat 6
 
-    Scenario Outline: In development, a <seconds>-second show <warns>
-      Given a show that lasts <seconds> seconds
-      When it runs in development
-      Then the console <warns>
-
-      Examples:
-        | seconds | warns                         |
-        | 9       | warns that it left 10 to 20 s |
-        | 16      | stays quiet                   |
-        | 21      | warns that it left 10 to 20 s |
-
-    # Shows may now last up to 30 seconds. The build deletes the outline above,
-    # with its steps, when this one passes.
-    @pending
     Scenario Outline: In development, a <seconds>-second show <warns> about 10 to 30 s
       Given a show that lasts <seconds> seconds
       When it runs in development

@@ -5,7 +5,7 @@ import { isFullscreen } from '../ui/fullscreen';
 import styles from './ShowScreen.module.css';
 
 /** A show that hasn't ended by then is stopped, and the result comes anyway. */
-export const SHOW_TIME_LIMIT_MS = 25_000;
+export const SHOW_TIME_LIMIT_MS = 35_000;
 
 /** One show: who is in it, and the pick the app made before it started. */
 export interface Run {

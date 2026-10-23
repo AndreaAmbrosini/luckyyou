@@ -19,7 +19,7 @@ how it should feel.
 
 - The app picks the unlucky person; a scenario only acts it out:
   [pick.feature](specs/pick.feature).
-- A show lasts 10–20 s at every head count it accepts:
+- A show lasts 10–30 s at every head count it accepts:
   [scenarios.feature](specs/scenarios.feature).
 - 2 to 12 people per pick: [setup.feature](specs/setup.feature),
   [scenarios.feature](specs/scenarios.feature).
