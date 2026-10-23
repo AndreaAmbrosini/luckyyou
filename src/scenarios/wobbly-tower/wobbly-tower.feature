@@ -165,13 +165,11 @@ Feature: Wobbly Tower
         | 8     |
         | 12    |
 
-    @pending
     Scenario: A moment of stillness, then the fall
       When the show runs with each ending
       Then the tower barely moves for at least half a second before it falls
       And it falls toward the unlucky person
 
-  @pending
   Rule: The ending is a tumble and a hard hat
 
     Scenario: Timber
@@ -215,7 +213,6 @@ Feature: Wobbly Tower
 
   Rule: It reads without sound
 
-    @pending
     Scenario: Captions tell the story to the end
       Given 8 people, the unlucky person is "Marco", a pigeon comes, the careful turns go to "Luca" and "Priya", the pointer goes straight to "Marco", and the tower goes dead still at the end
       When the show runs
@@ -233,19 +230,16 @@ Feature: Wobbly Tower
         | Uh-oh…                           |
         | Marco toppled it!                |
 
-    @pending
     Scenario: Each pointer twist has its caption
       Given the unlucky person is "Marco"
       When the pointer stops on "Ben" before hopping to "Marco"
       Then the caption is "Ben… nope, Marco!"
       And when the pointer stays on "Marco", the caption is "Marco… again?!"
 
-    @pending
     Scenario: Each ending has its caption
       When the show runs with each ending
       Then before the fall the caption is "Uh-oh…", "It holds!" then "…or not!", or "It's leaning…", for each ending in turn
 
-    @pending
     Scenario: Each caption stays up long enough to read
       When the show runs
       Then every caption stays on screen for at least 1 second
@@ -256,7 +250,6 @@ Feature: Wobbly Tower
       And with 2 people, both name tags are set at 44 pixels or more
       And no name tag is ever over another, under a block or under the pointer
 
-  @pending
   Rule: Reduced motion keeps the story
 
     Scenario: With reduced motion, the tower leans instead of shaking

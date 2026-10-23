@@ -8,6 +8,7 @@ import wobblyTower from './index';
 import {
   BEATS,
   planShow,
+  READ,
   type Beat,
   type Ending,
   type Plan,
@@ -35,6 +36,7 @@ import {
   type Spot,
 } from './layout';
 import { POINTER } from './parts';
+import { grownBoxes, speechBox } from './play';
 
 const POINTER_MOVES: readonly PointerMove[] = ['straight', 'fake-out', 'again'];
 const ENDINGS: readonly Ending[] = ['dead-still', 'it-holds', 'slow-lean'];
@@ -167,6 +169,26 @@ interface Frame {
   readonly pigeon: (Point & { readonly pose: string }) | null;
   /** The speech bubbles showing, and where their tails point. */
   readonly bubbles: readonly (Point & { readonly text: string })[];
+  /** How many blocks lie in the heap after the fall. */
+  readonly fallen: number;
+  /** Whether speed lines are drawn. */
+  readonly speedLines: boolean;
+  /** How many dust puffs are drawn. */
+  readonly dust: number;
+  /** Where and how big the unlucky person and their name tag are drawn. */
+  readonly them: string;
+  /** The unlucky person's hard hat, how far above its place on their head, while it shows. */
+  readonly hat: { readonly y: number } | null;
+}
+
+/** In the last frame of a run: how the unlucky person and the blocks ended up. */
+interface End {
+  /** The unlucky person comes after every other person and every block on the stage. */
+  readonly inFront: boolean;
+  /** How many times their size they are drawn. */
+  readonly scale: number;
+  /** Where each block lies, bottom of the tower first. */
+  readonly rests: readonly (Point & { readonly turn: number })[];
 }
 
 /** A cue the show asked for, and the time of the frame it was asked for in. */
@@ -226,6 +248,7 @@ async function watch(
   shirts: Record<string, string>;
   lifts: Moment[];
   cues: Heard[];
+  end: End;
 }> {
   const frames: Frame[] = [];
   const lifts: Moment[] = [];
@@ -249,8 +272,13 @@ async function watch(
         /** Only in a run with the pigeon. */
         pigeon: SVGElement | null;
         bubbles: HTMLElement[];
+        them: HTMLElement;
+        hat: SVGElement | null;
+        speedLines: HTMLElement | null;
+        dust: HTMLElement[];
       }
     | undefined;
+  let end: End = { inFront: false, scale: 0, rests: [] };
   // Every cue the show asks for, as the sound player gets it.
   const listened: Scenario = {
     ...wobblyTower,
@@ -282,8 +310,14 @@ async function watch(
         pointer: stage.querySelector<HTMLElement>('[data-part="pointer"]')!,
         pigeon: stage.querySelector<SVGElement>('[data-part="pigeon"]'),
         bubbles: [...stage.querySelectorAll<HTMLElement>('[data-part="bubble"]')],
+        them: [...stage.querySelectorAll<HTMLElement>('[data-person]')].find(
+          (person) => person.dataset.person === unlucky,
+        )!,
+        hat: stage.querySelector<SVGElement>('[data-part="hard-hat"]'),
+        speedLines: stage.querySelector<HTMLElement>('[data-part="speed-lines"]'),
+        dust: [...stage.querySelectorAll<HTMLElement>('[data-part="dust"]')],
       };
-      const { scene, tower: drawn, blocks, people, pointer, pigeon, bubbles } = parts;
+      const { scene, tower: drawn, blocks, people, pointer, pigeon, bubbles, them, hat } = parts;
       for (const cue of asked) cues.push({ cue, time });
       asked = [];
       if (!sign) {
@@ -343,7 +377,20 @@ async function watch(
             x: Number.parseFloat(bubble.style.left),
             y: Number.parseFloat(bubble.style.top),
           })),
+        fallen: Number(drawn.dataset.fallen ?? 0),
+        speedLines: parts.speedLines !== null && opacityOf(parts.speedLines) > 0,
+        dust: parts.dust.filter((puff) => opacityOf(puff) > 0).length,
+        them: placementOf(them),
+        hat: hat && opacityOf(hat) > 0 ? { y: Number(gsap.getProperty(hat, 'y')) } : null,
       });
+      const follows = (element: Element) =>
+        (them.compareDocumentPosition(element) & Node.DOCUMENT_POSITION_PRECEDING) !== 0;
+      end = {
+        inFront:
+          people.every((person) => person === them || follows(person)) && blocks.every(follows),
+        scale: Number(gsap.getProperty(them, 'scale')),
+        rests: blocks.map((block) => placed(block)!),
+      };
     },
   });
   holding.disconnect();
@@ -358,7 +405,15 @@ async function watch(
     shirts,
     lifts,
     cues,
+    end,
   };
+}
+
+/** Where `person` is drawn and how big, with their name tag: the same string while they hold still. */
+function placementOf(person: HTMLElement): string {
+  const tag = person.querySelector<HTMLElement>('[data-on="chest"]')!;
+  const { left, top, transform } = person.style;
+  return [left, top, transform, tag.style.left, tag.style.transform].join(' | ');
 }
 
 /** The pigeon's feet on its 90 × 70 grid (parts.ts). */
@@ -477,6 +532,198 @@ function expectSwaysAndSettles(frames: readonly Frame[], label: string) {
     expect(Math.max(...between.map((frame) => Math.abs(frame.lean))), at).toBeGreaterThanOrEqual(1);
     expect(Math.abs(between.at(-1)!.lean), at).toBeLessThan(0.5);
   });
+}
+
+/** Eight of the team, Marco, Luca, Priya and Ben among them. */
+const MARCO_TEAM = ['Anna', 'Ben', 'Carla', 'Dario', 'Elena', 'Luca', 'Marco', 'Priya'];
+
+/** The first seed from 1 whose plan for `team` and `unlucky` passes `test`. */
+function seedOf(team: readonly string[], unlucky: string, test: (plan: Plan) => boolean): number {
+  for (let seed = 1; seed < 50_000; seed++) {
+    if (test(planShow(team, unlucky, createRandom(seed)))) return seed;
+  }
+  throw new Error('no seed has it');
+}
+
+/** 8 with Marco unlucky, seed 1: run once and shared by the scenarios that watch it. */
+let marcoShow: ReturnType<typeof watch> | undefined;
+const marcoRun = () => (marcoShow ??= watch(MARCO_TEAM, 'Marco'));
+
+/** 8 people, Luca unlucky, once with each ending: run once and shared. */
+let endingShows: Promise<{ ending: Ending; run: Awaited<ReturnType<typeof watch>> }[]> | undefined;
+const endingRuns = () =>
+  (endingShows ??= (async () => {
+    const all = [];
+    for (const ending of ENDINGS) {
+      const seed = seedOf(names(8), 'Luca', (plan) => plan.ending === ending);
+      all.push({ ending, run: await watch(names(8), 'Luca', { seed }) });
+    }
+    return all;
+  })());
+
+/** The captions' words, in the order they showed. */
+const texts = (record: ShowRecord) => record.captions.map((caption) => caption.text);
+
+/** The caption the last turn starts with. */
+function pointerCaptionOf(plan: Plan, unlucky: string): string {
+  if (plan.pointer === 'fake-out') return `${plan.phew}… nope, ${unlucky}!`;
+  if (plan.pointer === 'again') return `${unlucky}… again?!`;
+  return `${unlucky}…`;
+}
+
+/** The captions each ending shows before the fall. */
+const ENDING_CAPTIONS: Record<Ending, readonly string[]> = {
+  'dead-still': ['Uh-oh…'],
+  'it-holds': ['It holds!', '…or not!'],
+  'slow-lean': ["It's leaning…"],
+};
+
+/** The frame the last block comes to rest in the heap. */
+const heaped = (frames: readonly Frame[], plan: Plan) =>
+  frames.find((frame) => frame.fallen === 2 + plan.turns.length)!;
+
+/** Each bubble's stay on stage: what it says, where its tail is, and its first and last frames. */
+function said(frames: readonly Frame[]): (Point & { text: string; from: number; to: number })[] {
+  const all: (Point & { text: string; from: number; to: number })[] = [];
+  const open = new Map<string, (typeof all)[number]>();
+  frames.forEach((frame, index) => {
+    const now = new Set<string>();
+    for (const bubble of frame.bubbles) {
+      const key = `${bubble.text}@${bubble.x},${bubble.y}`;
+      now.add(key);
+      const stay = open.get(key);
+      if (stay && frames[index - 1]?.time === stay.to) stay.to = frame.time;
+      else {
+        const fresh = { ...bubble, from: frame.time, to: frame.time };
+        all.push(fresh);
+        open.set(key, fresh);
+      }
+    }
+    for (const key of open.keys()) if (!now.has(key)) open.delete(key);
+  });
+  return all;
+}
+
+/** The hard hat's box on someone at `spot` grown at the end: on the head's 100 grid, x 6–94, y 4–40. */
+function hatBox(spot: Spot): Box {
+  const { head } = grownBoxes(spot);
+  const size = head.right - head.left;
+  return {
+    left: head.left + 0.06 * size,
+    right: head.left + 0.94 * size,
+    top: head.top + 0.04 * size,
+    bottom: head.top + 0.4 * size,
+  };
+}
+
+/**
+ * The last turn and the fall of `run`, as the rules have them: every caption
+ * up for a second, in order, each at its moment; the tower barely moving for
+ * half a second before it falls; "{unlucky} toppled it!" up as the last block
+ * lands in the heap; the bubbles; and the unlucky person still at the end.
+ */
+function expectEndingPlayed(
+  run: Awaited<ReturnType<typeof watch>>,
+  unlucky: string,
+  label: string,
+) {
+  const { frames, plan, record, cues } = run;
+  const last = plan.turns.at(-1)!;
+  const nearly = only(plan, 'nearly');
+  const falls = plan.still.to;
+  const captions = record.captions;
+  for (const caption of captions) {
+    expect(caption.to - caption.from, `${label}: ${caption.text}`).toBeGreaterThanOrEqual(1 - 1e-9);
+  }
+  // From "Nearly!" on, in order.
+  const fromNearly = captions.slice(captions.findIndex((caption) => caption.text === 'Nearly!'));
+  expect(
+    fromNearly.map((caption) => caption.text),
+    label,
+  ).toEqual([
+    'Nearly!',
+    pointerCaptionOf(plan, unlucky),
+    ...ENDING_CAPTIONS[plan.ending],
+    `${unlucky} toppled it!`,
+  ]);
+  const [shown, pointerCaption, ...rest] = fromNearly;
+  expect(shown!.from, label).toBeLessThanOrEqual(nearly.lands + STEP + 1e-9);
+  expect(pointerCaption!.from, label).toBeLessThanOrEqual(startOf(plan, 'last-turn') + 0.15);
+  if (plan.pointer === 'fake-out') {
+    // Up while the pointer is on the decoy.
+    const at = frames.find((frame) => frame.time >= pointerCaption!.from - 1e-9)!;
+    expect(at.over, label).toBe(plan.phew);
+  }
+  const toppled = rest.at(-1)!;
+  const onTime = (caption: { from: number }, time: number, text: string) => {
+    expect(caption.from, `${label}: ${text}`).toBeGreaterThanOrEqual(time - 1e-9);
+    expect(caption.from, `${label}: ${text}`).toBeLessThanOrEqual(time + STEP + 1e-9);
+  };
+  if (plan.ending === 'it-holds') {
+    onTime(rest[0]!, plan.still.from, 'It holds!');
+    onTime(rest[1]!, falls, '…or not!');
+  } else {
+    // At the freeze or the lean, before the fall.
+    expect(rest[0]!.from, label).toBeGreaterThanOrEqual(last.lands - 1e-9);
+    expect(rest[0]!.from, label).toBeLessThan(
+      plan.still.from + (plan.ending === 'dead-still' ? 0.5 : 0),
+    );
+  }
+  const down = heaped(frames, plan);
+  expect(down, label).toBeDefined();
+  expect(toppled.from - down.time, label).toBeGreaterThanOrEqual(-1e-9);
+  expect(toppled.from - down.time, label).toBeLessThanOrEqual(0.2);
+
+  // Barely moving for half a second, then falling at once, toward them.
+  const still = frames.filter((frame) => frame.time >= falls - 0.5 - 1e-9 && frame.time <= falls);
+  expect(still[0]!.time, label).toBeLessThanOrEqual(falls - 0.5 + STEP);
+  const leans = still.map((frame) => frame.lean);
+  expect(Math.max(...leans) - Math.min(...leans), label).toBeLessThan(1);
+  const soon = frames.find(
+    (frame) =>
+      frame.time > falls && frame.time <= falls + 0.5 && Math.abs(frame.lean - leans.at(-1)!) >= 1,
+  );
+  expect(soon, label).toBeDefined();
+  const side = sideOf(spotOf(plan, unlucky));
+  expect(Math.sign(frames.at(-1)!.lean), label).toBe(side);
+  for (const rest of run.end.rests) expect(Math.sign(rest.x - 640), label).toBe(side);
+
+  // Their name holds still for the show's last 1.5 seconds.
+  const end = frames.filter((frame) => frame.time >= record.duration - 1.5 - 1e-9);
+  expect(end[0]!.time, label).toBeLessThanOrEqual(record.duration - 1.5 + STEP);
+  for (const frame of end) expect(frame.them, `${label} at ${frame.time}`).toBe(end[0]!.them);
+
+  // The bubbles, each up 0.8 s or more.
+  const bubbles = said(frames);
+  const saying = (text: string, from: number, to = Infinity) => {
+    const found = bubbles.find(
+      (each) => each.text === text && each.from >= from - 1e-9 && each.from <= to,
+    );
+    expect(found, `${label}: ${text}`).toBeDefined();
+    expect(found!.to + STEP - found!.from, `${label}: ${text}`).toBeGreaterThanOrEqual(
+      0.8 - STEP - 1e-6,
+    );
+    return found!;
+  };
+  if (plan.pointer === 'fake-out') saying('Phew!', startOf(plan, 'nearly'), last.stops);
+  if (plan.pointer === 'again') saying('Me again?!', last.stops, last.lands);
+  if (plan.ending === 'dead-still') {
+    const creak = saying('creak…', last.lands, falls);
+    const heard = cues.filter((each) => each.cue === 'creak');
+    expect(heard, label).toHaveLength(1);
+    expect(Math.abs(heard[0]!.time - creak.from), label).toBeLessThanOrEqual(STEP + 1e-9);
+  }
+  if (plan.ending === 'it-holds') {
+    // Level with them: beside them where there's room, else pushed along their row.
+    const phew = saying('Phew!', plan.still.from, plan.still.from + STEP);
+    const them = spotOf(plan, unlucky);
+    expect(Math.abs(phew.y - them.y), label).toBeLessThan(them.size + 120);
+  }
+  const timber = saying('Timber!', falls, falls + STEP);
+  const box = speechBox('Timber!', timber);
+  const spot = spotOf(plan, unlucky);
+  expect(overlap(box, grownBoxes(spot).head), label).toBe(false);
+  expect(overlap(box, hatBox(spot)), label).toBe(false);
 }
 
 describeSpec(await loadFeature('./wobbly-tower.feature'), ({ Rule }) => {
@@ -1050,7 +1297,7 @@ describeSpec(await loadFeature('./wobbly-tower.feature'), ({ Rule }) => {
     });
   });
 
-  Rule('The last turn could go three ways', ({ RuleScenarioOutline }) => {
+  Rule('The last turn could go three ways', ({ RuleScenario, RuleScenarioOutline }) => {
     RuleScenarioOutline(
       'The pointer on the last turn, with <count> people',
       ({ Given, When, Then, And }, variables) => {
@@ -1155,9 +1402,272 @@ describeSpec(await loadFeature('./wobbly-tower.feature'), ({ Rule }) => {
         );
       },
     );
+    RuleScenario('A moment of stillness, then the fall', ({ When, Then, And }) => {
+      let runs: Awaited<ReturnType<typeof endingRuns>>;
+      When('the show runs with each ending', async () => {
+        runs = await endingRuns();
+        expect(runs.map((each) => each.run.plan.ending)).toEqual(ENDINGS);
+      });
+      Then('the tower barely moves for at least half a second before it falls', () => {
+        for (const { ending, run } of runs) {
+          const { frames, plan } = run;
+          const falls = plan.still.to;
+          const before = frames.filter(
+            (frame) => frame.time >= falls - 0.5 - 1e-9 && frame.time <= falls,
+          );
+          expect(before[0]!.time, ending).toBeLessThanOrEqual(falls - 0.5 + STEP);
+          const leans = before.map((frame) => frame.lean);
+          expect(Math.max(...leans) - Math.min(...leans), ending).toBeLessThan(1);
+          // And then it goes: a degree or more within half a second.
+          const after = frames.filter((frame) => frame.time > falls && frame.time <= falls + 0.5);
+          expect(
+            Math.max(...after.map((frame) => Math.abs(frame.lean - leans.at(-1)!))),
+            ending,
+          ).toBeGreaterThanOrEqual(1);
+        }
+      });
+      And('it falls toward the unlucky person', () => {
+        for (const { ending, run } of runs) {
+          const side = sideOf(spotOf(run.plan, 'Luca'));
+          expect(Math.sign(run.frames.at(-1)!.lean), ending).toBe(side);
+          expect(Math.abs(run.frames.at(-1)!.lean), ending).toBeGreaterThan(30);
+          for (const rest of run.end.rests) expect(Math.sign(rest.x - 640), ending).toBe(side);
+        }
+      });
+    });
+  });
+
+  Rule('The ending is a tumble and a hard hat', ({ RuleScenario }) => {
+    RuleScenario('Timber', ({ Given, When, Then, And }) => {
+      let run: Awaited<ReturnType<typeof watch>>;
+      /** The frames from the fall on. */
+      let falling: Frame[];
+      Given('the unlucky person is {string}', (_, name: string) => {
+        expect(name).toBe('Marco');
+      });
+      When('the tower falls', async () => {
+        run = await marcoRun();
+        falling = run.frames.filter((frame) => frame.time >= run.plan.still.to);
+      });
+      Then(
+        "the blocks tumble toward {string} and land around Marco, never on anyone's head",
+        (_, name: string) => {
+          const { plan, end } = run;
+          const spot = spotOf(plan, name);
+          const rests = heap(spot, 2 + plan.turns.length);
+          expect(end.rests).toHaveLength(rests.length);
+          end.rests.forEach((rest, k) => {
+            expect(rest.x, `block ${k}`).toBeCloseTo(rests[k]!.x, 6);
+            expect(rest.y, `block ${k}`).toBeCloseTo(rests[k]!.y, 6);
+            expect(rest.turn, `block ${k}`).toBeCloseTo(rests[k]!.turn, 6);
+            expect(Math.sign(rest.x - 640)).toBe(sideOf(spot));
+            for (const other of spots(plan.order.length)) {
+              expect(blockOverlaps(rests[k]!, headBox(other)), `block ${k}`).toBe(false);
+            }
+          });
+          // They tumble: the top block turns over on its way.
+          expect(Math.max(...falling.map((frame) => Math.abs(frame.top!.turn)))).toBeGreaterThan(
+            90,
+          );
+        },
+      );
+      And("a hard hat drops onto Marco's head, and Marco celebrates", () => {
+        const { plan, frames } = run;
+        const down = heaped(frames, plan);
+        const size = spotOf(plan, 'Marco').size;
+        // Hidden until the last block is down, then from above onto the head.
+        for (const frame of frames.filter((each) => each.time < down.time)) {
+          expect(frame.hat, `at ${frame.time}`).toBeNull();
+        }
+        const hat = frames.filter((frame) => frame.hat);
+        expect(hat[0]!.hat!.y).toBeLessThan(-size);
+        hat.slice(1).forEach((frame, index) => {
+          expect(frame.hat!.y).toBeGreaterThanOrEqual(hat[index]!.hat!.y);
+        });
+        expect(frames.at(-1)!.hat!.y).toBeCloseTo(0, 6);
+        const fanfare = run.cues.find((each) => each.cue === 'fanfare')!;
+        expect(fanfare.time).toBeGreaterThanOrEqual(
+          hat.find((frame) => frame.hat!.y === 0)!.time - STEP,
+        );
+        expect(frames.at(-1)!.moods.Marco).toBe('party');
+      });
+      And('everyone else cheers', () => {
+        for (const name of MARCO_TEAM.filter((each) => each !== 'Marco')) {
+          expect(run.frames.at(-1)!.moods[name], name).toBe('happy');
+        }
+      });
+    });
+
+    RuleScenario('The name holds still at the end', ({ Given, When, Then }) => {
+      let run: Awaited<ReturnType<typeof watch>>;
+      Given('the unlucky person is {string}', () => {});
+      When('the show runs', async () => {
+        run = await marcoRun();
+      });
+      Then('{string} is on stage, not moving, for the last 1.5 seconds', () => {
+        const last = run.frames.filter((frame) => frame.time >= run.record.duration - 1.5 - 1e-9);
+        expect(last.length).toBeGreaterThan(40);
+        for (const frame of last) expect(frame.them, `at ${frame.time}`).toBe(last[0]!.them);
+        expect(last[0]!.them).toContain('scale(1.3');
+      });
+    });
+
+    RuleScenario('The unlucky person stands out at the end', ({ Given, When, Then, And }) => {
+      let run: Awaited<ReturnType<typeof watch>>;
+      Given('the unlucky person is {string}', () => {});
+      When('the tower has fallen', async () => {
+        run = await marcoRun();
+      });
+      Then('{string} grows to 1.3 times their size, in front of everyone and every block', () => {
+        expect(run.end.inFront).toBe(true);
+        expect(run.end.scale).toBeCloseTo(1.3, 6);
+      });
+      And("{string} covers neither Marco's head nor the hard hat", (_, text: string) => {
+        const spot = spotOf(run.plan, 'Marco');
+        const timber = said(run.frames).filter((each) => each.text === text);
+        expect(timber).toHaveLength(1);
+        const box = speechBox(text, timber[0]!);
+        expect(overlap(box, grownBoxes(spot).head)).toBe(false);
+        expect(overlap(box, hatBox(spot))).toBe(false);
+      });
+      And('{string} is up within 0.2 seconds of the last block landing', (_, text: string) => {
+        const caption = run.record.captions.find((each) => each.text === text)!;
+        expect(caption).toBeDefined();
+        const down = heaped(run.frames, run.plan);
+        expect(caption.from - down.time).toBeGreaterThanOrEqual(-1e-9);
+        expect(caption.from - down.time).toBeLessThanOrEqual(0.2);
+      });
+    });
   });
 
   Rule('It reads without sound', ({ RuleScenario }) => {
+    RuleScenario('Captions tell the story to the end', ({ Given, When, Then }) => {
+      let record: ShowRecord;
+      Given(
+        '8 people, the unlucky person is {string}, a pigeon comes, the careful turns go to {string} and {string}, the pointer goes straight to {string}, and the tower goes dead still at the end',
+        async (_, unlucky: string, first: string, second: string, straightTo: string) => {
+          expect(straightTo).toBe(unlucky);
+          const seed = seedOf(
+            MARCO_TEAM,
+            unlucky,
+            (plan) =>
+              plan.pigeon &&
+              plan.pointer === 'straight' &&
+              plan.ending === 'dead-still' &&
+              during(plan, 'careful')
+                .map((turn) => turn.by)
+                .join() === [first, second].join(),
+          );
+          ({ record } = await watch(MARCO_TEAM, unlucky, { seed }));
+        },
+      );
+      When('the show runs', () => {});
+      Then('the captions include, in this order:', (_, table: { caption: string }[]) => {
+        const shown = texts(record);
+        let from = 0;
+        for (const { caption } of table) {
+          const at = shown.indexOf(caption, from);
+          expect(at, `${caption} after ${shown.slice(0, from).join(' / ')}`).toBeGreaterThanOrEqual(
+            0,
+          );
+          from = at + 1;
+        }
+      });
+    });
+
+    RuleScenario('Each pointer twist has its caption', ({ Given, When, Then, And }) => {
+      let unlucky: string;
+      let run: Awaited<ReturnType<typeof watch>>;
+      /** The caption the last turn starts with, and the frames while it's up. */
+      const lastTurnCaption = (seen: Awaited<ReturnType<typeof watch>>, text: string) => {
+        const caption = seen.record.captions.find((each) => each.text === text);
+        expect(caption, text).toBeDefined();
+        const up = seen.frames.filter(
+          (frame) => frame.time >= caption!.from - 1e-9 && frame.time < caption!.to,
+        );
+        expect(up[0]!.beat).toBe('last-turn');
+        return up;
+      };
+      Given('the unlucky person is {string}', (_, name: string) => {
+        unlucky = name;
+      });
+      When(
+        'the pointer stops on {string} before hopping to {string}',
+        async (_, decoy: string, to: string) => {
+          expect(to).toBe(unlucky);
+          const seed = seedOf(MARCO_TEAM, unlucky, (plan) => plan.phew === decoy);
+          run = await watch(MARCO_TEAM, unlucky, { seed });
+        },
+      );
+      Then('the caption is {string}', (_, text: string) => {
+        const up = lastTurnCaption(run, text);
+        // Up as the pointer stops on the decoy, and still up as it hops on.
+        expect(up[0]!.over).toBe(run.plan.phew);
+        expect(up.some((frame) => frame.over === unlucky)).toBe(true);
+      });
+      And(
+        'when the pointer stays on {string}, the caption is {string}',
+        async (_, name: string, text: string) => {
+          const seed = seedOf(MARCO_TEAM, name, (plan) => plan.pointer === 'again');
+          const again = await watch(MARCO_TEAM, name, { seed });
+          const up = lastTurnCaption(again, text);
+          for (const frame of up) expect(['', name]).toContain(frame.over);
+          expect(up.some((frame) => frame.over === name)).toBe(true);
+        },
+      );
+    });
+
+    RuleScenario('Each ending has its caption', ({ When, Then }) => {
+      let runs: Awaited<ReturnType<typeof endingRuns>>;
+      When('the show runs with each ending', async () => {
+        runs = await endingRuns();
+      });
+      Then(
+        'before the fall the caption is {string}, {string} then {string}, or {string}, for each ending in turn',
+        (_, uhOh: string, holds: string, orNot: string, leaning: string) => {
+          const expected: Record<Ending, string[]> = {
+            'dead-still': [uhOh],
+            'it-holds': [holds, orNot],
+            'slow-lean': [leaning],
+          };
+          for (const { ending, run } of runs) {
+            const shown = texts(run.record);
+            const pointer = shown.indexOf(
+              pointerCaptionOf(run.plan, 'Luca'),
+              shown.indexOf('Nearly!'),
+            );
+            const toppled = shown.indexOf('Luca toppled it!');
+            expect(shown.slice(pointer + 1, toppled), ending).toEqual(expected[ending]);
+            // Up before the fall; "…or not!" as it goes.
+            const captions = run.record.captions.slice(pointer + 1, toppled);
+            for (const caption of captions) {
+              expect(caption.from, ending).toBeGreaterThanOrEqual(
+                run.plan.turns.at(-1)!.lands - 1e-9,
+              );
+              expect(caption.from, ending).toBeLessThanOrEqual(run.plan.still.to + STEP + 1e-9);
+            }
+          }
+        },
+      );
+    });
+
+    RuleScenario('Each caption stays up long enough to read', ({ When, Then }) => {
+      let records: ShowRecord[];
+      When('the show runs', async () => {
+        records = [
+          (await eightRun()).record,
+          ...(await endingRuns()).map((each) => each.run.record),
+        ];
+      });
+      Then('every caption stays on screen for at least 1 second', () => {
+        for (const record of records) {
+          expect(record.captions.length).toBeGreaterThanOrEqual(10);
+          for (const caption of record.captions) {
+            expect(caption.to - caption.from, caption.text).toBeGreaterThanOrEqual(1 - 1e-9);
+          }
+        }
+      });
+    });
     RuleScenario('Names stay readable', ({ When, Then, And }) => {
       let shown: ReturnType<typeof shownAt>[];
       When('the show runs at 12 and at 2 people', () => {
@@ -1258,6 +1768,58 @@ describeSpec(await loadFeature('./wobbly-tower.feature'), ({ Rule }) => {
         }
       });
     });
+  });
+  Rule('Reduced motion keeps the story', ({ RuleScenario }) => {
+    RuleScenario(
+      'With reduced motion, the tower leans instead of shaking',
+      ({ Given, When, Then, And }) => {
+        let calm: Awaited<ReturnType<typeof watch>>;
+        let lively: Awaited<ReturnType<typeof watch>>;
+        Given('reduced motion is on', () => {});
+        When('the show runs', async () => {
+          // The shared run at 8, and the same show with reduced motion.
+          lively = await eightRun();
+          calm = await watch(names(8), 'Luca', { reducedMotion: true });
+        });
+        Then('the tower leans and settles in one slow move instead of swaying', () => {
+          const { frames, plan } = calm;
+          // Between one block landing and the next, and on to the fall, it
+          // turns back once at most; then it tips over in one go.
+          const marks = [...landings(frames).map((frame) => frame.time), plan.still.to];
+          marks.slice(1).forEach((to, index) => {
+            const between = frames.filter(
+              (frame) => frame.time >= marks[index]! && frame.time < to,
+            );
+            expect(turnsBack(between).length, `after block ${index + 1}`).toBeLessThanOrEqual(1);
+          });
+          const falling = frames.filter((frame) => frame.time >= plan.still.to);
+          expect(turnsBack(falling)).toEqual([]);
+          // The blocks drop without turning over.
+          for (const frame of falling) expect(Math.abs(frame.top!.turn)).toBeLessThan(45);
+          // Without reduced motion the big wobble swings three times, and the blocks tumble.
+          const wobble = only(lively.plan, 'wobble');
+          const wobbling = lively.frames.filter(
+            (frame) => frame.time >= wobble.lands && frame.time < wobble.from + wobble.seconds,
+          );
+          expect(turnsBack(wobbling)).toHaveLength(3);
+          expect(
+            Math.max(
+              ...lively.frames
+                .filter((frame) => frame.time >= lively.plan.still.to)
+                .map((frame) => Math.abs(frame.top!.turn)),
+            ),
+          ).toBeGreaterThan(90);
+        });
+        And('there are no speed lines', () => {
+          expect(calm.frames.filter((frame) => frame.speedLines)).toEqual([]);
+          expect(lively.frames.some((frame) => frame.speedLines)).toBe(true);
+        });
+        And('every caption still appears, in the same order', () => {
+          expect(texts(calm.record)).toEqual(texts(lively.record));
+          expect(texts(calm.record).at(-1)).toBe('Luca toppled it!');
+        });
+      },
+    );
   });
 });
 
@@ -1585,7 +2147,15 @@ describe('The plan', () => {
         expect(gap, label).toBeGreaterThanOrEqual(0.4 - 1e-9);
         if (index > 0) expect(gap, label).toBeLessThanOrEqual(gaps[index - 1]! + 1e-9);
       });
-      expect(plan.still.to, label).toBeCloseTo(T, 9);
+      // It falls as timber starts; on it-holds, once "It holds!" has had its
+      // second, and early enough that the unlucky person has grown (in 0.5 s)
+      // by the show's last 1.5 s.
+      if (plan.ending === 'it-holds') {
+        expect(plan.still.to, label).toBeCloseTo(Math.max(T, plan.still.from + READ), 9);
+        expect(plan.still.to + 0.5, label).toBeLessThanOrEqual(total(plan) - 1.5);
+      } else {
+        expect(plan.still.to, label).toBeCloseTo(T, 9);
+      }
       expect(plan.still.to - plan.still.from, label).toBeGreaterThanOrEqual(0.5);
       expect(plan.still.from, label).toBeGreaterThanOrEqual(last.lands - 1e-9);
     }
@@ -1799,6 +2369,67 @@ describe('Hops and tosses', () => {
             expect(overlap(pointerBox(frame.pointer), tag), label).toBe(false);
         }
       }
+    }
+  });
+});
+
+describe('The last turn and the fall', () => {
+  // Every pointer move with every ending, at 2, 8 and 12, with and without
+  // the pigeon: the seed for each found by search.
+  for (const count of [2, 8, 12]) {
+    for (const pigeon of [true, false]) {
+      it(`plays every last turn in time at ${count} people, ${pigeon ? 'with' : 'without'} the pigeon`, async () => {
+        const team = names(count);
+        const unlucky = unluckyOf(count);
+        for (const pointer of POINTER_MOVES) {
+          for (const ending of ENDINGS) {
+            const seed = seedOf(
+              team,
+              unlucky,
+              (plan) =>
+                plan.pointer === pointer && plan.ending === ending && plan.pigeon === pigeon,
+            );
+            const run = await watch(team, unlucky, { seed });
+            expectEndingPlayed(
+              run,
+              unlucky,
+              `${count} people, ${pointer}, ${ending}, seed ${seed}`,
+            );
+          }
+        }
+      });
+    }
+  }
+
+  it('plays every last turn in time with reduced motion, its captions in the same order', async () => {
+    const team = names(8);
+    const unlucky = unluckyOf(8);
+    for (const pointer of POINTER_MOVES) {
+      for (const ending of ENDINGS) {
+        const seed = seedOf(
+          team,
+          unlucky,
+          (plan) => plan.pointer === pointer && plan.ending === ending,
+        );
+        const label = `8 people, ${pointer}, ${ending}, seed ${seed}, reduced motion`;
+        const calm = await watch(team, unlucky, { seed, reducedMotion: true });
+        expectEndingPlayed(calm, unlucky, label);
+        expect(
+          calm.frames.filter((frame) => frame.speedLines),
+          label,
+        ).toEqual([]);
+      }
+    }
+  });
+
+  it('the dust puffs up where blocks land in the heap', async () => {
+    const { frames, plan } = await marcoRun();
+    const down = heaped(frames, plan);
+    const puffs = frames.filter((frame) => frame.dust > 0);
+    expect(puffs.length).toBeGreaterThan(0);
+    for (const frame of puffs) {
+      expect(frame.time).toBeGreaterThanOrEqual(plan.still.to);
+      expect(frame.time).toBeLessThan(down.time + 1);
     }
   });
 });

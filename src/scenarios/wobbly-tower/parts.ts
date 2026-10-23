@@ -1,7 +1,7 @@
 // Wobbly Tower's drawings, from the Design canvas: the "Your turn!" pointer,
-// the blocks, the pigeon in two poses, the hard hat, the dust puffs and the
-// field. Every colour comes from a class in wobbly-tower.module.css, or from
-// the `var(--…)` a block is given.
+// the blocks, the pigeon in two poses, the hard hat, the dust puffs, the
+// speed lines and the field. Every colour comes from a class in
+// wobbly-tower.module.css, or from the `var(--…)` a block is given.
 
 import { BLOCK_HEIGHT, type Point } from './layout';
 import styles from './wobbly-tower.module.css';
@@ -204,5 +204,15 @@ export function dust(size: number): HTMLElement {
   const el = part(styles.dust, 'dust');
   el.style.width = `${size}px`;
   el.style.height = `${size}px`;
+  return el;
+}
+
+/**
+ * Three ink speed lines, one above the other, 90 by 40 stage pixels:
+ * absolutely positioned at 0,0 of their container; data-part="speed-lines".
+ */
+export function speedLines(): HTMLElement {
+  const el = part(styles.speedLines, 'speed-lines');
+  for (let k = 0; k < 3; k++) el.append(part(styles.speedLine));
   return el;
 }

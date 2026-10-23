@@ -3,8 +3,9 @@
 // it looks. What moves (the tower's lean, the blocks, the pointer and the
 // pigeon) and who looks how are worked out from the show's time each frame,
 // so every frame follows from the plan alone. The stage tells its story in
-// data attributes too: the scene's beat, the tower's lean and blocks, whom
-// the pointer is over, and each person's mood and whether they hold a block.
+// data attributes too: the scene's beat, the tower's lean, its blocks and how
+// many lie in the heap, whom the pointer is over, and each person's mood and
+// whether they hold a block.
 
 import { gsap } from 'gsap';
 import {
@@ -23,6 +24,7 @@ import {
 } from '../../scenario-kit';
 import {
   BLOCK_WIDTHS,
+  heap,
   headBox,
   heldBlock,
   overlap,
@@ -42,12 +44,15 @@ import {
 } from './layout';
 import {
   block as drawBlock,
+  dust,
   field,
+  hardHat,
   pigeon as drawPigeon,
   pointer as drawPointer,
   POINTER,
+  speedLines,
 } from './parts';
-import { BEATS, planShow, type Beat, type Turn } from './plan';
+import { BEATS, planShow, READ, type Beat, type Plan, type Turn } from './plan';
 import styles from './wobbly-tower.module.css';
 
 /** The two paper blocks land at these show seconds, each after falling for DROP seconds. */
@@ -119,10 +124,27 @@ const fadeOf = (turn: Turn) => Math.min(FADE, Math.max(0, turn.lands - turn.stop
 const ARC = 140;
 /** Seconds a bubble stays up. */
 const BUBBLE = 0.8;
-/** The fall: in `seconds` the tower tips `lean` degrees toward the unlucky person, and fades out. */
-const FALL = { seconds: 0.8, lean: 80, fadeFrom: 0.3, fade: 0.5 };
-/** How much the unlucky person grows once it's down. */
+/**
+ * The fall, in seconds from `plan.still.to`: the tower tips to `lean` degrees
+ * toward the unlucky person in `tip`, while on `it-holds` the top block
+ * slides `slide` pixels off the one below; then every block tumbles over,
+ * half a turn, into the heap. The bottom block lands at `first`, the top one
+ * last, at `lands`: READ after "…or not!", so "{unlucky} toppled it!" never
+ * waits for it. With reduced motion the tower tips slowly, in `calmTip`, and
+ * every block drops at once, without turning over.
+ */
+const FALL = { lean: 35, tip: 0.35, calmTip: 0.6, slide: 60, first: 0.75, lands: READ };
+/** Speed lines trail the tower's top while it tips, in seconds from the fall. */
+const SPEED = { from: 0.15, to: 0.55 };
+/** A dust puff is this wide; it grows for `grow` seconds as a block lands, then fades in `fade`. */
+const DUST = { size: 48, grow: 0.4, fade: 0.3 };
+/** How much the unlucky person grows as it falls, and in how long. */
 const GROWN = 1.3;
+const GROW = 0.5;
+/** Seconds the hard hat takes to drop onto their head, once the last block is down. */
+const HAT_DROP = 0.45;
+/** "creak…" comes this long after the dead-still block lands. */
+const CREAK = 0.3;
 
 const ease = {
   sway: gsap.parseEase('sine.inOut'),
@@ -227,6 +249,24 @@ export async function playWobblyTower(show: Show): Promise<void> {
     ]);
   };
 
+  /**
+   * After the last block: dead still stays upright; it holds sways out and
+   * back, settled by `still.from`; slow lean leans to the tipping point by
+   * `still.from` and holds there.
+   */
+  const lastTurnSway = (turn: Turn) => {
+    const peak = side(turn);
+    const settles = plan.still.from - turn.lands;
+    if (plan.ending === 'it-holds') {
+      lean.sway(turn.lands, [
+        [settles / 2, peak],
+        [settles, 0],
+      ]);
+    } else if (plan.ending === 'slow-lean') {
+      lean.sway(turn.lands, [[settles, peak]]);
+    }
+  };
+
   // Each block's way onto the tower, in the order they land, with the sways
   // after them; the pigeon's dip comes between the big wobble and the careful turns.
   const flights: Flight[] = [];
@@ -263,7 +303,10 @@ export async function playWobblyTower(show: Show): Promise<void> {
       lands: turn.lands,
       from: heldBlock(spotOf(turn.by)),
     });
-    if (turn.beat === 'last-turn') continue;
+    if (turn.beat === 'last-turn') {
+      lastTurnSway(turn);
+      continue;
+    }
     const from = swayAfter(turn);
     if (turn.beat === 'wobble') {
       wobbleFrom = from;
@@ -276,13 +319,26 @@ export async function playWobblyTower(show: Show): Promise<void> {
     }
   }
   const fallSide = towards(plan.falls, plan.order);
-  /** The lean at `t`: the sways, then the fall toward the unlucky person. */
+  const fallsAt = plan.still.to;
+  const tip = show.reducedMotion ? FALL.calmTip : FALL.tip;
+  const leaning = lean.at(fallsAt);
+  /** The lean at `t`: the sways, then the tip toward the unlucky person. */
   const leanAt = (t: number) => {
-    const falling = (t - plan.still.to) / FALL.seconds;
-    if (falling <= 0) return lean.at(t);
-    return fallSide * FALL.lean * Math.min(1, falling) ** 2;
+    const tipping = (t - fallsAt) / tip;
+    if (tipping <= 0) return lean.at(t);
+    const u = (show.reducedMotion ? ease.sway : ease.drop)(Math.min(1, tipping));
+    return leaning + (fallSide * FALL.lean - leaning) * u;
   };
   const landedBy = (t: number) => flights.filter((flight) => flight.lands <= t).length;
+  const tumbles = planTumble(plan, heap(spotOf(show.unlucky), flights.length), {
+    fallsAt,
+    tip,
+    side: fallSide,
+    calm: show.reducedMotion,
+    leanAt,
+  });
+  /** When the last block lands in the heap. */
+  const downAt = fallsAt + FALL.lands;
 
   // The pointer: from above the tower, it hops to each turn's decoy and
   // taker, fades out as they lift the block, and fades in where it was as it
@@ -320,12 +376,20 @@ export async function playWobblyTower(show: Show): Promise<void> {
     { from: nearly.lands, to: plan.hold.to + NEARLY_BACK },
   ];
   if (plan.pigeon) alarms.push({ from: dipFrom, to: dipFrom + 2 * PIGEON.swing });
-  const phewAt = plan.hold.to + NEARLY_BACK;
-  const downAt = plan.still.to + FALL.seconds;
+  // Nearly's thrower says "Phew!" as it swings back, so that "Me again?!"
+  // can follow before the toss when the pointer stays on them.
+  const phewAt = plan.hold.to;
+  const relieved = (name: string, t: number) =>
+    (name === nearly.by && t >= phewAt && t < phewAt + BUBBLE) ||
+    (plan.ending === 'it-holds' &&
+      name === show.unlucky &&
+      t >= plan.still.from &&
+      t < plan.still.from + BUBBLE);
   const moodOf = (name: string, t: number, picked: string): Mood => {
     if (t >= downAt) return name === show.unlucky ? 'party' : 'happy';
+    if (t >= fallsAt) return 'scared';
+    if (relieved(name, t)) return 'happy';
     if (alarms.some((span) => t >= span.from && t < span.to)) return 'scared';
-    if (name === nearly.by && t >= phewAt && t < phewAt + BUBBLE) return 'happy';
     const careful = t >= starts.careful;
     if (name === picked) return careful ? 'scared' : 'worried';
     return careful ? 'worried' : 'calm';
@@ -334,7 +398,7 @@ export async function playWobblyTower(show: Show): Promise<void> {
   let beat = '';
   let shownLean = '';
   let landed = -1;
-  let fadedTower = 1;
+  let fallen = -1;
   const draw = (t: number) => {
     let now: Beat = BEATS[0];
     for (const each of BEATS) if (plan.beats[each] > 0 && starts[each] <= t) now = each;
@@ -348,12 +412,13 @@ export async function playWobblyTower(show: Show): Promise<void> {
     if (count !== landed) built.dataset.blocks = String((landed = count));
     const poses = tower(count, degrees);
     flights.forEach((flight, k) => {
+      if (t >= fallsAt) return place(flight.el, tumbles.at(k, t));
       if (k < count) return place(flight.el, poses[k]!);
       if (t < flight.lift) return hide(flight.el);
       place(flight.el, inFlight(flight, t));
     });
-    const fade = Math.max(0, Math.min(1, 1 - (t - plan.still.to - FALL.fadeFrom) / FALL.fade));
-    if (fade !== fadedTower) built.style.opacity = String((fadedTower = fade));
+    const down = tumbles.down(t);
+    if (down !== fallen) built.dataset.fallen = String((fallen = down));
 
     // The pointer.
     const where = hops.at(t);
@@ -394,7 +459,7 @@ export async function playWobblyTower(show: Show): Promise<void> {
       const mood = moodOf(person.name, t, picked);
       const holding = person.holding;
       const sweat =
-        t < downAt && (mood === 'scared' || (person.name === picked && t >= starts.careful));
+        t < fallsAt && (mood === 'scared' || (person.name === picked && t >= starts.careful));
       const raised = holding || t >= downAt;
       if (mood !== person.mood) {
         person.mood = mood;
@@ -432,8 +497,11 @@ export async function playWobblyTower(show: Show): Promise<void> {
     cue(flight.lands, 'thunk');
   }
   for (const time of plan.heartbeats) cue(time, 'heartbeat');
-  cue(plan.still.to, 'tumble');
-  cue(downAt, 'fanfare');
+  const last = plan.turns.at(-1)!;
+  const creakAt = last.lands + CREAK;
+  if (plan.ending === 'dead-still') cue(creakAt, 'creak');
+  cue(fallsAt, 'tumble');
+  cue(downAt + HAT_DROP, 'fanfare');
 
   // Captions, one at each moment; the kit holds each long enough to read.
   const wobble = plan.turns.find((turn) => turn.beat === 'wobble')!;
@@ -446,10 +514,18 @@ export async function playWobblyTower(show: Show): Promise<void> {
     caption(turn.stops, `${turn.by}…`);
   }
   caption(nearly.lands, 'Nearly!');
+  caption(starts['last-turn'], pointerCaption(plan, show.unlucky));
+  if (plan.ending === 'dead-still') caption(last.lands, 'Uh-oh…');
+  if (plan.ending === 'it-holds') {
+    caption(plan.still.from, 'It holds!');
+    caption(fallsAt, '…or not!');
+  }
+  if (plan.ending === 'slow-lean') caption(last.lands, "It's leaning…");
+  caption(downAt, `${show.unlucky} toppled it!`);
 
   // Gags, in bubbles beside the tower's top, a head or the pigeon.
-  const say = (time: number, text: string, beside: Box) => {
-    const avoid = inTheWay.filter((box) => !overlap(box, beside));
+  const say = (time: number, text: string, beside: Box, clearOf: readonly Box[] = []) => {
+    const avoid = [...inTheWay.filter((box) => !overlap(box, beside)), ...clearOf];
     const speech = bubble(text, speechAt(text, beside, avoid));
     speech.dataset.part = 'bubble';
     scene.append(speech);
@@ -468,11 +544,63 @@ export async function playWobblyTower(show: Show): Promise<void> {
   say(wobble.lands, 'Eek!', headBox(spotOf(wobble.by)));
   if (plan.pigeon) say(landsAt, 'Coo?', around(perch(landsAt), 45));
   say(phewAt, 'Phew!', headBox(spotOf(nearly.by)));
+  const unluckyHead = headBox(spotOf(show.unlucky));
+  if (plan.phew && plan.phew !== nearly.by) {
+    // The decoy is let off as the pointer hops on from them. When they threw
+    // Nearly, they are saying it already.
+    const rest = Math.max(DWELL.least, last.stops - last.decoyStops! - DWELL.hop);
+    say(last.decoyStops! + rest, 'Phew!', headBox(spotOf(plan.phew)));
+  }
+  if (plan.pointer === 'again') say(last.stops + fadeOf(last), 'Me again?!', unluckyHead);
+  const topAt = (t: number) => around(topOf(tower(flights.length, leanAt(t)).at(-1)!), 40);
+  if (plan.ending === 'dead-still') say(creakAt, 'creak…', topAt(creakAt));
+  if (plan.ending === 'it-holds') say(plan.still.from, 'Phew!', unluckyHead);
 
-  // It's down: the unlucky person steps in front of everything and grows.
+  // It falls: the unlucky person steps in front of everything and grows,
+  // and "Timber!" goes up by the tower's top, clear of their grown head and
+  // name tag, where the hard hat lands too.
   const unlucky = people.get(show.unlucky)!;
-  at(downAt, () => scene.append(unlucky.el));
-  timeline.to(unlucky.el, { scale: GROWN, duration: 0.5, ease: 'back.out(1.4)' }, downAt);
+  const standsOut = grownBoxes(unlucky.spot);
+  say(fallsAt, 'Timber!', topAt(fallsAt), [standsOut.head, standsOut.tag]);
+  at(fallsAt, () => scene.append(unlucky.el));
+  timeline.to(
+    unlucky.el,
+    { scale: GROWN, duration: GROW, ease: show.reducedMotion ? 'power2.out' : 'back.out(1.4)' },
+    fallsAt,
+  );
+  if (!show.reducedMotion) {
+    const lines = speedLines();
+    const top = topOf(tower(flights.length, fallSide * FALL.lean).at(-1)!);
+    lines.style.left = `${top.x - fallSide * 90}px`;
+    lines.style.top = `${top.y}px`;
+    gsap.set(lines, { autoAlpha: 0, xPercent: -50, yPercent: -50 });
+    built.append(lines);
+    timeline.set(lines, { autoAlpha: 1 }, fallsAt + SPEED.from);
+    timeline.set(lines, { autoAlpha: 0 }, fallsAt + SPEED.to);
+  }
+  // Dust puffs up where the first, a middle and the last block land.
+  const count = flights.length;
+  for (const k of new Set([0, count >> 1, count - 1])) {
+    const lies = tumbles.rest(k);
+    const puff = dust(DUST.size);
+    puff.style.left = `${lies.x - DUST.size / 2}px`;
+    puff.style.top = `${lies.y + lies.height / 2 - 0.75 * DUST.size}px`;
+    gsap.set(puff, { autoAlpha: 0 });
+    built.append(puff);
+    const time = tumbles.landsAt(k);
+    timeline.set(puff, { autoAlpha: 1, scale: 0.4 }, time);
+    timeline.to(puff, { scale: 1.3, duration: DUST.grow, ease: 'power2.out' }, time);
+    timeline.to(puff, { autoAlpha: 0, duration: DUST.fade }, time + DUST.grow);
+  }
+  // Once it's down, the hard hat drops onto their head, on the head's grid.
+  const hat = hardHat();
+  hat.setAttribute('width', String(unlucky.spot.size));
+  hat.setAttribute('height', String(unlucky.spot.size));
+  hat.classList.add(styles.hat);
+  gsap.set(hat, { autoAlpha: 0 });
+  unlucky.el.append(hat);
+  timeline.set(hat, { autoAlpha: 1, y: -1.5 * unlucky.spot.size }, downAt);
+  timeline.to(hat, { y: 0, duration: HAT_DROP, ease: 'power2.in' }, downAt);
   timeline.set({}, {}, total);
 
   await show.play(timeline);
@@ -664,6 +792,100 @@ function inFlight(flight: Flight, t: number): Block {
   };
 }
 
+/** The caption as the last turn starts, for how the pointer moves. */
+function pointerCaption(plan: Plan, unlucky: string): string {
+  if (plan.pointer === 'fake-out') return `${plan.phew}… nope, ${unlucky}!`;
+  if (plan.pointer === 'again') return `${unlucky}… again?!`;
+  return `${unlucky}…`;
+}
+
+/**
+ * The head and the name tag of someone standing at `spot` once grown to
+ * GROWN, about the point they stand on (the person's transform origin).
+ * Their hard hat sits inside the head's box.
+ */
+export function grownBoxes(spot: Spot, tagWidth = spot.tag.maxWidth): { head: Box; tag: Box } {
+  const grow = (box: Box): Box => ({
+    left: spot.x + (box.left - spot.x) * GROWN,
+    right: spot.x + (box.right - spot.x) * GROWN,
+    top: spot.y + (box.top - spot.y) * GROWN,
+    bottom: spot.y + (box.bottom - spot.y) * GROWN,
+  });
+  return { head: grow(headBox(spot)), tag: grow(tagBox(spot, tagWidth)) };
+}
+
+/**
+ * How the tower comes down, from `fallsAt`: each block stands on the tower
+ * as it tips (the top one sliding off on `it-holds`), lets go at the end of
+ * the tip and tumbles to `heap`, its place k there. The bottom block lands
+ * first and the top one last; with reduced motion all of them drop straight
+ * down together, without turning over.
+ */
+function planTumble(
+  plan: Plan,
+  rests: readonly Block[],
+  {
+    fallsAt,
+    tip,
+    side,
+    calm,
+    leanAt,
+  }: {
+    fallsAt: number;
+    tip: number;
+    side: -1 | 1;
+    calm: boolean;
+    leanAt: (t: number) => number;
+  },
+) {
+  const count = rests.length;
+  const slides = plan.ending === 'it-holds';
+  const leaves = fallsAt + tip;
+  const landsAt = (k: number) =>
+    fallsAt +
+    (calm
+      ? FALL.lands
+      : FALL.first + (FALL.lands - FALL.first) * (count === 1 ? 1 : k / (count - 1)));
+  /** Block k standing on the tipping tower at `t`; the top one slides off on `it-holds`. */
+  const standing = (k: number, t: number): Block => {
+    const block = tower(count, leanAt(t))[k]!;
+    if (!slides || k !== count - 1) return block;
+    const u = ease.sway(Math.max(0, Math.min(1, (t - fallsAt) / tip)));
+    const a = (block.turn * Math.PI) / 180;
+    const along = side * FALL.slide * u;
+    return {
+      ...block,
+      x: block.x + along * Math.cos(a),
+      y: block.y + along * Math.sin(a),
+      turn: block.turn + side * 15 * u,
+    };
+  };
+  const from = rests.map((_, k) => standing(k, leaves));
+  return {
+    landsAt,
+    rest: (k: number) => rests[k]!,
+    /** How many blocks lie in the heap at `t`. */
+    down: (t: number) => rests.filter((_, k) => t >= landsAt(k)).length,
+    /** Where block k is at `t`, from `fallsAt` on. */
+    at(k: number, t: number): Block {
+      if (t < leaves) return standing(k, t);
+      const to = rests[k]!;
+      const lands = landsAt(k);
+      if (t >= lands) return to;
+      const start = from[k]!;
+      const u = (t - leaves) / (lands - leaves);
+      const point = calm
+        ? {
+            x: start.x + (to.x - start.x) * ease.sway(u),
+            y: start.y + (to.y - start.y) * ease.drop(u),
+          }
+        : arc(start, to, ease.toss(u), 40);
+      const turn = calm ? to.turn : to.turn + side * 180;
+      return { ...to, ...point, turn: start.turn + (turn - start.turn) * u };
+    },
+  };
+}
+
 /** The middle of a block's top edge. */
 function topOf(block: Block): Point {
   const a = (block.turn * Math.PI) / 180;
@@ -744,28 +966,47 @@ function speechSize(text: string): { half: number; height: number } {
   };
 }
 
+/** The box a bubble saying `text` takes, with its tail at `tail`. */
+export function speechBox(text: string, { x, y }: Point): Box {
+  const { half, height } = speechSize(text);
+  return { left: x - half, right: x + half, top: y - height, bottom: y };
+}
+
 /** Space kept between a bubble and what it sits beside, and the stage's edge. */
 const SPEECH = { gap: 12, edge: 8 };
 
 /**
  * Where to anchor a bubble saying `text`: level with `beside`, on its side
- * toward the stage's middle, pushed out past anything in `avoid` it would
- * cover; the other side when that has no room, and over `beside` when
- * neither has.
+ * toward the stage's middle, or on the other side, or just above it, if that
+ * covers nothing in `avoid`; otherwise level with it toward the middle,
+ * pushed out past anything it would cover, or the other way when that has no
+ * room, and over `beside` when neither has.
  */
 function speechAt(text: string, beside: Box, avoid: readonly Box[]): Point {
   const { half, height } = speechSize(text);
   const { gap, edge } = SPEECH;
-  const drawn = ({ x, y }: Point): Box => ({
-    left: x - half,
-    right: x + half,
-    top: y - height,
-    bottom: y,
-  });
+  const drawn = (tail: Point) => speechBox(text, tail);
   const middle = (beside.left + beside.right) / 2;
   const level = (beside.top + beside.bottom) / 2 + height / 2;
   const y = Math.min(STAGE.height - edge, Math.max(height + edge, level));
   const inward = middle > STAGE.width / 2 ? -1 : 1;
+  const clear = (tail: Point) => {
+    const box = drawn(tail);
+    const onStage =
+      box.left >= edge &&
+      box.right <= STAGE.width - edge &&
+      box.top >= edge &&
+      box.bottom <= STAGE.height - edge;
+    return onStage && !avoid.some((other) => overlap(box, other));
+  };
+  const near = [
+    { x: beside.right + gap + half, y },
+    { x: beside.left - gap - half, y },
+    { x: middle, y: beside.top - gap },
+  ];
+  if (inward < 0) [near[0], near[1]] = [near[1]!, near[0]!];
+  const nearby = near.find(clear);
+  if (nearby) return nearby;
   for (const side of [inward, -inward]) {
     const past = (box: Box) => (side > 0 ? box.right + gap + half : box.left - gap - half);
     let x = past(beside);

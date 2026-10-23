@@ -193,3 +193,31 @@
 .sun {
   fill: var(--color-sun);
 }
+
+/* The hard hat sits on the head's grid, over the head. */
+.hat {
+  position: absolute;
+  top: 0;
+  left: 0;
+}
+
+.speedLines {
+  position: absolute;
+  top: 0;
+  left: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  width: 90px;
+  height: 40px;
+}
+
+.speedLine {
+  height: 5px;
+  border-radius: var(--radius-pill);
+  background-color: var(--color-ink);
+}
+
+.speedLine:nth-child(2) {
+  margin-left: 24px;
+}

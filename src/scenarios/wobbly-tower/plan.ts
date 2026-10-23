@@ -97,7 +97,12 @@ export interface Plan {
   readonly hold: { readonly from: number; readonly to: number };
   /** Show seconds of each heartbeat, from the careful turns' start to the last block, closer and closer. */
   readonly heartbeats: readonly number[];
-  /** Show seconds while the tower barely moves before it falls; it falls at `still.to`. */
+  /**
+   * Show seconds while the tower barely moves before it falls; it falls at
+   * `still.to`. That is timber's start, or later for `it-holds`, so "…or
+   * not!" as it falls comes a second after "It holds!" as it settles, at
+   * `still.from`.
+   */
   readonly still: { readonly from: number; readonly to: number };
   /** The tower falls toward the side of the stage this person stands on: the unlucky person. */
   readonly falls: string;
@@ -143,11 +148,21 @@ const NEARLY = { stops: 0.27, lands: 0.67, leanOut: 0.4 };
  * The last turn, in seconds from its start: where the pointer stops (the
  * fake-out stops on the decoy first, rests and hops on, as a careful turn
  * does), and how long the toss takes. "Again?!" doesn't hop: the pointer
- * bounces on the spot.
+ * bounces on the spot, once Nearly's thrower has said "Phew!". The fake-out
+ * and "Again?!" land 1.2 s in: on `it-holds` the tower settles 0.68 s later
+ * and falls READ after that, 0.52 s into timber, so the unlucky person has
+ * grown (0.5 s) before the show's last 1.5 s.
  */
-const LAST = { decoy: 0.15, straight: 0.3, fakeOut: 0.8, toss: 0.55 };
+const LAST = { decoy: 0.05, straight: 0.3, fakeOut: 0.7, again: 0.7, toss: 0.5 };
 /** Seconds the tower barely moves before it falls, unless it froze earlier. */
 const STILL = 0.6;
+/** `it-holds`: the tower sways out to its lean and back upright, in seconds, then holds. */
+const HOLDS = { out: 0.34, back: 0.34 };
+/**
+ * Seconds from one caption to the next that must not wait: the kit keeps
+ * each up for a second, and a frame more covers the frame they're asked in.
+ */
+export const READ = 1.04;
 /** Peak leans, in degrees. */
 const LEANS = {
   quick: { least: 2, most: 3 },
@@ -303,7 +318,9 @@ export function planShow(names: readonly string[], unlucky: string, random: () =
 
   // The last turn, from its start: the pointer's move, then the toss.
   from = start('last-turn');
-  const stops = from + (fakeOut ? LAST.fakeOut : LAST.straight);
+  const stops =
+    from +
+    (pointer === 'fake-out' ? LAST.fakeOut : pointer === 'again' ? LAST.again : LAST.straight);
   const lands = stops + LAST.toss;
   const fall = start('timber');
   add(
@@ -332,8 +349,20 @@ export function planShow(names: readonly string[], unlucky: string, random: () =
     phew: fakeOut,
     hold,
     heartbeats,
-    // Dead still freezes as the block lands; the others settle or lean first.
-    still: { from: ending === 'dead-still' ? lands : fall - STILL, to: fall },
+    still: stillness(ending, lands, fall),
     falls: unlucky,
   };
+}
+
+/**
+ * When the tower is still before the fall, for the last block landing at
+ * `lands` and timber at `timber`. Dead still freezes as the block lands; slow
+ * lean holds at the tipping point; it holds settles, and falls once "It
+ * holds!" has had its second.
+ */
+function stillness(ending: Ending, lands: number, timber: number) {
+  if (ending === 'dead-still') return { from: lands, to: timber };
+  if (ending === 'slow-lean') return { from: timber - STILL, to: timber };
+  const settles = lands + HOLDS.out + HOLDS.back;
+  return { from: settles, to: Math.max(timber, settles + READ) };
 }
