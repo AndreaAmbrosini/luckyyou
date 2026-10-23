@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { gsap } from 'gsap';
 import { describeSpec, runShow, type ShowRecord } from '../../scenario-kit/testing';
 import { createRandom } from '../../scenario-kit/random';
-import { handOutLooks, nameTag } from '../../scenario-kit';
+import { handOutLooks, nameTag, type Cue, type Scenario } from '../../scenario-kit';
 import wobblyTower from './index';
 import {
   BEATS,
@@ -169,6 +169,18 @@ interface Frame {
   readonly bubbles: readonly (Point & { readonly text: string })[];
 }
 
+/** A cue the show asked for, and the time of the frame it was asked for in. */
+interface Heard {
+  readonly cue: Cue;
+  readonly time: number;
+}
+
+/** Someone doing something, and the time of the frame it shows in. */
+interface Moment {
+  readonly name: string;
+  readonly time: number;
+}
+
 /** A tower block as the stage built it: who throws it ('' for paper) and its colour. */
 interface Built {
   readonly by: string;
@@ -212,8 +224,17 @@ async function watch(
   sign: string;
   built: Built[];
   shirts: Record<string, string>;
+  lifts: Moment[];
+  cues: Heard[];
 }> {
   const frames: Frame[] = [];
+  const lifts: Moment[] = [];
+  const cues: Heard[] = [];
+  /** Cues asked for since the last frame: they belong to the next frame's time. */
+  let asked: Cue[] = [];
+  // Lifts can be shorter than a frame: each change of data-holding is noted.
+  let changed: MutationRecord[] = [];
+  const holding = new MutationObserver((records) => changed.push(...records));
   let sign = '';
   let built: Built[] = [];
   let shirts: Record<string, string> = {};
@@ -230,7 +251,22 @@ async function watch(
         bubbles: HTMLElement[];
       }
     | undefined;
-  const record = await runShow(wobblyTower, {
+  // Every cue the show asks for, as the sound player gets it.
+  const listened: Scenario = {
+    ...wobblyTower,
+    play: (show) =>
+      wobblyTower.play({
+        ...show,
+        sound: {
+          ...show.sound,
+          play(cue) {
+            asked.push(cue);
+            return show.sound.play(cue);
+          },
+        },
+      }),
+  };
+  const record = await runShow(listened, {
     names: team,
     unlucky,
     seed,
@@ -248,7 +284,12 @@ async function watch(
         bubbles: [...stage.querySelectorAll<HTMLElement>('[data-part="bubble"]')],
       };
       const { scene, tower: drawn, blocks, people, pointer, pigeon, bubbles } = parts;
+      for (const cue of asked) cues.push({ cue, time });
+      asked = [];
       if (!sign) {
+        for (const person of people) {
+          holding.observe(person, { attributeFilter: ['data-holding'], attributeOldValue: true });
+        }
         sign = pointer.textContent ?? '';
         built = blocks.map((block) => ({ by: block.dataset.by!, fill: block.dataset.fill! }));
         shirts = Object.fromEntries(
@@ -257,6 +298,14 @@ async function watch(
             person.querySelector('svg')!.style.getPropertyValue('--shirt'),
           ]),
         );
+      }
+      changed.push(...holding.takeRecords());
+      const seen = changed;
+      changed = [];
+      for (const change of seen) {
+        if (change.oldValue !== 'true') {
+          lifts.push({ name: (change.target as HTMLElement).dataset.person!, time });
+        }
       }
       // Once the show is over, the run empties the stage.
       if (!scene.isConnected) return;
@@ -297,6 +346,7 @@ async function watch(
       });
     },
   });
+  holding.disconnect();
   expect(record.error).toBeUndefined();
   if (until === undefined) expect(record.outcome).toBe('finished');
   return {
@@ -306,6 +356,8 @@ async function watch(
     sign,
     built,
     shirts,
+    lifts,
+    cues,
   };
 }
 
@@ -453,6 +505,7 @@ describeSpec(await loadFeature('./wobbly-tower.feature'), ({ Rule }) => {
         let unlucky: string;
         let frames: Frame[];
         let plan: Plan;
+        let lifts: Moment[];
         /** The frame the last block lands in. */
         let last: Frame;
         Given('<count> people, with the unlucky person <position> in the list', () => {
@@ -460,15 +513,13 @@ describeSpec(await loadFeature('./wobbly-tower.feature'), ({ Rule }) => {
           unlucky = variables.position === 'first' ? team[0]! : team.at(-1)!;
         });
         When('the show runs', async () => {
-          ({ frames, plan } = await watch(team, unlucky));
+          ({ frames, plan, lifts } = await watch(team, unlucky));
           last = landings(frames).at(-1)!;
         });
         Then("the last turn is the unlucky person's", () => {
           expect(last.blocks).toBe(2 + plan.turns.length);
-          // Who held a block overhead, turn after turn: the last is the unlucky person.
-          const holders = frames.flatMap((frame, index) =>
-            frame.holding.filter((name) => !frames[index - 1]?.holding.includes(name)),
-          );
+          // Who lifted a block overhead, turn after turn: the last is the unlucky person.
+          const holders = lifts.map((lift) => lift.name);
           expect(holders).toHaveLength(plan.turns.length);
           expect(holders.at(-1)).toBe(unlucky);
         });
@@ -568,9 +619,10 @@ describeSpec(await loadFeature('./wobbly-tower.feature'), ({ Rule }) => {
       let frames: Frame[];
       let plan: Plan;
       let sign: string;
+      let lifts: Moment[];
       Given('8 people', () => {});
       When('the show runs', async () => {
-        ({ frames, plan, sign } = await eightRun());
+        ({ frames, plan, sign, lifts } = await eightRun());
       });
       Then(
         'before each turn the {string} pointer hops from where it was to the next person',
@@ -608,15 +660,21 @@ describeSpec(await loadFeature('./wobbly-tower.feature'), ({ Rule }) => {
         },
       );
       And('it stops over their head before they lift a block', () => {
-        frames.forEach((frame, index) => {
-          for (const name of frame.holding) {
-            if (frames[index - 1]?.holding.includes(name)) continue;
-            expect(frame.over, `${name} at ${frame.time}`).toBe(name);
-            const tip = pointerTip(spotOf(plan, name));
-            expect(frame.pointer.x).toBeCloseTo(tip.x, 6);
-            expect(frame.pointer.y).toBeCloseTo(tip.y, 6);
-          }
-        });
+        expect(lifts).toHaveLength(plan.turns.length);
+        const stopped = stops(frames);
+        for (const { name, time } of lifts) {
+          const frame = frames.find((each) => each.time === time)!;
+          expect(frame.over, `${name} at ${time}`).toBe(name);
+          const tip = pointerTip(spotOf(plan, name));
+          expect(frame.pointer.x).toBeCloseTo(tip.x, 6);
+          expect(frame.pointer.y).toBeCloseTo(tip.y, 6);
+          // It had stopped over them by then, and is faded out.
+          const stop = stopped.find(
+            (each) => each.name === name && each.from <= time && each.to >= time,
+          );
+          expect(stop, `${name} at ${time}`).toBeDefined();
+          expect(frame.pointer.shown, `${name} at ${time}`).toBe(0);
+        }
       });
       And('it never covers a name tag', () => {
         const tags = tagsOf(plan.order);
@@ -632,10 +690,11 @@ describeSpec(await loadFeature('./wobbly-tower.feature'), ({ Rule }) => {
       let frames: Frame[];
       let plan: Plan;
       let record: ShowRecord;
+      let cues: Heard[];
       let careful: Turn[];
       Given('8 people', () => {});
       When('the careful turns start', async () => {
-        ({ frames, plan, record } = await eightRun());
+        ({ frames, plan, record, cues } = await eightRun());
         careful = during(plan, 'careful');
       });
       Then(
@@ -669,20 +728,26 @@ describeSpec(await loadFeature('./wobbly-tower.feature'), ({ Rule }) => {
         }
       });
       And('each careful turn takes longer than the one before', () => {
-        // From the pointer stopping on the decoy until the block lands, on the stage.
-        const stopped = stops(frames);
+        // On the stage, from the block before landing (the first careful turn
+        // from its beat's start, after the pigeon) until this one lands.
         const landed = landings(frames);
-        const lengths = careful.map((turn) => {
-          const decoy = stopped.find((each) => each.from >= turn.decoyStops! - 1e-9)!;
-          const lands = landed.find((each) => each.time >= turn.lands - 1e-9)!;
-          return lands.time - decoy.from;
-        });
+        const landing = (turn: Turn) => landed.find((each) => each.time >= turn.lands - 1e-9)!.time;
+        const lengths = [
+          landing(careful[0]!) - startOf(plan, 'careful'),
+          landing(careful[1]!) - landing(careful[0]!),
+        ];
         expect(lengths[1]!).toBeGreaterThan(lengths[0]!);
         expect(careful[1]!.seconds).toBeGreaterThan(careful[0]!.seconds);
       });
       And('the heartbeat comes quicker and quicker until the last turn', () => {
-        // Sound isn't recorded: play.ts cues a heartbeat at each of these.
         const { heartbeats } = plan;
+        // A heartbeat sounds in the frame each of these falls in.
+        const beats = cues.filter((each) => each.cue === 'heartbeat').map((each) => each.time);
+        expect(beats).toHaveLength(heartbeats.length);
+        heartbeats.forEach((time, index) => {
+          expect(beats[index]!).toBeGreaterThanOrEqual(time - 1e-9);
+          expect(beats[index]!).toBeLessThan(time + STEP + 1e-9);
+        });
         expect(heartbeats[0]).toBeCloseTo(startOf(plan, 'careful'), 9);
         expect(heartbeats.at(-1)!).toBeGreaterThanOrEqual(startOf(plan, 'last-turn'));
         expect(heartbeats.at(-1)!).toBeLessThan(plan.turns.at(-1)!.lands);
@@ -729,12 +794,16 @@ describeSpec(await loadFeature('./wobbly-tower.feature'), ({ Rule }) => {
       let plan: Plan;
       let built: Built[];
       let shirts: Record<string, string>;
+      let cues: Heard[];
       When('the show runs', async () => {
-        ({ frames, plan, built, shirts } = await eightRun());
+        ({ frames, plan, built, shirts, cues } = await eightRun());
       });
       Then('each block lands on top of the tower with a thunk', () => {
-        // Sound isn't recorded: play.ts cues a thunk as each lands.
         const landed = landings(frames);
+        // A thunk sounds in the frame each block lands in, and only then.
+        expect(cues.filter((each) => each.cue === 'thunk').map((each) => each.time)).toEqual(
+          landed.map((frame) => frame.time),
+        );
         expect(landed.map((frame) => frame.blocks)).toEqual(
           Array.from({ length: 2 + plan.turns.length }, (_, index) => index + 1),
         );
@@ -1462,8 +1531,9 @@ describe('The plan', () => {
         } else if (turn.beat === 'last-turn' && plan.pointer === 'again') {
           // The pointer stays on them: no hop.
         } else if (turn.decoyStops !== null) {
+          // A hop to the decoy, a rest of 0.25 s on them and a hop on, each hop 0.4 s or more.
           expect(turn.decoyStops - leaves, at).toBeGreaterThanOrEqual(0.4 - 1e-9);
-          expect(turn.stops - turn.decoyStops, at).toBeGreaterThanOrEqual(0.4 - 1e-9);
+          expect(turn.stops - turn.decoyStops, at).toBeGreaterThanOrEqual(0.65 - 1e-9);
         } else {
           expect(turn.stops - leaves, at).toBeGreaterThanOrEqual(0.4 - 1e-9);
         }
@@ -1541,15 +1611,15 @@ describe('The stage', () => {
       for (const seed of [1, 2]) {
         const label = `${count} people, seed ${seed}`;
         const team = names(count);
-        const { frames, plan, built, shirts } = await watch(team, unluckyOf(count), { seed });
-        // planShow takes the first draws, then the looks.
+        const { plan, built, shirts, lifts } = await watch(team, unluckyOf(count), { seed });
+        // The looks are drawn after the plan's draws.
         const random = createRandom(seed);
-        expect(planShow(team, unluckyOf(count), random), label).toEqual(plan);
+        planShow(team, unluckyOf(count), random);
         const looks = handOutLooks(team, random);
-        const takers = frames.flatMap((frame, index) =>
-          frame.holding.filter((name) => !frames[index - 1]?.holding.includes(name)),
-        );
-        expect(takers, label).toEqual(plan.turns.map((turn) => turn.by));
+        expect(
+          lifts.map((lift) => lift.name),
+          label,
+        ).toEqual(plan.turns.map((turn) => turn.by));
         expect(
           built.map((block) => block.by),
           label,
@@ -1587,17 +1657,15 @@ describe('The stage', () => {
     }
   });
 
-  it('the pointer fades out as they lift, so it never sits over a held block', async () => {
-    const { frames } = await eightRun();
-    frames.forEach((frame, index) => {
-      for (const name of frame.holding) {
-        let lifted = index;
-        while (lifted > 0 && frames[lifted - 1]!.holding.includes(name)) lifted--;
-        if (frame.over === name && frame.pointer.shown > 0) {
-          expect(frame.time - frames[lifted]!.time, `${name} at ${frame.time}`).toBeLessThan(0.15);
+  it('the pointer has faded out by the lift, so it never sits over a held block', async () => {
+    for (const count of [2, 8, 12]) {
+      const { frames } = await (count === 8 ? eightRun() : watch(names(count), unluckyOf(count)));
+      for (const frame of frames) {
+        if (frame.holding.includes(frame.over)) {
+          expect(frame.pointer.shown, `${count} people, ${frame.over} at ${frame.time}`).toBe(0);
         }
       }
-    });
+    }
   });
 
   it('the tower never sways more than 3 times a second, and settles after each block', async () => {
@@ -1632,5 +1700,105 @@ describe('The stage', () => {
     );
     expect(turnsBack(wobbling)).toHaveLength(1);
     expect(Math.max(...wobbling.map((frame) => Math.abs(frame.lean)))).toBeCloseTo(7, 1);
+  });
+});
+
+describe('Hops and tosses', () => {
+  /** Show seconds per frame in these runs: fine enough to time a hop to the frame. */
+  const FINE = 1 / 120;
+  /** The first seed from 1 whose plan at `count` with the usual unlucky person passes `test`. */
+  const seedFor = (count: number, test: (plan: Plan) => boolean) => {
+    let seed = 1;
+    while (!test(planShow(names(count), unluckyOf(count), createRandom(seed)))) seed++;
+    return seed;
+  };
+  /** A run at 2, at 8 with the fake-out, and at 12 with 4 quick turns, finely timed. */
+  let shows: Promise<{ label: string; run: Awaited<ReturnType<typeof watch>> }[]> | undefined;
+  const fineRuns = () =>
+    (shows ??= (async () => {
+      const all = [];
+      // One at a time: every run drives the one GSAP clock.
+      for (const { count, seed } of [
+        { count: 2, seed: seedFor(2, (plan) => during(plan, 'stack').length === 4) },
+        { count: 8, seed: seedFor(8, (plan) => plan.pointer === 'fake-out') },
+        { count: 12, seed: seedFor(12, (plan) => during(plan, 'stack').length === 4) },
+      ]) {
+        const run = await watch(names(count), unluckyOf(count), { seed, step: FINE });
+        all.push({ label: `${count} people, seed ${seed}`, run });
+      }
+      return all;
+    })());
+
+  it('every hop lasts 0.4 s or more (0.2 s in a quick turn), and the pointer rests 0.25 s or more on a decoy', async () => {
+    for (const { label, run } of await fineRuns()) {
+      const { frames, plan } = run;
+      const stopped = stops(frames);
+      // Each stop, with the turn it belongs to.
+      const turnOf = plan.turns.flatMap((turn) => (turn.decoy ? [turn, turn] : [turn]));
+      expect(
+        stopped.map((stop) => stop.name),
+        label,
+      ).toEqual(plan.turns.flatMap((turn) => (turn.decoy ? [turn.decoy, turn.by] : [turn.by])));
+      stopped.forEach((stop, index) => {
+        const turn = turnOf[index]!;
+        const at = `${label}, stop ${index + 1} on ${stop.name} (${turn.beat})`;
+        const after = index === 0 ? -1 : stopped[index - 1]!.to;
+        const leaves = frames.find(
+          (frame) => frame.time > after && frame.over === '' && frame.pointer.shown > 0,
+        )!;
+        const least = turn.beat === 'stack' ? 0.2 : 0.4;
+        expect(stop.from - leaves.time, at).toBeGreaterThanOrEqual(least - FINE);
+        if (turn.decoy === stop.name && turn.by !== stop.name) {
+          expect(stop.to + FINE - stop.from, at).toBeGreaterThanOrEqual(0.25 - FINE);
+        }
+      });
+    }
+  });
+
+  it('each tossed block flies 0.4 s or more, from the whoosh to the thunk', async () => {
+    for (const { label, run } of await fineRuns()) {
+      const whooshes = run.cues.filter((each) => each.cue === 'whoosh');
+      const thunks = run.cues.filter((each) => each.cue === 'thunk').slice(2);
+      expect(whooshes, label).toHaveLength(run.plan.turns.length);
+      expect(thunks, label).toHaveLength(run.plan.turns.length);
+      whooshes.forEach((whoosh, index) => {
+        expect(
+          thunks[index]!.time - whoosh.time,
+          `${label}, turn ${index + 1}`,
+        ).toBeGreaterThanOrEqual(0.4 - FINE);
+      });
+    }
+  });
+
+  it('a bounce in place is a visible hop, clear of the name tags', async () => {
+    // "Again?!" at 8 and 12 with the unlucky person in the front row, and a repeat turn at 2.
+    const front = (count: number) => (plan: Plan) =>
+      plan.pointer === 'again' && spotOf(plan, unluckyOf(count)).row === 'front';
+    const runs = [
+      { count: 8, seed: seedFor(8, front(8)) },
+      { count: 12, seed: seedFor(12, front(12)) },
+      { count: 2, seed: seedFor(2, repeatsBeforeLast) },
+    ];
+    for (const { count, seed } of runs) {
+      const label = `${count} people, seed ${seed}`;
+      const { frames, plan } = await watch(names(count), unluckyOf(count), { seed });
+      const stopped = stops(frames);
+      const tags = tagsOf(plan.order);
+      const bounces = stopped.slice(1).filter((stop, index) => stop.name === stopped[index]!.name);
+      expect(bounces.length, label).toBeGreaterThan(0);
+      for (const stop of bounces) {
+        const before = stopped[stopped.indexOf(stop) - 1]!;
+        const hop = frames.filter((frame) => frame.time > before.to && frame.time < stop.from);
+        const tip = pointerTip(spotOf(plan, stop.name));
+        expect(
+          tip.y - Math.min(...hop.map((frame) => frame.pointer.y)),
+          label,
+        ).toBeGreaterThanOrEqual(10);
+        for (const frame of hop.filter((each) => each.pointer.shown > 0)) {
+          for (const tag of tags)
+            expect(overlap(pointerBox(frame.pointer), tag), label).toBe(false);
+        }
+      }
+    }
   });
 });

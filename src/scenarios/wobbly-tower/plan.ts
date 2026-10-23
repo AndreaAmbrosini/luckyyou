@@ -120,8 +120,19 @@ const TOSS = 0.4;
 const QUICK_TOSS = 0.55;
 /** The big wobble, in seconds from its start: the pointer stops, then the block lands. */
 const WOBBLE = { stops: 0.45, lands: 0.9 };
-/** A careful turn, as parts of it from its start: the decoy, the taker, the landing. */
-const CAREFUL_PACE = { decoy: 0.305, stops: 0.61, lands: 0.915 };
+/**
+ * Each careful turn, as parts of it from its start: the decoy, the taker, the
+ * landing. A decoy stop is a hop of 0.4 s or more to them, a rest of 0.25 s
+ * or more, and a hop on of 0.4 s or more, so the decoy and the taker are 0.65 s
+ * or more apart. The first turn's decoy comes early, as its hop starts in the
+ * beat before; the second's leaves room for the hop from the first landing,
+ * and its landing for Nearly's hop. Laid out for the shortest careful beat,
+ * 3.0 s.
+ */
+const CAREFUL_PACE = [
+  { decoy: 0.08, stops: 0.57, lands: 0.965 },
+  { decoy: 0.215, stops: 0.61, lands: 0.92 },
+] as const;
 /**
  * Nearly, in seconds from its start: the pointer stops, the block lands, the
  * tower leans out for `leanOut` and holds still until the beat ends. It
@@ -130,10 +141,11 @@ const CAREFUL_PACE = { decoy: 0.305, stops: 0.61, lands: 0.915 };
 const NEARLY = { stops: 0.27, lands: 0.67, leanOut: 0.4 };
 /**
  * The last turn, in seconds from its start: where the pointer stops (the
- * fake-out stops on the decoy first). "Again?!" doesn't hop: the pointer
+ * fake-out stops on the decoy first, rests and hops on, as a careful turn
+ * does), and how long the toss takes. "Again?!" doesn't hop: the pointer
  * bounces on the spot.
  */
-const LAST = { decoy: 0.15, straight: 0.3, fakeOut: 0.6 };
+const LAST = { decoy: 0.15, straight: 0.3, fakeOut: 0.8, toss: 0.55 };
 /** Seconds the tower barely moves before it falls, unless it froze earlier. */
 const STILL = 0.6;
 /** Peak leans, in degrees. */
@@ -269,10 +281,11 @@ export function planShow(names: readonly string[], unlucky: string, random: () =
   [careful1, careful2].forEach(({ by, decoy, lean }, index) => {
     const seconds = careful[index]!;
     const at = (part: number) => from + part * seconds;
+    const pace = CAREFUL_PACE[index]!;
     const times = {
-      decoyStops: at(CAREFUL_PACE.decoy),
-      stops: at(CAREFUL_PACE.stops),
-      lands: at(CAREFUL_PACE.lands),
+      decoyStops: at(pace.decoy),
+      stops: at(pace.stops),
+      lands: at(pace.lands),
     };
     add(by, 'careful', from, seconds, times, decoy, lean);
     from += seconds;
@@ -291,7 +304,7 @@ export function planShow(names: readonly string[], unlucky: string, random: () =
   // The last turn, from its start: the pointer's move, then the toss.
   from = start('last-turn');
   const stops = from + (fakeOut ? LAST.fakeOut : LAST.straight);
-  const lands = stops + TOSS;
+  const lands = stops + LAST.toss;
   const fall = start('timber');
   add(
     unlucky,

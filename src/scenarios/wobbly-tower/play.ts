@@ -99,12 +99,22 @@ const NEARLY_BACK = 0.5;
 const FADE = 0.12;
 /** The longest a hop takes: it waits where it is until then. */
 const LONGEST_HOP = 0.6;
-/** How long the pointer rests on a decoy: what the hop on leaves over `hop`, within these. */
-const DWELL = { least: 0.1, most: 0.25, hop: 0.45 };
+/**
+ * How long the pointer rests on a decoy: at least `least`, and whatever the
+ * hop on to the taker leaves over `hop` seconds.
+ */
+const DWELL = { least: 0.25, hop: 0.5 };
 /** How high the pointer hops between two people of the same row, at most. */
 const HOP_HEIGHT = 40;
-/** The part of a toss the block is held overhead, before it leaves the hands. */
-const HELD = 0.3;
+/**
+ * A tossed block flies at least this long, from the whoosh to the thunk. What
+ * the toss has beyond that goes first to the pointer fading out, up to FADE,
+ * and then to holding the block overhead.
+ */
+const FLIGHT = 0.4;
+
+/** How long the pointer takes to fade out as `turn`'s taker is about to lift. */
+const fadeOf = (turn: Turn) => Math.min(FADE, Math.max(0, turn.lands - turn.stops - FLIGHT));
 /** How far a toss arcs above the higher of its two ends. */
 const ARC = 140;
 /** Seconds a bubble stays up. */
@@ -248,8 +258,8 @@ export async function playWobblyTower(show: Show): Promise<void> {
   let dipFrom = 0;
   for (const turn of plan.turns) {
     add(turn.by, {
-      lift: turn.stops,
-      release: turn.stops + HELD * (turn.lands - turn.stops),
+      lift: turn.stops + fadeOf(turn),
+      release: Math.max(turn.stops + fadeOf(turn), turn.lands - FLIGHT),
       lands: turn.lands,
       from: heldBlock(spotOf(turn.by)),
     });
@@ -382,7 +392,7 @@ export async function playWobblyTower(show: Show): Promise<void> {
     const picked = where.over || tossing?.by || '';
     for (const person of people.values()) {
       const mood = moodOf(person.name, t, picked);
-      const holding = tossing?.by === person.name && t < tossing.release;
+      const holding = person.holding;
       const sweat =
         t < downAt && (mood === 'scared' || (person.name === picked && t >= starts.careful));
       const raised = holding || t >= downAt;
@@ -391,10 +401,6 @@ export async function playWobblyTower(show: Show): Promise<void> {
         person.el.dataset.mood = mood;
         person.face.setMood(mood);
       }
-      if (holding !== person.holding) {
-        person.holding = holding;
-        person.el.dataset.holding = String(holding);
-      }
       if (raised !== person.raised) person.face.setRaised((person.raised = raised));
       if (sweat !== person.sweat) person.face.setSweat((person.sweat = sweat));
     }
@@ -402,6 +408,22 @@ export async function playWobblyTower(show: Show): Promise<void> {
   const clock = { t: 0 };
   timeline.to(clock, { t: total, duration: total, ease: 'none', onUpdate: () => draw(clock.t) }, 0);
   draw(0);
+
+  // Who holds a block overhead, from the lift to the whoosh: set as each
+  // moment passes, so a lift too short to fall on a frame still shows.
+  for (const flight of flights) {
+    if (!flight.by) continue;
+    const person = people.get(flight.by)!;
+    for (const [time, on] of [
+      [flight.lift, true],
+      [flight.release, false],
+    ] as const) {
+      at(time, () => {
+        person.holding = on;
+        person.el.dataset.holding = String(on);
+      });
+    }
+  }
 
   // Sounds: a thunk as each block lands, a whoosh as it's tossed, the
   // heartbeat from the careful turns on, and the fall.
@@ -510,7 +532,8 @@ interface Hop {
  * It starts over the paper blocks. Each turn it fades in where it was as it
  * leaves (the previous block's landing, or later so a hop never drags on),
  * hops to the decoy, rests there and hops on, or straight to the taker, and
- * fades out as they lift the block. Between rows it goes by the tower, and
+ * fades out before they lift the block (at once when the toss has no time to
+ * spare). Between rows it goes by the tower, and
  * within a row it hops low enough that its box stays clear of the tags.
  */
 function planHops(
@@ -526,7 +549,7 @@ function planHops(
   const heights: Record<Spot['row'], number> = {
     back: HOP_HEIGHT,
     front:
-      back.length === 0 ? HOP_HEIGHT : Math.max(0, Math.min(HOP_HEIGHT, frontTop - backTags - 4)),
+      back.length === 0 ? HOP_HEIGHT : Math.max(0, Math.min(HOP_HEIGHT, frontTop - backTags - 2)),
   };
   const route = (a: Anchor, b: Anchor): Pick<Hop, 'path' | 'height'> => {
     if (a.row && a.row === b.row) return { path: [a.tip, b.tip], height: heights[a.row] };
@@ -540,7 +563,7 @@ function planHops(
   const startTip = { x: TOWER.x, y: topOf(tower(PAPER.length, 0).at(-1)!).y - 10 };
   const hops: Hop[] = [];
   const stays: { from: number; to: number; name: string }[] = [];
-  const shows: Span[] = [];
+  const shows: (Span & { fade: number })[] = [];
   let here: Anchor = { tip: startTip, row: null };
   turns.forEach((turn, index) => {
     const left = index === 0 ? stackStart : turns[index - 1]!.lands;
@@ -553,7 +576,7 @@ function planHops(
     const leaves = Math.max(left, targets[0]!.time - LONGEST_HOP);
     // The stop before ends as this turn's pointer leaves.
     if (stays.length > 0) stays.at(-1)!.to = leaves;
-    shows.push({ from: leaves, to: turn.stops });
+    shows.push({ from: leaves, to: turn.stops, fade: fadeOf(turn) });
     let from = leaves;
     targets.forEach(({ name, time }, at) => {
       const spot = spotOf(name);
@@ -561,7 +584,7 @@ function planHops(
       hops.push({ leaves: from, arrives: time, ...route(here, there) });
       const rest =
         at < targets.length - 1
-          ? Math.min(DWELL.most, Math.max(DWELL.least, targets[at + 1]!.time - time - DWELL.hop))
+          ? Math.max(DWELL.least, targets[at + 1]!.time - time - DWELL.hop)
           : Infinity;
       stays.push({ from: time, to: time + rest, name });
       here = there;
@@ -582,12 +605,10 @@ function planHops(
       }
       const over = stays.find((stay) => t >= stay.from && t < stay.to)?.name ?? '';
       let shown = 0;
-      for (const span of shows) {
-        if (t < span.from || t >= span.to + FADE) continue;
-        shown = Math.max(
-          shown,
-          Math.min(1, (t - span.from) / FADE, t < span.to ? 1 : 1 - (t - span.to) / FADE),
-        );
+      for (const { from, to, fade } of shows) {
+        if (t < from || t >= to + fade) continue;
+        const out = t < to ? 1 : 1 - (t - to) / fade;
+        shown = Math.max(shown, Math.min(1, (t - from) / FADE, out));
       }
       return { tip, over, shown };
     },
