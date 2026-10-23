@@ -159,7 +159,7 @@ const CUES: Record<Cue, (context: AudioContext) => AudioScheduledSourceNode[]> =
   },
 
   creak(context) {
-    // A slow, rasping squeal that climbs, with a ragged wobble so it is no pulse.
+    // A slow, rasping squeal that climbs, from noise, so it is no pulse.
     const rasp = noise(context, 0.6);
     const squeal = filter(context, 'bandpass', 380);
     squeal.Q.setValueAtTime(12, context.currentTime);
