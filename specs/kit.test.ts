@@ -15,7 +15,7 @@ import { createRandom } from '../src/scenario-kit/random';
 import { spread } from '../src/scenario-kit/stage';
 import { createSound, type Cue } from '../src/scenario-kit/sound';
 import { runShow, type ShowRecord } from '../src/scenario-kit/testing';
-import { bubble, nameTag } from '../src/scenario-kit/text';
+import { bubble, nameTag, speechAt, speechBox, type Box } from '../src/scenario-kit/text';
 import { fitBeats } from '../src/scenario-kit/time';
 import { onReset } from '../src/test/reset';
 import { TEAM } from './support/app';
@@ -403,7 +403,7 @@ describeSpec(await loadFeature('./kit.feature'), ({ Rule }) => {
     });
   });
 
-  Rule('Text is safe and readable', ({ RuleScenario }) => {
+  Rule('Text is safe and readable', ({ RuleScenario, RuleScenarioOutline }) => {
     RuleScenario('A name tag shows a name as typed', ({ Given, When, Then, And }) => {
       let name: string;
       let tag: HTMLElement;
@@ -556,6 +556,71 @@ describeSpec(await loadFeature('./kit.feature'), ({ Rule }) => {
         expect([speech.style.left, speech.style.top]).toEqual(['640px', '300px']);
       });
     });
+
+    RuleScenarioOutline(
+      "A bubble goes beside what it's about, <where>",
+      ({ Given, When, Then, And }, { blocked, where }) => {
+        const head: Box = { left: 500, right: 600, top: 300, bottom: 400 };
+        const IN_THE_WAY: Record<string, Box[]> = {
+          nothing: [],
+          'its right': [{ left: 600, right: 900, top: 300, bottom: 400 }],
+          'both sides': [
+            { left: 200, right: 500, top: 300, bottom: 400 },
+            { left: 600, right: 900, top: 300, bottom: 400 },
+          ],
+          'both sides and above': [
+            { left: 200, right: 500, top: 300, bottom: 400 },
+            { left: 600, right: 900, top: 300, bottom: 400 },
+            { left: 400, right: 700, top: 100, bottom: 300 },
+          ],
+        };
+        let avoid: Box[];
+        let box: Box;
+        const level = () => {
+          const centre = (box.top + box.bottom) / 2;
+          expect(centre).toBeGreaterThanOrEqual(head.top);
+          expect(centre).toBeLessThanOrEqual(head.bottom);
+        };
+        Given('a head at 500 to 600 across and 300 to 400 down, with <blocked> in the way', () => {
+          avoid = IN_THE_WAY[blocked]!;
+        });
+        When('a bubble saying "Phew!" is placed by it', () => {
+          box = speechBox('Phew!', speechAt('Phew!', head, avoid));
+        });
+        Then('it goes <where>', () => {
+          if (where === 'level with it, toward the middle') {
+            level();
+            expect(box.left).toBeGreaterThanOrEqual(head.right);
+            expect(box.left).toBeLessThan(head.right + 20);
+          } else if (where === 'level with it, on its other side') {
+            level();
+            expect(box.right).toBeLessThanOrEqual(head.left);
+            expect(box.right).toBeGreaterThan(head.left - 20);
+          } else if (where === 'above it') {
+            expect(box.bottom).toBeLessThanOrEqual(head.top);
+            expect(box.bottom).toBeGreaterThan(head.top - 20);
+            expect((box.left + box.right) / 2).toBeCloseTo((head.left + head.right) / 2);
+          } else {
+            level();
+            expect(box.left).toBeGreaterThanOrEqual(900);
+          }
+        });
+        And('it covers neither the head nor anything in the way, and stays on the stage', () => {
+          for (const other of [head, ...avoid]) {
+            const covers =
+              box.left < other.right &&
+              other.left < box.right &&
+              box.top < other.bottom &&
+              other.top < box.bottom;
+            expect(covers).toBe(false);
+          }
+          expect(box.left).toBeGreaterThanOrEqual(0);
+          expect(box.right).toBeLessThanOrEqual(1280);
+          expect(box.top).toBeGreaterThanOrEqual(0);
+          expect(box.bottom).toBeLessThanOrEqual(720);
+        });
+      },
+    );
   });
 
   Rule('Characters', ({ RuleScenario }) => {

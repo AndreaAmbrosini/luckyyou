@@ -57,7 +57,7 @@ export interface Turn {
    * Show seconds when the turn starts. Each turn starts where the one before
    * ends, except the first careful turn, which starts after the pigeon's beat.
    * The pointer leaves for this turn at max(the previous block's landing,
-   * or stack's start for the first turn, its first stop − play.ts's
+   * or stack's start for the first turn, its first stop − pointer.ts's
    * LONGEST_HOP).
    */
   readonly from: number;
@@ -119,7 +119,7 @@ const QUICKER = 0.9;
 const CAREFUL = [1, 1.25];
 /**
  * The pointer hops while the tower settles, leaving at max(the previous
- * block's landing, its first stop − play.ts's LONGEST_HOP). Every hop and
+ * block's landing, its first stop − pointer.ts's LONGEST_HOP). Every hop and
  * toss lasts 0.4 s or more (DESIGN.md: movement that matters), except a
  * quick turn's hop, which gets what its toss leaves, 0.2 s or more. Before
  * each toss the pointer stays over the taker for `POINTED`, so it's seen to

@@ -1,10 +1,10 @@
 // Where everyone stands in the ring, from the storyboard: an ellipse seen
 // from a little above, so the person at the back is smaller than the one in
-// front. In stage pixels. Also where the potato goes, and where a speech
-// bubble or the grown unlucky person fits, so the potato and the names stay
-// in view below the caption.
+// front. In stage pixels. Also where the potato goes, and where the grown
+// unlucky person fits, so the potato and the names stay in view below the
+// caption.
 
-import { STAGE, stagePx } from '../../scenario-kit';
+import { STAGE } from '../../scenario-kit';
 
 export interface Point {
   readonly x: number;
@@ -379,7 +379,7 @@ export function windUp(spot: Spot, scale = 1): Path {
 
 /** How much bigger the unlucky person stands at the pop. */
 export const CROWNED = 1.3;
-/** How close to the stage's edge a grown name tag or a speech bubble may come. */
+/** How close to the stage's edge a grown name tag may come. */
 const EDGE = 8;
 
 const shift = (box: Box, x: number, y: number): Box => ({
@@ -409,70 +409,4 @@ export function crowned(spot: Spot): { x: number; y: number; head: Box; tag: Box
   const head = grow(headBox(spot));
   const crown = 0.1 * (head.bottom - head.top);
   return { x, y, head: shift({ ...head, top: head.top - crown }, x, y), tag: shift(tag, x, y) };
-}
-
-/**
- * A speech bubble's box when the kit anchors it at `anchor`, estimated from
- * its text: the speech sits 22 px over the anchor in the caption's font,
- * padded 22 by 6 inside a 4 px line, its tail down to the anchor. A tenth
- * more all round for its tilt and popIn's overshoot.
- */
-export function speechBox(text: string, anchor: Point): Box {
-  const font = stagePx('--size-stage-caption');
-  const width = 1.1 * (0.62 * font * [...text].length + 2 * (22 + 4));
-  const height = 1.1 * (22 + 1.1 * font + 2 * (6 + 4));
-  return {
-    left: anchor.x - width / 2,
-    right: anchor.x + width / 2,
-    top: anchor.y - height,
-    bottom: anchor.y,
-  };
-}
-
-/** The gap between a speech bubble and what it sits beside. */
-const SPEECH_GAP = 12;
-
-/**
- * Where to anchor a speech bubble saying `text`: level with `beside` and
- * next to it on the side towards the stage's middle, or the other side when
- * that has no room; clear of `beside` and everything in `avoid`, inside the stage.
- * When `close`, it isn't pushed further out past something in the way: a side
- * that's in the way doesn't count as room, and with neither side it goes over
- * `beside` if that's clear.
- */
-export function speechAt(
-  text: string,
-  beside: Box,
-  avoid: readonly Box[] = [],
-  { close = false } = {},
-): Point {
-  const size = speechBox(text, { x: 0, y: 0 });
-  const half = size.right;
-  const height = -size.top;
-  const level = (beside.top + beside.bottom) / 2 + height / 2;
-  const y = Math.min(STAGE.height - EDGE, Math.max(height + EDGE, level));
-  const towards = (beside.left + beside.right) / 2 > STAGE.width / 2 ? -1 : 1;
-  const inTheWay = [beside, ...avoid];
-  for (const side of [towards, -towards]) {
-    const past = (box: Box) =>
-      side > 0 ? box.right + SPEECH_GAP + half : box.left - SPEECH_GAP - half;
-    let x = past(beside);
-    let pushed = false;
-    for (let moved = true; moved;) {
-      const blocking = inTheWay.find((box) => overlap(speechBox(text, { x, y }), box));
-      moved = blocking !== undefined;
-      if (blocking) x = past(blocking);
-      pushed ||= moved;
-    }
-    if (close && pushed) continue;
-    if (x - half >= EDGE && x + half <= STAGE.width - EDGE) return { x, y };
-  }
-  // Neither side has room: over it instead.
-  const middle = (beside.left + beside.right) / 2;
-  const x = Math.min(STAGE.width - EDGE - half, Math.max(EDGE + half, middle));
-  const overIt = { x, y: beside.top };
-  if (close && avoid.some((box) => overlap(speechBox(text, overIt), box))) {
-    return speechAt(text, beside, avoid);
-  }
-  return overIt;
 }

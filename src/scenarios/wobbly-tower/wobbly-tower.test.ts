@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { gsap } from 'gsap';
 import { describeSpec, runShow, type ShowRecord } from '../../scenario-kit/testing';
 import { createRandom } from '../../scenario-kit/random';
-import { handOutLooks, nameTag, type Cue, type Scenario } from '../../scenario-kit';
+import { handOutLooks, nameTag, speechBox, type Cue, type Scenario } from '../../scenario-kit';
 import wobblyTower from './index';
 import {
   BEATS,
@@ -37,7 +37,7 @@ import {
   type Spot,
 } from './layout';
 import { PIGEON_FEET, POINTER } from './parts';
-import { grownBoxes, speechBox } from './play';
+import { grownBoxes } from './play';
 
 const POINTER_MOVES: readonly PointerMove[] = ['straight', 'fake-out', 'again'];
 const ENDINGS: readonly Ending[] = ['dead-still', 'it-holds', 'slow-lean'];

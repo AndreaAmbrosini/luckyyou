@@ -3,6 +3,7 @@ import { gsap } from 'gsap';
 import { beforeAll, describe, expect, it } from 'vitest';
 import { describeSpec, runShow, type ShowRecord } from '../../scenario-kit/testing';
 import { createRandom } from '../../scenario-kit/random';
+import { speechBox } from '../../scenario-kit';
 import hotPotato from './index';
 import {
   bezier,
@@ -21,7 +22,6 @@ import {
   raised,
   ring,
   SKY,
-  speechBox,
   tagBox,
   throwPath,
   windUp,

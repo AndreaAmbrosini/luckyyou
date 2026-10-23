@@ -11,6 +11,7 @@ import {
   nameTag,
   popIn,
   shake,
+  speechAt,
   type Cue,
   type Head,
   type Look,
@@ -32,7 +33,6 @@ import {
   potatoBox,
   raised,
   ring,
-  speechAt,
   throwPath,
   windUp,
   type Box,
@@ -422,9 +422,8 @@ export async function playHotPotato(show: Show): Promise<void> {
     beside: Box,
     avoid: Box[] = [],
     colour: 'paper' | 'sun' = 'paper',
-    close = false,
   ) => {
-    const speech = bubble(text, speechAt(text, beside, avoid, { close }), { colour });
+    const speech = bubble(text, speechAt(text, beside, avoid), { colour });
     speech.dataset.part = 'bubble';
     scene.append(speech);
     timeline.add(popIn(speech), time);
@@ -445,8 +444,7 @@ export async function playHotPotato(show: Show): Promise<void> {
   }
   if (plan.phew) {
     const holding = showdownThrows.at(-1)!.by;
-    // Close by, so it's plainly theirs.
-    say(phewAt, 'Phew!', headBox(people.get(plan.phew)!.spot), [inHands(holding)], 'paper', true);
+    say(phewAt, 'Phew!', headBox(people.get(plan.phew)!.spot), [inHands(holding)]);
   }
 
   // The last second: the sparkler burns to its last spark, and the face

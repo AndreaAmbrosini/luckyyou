@@ -415,3 +415,12 @@ export function placeTags(all: readonly Spot[], widths: readonly number[]): numb
     return shift;
   });
 }
+
+/** The middle of a block's top edge. */
+export function topOf(block: Block): Point {
+  const a = (block.turn * Math.PI) / 180;
+  return {
+    x: block.x + (block.height / 2) * Math.sin(a),
+    y: block.y - (block.height / 2) * Math.cos(a),
+  };
+}

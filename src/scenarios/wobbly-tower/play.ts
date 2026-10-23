@@ -14,8 +14,8 @@ import {
   head,
   nameTag,
   popIn,
+  speechAt,
   STAGE,
-  stagePx,
   type Cue,
   type Head,
   type Look,
@@ -29,11 +29,11 @@ import {
   heldBlock,
   overlap,
   placeTags,
-  pointerTip,
   signedLean,
   spots as standing,
   tagBox,
   tagContentWidth,
+  topOf,
   tower,
   towards,
   TOWER,
@@ -54,6 +54,7 @@ import {
   speedLines,
 } from './parts';
 import { BEATS, planShow, READ, type Beat, type Plan, type Turn } from './plan';
+import { fadeOf, FLIGHT, movesOn, planHops } from './pointer';
 import styles from './wobbly-tower.module.css';
 
 /** The two paper blocks land at these show seconds, each after falling for DROP seconds. */
@@ -99,31 +100,6 @@ const PIGEON = {
 } as const;
 /** Seconds Nearly takes to swing back upright after its hold. */
 const NEARLY_BACK = 0.5;
-/** Seconds the pointer takes to fade in or out. */
-const FADE = 0.12;
-/** The longest a hop takes: it waits where it is until then. */
-const LONGEST_HOP = 0.6;
-/**
- * How long the pointer rests on a decoy: at least `least`, and whatever the
- * hop on to the taker leaves over `hop` seconds.
- */
-const DWELL = { least: 0.25, hop: 0.5 };
-/** How long the pointer rests on a stop at `stops` before hopping on to the next at `next`. */
-const restBetween = (stops: number, next: number) =>
-  Math.max(DWELL.least, next - stops - DWELL.hop);
-/** When the pointer hops on from `turn`'s decoy. */
-const movesOn = (turn: Turn) => turn.decoyStops! + restBetween(turn.decoyStops!, turn.stops);
-/** How high the pointer hops between two people of the same row, at most. */
-const HOP_HEIGHT = 40;
-/**
- * A tossed block flies at least this long, from the whoosh to the thunk. What
- * the toss has beyond that goes first to the pointer fading out, up to FADE,
- * and then to holding the block overhead.
- */
-const FLIGHT = 0.4;
-
-/** How long the pointer takes to fade out as `turn`'s taker is about to lift. */
-const fadeOf = (turn: Turn) => Math.min(FADE, Math.max(0, turn.lands - turn.stops - FLIGHT));
 /** How far a toss arcs above the higher of its two ends. */
 const ARC = 140;
 /** Seconds a bubble stays up. */
@@ -152,7 +128,6 @@ const CREAK = 0.3;
 
 const ease = {
   sway: gsap.parseEase('sine.inOut'),
-  hop: gsap.parseEase('power1.inOut'),
   toss: gsap.parseEase('sine.inOut'),
   drop: gsap.parseEase('power2.in'),
   fly: gsap.parseEase('sine.inOut'),
@@ -363,7 +338,8 @@ export async function playWobblyTower(show: Show): Promise<void> {
   pointer.el.dataset.over = '';
   const setPointerX = gsap.quickSetter(pointer.el, 'x', 'px') as (value: number) => void;
   const setPointerY = gsap.quickSetter(pointer.el, 'y', 'px') as (value: number) => void;
-  const hops = planHops(plan.turns, starts.stack, spotOf, spots);
+  const startTip = { x: TOWER.x, y: topOf(tower(PAPER.length, 0).at(-1)!).y - 10 };
+  const hops = planHops(plan.turns, starts.stack, spotOf, spots, startTip);
 
   // The pigeon flies in, perches on the top block wherever it leans, and flies off.
   const bird = plan.pigeon ? drawPigeon() : null;
@@ -669,128 +645,6 @@ class Sway {
   }
 }
 
-/** Where the pointer can be, at a spot or anywhere else. */
-interface Anchor {
-  readonly tip: Point;
-  readonly row: Spot['row'] | null;
-}
-
-/** One hop of the pointer, from where it was to someone. */
-interface Hop {
-  readonly leaves: number;
-  readonly arrives: number;
-  readonly path: readonly Point[];
-  /** How high it hops on the way. */
-  readonly height: number;
-}
-
-/**
- * The pointer's hops, the stops it makes and when it shows, for the turns.
- * It starts over the paper blocks. Each turn it fades in where it was as it
- * leaves (the previous block's landing, or later so a hop never drags on),
- * hops to the decoy, rests there and hops on, or straight to the taker, and
- * fades out before they lift the block. Between rows it goes by the tower,
- * and within a row it hops low enough that its box stays clear of the tags.
- */
-function planHops(
-  turns: readonly Turn[],
-  stackStart: number,
-  spotOf: (name: string) => Spot,
-  spots: readonly Spot[],
-) {
-  const back = spots.filter((spot) => spot.row === 'back');
-  const front = spots.filter((spot) => spot.row === 'front');
-  const backTags = Math.max(...back.map((spot) => tagBox(spot).bottom));
-  const frontTop = Math.min(...front.map((spot) => pointerTip(spot).y - POINTER.height));
-  const heights: Record<Spot['row'], number> = {
-    back: HOP_HEIGHT,
-    front:
-      back.length === 0 ? HOP_HEIGHT : Math.max(0, Math.min(HOP_HEIGHT, frontTop - backTags - 2)),
-  };
-  const route = (a: Anchor, b: Anchor): Pick<Hop, 'path' | 'height'> => {
-    if (a.row && a.row === b.row) return { path: [a.tip, b.tip], height: heights[a.row] };
-    const path = [a.tip, { x: TOWER.x, y: a.tip.y }, { x: TOWER.x, y: b.tip.y }, b.tip].filter(
-      (point, index, all) =>
-        index === 0 || point.x !== all[index - 1]!.x || point.y !== all[index - 1]!.y,
-    );
-    return { path, height: 0 };
-  };
-
-  const startTip = { x: TOWER.x, y: topOf(tower(PAPER.length, 0).at(-1)!).y - 10 };
-  const hops: Hop[] = [];
-  const stays: { from: number; to: number; name: string }[] = [];
-  const shows: (Span & { fade: number })[] = [];
-  let here: Anchor = { tip: startTip, row: null };
-  turns.forEach((turn, index) => {
-    const left = index === 0 ? stackStart : turns[index - 1]!.lands;
-    const targets: { name: string; time: number }[] = turn.decoy
-      ? [
-          { name: turn.decoy, time: turn.decoyStops! },
-          { name: turn.by, time: turn.stops },
-        ]
-      : [{ name: turn.by, time: turn.stops }];
-    const leaves = Math.max(left, targets[0]!.time - LONGEST_HOP);
-    // The stop before ends as this turn's pointer leaves.
-    if (stays.length > 0) stays.at(-1)!.to = leaves;
-    shows.push({ from: leaves, to: turn.stops, fade: fadeOf(turn) });
-    let from = leaves;
-    targets.forEach(({ name, time }, at) => {
-      const spot = spotOf(name);
-      const there: Anchor = { tip: pointerTip(spot), row: spot.row };
-      hops.push({ leaves: from, arrives: time, ...route(here, there) });
-      const rest = at < targets.length - 1 ? restBetween(time, targets[at + 1]!.time) : Infinity;
-      stays.push({ from: time, to: time + rest, name });
-      here = there;
-      from = time + rest;
-    });
-  });
-
-  return {
-    /** Where the pointer's tip is at `t`, whom it's over, and how opaque it's drawn. */
-    at(t: number): { tip: Point; over: string; shown: number } {
-      let tip = startTip;
-      for (const hop of hops) {
-        if (t < hop.leaves) break;
-        tip =
-          t < hop.arrives
-            ? along(hop, ease.hop((t - hop.leaves) / (hop.arrives - hop.leaves)))
-            : hop.path.at(-1)!;
-      }
-      const over = stays.find((stay) => t >= stay.from && t < stay.to)?.name ?? '';
-      let shown = 0;
-      for (const { from, to, fade } of shows) {
-        // Gone by the lift, however its time is rounded.
-        if (t < from || t >= to + fade - 1e-9) continue;
-        const out = t < to ? 1 : 1 - (t - to) / fade;
-        shown = Math.max(shown, Math.min(1, (t - from) / FADE, out));
-      }
-      return { tip, over, shown };
-    },
-  };
-}
-
-/** A point `u` (0 to 1) of the way along a hop's path, lifted on a curve `height` high. */
-function along({ path, height }: Pick<Hop, 'path' | 'height'>, u: number): Point {
-  const lengths = path.slice(1).map((point, index) => {
-    const before = path[index]!;
-    return Math.hypot(point.x - before.x, point.y - before.y);
-  });
-  const length = lengths.reduce((sum, each) => sum + each, 0);
-  let point = path[0]!;
-  let left = u * length;
-  for (const [index, each] of lengths.entries()) {
-    const a = path[index]!;
-    const b = path[index + 1]!;
-    if (left <= each || index === lengths.length - 1) {
-      const part = each === 0 ? 1 : Math.min(1, left / each);
-      point = { x: a.x + (b.x - a.x) * part, y: a.y + (b.y - a.y) * part };
-      break;
-    }
-    left -= each;
-  }
-  return { x: point.x, y: point.y - height * Math.sin(Math.PI * u) };
-}
-
 /** A point `u` of the way from `a` to `b` on a curve over the higher of the two, `rise` above it. */
 function arc(a: Point, b: Point, u: number, rise: number): Point {
   const c = { x: (a.x + b.x) / 2, y: Math.min(a.y, b.y) - rise };
@@ -912,15 +766,6 @@ function planTumble(
   };
 }
 
-/** The middle of a block's top edge. */
-function topOf(block: Block): Point {
-  const a = (block.turn * Math.PI) / 180;
-  return {
-    x: block.x + (block.height / 2) * Math.sin(a),
-    y: block.y - (block.height / 2) * Math.cos(a),
-  };
-}
-
 /** Draws `el` as `block`: its size, its place and its turn. */
 function place(el: HTMLElement, block: Block) {
   const width = `${block.width}px`;
@@ -982,69 +827,4 @@ function placeNameTags(people: readonly Person[]): Box[] {
     if (shift !== 0) tags[index]!.style.left = `calc(50% + ${shift}px)`;
   });
   return people.map((person, index) => tagBox(person.spot, widths[index], shifts[index]));
-}
-
-/** How big a speech bubble saying `text` is drawn, about its tail. */
-function speechSize(text: string): { half: number; height: number } {
-  const font = stagePx('--size-stage-caption');
-  return {
-    half: (1.1 * (0.62 * font * [...text].length + 2 * (22 + 4))) / 2,
-    height: 1.1 * (22 + 1.1 * font + 2 * (6 + 4)),
-  };
-}
-
-/** The box a bubble saying `text` takes, with its tail at `tail`. */
-export function speechBox(text: string, { x, y }: Point): Box {
-  const { half, height } = speechSize(text);
-  return { left: x - half, right: x + half, top: y - height, bottom: y };
-}
-
-/** Space kept between a bubble and what it sits beside, and the stage's edge. */
-const SPEECH = { gap: 12, edge: 8 };
-
-/**
- * Where to anchor a bubble saying `text`: level with `beside`, on its side
- * toward the stage's middle, or on the other side, or just above it, if that
- * covers nothing in `avoid`; otherwise level with it toward the middle,
- * pushed out past anything it would cover, or the other way when that has no
- * room, and over `beside` when neither has.
- */
-function speechAt(text: string, beside: Box, avoid: readonly Box[]): Point {
-  const { half, height } = speechSize(text);
-  const { gap, edge } = SPEECH;
-  const drawn = (tail: Point) => speechBox(text, tail);
-  const middle = (beside.left + beside.right) / 2;
-  const level = (beside.top + beside.bottom) / 2 + height / 2;
-  const y = Math.min(STAGE.height - edge, Math.max(height + edge, level));
-  const inward = middle > STAGE.width / 2 ? -1 : 1;
-  const clear = (tail: Point) => {
-    const box = drawn(tail);
-    const onStage =
-      box.left >= edge &&
-      box.right <= STAGE.width - edge &&
-      box.top >= edge &&
-      box.bottom <= STAGE.height - edge;
-    return onStage && !avoid.some((other) => overlap(box, other));
-  };
-  const near = [
-    { x: beside.right + gap + half, y },
-    { x: beside.left - gap - half, y },
-    { x: middle, y: beside.top - gap },
-  ];
-  if (inward < 0) [near[0], near[1]] = [near[1]!, near[0]!];
-  const nearby = near.find(clear);
-  if (nearby) return nearby;
-  for (const side of [inward, -inward]) {
-    const past = (box: Box) => (side > 0 ? box.right + gap + half : box.left - gap - half);
-    let x = past(beside);
-    for (let blocking = avoid.find((box) => overlap(drawn({ x, y }), box)); blocking;) {
-      x = past(blocking);
-      blocking = avoid.find((box) => overlap(drawn({ x, y }), box));
-    }
-    if (x - half >= edge && x + half <= STAGE.width - edge) return { x, y };
-  }
-  return {
-    x: Math.min(STAGE.width - edge - half, Math.max(edge + half, middle)),
-    y: Math.max(height + edge, beside.top),
-  };
 }

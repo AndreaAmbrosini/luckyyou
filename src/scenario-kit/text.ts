@@ -3,6 +3,7 @@
 
 import { gsap } from 'gsap';
 import styles from './text.module.css';
+import { STAGE } from './stage';
 import { stagePx, token } from './tokens';
 
 /** A tag's padding on both sides together, in ems, as text.module.css sets it. */
@@ -146,6 +147,92 @@ export function bubble(
   words.dir = 'auto';
   words.textContent = text;
   return element;
+}
+
+/** A box on the stage, in stage pixels. */
+export interface Box {
+  readonly left: number;
+  readonly right: number;
+  readonly top: number;
+  readonly bottom: number;
+}
+
+const overlap = (one: Box, two: Box) =>
+  one.left < two.right && two.left < one.right && one.top < two.bottom && two.top < one.bottom;
+
+/**
+ * A bubble's box when it's anchored at `anchor`, estimated from its text: the
+ * speech sits 22 px over the anchor in the caption's font, padded 22 by 6
+ * inside a 4 px line, its tail down to the anchor. A tenth more all round for
+ * its tilt and popIn's overshoot.
+ */
+export function speechBox(text: string, anchor: { x: number; y: number }): Box {
+  const font = stagePx('--size-stage-caption');
+  const half = (1.1 * (0.62 * font * [...text].length + 2 * (22 + 4))) / 2;
+  const height = 1.1 * (22 + 1.1 * font + 2 * (6 + 4));
+  return {
+    left: anchor.x - half,
+    right: anchor.x + half,
+    top: anchor.y - height,
+    bottom: anchor.y,
+  };
+}
+
+/** Space kept between a bubble and what it sits beside, and the stage's edge. */
+const SPEECH = { gap: 12, edge: 8 };
+
+/**
+ * Where to anchor a bubble saying `text`, on the stage and clear of `beside`
+ * and everything in `avoid`: level with `beside`, on its side toward the
+ * stage's middle, or its other side, or just above it, when that's clear;
+ * otherwise level with it, pushed out past what's in the way toward the
+ * middle, or the other way when that has no room; over `beside` when neither
+ * has.
+ */
+export function speechAt(
+  text: string,
+  beside: Box,
+  avoid: readonly Box[] = [],
+): {
+  x: number;
+  y: number;
+} {
+  const { gap, edge } = SPEECH;
+  const size = speechBox(text, { x: 0, y: 0 });
+  const half = size.right;
+  const height = -size.top;
+  const inTheWay = [beside, ...avoid];
+  const middle = (beside.left + beside.right) / 2;
+  const level = (beside.top + beside.bottom) / 2 + height / 2;
+  const y = Math.min(STAGE.height - edge, Math.max(height + edge, level));
+  const centred = Math.min(STAGE.width - edge - half, Math.max(edge + half, middle));
+  const inward = middle > STAGE.width / 2 ? -1 : 1;
+  const past = (box: Box, side: number) =>
+    side > 0 ? box.right + gap + half : box.left - gap - half;
+  const blocking = (tail: { x: number; y: number }) =>
+    inTheWay.find((box) => overlap(speechBox(text, tail), box));
+  const clear = (tail: { x: number; y: number }) => {
+    const box = speechBox(text, tail);
+    const onStage =
+      box.left >= edge &&
+      box.right <= STAGE.width - edge &&
+      box.top >= edge &&
+      box.bottom <= STAGE.height - edge;
+    return onStage && !blocking(tail);
+  };
+
+  const near = [
+    { x: past(beside, inward), y },
+    { x: past(beside, -inward), y },
+    { x: centred, y: beside.top - gap },
+  ].find(clear);
+  if (near) return near;
+  for (const side of [inward, -inward]) {
+    let x = past(beside, side);
+    for (let box = blocking({ x, y }); box; box = blocking({ x, y })) x = past(box, side);
+    if (x - half >= edge && x + half <= STAGE.width - edge) return { x, y };
+  }
+  return { x: centred, y: Math.max(height + edge, beside.top) };
 }
 
 /**

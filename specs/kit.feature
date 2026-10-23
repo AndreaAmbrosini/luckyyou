@@ -139,6 +139,19 @@ Feature: The scenario kit
       Then it reads "Woo-hoo!"
       And it points at 640, 300
 
+    Scenario Outline: A bubble goes beside what it's about, <where>
+      Given a head at 500 to 600 across and 300 to 400 down, with <blocked> in the way
+      When a bubble saying "Phew!" is placed by it
+      Then it goes <where>
+      And it covers neither the head nor anything in the way, and stays on the stage
+
+      Examples:
+        | blocked                       | where                                 |
+        | nothing                       | level with it, toward the middle      |
+        | its right                     | level with it, on its other side      |
+        | both sides                    | above it                              |
+        | both sides and above          | level with it, past what's in the way |
+
   Rule: Characters
 
     Scenario: A head has five moods and one accessory
