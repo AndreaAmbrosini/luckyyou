@@ -266,8 +266,8 @@ Feature: Wobbly Tower
 
     Scenario: Whoever is at risk is drawn big
       When the show runs at 6 and at 12 people, a 15-character name among the 12
-      Then with 6 or fewer at risk, their heads are 120 pixels tall and their name tags 36 pixels or more, on the 1280 by 720 stage
-      And with 7 or more at risk, their heads are 100 pixels tall and their name tags 30 pixels or more
+      Then with 6 or fewer at risk, their heads are 120 pixels tall and the name tags other than the 15-character one 36 pixels or more, on the 1280 by 720 stage
+      And with 7 or more at risk, their heads are 100 pixels tall and those other name tags 30 pixels or more
       And the 15-character name's tag is 22 pixels or more, at risk or not
       And on the Safe bench, name tags are 22 pixels or more
       And the "At risk" number is 48 pixels or more

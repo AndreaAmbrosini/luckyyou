@@ -1418,7 +1418,7 @@ describeSpec(await loadFeature('./wobbly-tower.feature'), ({ Rule }) => {
         ];
       });
       Then(
-        'with 6 or fewer at risk, their heads are 120 pixels tall and their name tags 36 pixels or more, on the 1280 by 720 stage',
+        'with 6 or fewer at risk, their heads are 120 pixels tall and the name tags other than the 15-character one 36 pixels or more, on the 1280 by 720 stage',
         () => {
           let seen = 0;
           for (const { at, name, frame, them } of standing()) {
@@ -1433,7 +1433,7 @@ describeSpec(await loadFeature('./wobbly-tower.feature'), ({ Rule }) => {
         },
       );
       And(
-        'with 7 or more at risk, their heads are 100 pixels tall and their name tags 30 pixels or more',
+        'with 7 or more at risk, their heads are 100 pixels tall and those other name tags 30 pixels or more',
         () => {
           let seen = 0;
           for (const { at, name, frame, them } of standing()) {

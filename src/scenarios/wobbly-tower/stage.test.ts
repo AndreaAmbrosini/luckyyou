@@ -638,38 +638,140 @@ describe('Moving people', () => {
     expect(failures.slice(0, 10)).toEqual([]);
   });
 
-  it('the 15-character name keeps its tag apart, wherever it stands, at 8 to 12', () => {
-    const long = TEAM.at(-1)!;
-    const failures: string[] = [];
-    for (let count = 8; count <= 12; count++) {
-      for (let seed = 1; seed <= 20; seed++) {
-        // The plan goes by place in the list, not by name: the long name in each place in turn.
-        for (let place = 0; place < count; place++) {
+  const long = TEAM.at(-1)!;
+  /**
+   * The plans at 8 to 12, seeds 1–20, the 15-character name in each place in
+   * the list in turn (the plan goes by place, not by name), worked out once for
+   * the tests that share them; and when to look: standing, before the first
+   * close and after each, and every moment of each close.
+   */
+  let longShows:
+    | {
+        label: string;
+        plan: Plan;
+        places: ReturnType<typeof placings>;
+        moves: number[];
+        /** Every tag's box at each moment looked at; none while it hides. */
+        looks: { t: number; boxes: { name: string; box: Box }[] }[];
+      }[]
+    | undefined;
+  const withTheLongName = () =>
+    (longShows ??= Array.from({ length: 5 }, (_, k) => k + 8).flatMap((count) =>
+      Array.from({ length: 20 }, (_, k) => k + 1).flatMap((seed) =>
+        Array.from({ length: count }, (_, place) => {
           const team = NORMAL.slice(0, count).map((name, index) => (index === place ? long : name));
           const plan = planShow(team, team.at(-1)!, createRandom(seed));
-          const places = placings(plan);
           const moves = [
             ...new Set(plan.turns.flatMap((turn) => (turn.safe === null ? [] : [turn.safe]))),
           ];
-          // Standing, before the first close and after each; and every moment of each close.
+          const places = placings(plan);
           const times = [
             0,
             ...moves.flatMap((at) => Array.from({ length: 21 }, (_, k) => at + (HOP * k) / 20)),
           ];
-          for (const t of times) {
-            const boxes = plan.order.flatMap((name) => {
-              const box = places.tagBox(name, t);
-              return box ? [{ name, box }] : [];
-            });
-            boxes.forEach(({ name, box }, index) => {
-              for (const other of boxes.slice(index + 1)) {
-                if (overlap(box, other.box)) {
-                  failures.push(
-                    `${count} people, seed ${seed}, ${long} in place ${place}: ${name} and ${other.name} at ${t.toFixed(3)}`,
-                  );
-                }
-              }
-            });
+          return {
+            label: `${count} people, seed ${seed}, ${long} in place ${place}`,
+            plan,
+            places,
+            moves,
+            looks: times.map((t) => ({
+              t,
+              boxes: plan.order.flatMap((name) => {
+                const box = places.tagBox(name, t);
+                return box ? [{ name, box }] : [];
+              }),
+            })),
+          };
+        }),
+      ),
+    ));
+
+  it('the 15-character name keeps its tag apart, wherever it stands, at 8 to 12', () => {
+    const failures: string[] = [];
+    for (const { label, looks } of withTheLongName()) {
+      for (const { t, boxes } of looks) {
+        boxes.forEach(({ name, box }, index) => {
+          for (const other of boxes.slice(index + 1)) {
+            if (overlap(box, other.box)) {
+              failures.push(`${label}: ${name} and ${other.name} at ${t.toFixed(3)}`);
+            }
+          }
+        });
+      }
+    }
+    expect(failures.slice(0, 10)).toEqual([]);
+  });
+
+  it('with the 15-character name, tags at risk clear the tower and its plinth, at 8 to 12', () => {
+    const failures: string[] = [];
+    /**
+     * Every block of a tower `landed` blocks high or lower, `height` each, at
+     * every lean before the fall, with its upright box; and how far those
+     * boxes reach, row by row, so a tag far from them all is passed quickly.
+     */
+    const poses = new Map<
+      string,
+      {
+        blocks: { block: ReturnType<typeof tower>[number]; box: Box }[];
+        left: number[];
+        right: number[];
+      }
+    >();
+    const towerUpTo = (landed: number, height: number) => {
+      const key = `${landed}/${height}`;
+      let known = poses.get(key);
+      if (!known) {
+        const blocks = Array.from({ length: landed }, (_, k) => k + 1)
+          .flatMap((count) =>
+            Array.from({ length: 23 }, (_, k) => tower(count, k - 11, height)).flat(),
+          )
+          .map((block) => ({ block, box: blockBox(block) }));
+        const left = Array.from({ length: 721 }, () => Infinity);
+        const right = Array.from({ length: 721 }, () => -Infinity);
+        for (const { box } of blocks) {
+          for (let y = Math.max(0, Math.floor(box.top)); y <= Math.ceil(box.bottom); y++) {
+            left[y] = Math.min(left[y]!, box.left);
+            right[y] = Math.max(right[y]!, box.right);
+          }
+        }
+        poses.set(key, (known = { blocks, left, right }));
+      }
+      return known;
+    };
+    const near = ({ left, right }: { left: number[]; right: number[] }, box: Box) => {
+      for (
+        let y = Math.max(0, Math.floor(box.top));
+        y <= Math.min(720, Math.ceil(box.bottom));
+        y++
+      ) {
+        if (left[y]! < box.right && right[y]! > box.left) return true;
+      }
+      return false;
+    };
+    for (const { label, plan, places, moves, looks } of withTheLongName()) {
+      const height = blockHeight(2 + plan.turns.length);
+      for (const { t, boxes } of looks) {
+        // The two paper blocks, and every thrown one landed by then.
+        const landed = 2 + plan.turns.filter((turn) => turn.lands <= t + 1e-9).length;
+        const built = towerUpTo(landed, height);
+        const move = moves.findLast((at) => at <= t + 1e-9);
+        const atRisk = places.atRisk(t);
+        for (const { name, box } of boxes) {
+          if (!atRisk.includes(name)) continue;
+          // Whoever changes sides walks round the tower, their tag drawn over it like over every block.
+          if (
+            move !== undefined &&
+            sideOf(places.at(name, move - 1e-9)) !== sideOf(places.at(name, move + HOP))
+          ) {
+            continue;
+          }
+          const at = `${label}: ${name} at ${t.toFixed(3)}`;
+          if (overlap(box, PLINTH)) failures.push(`${at}, on the plinth`);
+          if (
+            near(built, box) &&
+            built.blocks.some((pose) => overlap(pose.box, box) && blockOverlaps(pose.block, box))
+          ) {
+            failures.push(`${at}, on the tower`);
           }
         }
       }
