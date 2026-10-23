@@ -16,7 +16,6 @@ Feature: Wobbly Tower
 
   Rule: It falls on the unlucky person's turn
 
-    @pending
     Scenario Outline: <count> people, the unlucky person <position> in the list
       Given <count> people, with the unlucky person <position> in the list
       When the show runs
@@ -57,7 +56,6 @@ Feature: Wobbly Tower
 
   Rule: The pointer picks each turn
 
-    @pending
     Scenario: Nobody knows who's next until it stops
       Given 8 people
       When the show runs
@@ -65,7 +63,6 @@ Feature: Wobbly Tower
       And it stops over their head before they lift a block
       And it never covers a name tag
 
-    @pending
     Scenario: Careful now, the pointer wavers
       Given 8 people
       When the careful turns start
@@ -88,7 +85,6 @@ Feature: Wobbly Tower
 
   Rule: The tower sways and holds
 
-    @pending
     Scenario: Each block lands and the tower sways
       When the show runs
       Then each block lands on top of the tower with a thunk
@@ -96,7 +92,6 @@ Feature: Wobbly Tower
       And after each block the tower sways and settles before the next turn, except on the last turn
       And it never sways more than 3 times a second
 
-    @pending
     Scenario: The big wobble holds
       Given 8 people
       When the big wobble turn's block lands
@@ -109,7 +104,6 @@ Feature: Wobbly Tower
       When the show runs with 20 different random seeds
       Then the big wobble is on the unlucky person's turn in some runs, and not in others
 
-    @pending
     Scenario Outline: Sometimes a pigeon lands on top, with <count> people
       Given <count> people
       When the show runs with 20 different random seeds
@@ -129,7 +123,6 @@ Feature: Wobbly Tower
 
   Rule: Nearly! The biggest wobble is a false alarm
 
-    @pending
     Scenario: Nearly
       Given 8 people
       When the turn before the last one's block lands

@@ -1,8 +1,9 @@
 import { loadFeature } from '@amiceli/vitest-cucumber';
 import { describe, expect, it } from 'vitest';
-import { describeSpec } from '../../scenario-kit/testing';
+import { gsap } from 'gsap';
+import { describeSpec, runShow, type ShowRecord } from '../../scenario-kit/testing';
 import { createRandom } from '../../scenario-kit/random';
-import { nameTag } from '../../scenario-kit';
+import { handOutLooks, nameTag } from '../../scenario-kit';
 import wobblyTower from './index';
 import {
   BEATS,
@@ -30,8 +31,10 @@ import {
   tagContentWidth,
   tower,
   type Box,
+  type Point,
   type Spot,
 } from './layout';
+import { POINTER } from './parts';
 
 const POINTER_MOVES: readonly PointerMove[] = ['straight', 'fake-out', 'again'];
 const ENDINGS: readonly Ending[] = ['dead-still', 'it-holds', 'slow-lean'];
@@ -140,6 +143,290 @@ const LEANS = Array.from({ length: 45 }, (_, index) => index - 22);
 /** How tall the tower may end: 2 paper blocks and 7 to 9 turns. */
 const HEIGHTS = [9, 10, 11];
 
+/** Show seconds per recorded frame. */
+const STEP = 1 / 30;
+
+/** What the stage showed in one frame. */
+interface Frame {
+  readonly time: number;
+  readonly beat: string;
+  /** Whom the pointer has stopped over; '' while it hops, and before the first turn. */
+  readonly over: string;
+  /** Where the pointer's tip is, and how opaque it's drawn: 0 hidden, 1 fully. */
+  readonly pointer: Point & { readonly shown: number };
+  /** The tower's lean in degrees, positive to the right of the stage. */
+  readonly lean: number;
+  /** How many blocks have landed on the tower. */
+  readonly blocks: number;
+  /** The top landed block's centre and turn, as drawn; null before the first lands. */
+  readonly top: (Point & { readonly turn: number }) | null;
+  readonly moods: Readonly<Record<string, string>>;
+  /** Who holds a block overhead. */
+  readonly holding: readonly string[];
+  /** Where the pigeon's feet are, and its pose, while it's on stage. */
+  readonly pigeon: (Point & { readonly pose: string }) | null;
+  /** The speech bubbles showing, and where their tails point. */
+  readonly bubbles: readonly (Point & { readonly text: string })[];
+}
+
+/** A tower block as the stage built it: who throws it ('' for paper) and its colour. */
+interface Built {
+  readonly by: string;
+  readonly fill: string;
+}
+
+/** Whether `element` is drawn: not hidden, and not fully transparent. */
+const opacityOf = (element: HTMLElement | SVGElement) =>
+  element.style.visibility === 'hidden' ? 0 : Number(element.style.opacity || 1);
+
+/** A block's centre and turn from the transform play.ts draws it with. */
+function placed(block: HTMLElement): (Point & { turn: number }) | null {
+  const match = /translate\(([-\d.e]+)px, ([-\d.e]+)px\) rotate\(([-\d.e]+)deg\)/.exec(
+    block.style.transform,
+  );
+  if (!match) return null;
+  return {
+    x: Number(match[1]) + Number.parseFloat(block.style.width) / 2,
+    y: Number(match[2]) + Number.parseFloat(block.style.height) / 2,
+    turn: Number(match[3]),
+  };
+}
+
+/**
+ * Runs Wobbly Tower and notes what the stage showed every frame. With
+ * `until`, the show is cancelled at that many show seconds.
+ */
+async function watch(
+  team: readonly string[],
+  unlucky: string,
+  {
+    seed = 1,
+    step = STEP,
+    until,
+    reducedMotion = false,
+  }: { seed?: number; step?: number; until?: number; reducedMotion?: boolean } = {},
+): Promise<{
+  frames: Frame[];
+  record: ShowRecord;
+  plan: Plan;
+  sign: string;
+  built: Built[];
+  shirts: Record<string, string>;
+}> {
+  const frames: Frame[] = [];
+  let sign = '';
+  let built: Built[] = [];
+  let shirts: Record<string, string> = {};
+  /** What each frame reads, found once: looking it up every frame is slow in jsdom. */
+  let parts:
+    | {
+        scene: HTMLElement;
+        tower: HTMLElement;
+        blocks: HTMLElement[];
+        people: HTMLElement[];
+        pointer: HTMLElement;
+        /** Only in a run with the pigeon. */
+        pigeon: SVGElement | null;
+        bubbles: HTMLElement[];
+      }
+    | undefined;
+  const record = await runShow(wobblyTower, {
+    names: team,
+    unlucky,
+    seed,
+    step,
+    cancelAt: until,
+    reducedMotion,
+    onFrame(time, stage) {
+      parts ??= {
+        scene: stage.querySelector<HTMLElement>('[data-part="scene"]')!,
+        tower: stage.querySelector<HTMLElement>('[data-part="tower"]')!,
+        blocks: [...stage.querySelectorAll<HTMLElement>('[data-part="tower"] [data-part="block"]')],
+        people: [...stage.querySelectorAll<HTMLElement>('[data-person]')],
+        pointer: stage.querySelector<HTMLElement>('[data-part="pointer"]')!,
+        pigeon: stage.querySelector<SVGElement>('[data-part="pigeon"]'),
+        bubbles: [...stage.querySelectorAll<HTMLElement>('[data-part="bubble"]')],
+      };
+      const { scene, tower: drawn, blocks, people, pointer, pigeon, bubbles } = parts;
+      if (!sign) {
+        sign = pointer.textContent ?? '';
+        built = blocks.map((block) => ({ by: block.dataset.by!, fill: block.dataset.fill! }));
+        shirts = Object.fromEntries(
+          people.map((person) => [
+            person.dataset.person!,
+            person.querySelector('svg')!.style.getPropertyValue('--shirt'),
+          ]),
+        );
+      }
+      // Once the show is over, the run empties the stage.
+      if (!scene.isConnected) return;
+      const landed = Number(drawn.dataset.blocks);
+      const pigeonShown = pigeon !== null && opacityOf(pigeon) > 0;
+      frames.push({
+        time,
+        beat: scene.dataset.beat!,
+        over: pointer.dataset.over!,
+        pointer: {
+          x: Number(gsap.getProperty(pointer, 'x')) + POINTER.tip.x,
+          y: Number(gsap.getProperty(pointer, 'y')) + POINTER.tip.y,
+          shown: opacityOf(pointer),
+        },
+        lean: Number(drawn.dataset.lean),
+        blocks: landed,
+        top: landed > 0 ? placed(blocks[landed - 1]!) : null,
+        moods: Object.fromEntries(
+          people.map((person) => [person.dataset.person!, person.dataset.mood!]),
+        ),
+        holding: people
+          .filter((person) => person.dataset.holding === 'true')
+          .map((person) => person.dataset.person!),
+        pigeon: pigeonShown
+          ? {
+              x: Number(gsap.getProperty(pigeon, 'x')) + PIGEON_FEET.x,
+              y: Number(gsap.getProperty(pigeon, 'y')) + PIGEON_FEET.y,
+              pose: pigeon.dataset.pose!,
+            }
+          : null,
+        bubbles: bubbles
+          .filter((bubble) => opacityOf(bubble) > 0)
+          .map((bubble) => ({
+            text: bubble.textContent ?? '',
+            x: Number.parseFloat(bubble.style.left),
+            y: Number.parseFloat(bubble.style.top),
+          })),
+      });
+    },
+  });
+  expect(record.error).toBeUndefined();
+  if (until === undefined) expect(record.outcome).toBe('finished');
+  return {
+    frames,
+    record,
+    plan: planShow(team, unlucky, createRandom(seed)),
+    sign,
+    built,
+    shirts,
+  };
+}
+
+/** The pigeon's feet on its 90 × 70 grid (parts.ts). */
+const PIGEON_FEET = { x: 38, y: 68 } as const;
+
+/** Each time a block lands: the frame's time and how many have landed. */
+const landings = (frames: readonly Frame[]) =>
+  frames.filter((frame, index) => index > 0 && frame.blocks > frames[index - 1]!.blocks);
+
+/** The stretches the pointer stays over someone: who, and the frames' times. */
+function stops(frames: readonly Frame[]): { name: string; from: number; to: number }[] {
+  const all: { name: string; from: number; to: number }[] = [];
+  frames.forEach((frame, index) => {
+    if (!frame.over) return;
+    const previous = frames[index - 1];
+    if (previous?.over === frame.over) all.at(-1)!.to = frame.time;
+    else all.push({ name: frame.over, from: frame.time, to: frame.time });
+  });
+  return all;
+}
+
+/**
+ * The times the lean turns back, frame to frame. Standing still for a tenth
+ * of a second or more ends a sway, so moving off again from rest isn't one.
+ */
+function turnsBack(frames: readonly Frame[]): number[] {
+  const times: number[] = [];
+  let direction = 0;
+  let still = 0;
+  frames.forEach((frame, index) => {
+    if (index === 0) return;
+    const previous = frames[index - 1]!;
+    const delta = frame.lean - previous.lean;
+    if (Math.abs(delta) < 1e-6) {
+      still += frame.time - previous.time;
+      if (still > 0.1 - 1e-9) direction = 0;
+      return;
+    }
+    still = 0;
+    if (direction !== 0 && Math.sign(delta) !== direction) times.push(previous.time);
+    direction = Math.sign(delta);
+  });
+  return times;
+}
+
+/** The seconds from each time the lean turns back to the next, within one sway. */
+function swings(frames: readonly Frame[]): number[] {
+  const all: number[] = [];
+  let direction = 0;
+  let still = 0;
+  let last: number | null = null;
+  frames.forEach((frame, index) => {
+    if (index === 0) return;
+    const previous = frames[index - 1]!;
+    const delta = frame.lean - previous.lean;
+    if (Math.abs(delta) < 1e-6) {
+      still += frame.time - previous.time;
+      if (still > 0.1 - 1e-9) [direction, last] = [0, null];
+      return;
+    }
+    still = 0;
+    if (direction !== 0 && Math.sign(delta) !== direction) {
+      if (last !== null) all.push(previous.time - last);
+      last = previous.time;
+    }
+    direction = Math.sign(delta);
+  });
+  return all;
+}
+
+/** The most times the lean turns back within any one second. */
+const swaysPerSecond = (frames: readonly Frame[]) => {
+  const times = turnsBack(frames);
+  return Math.max(0, ...times.map((from) => times.filter((t) => t >= from && t < from + 1).length));
+};
+
+/** The tag boxes at `count` people standing in `order`, as the kit sets them. */
+const tagsOf = (order: readonly string[]) => tagsFor(spots(order.length), order);
+
+/** The pointer's whole box with its tip at `tip`. */
+const pointerBox = (tip: Point): Box => ({
+  left: tip.x - POINTER.tip.x,
+  right: tip.x - POINTER.tip.x + POINTER.width,
+  top: tip.y - POINTER.tip.y,
+  bottom: tip.y - POINTER.tip.y + POINTER.height,
+});
+
+/** Where `name` stands in a run of `plan`. */
+const spotOf = (plan: Plan, name: string) => spots(plan.order.length)[plan.order.indexOf(name)]!;
+
+/** The top centre of the top block of `count` blocks leaning `lean`. */
+function topOf(count: number, lean: number): Point {
+  const block = tower(count, lean).at(-1)!;
+  const a = (block.turn * Math.PI) / 180;
+  return {
+    x: block.x + (block.height / 2) * Math.sin(a),
+    y: block.y - (block.height / 2) * Math.cos(a),
+  };
+}
+
+/** 8 people, Luca unlucky, seed 1: run once and shared by the scenarios that watch it. */
+let eightShow: ReturnType<typeof watch> | undefined;
+const eightRun = () => (eightShow ??= watch(names(8), 'Luca'));
+
+/**
+ * After each block but the last turn's, the tower sways a degree or more and
+ * is back upright (under half a degree) in the frame before the next block
+ * lands: the next turn's weight comes on a settled tower.
+ */
+function expectSwaysAndSettles(frames: readonly Frame[], label: string) {
+  const landed = landings(frames);
+  landed.slice(0, -1).forEach((landing, index) => {
+    const next = landed[index + 1]!;
+    const between = frames.filter((frame) => frame.time >= landing.time && frame.time < next.time);
+    const at = `${label}, block ${landing.blocks}`;
+    expect(Math.max(...between.map((frame) => Math.abs(frame.lean))), at).toBeGreaterThanOrEqual(1);
+    expect(Math.abs(between.at(-1)!.lean), at).toBeLessThan(0.5);
+  });
+}
+
 describeSpec(await loadFeature('./wobbly-tower.feature'), ({ Rule }) => {
   Rule('Its card', ({ RuleScenario }) => {
     RuleScenario('The picker shows Wobbly Tower', ({ Then, And }) => {
@@ -158,7 +445,47 @@ describeSpec(await loadFeature('./wobbly-tower.feature'), ({ Rule }) => {
     });
   });
 
-  Rule("It falls on the unlucky person's turn", ({ RuleScenario }) => {
+  Rule("It falls on the unlucky person's turn", ({ RuleScenario, RuleScenarioOutline }) => {
+    RuleScenarioOutline(
+      '<count> people, the unlucky person <position> in the list',
+      ({ Given, When, Then, And }, variables) => {
+        let team: string[];
+        let unlucky: string;
+        let frames: Frame[];
+        let plan: Plan;
+        /** The frame the last block lands in. */
+        let last: Frame;
+        Given('<count> people, with the unlucky person <position> in the list', () => {
+          team = names(Number(variables.count));
+          unlucky = variables.position === 'first' ? team[0]! : team.at(-1)!;
+        });
+        When('the show runs', async () => {
+          ({ frames, plan } = await watch(team, unlucky));
+          last = landings(frames).at(-1)!;
+        });
+        Then("the last turn is the unlucky person's", () => {
+          expect(last.blocks).toBe(2 + plan.turns.length);
+          // Who held a block overhead, turn after turn: the last is the unlucky person.
+          const holders = frames.flatMap((frame, index) =>
+            frame.holding.filter((name) => !frames[index - 1]?.holding.includes(name)),
+          );
+          expect(holders).toHaveLength(plan.turns.length);
+          expect(holders.at(-1)).toBe(unlucky);
+        });
+        And('the tower falls on that turn, toward them', () => {
+          const falling = frames.find((frame) => Math.abs(frame.lean) > 30);
+          expect(falling).toBeDefined();
+          expect(falling!.time).toBeGreaterThan(last.time);
+          expect(Math.sign(falling!.lean)).toBe(sideOf(spotOf(plan, unlucky)));
+        });
+        And("it never falls on anyone else's turn", () => {
+          for (const frame of frames.filter((each) => each.time <= last.time)) {
+            expect(Math.abs(frame.lean), `at ${frame.time}`).toBeLessThanOrEqual(22 + 1e-6);
+          }
+        });
+      },
+    );
+
     RuleScenario('Who goes first gives nothing away', ({ Given, When, Then, And }) => {
       let runs: Plan[];
       Given('8 people, with the same unlucky person every time', () => {});
@@ -236,7 +563,135 @@ describeSpec(await loadFeature('./wobbly-tower.feature'), ({ Rule }) => {
     });
   });
 
-  Rule('The pointer picks each turn', ({ RuleScenarioOutline }) => {
+  Rule('The pointer picks each turn', ({ RuleScenario, RuleScenarioOutline }) => {
+    RuleScenario("Nobody knows who's next until it stops", ({ Given, When, Then, And }) => {
+      let frames: Frame[];
+      let plan: Plan;
+      let sign: string;
+      Given('8 people', () => {});
+      When('the show runs', async () => {
+        ({ frames, plan, sign } = await eightRun());
+      });
+      Then(
+        'before each turn the {string} pointer hops from where it was to the next person',
+        (_, label: string) => {
+          expect(sign).toBe(label);
+          const stopped = stops(frames);
+          expect(stopped.map((each) => each.name)).toEqual(
+            plan.turns.flatMap((turn) => (turn.decoy ? [turn.decoy, turn.by] : [turn.by])),
+          );
+          stopped.forEach((stop, index) => {
+            const spot = spotOf(plan, stop.name);
+            const tip = pointerTip(spot);
+            const during = frames.filter(
+              (frame) => frame.time >= stop.from && frame.time <= stop.to,
+            );
+            for (const frame of during) {
+              expect(frame.pointer.x).toBeCloseTo(tip.x, 6);
+              expect(frame.pointer.y).toBeCloseTo(tip.y, 6);
+            }
+            if (index === 0) return;
+            // In between it hops, over nobody, from where it stopped last.
+            const previous = stopped[index - 1]!;
+            const hop = frames.filter(
+              (frame) =>
+                frame.time > previous.to && frame.time < stop.from && frame.pointer.shown > 0,
+            );
+            expect(hop.length, `hop to ${stop.name}`).toBeGreaterThan(0);
+            for (const frame of hop) expect(frame.over).toBe('');
+            const from = pointerTip(spotOf(plan, previous.name));
+            expect(
+              Math.hypot(hop[0]!.pointer.x - from.x, hop[0]!.pointer.y - from.y),
+              `hop to ${stop.name}`,
+            ).toBeLessThan(80);
+          });
+        },
+      );
+      And('it stops over their head before they lift a block', () => {
+        frames.forEach((frame, index) => {
+          for (const name of frame.holding) {
+            if (frames[index - 1]?.holding.includes(name)) continue;
+            expect(frame.over, `${name} at ${frame.time}`).toBe(name);
+            const tip = pointerTip(spotOf(plan, name));
+            expect(frame.pointer.x).toBeCloseTo(tip.x, 6);
+            expect(frame.pointer.y).toBeCloseTo(tip.y, 6);
+          }
+        });
+      });
+      And('it never covers a name tag', () => {
+        const tags = tagsOf(plan.order);
+        for (const frame of frames.filter((each) => each.pointer.shown > 0)) {
+          for (const tag of tags) {
+            expect(overlap(pointerBox(frame.pointer), tag), `at ${frame.time}`).toBe(false);
+          }
+        }
+      });
+    });
+
+    RuleScenario('Careful now, the pointer wavers', ({ Given, When, Then, And }) => {
+      let frames: Frame[];
+      let plan: Plan;
+      let record: ShowRecord;
+      let careful: Turn[];
+      Given('8 people', () => {});
+      When('the careful turns start', async () => {
+        ({ frames, plan, record } = await eightRun());
+        careful = during(plan, 'careful');
+      });
+      Then(
+        'before each careful turn the pointer stops on someone, then hops to someone else',
+        () => {
+          const from = startOf(plan, 'careful');
+          const to = startOf(plan, 'nearly');
+          const stopped = stops(frames.filter((frame) => frame.time >= from && frame.time < to));
+          expect(stopped.map((each) => each.name)).toEqual(
+            careful.flatMap((turn) => [turn.decoy!, turn.by]),
+          );
+          for (const turn of careful) expect(turn.decoy).not.toBe(turn.by);
+          // Between the two stops of a turn, it hops over nobody.
+          for (let index = 0; index < stopped.length; index += 2) {
+            const [decoy, taker] = [stopped[index]!, stopped[index + 1]!];
+            const hop = frames.filter((frame) => frame.time > decoy.to && frame.time < taker.from);
+            expect(hop.length).toBeGreaterThan(0);
+            for (const frame of hop) expect(frame.over).toBe('');
+          }
+        },
+      );
+      And('the caption names whose turn it is', () => {
+        for (const turn of careful) {
+          const caption = record.captions.find((each) => each.text === `${turn.by}…`);
+          expect(caption, turn.by).toBeDefined();
+          // The kit holds the caption before for a second, which can hold this one a moment.
+          expect(caption!.from).toBeGreaterThanOrEqual(turn.stops - 1e-9);
+          expect(caption!.from).toBeLessThanOrEqual(turn.stops + 0.15);
+          const shown = frames.find((frame) => frame.time >= caption!.from - 1e-9)!;
+          expect(shown.over).toBe(turn.by);
+        }
+      });
+      And('each careful turn takes longer than the one before', () => {
+        // From the pointer stopping on the decoy until the block lands, on the stage.
+        const stopped = stops(frames);
+        const landed = landings(frames);
+        const lengths = careful.map((turn) => {
+          const decoy = stopped.find((each) => each.from >= turn.decoyStops! - 1e-9)!;
+          const lands = landed.find((each) => each.time >= turn.lands - 1e-9)!;
+          return lands.time - decoy.from;
+        });
+        expect(lengths[1]!).toBeGreaterThan(lengths[0]!);
+        expect(careful[1]!.seconds).toBeGreaterThan(careful[0]!.seconds);
+      });
+      And('the heartbeat comes quicker and quicker until the last turn', () => {
+        // Sound isn't recorded: play.ts cues a heartbeat at each of these.
+        const { heartbeats } = plan;
+        expect(heartbeats[0]).toBeCloseTo(startOf(plan, 'careful'), 9);
+        expect(heartbeats.at(-1)!).toBeGreaterThanOrEqual(startOf(plan, 'last-turn'));
+        expect(heartbeats.at(-1)!).toBeLessThan(plan.turns.at(-1)!.lands);
+        const gaps = heartbeats.slice(1).map((time, index) => time - heartbeats[index]!);
+        gaps.slice(1).forEach((gap, index) => expect(gap).toBeLessThanOrEqual(gaps[index]! + 1e-9));
+        expect(gaps.at(-1)!).toBeLessThan(gaps[0]!);
+      });
+    });
+
     RuleScenarioOutline(
       'Stack it up, each turn quicker, with <count> people',
       ({ Given, When, Then, And }, variables) => {
@@ -268,7 +723,160 @@ describeSpec(await loadFeature('./wobbly-tower.feature'), ({ Rule }) => {
     );
   });
 
-  Rule('The tower sways and holds', ({ RuleScenario }) => {
+  Rule('The tower sways and holds', ({ RuleScenario, RuleScenarioOutline }) => {
+    RuleScenario('Each block lands and the tower sways', ({ When, Then, And }) => {
+      let frames: Frame[];
+      let plan: Plan;
+      let built: Built[];
+      let shirts: Record<string, string>;
+      When('the show runs', async () => {
+        ({ frames, plan, built, shirts } = await eightRun());
+      });
+      Then('each block lands on top of the tower with a thunk', () => {
+        // Sound isn't recorded: play.ts cues a thunk as each lands.
+        const landed = landings(frames);
+        expect(landed.map((frame) => frame.blocks)).toEqual(
+          Array.from({ length: 2 + plan.turns.length }, (_, index) => index + 1),
+        );
+        plan.turns.forEach((turn, index) => {
+          const time = landed[index + 2]!.time;
+          expect(time).toBeGreaterThanOrEqual(turn.lands - 1e-9);
+          expect(time).toBeLessThan(turn.lands + STEP + 1e-9);
+        });
+        for (const frame of landed) {
+          const top = tower(frame.blocks, frame.lean).at(-1)!;
+          expect(frame.top!.x).toBeCloseTo(top.x, 1);
+          expect(frame.top!.y).toBeCloseTo(top.y, 1);
+          expect(frame.top!.turn).toBeCloseTo(top.turn, 1);
+        }
+      });
+      And("each block is its thrower's shirt colour, after two plain paper blocks", () => {
+        const paper = 'var(--color-paper)';
+        expect(built.slice(0, 2)).toEqual([
+          { by: '', fill: paper },
+          { by: '', fill: paper },
+        ]);
+        expect(built.slice(2).map((block) => block.by)).toEqual(plan.turns.map((turn) => turn.by));
+        for (const block of built.slice(2)) expect(block.fill).toBe(shirts[block.by]);
+      });
+      And(
+        'after each block the tower sways and settles before the next turn, except on the last turn',
+        () => {
+          expectSwaysAndSettles(frames, '8 people');
+        },
+      );
+      And('it never sways more than 3 times a second', () => {
+        expect(swaysPerSecond(frames)).toBeLessThanOrEqual(3);
+      });
+    });
+
+    RuleScenario('The big wobble holds', ({ Given, When, Then, And }) => {
+      let frames: Frame[];
+      let plan: Plan;
+      let record: ShowRecord;
+      /** The frames from the big wobble's landing until the turn's end. */
+      let wobbling: Frame[];
+      /** When the tower is upright and still again. */
+      let settled: number;
+      Given('8 people', () => {});
+      When("the big wobble turn's block lands", async () => {
+        ({ frames, plan, record } = await eightRun());
+        const wobble = only(plan, 'wobble');
+        const lands = landings(frames).find((frame) => frame.time >= wobble.lands - 1e-9)!;
+        wobbling = frames.filter(
+          (frame) => frame.time >= lands.time && frame.time < wobble.from + wobble.seconds,
+        );
+        const last = turnsBack(wobbling).at(-1)!;
+        settled = wobbling.find((frame) => frame.time > last && Math.abs(frame.lean) < 1e-6)!.time;
+      });
+      Then('the tower sways wide, three times, each smaller than the one before', () => {
+        const swings = turnsBack(wobbling).map(
+          (time) => wobbling.find((frame) => frame.time >= time - 1e-9)!.lean,
+        );
+        expect(swings).toHaveLength(3);
+        expect(Math.abs(swings[0]!)).toBeGreaterThanOrEqual(6);
+        swings.slice(1).forEach((lean, index) => {
+          expect(Math.sign(lean)).toBe(-Math.sign(swings[index]!));
+          expect(Math.abs(lean)).toBeLessThan(Math.abs(swings[index]!));
+        });
+      });
+      And('everyone looks scared until it settles', () => {
+        for (const frame of wobbling.filter((each) => each.time < settled)) {
+          expect(new Set(Object.values(frame.moods)), `at ${frame.time}`).toEqual(
+            new Set(['scared']),
+          );
+        }
+        const after = frames.find((frame) => frame.time > settled + 2 * STEP)!;
+        expect(Object.values(after.moods)).not.toContain('scared');
+      });
+      And('the caption is {string}, then {string}', (_, wobble: string, holds: string) => {
+        const landed = wobbling[0]!.time;
+        const first = record.captions.find((caption) => caption.text === wobble)!;
+        const then = record.captions.find((caption) => caption.text === holds)!;
+        expect(first.from).toBeGreaterThanOrEqual(landed - STEP);
+        expect(first.from).toBeLessThanOrEqual(landed + 0.1);
+        expect(then.from).toBeGreaterThanOrEqual(settled - STEP);
+        expect(then.from - first.from).toBeGreaterThanOrEqual(1 - 1e-9);
+        expect(record.captions.indexOf(then)).toBe(record.captions.indexOf(first) + 1);
+      });
+    });
+
+    RuleScenarioOutline(
+      'Sometimes a pigeon lands on top, with <count> people',
+      ({ Given, When, Then, And }, variables) => {
+        let runs: Plan[];
+        let team: string[];
+        Given('<count> people', () => {
+          team = names(Number(variables.count));
+        });
+        When('the show runs with 20 different random seeds', () => {
+          runs = plans(team.length);
+        });
+        Then(
+          'in some runs a pigeon lands on top after the big wobble, the tower dips, everyone gasps, and it flies off',
+          async () => {
+            const seed = runs.findIndex((plan) => plan.pigeon) + 1;
+            expect(seed).toBeGreaterThan(0);
+            const { frames, plan } = await watch(team, unluckyOf(team.length), { seed });
+            const P = startOf(plan, 'pigeon');
+            const shown = frames.filter((frame) => frame.pigeon);
+            expect(shown.length).toBeGreaterThan(0);
+            for (const frame of shown) {
+              expect(frame.time).toBeGreaterThanOrEqual(P - 1e-9);
+              expect(frame.time).toBeLessThanOrEqual(P + plan.beats.pigeon + 1e-9);
+            }
+            // The big wobble has settled when it comes.
+            expect(frames.find((frame) => frame.time >= P - 1e-9)!.lean).toBeCloseTo(0, 6);
+            const perched = shown.filter((frame) => frame.pigeon!.pose === 'perched');
+            expect(perched.length).toBeGreaterThan(0);
+            for (const frame of perched) {
+              const top = topOf(frame.blocks, frame.lean);
+              expect(frame.pigeon!.x).toBeCloseTo(top.x, 1);
+              expect(frame.pigeon!.y).toBeCloseTo(top.y, 1);
+            }
+            expect(
+              Math.max(...perched.map((frame) => Math.abs(frame.lean))),
+            ).toBeGreaterThanOrEqual(1);
+            expect(
+              perched.some((frame) =>
+                Object.values(frame.moods).every((mood) => mood === 'scared'),
+              ),
+            ).toBe(true);
+            const gone = shown.at(-1)!;
+            expect(gone.pigeon!.pose).toBe('flying');
+            expect(gone.pigeon!.x).toBeGreaterThan(perched.at(-1)!.pigeon!.x + 100);
+            expect(frames.at(-1)!.pigeon).toBeNull();
+          },
+        );
+        And('in some runs no pigeon comes', async () => {
+          const seed = runs.findIndex((plan) => !plan.pigeon) + 1;
+          expect(seed).toBeGreaterThan(0);
+          const { frames } = await watch(team, unluckyOf(team.length), { seed });
+          expect(frames.filter((frame) => frame.pigeon)).toEqual([]);
+        });
+      },
+    );
+
     RuleScenario('The big wobble gives nothing away', ({ Given, When, Then }) => {
       let runs: Plan[];
       Given('8 people, with the same unlucky person every time', () => {});
@@ -301,6 +909,63 @@ describeSpec(await loadFeature('./wobbly-tower.feature'), ({ Rule }) => {
   });
 
   Rule('Nearly! The biggest wobble is a false alarm', ({ RuleScenario }) => {
+    RuleScenario('Nearly', ({ Given, When, Then, And }) => {
+      let frames: Frame[];
+      let plan: Plan;
+      let record: ShowRecord;
+      let nearly: Turn;
+      /** The frames the tower leans furthest in, before the fall. */
+      let furthest: Frame[];
+      Given('8 people', () => {});
+      When("the turn before the last one's block lands", async () => {
+        ({ frames, plan, record } = await eightRun());
+        nearly = only(plan, 'nearly');
+        const before = frames.filter((frame) => frame.time < plan.still.to);
+        const most = Math.max(...before.map((frame) => Math.abs(frame.lean)));
+        furthest = before.filter((frame) => Math.abs(frame.lean) > most - 1e-6);
+      });
+      Then(
+        'the tower leans further than at any other time and holds still there for at least half a second',
+        () => {
+          expect(Math.abs(furthest[0]!.lean)).toBeCloseTo(22, 6);
+          expect(Math.sign(furthest[0]!.lean)).toBe(sideOf(spotOf(plan, nearly.by)));
+          // One stretch, in the Nearly beat.
+          furthest.slice(1).forEach((frame, index) => {
+            expect(frame.time - furthest[index]!.time).toBeCloseTo(STEP, 6);
+          });
+          expect(furthest.at(-1)!.time - furthest[0]!.time).toBeGreaterThanOrEqual(0.5 - STEP);
+          expect(furthest[0]!.time).toBeGreaterThan(nearly.lands);
+          expect(furthest.at(-1)!.time).toBeLessThanOrEqual(startOf(plan, 'last-turn') + 1e-9);
+        },
+      );
+      And('it swings back upright', () => {
+        const lastLands = plan.turns.at(-1)!.lands;
+        const back = frames.filter(
+          (frame) => frame.time > furthest.at(-1)!.time && frame.time < lastLands,
+        );
+        expect(back.some((frame) => Math.abs(frame.lean) < 0.5)).toBe(true);
+      });
+      And('the thrower says {string}', (_, phew: string) => {
+        const thrower = spotOf(plan, nearly.by);
+        const said = frames
+          .filter((frame) => frame.time > furthest.at(-1)!.time)
+          .flatMap((frame) => frame.bubbles)
+          .filter((bubble) => bubble.text === phew);
+        expect(said.length).toBeGreaterThan(0);
+        // Beside the thrower's head.
+        for (const bubble of said) {
+          expect(Math.abs(bubble.x - thrower.x)).toBeLessThan(thrower.size + 260);
+          expect(Math.abs(bubble.y - thrower.y)).toBeLessThan(thrower.size + 120);
+        }
+      });
+      And('the caption is {string}', (_, text: string) => {
+        const caption = record.captions.find((each) => each.text === text)!;
+        expect(caption).toBeDefined();
+        expect(caption.from).toBeGreaterThanOrEqual(nearly.lands - 1e-9);
+        expect(caption.from).toBeLessThanOrEqual(nearly.lands + 0.1);
+      });
+    });
+
     RuleScenario('Who nearly topples it gives nothing away', ({ Given, When, Then, And }) => {
       let runs: Plan[];
       Given('8 people, with the same unlucky person every time', () => {});
@@ -860,5 +1525,112 @@ describe('The plan', () => {
     const orders = plans(8).map((plan) => plan.order.join());
     for (const order of orders) expect(order.split(',').sort()).toEqual([...names(8)].sort());
     expect(new Set(orders).size).toBeGreaterThan(1);
+  });
+});
+
+describe('The stage', () => {
+  /** The first seed from 1 whose plan at `count` passes `test`. */
+  const seedWhere = (count: number, test: (plan: Plan) => boolean) => {
+    let seed = 1;
+    while (!test(planShow(names(count), unluckyOf(count), createRandom(seed)))) seed++;
+    return seed;
+  };
+
+  it('the stage plays the plan for its seed', async () => {
+    for (const count of [2, 8, 12]) {
+      for (const seed of [1, 2]) {
+        const label = `${count} people, seed ${seed}`;
+        const team = names(count);
+        const { frames, plan, built, shirts } = await watch(team, unluckyOf(count), { seed });
+        // planShow takes the first draws, then the looks.
+        const random = createRandom(seed);
+        expect(planShow(team, unluckyOf(count), random), label).toEqual(plan);
+        const looks = handOutLooks(team, random);
+        const takers = frames.flatMap((frame, index) =>
+          frame.holding.filter((name) => !frames[index - 1]?.holding.includes(name)),
+        );
+        expect(takers, label).toEqual(plan.turns.map((turn) => turn.by));
+        expect(
+          built.map((block) => block.by),
+          label,
+        ).toEqual(['', '', ...plan.turns.map((turn) => turn.by)]);
+        expect(
+          built.map((block) => block.fill),
+          label,
+        ).toEqual([
+          'var(--color-paper)',
+          'var(--color-paper)',
+          ...plan.turns.map((turn) => `var(--color-${looks.get(turn.by)!.ring})`),
+        ]);
+        for (const name of team) {
+          expect(shirts[name], label).toBe(`var(--color-${looks.get(name)!.ring})`);
+        }
+      }
+    }
+  });
+
+  it("the pointer's whole box never covers a name tag at 8 and 12", async () => {
+    for (const count of [8, 12]) {
+      const team = NORMAL.slice(0, count);
+      for (const seed of [1, 2, 3]) {
+        const { frames, plan } = await watch(team, team.at(-1)!, { seed });
+        const tags = tagsOf(plan.order);
+        for (const frame of frames.filter((each) => each.pointer.shown > 0)) {
+          for (const tag of tags) {
+            expect(
+              overlap(pointerBox(frame.pointer), tag),
+              `${count} people, seed ${seed}, at ${frame.time}`,
+            ).toBe(false);
+          }
+        }
+      }
+    }
+  });
+
+  it('the pointer fades out as they lift, so it never sits over a held block', async () => {
+    const { frames } = await eightRun();
+    frames.forEach((frame, index) => {
+      for (const name of frame.holding) {
+        let lifted = index;
+        while (lifted > 0 && frames[lifted - 1]!.holding.includes(name)) lifted--;
+        if (frame.over === name && frame.pointer.shown > 0) {
+          expect(frame.time - frames[lifted]!.time, `${name} at ${frame.time}`).toBeLessThan(0.15);
+        }
+      }
+    });
+  });
+
+  it('the tower never sways more than 3 times a second, and settles after each block', async () => {
+    // The quickest quick turns: four of them, at 2 and at 5 people.
+    const runs = [
+      { count: 2, seed: seedWhere(2, (plan) => during(plan, 'stack').length === 4) },
+      { count: 5, seed: seedWhere(5, (plan) => during(plan, 'stack').length === 4) },
+      { count: 12, seed: seedWhere(12, (plan) => during(plan, 'stack').length === 4) },
+      { count: 8, seed: 3 },
+    ];
+    for (const { count, seed } of runs) {
+      for (const reducedMotion of [false, true]) {
+        const label = `${count} people, seed ${seed}${reducedMotion ? ', reduced motion' : ''}`;
+        const { frames, plan } = await watch(names(count), unluckyOf(count), {
+          seed,
+          reducedMotion,
+        });
+        const before = frames.filter((frame) => frame.time < plan.still.to);
+        expect(swaysPerSecond(before), label).toBeLessThanOrEqual(3);
+        for (const swing of swings(before))
+          expect(swing, label).toBeGreaterThanOrEqual(0.34 - STEP);
+        expectSwaysAndSettles(frames, label);
+      }
+    }
+  });
+
+  it('with reduced motion the big wobble is one slow lean and settle', async () => {
+    const { frames, plan } = await watch(names(8), 'Luca', { reducedMotion: true });
+    const wobble = only(plan, 'wobble');
+    const wobbling = frames.filter(
+      (frame) => frame.time >= wobble.lands && frame.time < wobble.from + wobble.seconds,
+    );
+    expect(turnsBack(wobbling)).toHaveLength(1);
+    expect(Math.max(...wobbling.map((frame) => Math.abs(frame.lean)))).toBeCloseTo(7, 1);
   });
 });

@@ -1,14 +1,23 @@
-.people {
+/* Someone standing at their spot: the head and the name tag on the chest. */
+.person {
+  position: absolute;
+  transform-origin: 50% 80%;
+}
+
+.person > svg {
+  display: block;
+}
+
+/* The tower's blocks are placed on the stage, in its stage pixels. */
+.tower {
   position: absolute;
   inset: 0;
-  display: flex;
-  flex-wrap: wrap;
-  place-content: center;
-  gap: 32px 40px;
-  margin: 0;
-  padding: 80px;
-  background-color: var(--color-sky);
-  list-style: none;
+}
+
+.pigeon {
+  position: absolute;
+  top: 0;
+  left: 0;
 }
 
 .scene {
