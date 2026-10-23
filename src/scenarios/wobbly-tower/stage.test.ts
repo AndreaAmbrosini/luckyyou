@@ -232,6 +232,21 @@ describe('The plan', () => {
         finals.every(([turn]) => turn!.decoys.length === most) &&
         paced.every((round) => Math.abs(round[0]!.seconds - 2.6) < 1e-9);
       if (!stretched) expect(plan.end, label).toBeGreaterThanOrEqual(21.5 - 1e-9);
+      // The timing file's checkpoints.
+      const count = plan.order.length;
+      if (count === 8 && plan.fallsWith === 2) {
+        for (const round of paced) expect(round[0]!.seconds, label).toBeCloseTo(2.1, 9);
+      }
+      if (count === 12 && plan.fallsWith === 2) {
+        expect(plan.end, label).toBeCloseTo(28.0, 9);
+        for (const round of paced.filter((each) => each.length === 2)) {
+          expect(round[0]!.seconds, label).toBeCloseTo(2.1, 9);
+        }
+      }
+      if (count === 6 && plan.fallsWith === 3) {
+        expect(plan.end, label).toBeGreaterThanOrEqual(21.8 - 1e-9);
+        expect(plan.end, label).toBeLessThanOrEqual(23.3 + 1e-9);
+      }
     }
   });
 
@@ -303,6 +318,24 @@ describe('The plan', () => {
       expect(plan.spotlight, label).toBeCloseTo(spotlight, 9);
       expect(plan.finalTwo === null, label).toBe(small || plan.fallsWith === 3);
       if (plan.finalTwo !== null) expect(plan.finalTwo, label).toBeCloseTo(nearly.lands + 2.35, 9);
+      // The interludes: the round after "Final three!", the last round after
+      // "Final two!", and with 2 or 3 people each next round after a landing.
+      if (small) {
+        rounds.slice(1).forEach((round, index) => {
+          const before = rounds[index]![0]!;
+          expect(round[0]!.from, `${label}, round ${index + 1}`).toBeCloseTo(
+            before.lands + (before.nearly ? 2.0 : 0.85),
+            9,
+          );
+        });
+      } else {
+        const afterSpotlight = rounds[rounds.findIndex((round) => round[0]!.beat !== 'safe')]![0]!;
+        expect(afterSpotlight.from, label).toBeCloseTo(
+          plan.spotlight + (plan.fallsWith === 3 ? 1.8 : 1.0),
+          9,
+        );
+        if (plan.fallsWith === 2) expect(last.from, label).toBeCloseTo(nearly.lands + 3.05, 9);
+      }
       expect(plan.hold.from, label).toBeCloseTo(nearly.lands + 0.6, 9);
       expect(plan.hold.to, label).toBeCloseTo(nearly.lands + 1.4, 9);
       expect(plan.starts.final, label).toBeCloseTo(plan.spotlight, 9);

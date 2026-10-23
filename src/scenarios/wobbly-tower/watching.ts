@@ -15,7 +15,6 @@ import {
   tagBox,
   placeTags,
   tagContentWidth,
-  tower,
   type Block,
   type Box,
   type Point,
@@ -532,16 +531,6 @@ export const pointerBox = (tip: Point): Box => ({
 /** Where `name` stands in a run of `plan`. */
 export const spotOf = (plan: Plan, name: string) =>
   spots(plan.order.length)[plan.order.indexOf(name)]!;
-
-/** The top centre of the top block of `count` blocks leaning `lean`. */
-export function topOf(count: number, lean: number): Point {
-  const block = tower(count, lean).at(-1)!;
-  const a = (block.turn * Math.PI) / 180;
-  return {
-    x: block.x + (block.height / 2) * Math.sin(a),
-    y: block.y - (block.height / 2) * Math.cos(a),
-  };
-}
 
 /** 8 people, Luca unlucky, seed 1: run once and shared by the scenarios that watch it. */
 let eightShow: ReturnType<typeof watch> | undefined;
