@@ -766,18 +766,37 @@ function planTumble(
   };
 }
 
+/**
+ * How each block was last drawn. Styles are written only when they change:
+ * most frames leave most blocks as they were, and jsdom, where the shows are
+ * tested, parses every write again.
+ */
+const drawnAs = new WeakMap<
+  HTMLElement,
+  { width: string; height: string; transform: string; hidden: boolean }
+>();
+
 /** Draws `el` as `block`: its size, its place and its turn. */
 function place(el: HTMLElement, block: Block) {
-  const width = `${block.width}px`;
-  const height = `${block.height}px`;
-  if (el.style.width !== width) el.style.width = width;
-  if (el.style.height !== height) el.style.height = height;
-  el.style.transform = `translate(${block.x - block.width / 2}px, ${block.y - block.height / 2}px) rotate(${block.turn}deg)`;
-  if (el.style.visibility) el.style.visibility = '';
+  const was = drawnAs.get(el);
+  const now = {
+    width: `${block.width}px`,
+    height: `${block.height}px`,
+    transform: `translate(${block.x - block.width / 2}px, ${block.y - block.height / 2}px) rotate(${block.turn}deg)`,
+    hidden: false,
+  };
+  for (const key of ['width', 'height', 'transform'] as const) {
+    if (was?.[key] !== now[key]) el.style[key] = now[key];
+  }
+  if (was?.hidden !== false) el.style.visibility = '';
+  drawnAs.set(el, now);
 }
 
 function hide(el: HTMLElement) {
-  if (el.style.visibility !== 'hidden') el.style.visibility = 'hidden';
+  const was = drawnAs.get(el);
+  if (was?.hidden) return;
+  el.style.visibility = 'hidden';
+  drawnAs.set(el, { width: '', height: '', transform: '', ...was, hidden: true });
 }
 
 /** Draws `el` at `opacity`, hidden at 0. */
