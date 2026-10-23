@@ -219,12 +219,13 @@ export function riskSpots(
   return all;
 }
 
-/** How the kit sets a name tag: its font size, the width it allows, its lines, and how wide it is drawn. */
+/** How the kit sets a name tag: its font size, the width it allows, its lines, and how wide and high it is drawn. */
 export interface TagSet {
   readonly size: number;
   readonly maxWidth: number;
   readonly lines: 1 | 2;
   readonly width: number;
+  readonly height: number;
 }
 
 /** How a show sets `name`'s tag for `tag`: the kit's sizes, and its width as drawn. */
@@ -234,12 +235,22 @@ export type SetTag = (name: string, tag: Spot['tag']) => TagSet;
 export const nameTagFor = (name: string, tag: Spot['tag']): HTMLElement =>
   nameTag(name, { ...tag, wrapBelow: tag.size, chest: true });
 
-/** What the kit set `el`, `name`'s tag, at; its width as `tagContentWidth` estimates it. */
+/**
+ * What the kit set `el`, `name`'s tag, at; its width as `tagContentWidth`
+ * estimates it, and its height from the tag's line height (1.1), padding
+ * (0.15 em) and border.
+ */
 export function tagSetOf(name: string, el: HTMLElement): TagSet {
   const size = Number.parseFloat(el.style.getPropertyValue('--tag-size'));
   const maxWidth = Number.parseFloat(el.style.maxWidth);
   const lines = el.dataset.lines === '2' ? 2 : 1;
-  return { size, maxWidth, lines, width: tagContentWidth(name, size, maxWidth, lines) };
+  return {
+    size,
+    maxWidth,
+    lines,
+    width: tagContentWidth(name, size, maxWidth, lines),
+    height: (1.1 * lines + 0.15) * size + 2 * stagePx('--line'),
+  };
 }
 
 const estimates = new Map<string, TagSet>();
@@ -251,9 +262,10 @@ export const estimateTag: SetTag = (name, tag) => {
   return set;
 };
 
-/** The Safe bench: its plank's top and left end, and where the heads sit. */
+/** The Safe bench: its plank's top with nobody on it, its thickness and left end, and where the heads sit. */
 export const BENCH = {
   plank: 250,
+  thick: 16,
   from: 230,
   head: 76,
   headTop: 122,
@@ -264,8 +276,8 @@ export const BENCH = {
   edge: 16,
 } as const;
 
-/** Space between the plank's ends and the first and last person on it. */
-const PLANK_END = { left: 20, right: 60 };
+/** Space between the plank's ends and the first and last person on it, and between its top and the lowest tag on it. */
+const PLANK_END = { left: 20, right: 60, under: 6 };
 
 /** The name tag of everyone on a bench of `benched`: 0.3 of the head, and the slot gap less 8 wide. */
 export function benchTag(benched: number): Spot['tag'] {
@@ -308,13 +320,23 @@ export function benchSpot(slot: number, widths: readonly number[]): Spot {
   };
 }
 
-/** The bench's plank, from its left end to 60 past the last person on it. */
-export function plank(widths: readonly number[]): { left: number; right: number; top: number } {
-  const xs = widths.length > 0 ? benchXs(widths) : [BENCH.first];
+/**
+ * The bench's plank, from its left end to 60 past the last person on it, for
+ * tags `seats` wide and high as drawn (benchTag's): its top 6 under the
+ * lowest tag, so they sit on it.
+ */
+export function plank(seats: readonly { width: number; height: number }[]): Box {
+  const xs = seats.length > 0 ? benchXs(seats.map((seat) => seat.width)) : [BENCH.first];
+  const tagTop = BENCH.headTop + 0.76 * BENCH.head;
+  const top =
+    seats.length > 0
+      ? tagTop + Math.max(...seats.map((seat) => seat.height)) + PLANK_END.under
+      : BENCH.plank;
   return {
     left: Math.min(BENCH.from, xs[0]! - PLANK_END.left),
     right: xs.at(-1)! + PLANK_END.right,
-    top: BENCH.plank,
+    top,
+    bottom: top + BENCH.thick,
   };
 }
 
@@ -332,8 +354,12 @@ export function between(a: Spot, b: Spot, t: number): Spot {
 
 /** Seconds the hop to the bench takes, and the gap closing with it. */
 export const HOP = 0.6;
-/** How far the hop to the bench rises over the higher of its two ends. */
+/**
+ * How far the hop to the bench rises over the higher of its two ends, head
+ * top to head top; never past `CAPTION_BOTTOM + HOP_CLEAR`, under the caption.
+ */
 export const HOP_ARC = 80;
+export const HOP_CLEAR = 8;
 const inOut = (u: number) => (u < 0.5 ? 2 * u * u : 1 - 2 * (1 - u) * (1 - u));
 
 /**
@@ -358,7 +384,8 @@ export interface DrawnTag {
 /**
  * Where everyone is over the show, from `plan`: at risk around the tower,
  * then, from their `Safe!`, hopping up to their slot on the bench (in an arc
- * peaking HOP_ARC over the higher end, or a straight slide with `calm`)
+ * whose head top peaks HOP_ARC over the higher end, but no higher than
+ * CAPTION_BOTTOM + HOP_CLEAR; or a straight slide with `calm`)
  * while those still at risk close the gap, keeping their order. `setTag`
  * says how the show sets each tag (the kit's sizes and the width as drawn);
  * every layout is worked out, and every tag set, before the show starts.
@@ -441,8 +468,12 @@ export function placings(plan: Plan, setTag: SetTag = estimateTag, calm = false)
     const to = benchSpots.get(name)!;
     const spot = between(from, to, move.u);
     if (calm) return spot;
-    const top = Math.min(from.y, to.y) - HOP_ARC;
-    return { ...spot, y: overArc(from.y, to.y, top, move.u) };
+    // The head's top arcs: over the higher end, but clear of the caption.
+    const fromTop = from.y - 0.8 * from.size;
+    const toTop = to.y - 0.8 * to.size;
+    const higher = Math.min(fromTop, toTop);
+    const peak = Math.min(higher, Math.max(higher - HOP_ARC, CAPTION_BOTTOM + HOP_CLEAR));
+    return { ...spot, y: overArc(fromTop, toTop, peak, move.u) + 0.8 * spot.size };
   };
 
   /** `name`'s tag as drawn at `t`: between the two still ones while they move; null while it hides, on the hop. */

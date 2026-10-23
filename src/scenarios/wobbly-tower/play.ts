@@ -25,6 +25,7 @@ import {
 import {
   BLOCK_WIDTHS,
   benchTag,
+  blockBox,
   blockHeight,
   heap,
   headBox,
@@ -132,6 +133,8 @@ interface Person {
   benched: boolean;
   /** Whether they're behind the spotlight. */
   dimmed: boolean;
+  /** Whether they've gone behind everyone, for the hop to the bench. */
+  behind: boolean;
   mood: Mood | '';
   holding: boolean;
   raised: boolean;
@@ -149,6 +152,8 @@ interface Flight {
   readonly from: Block;
   /** Where it lands: on top of the tower. */
   readonly to: Block;
+  /** The highest its centre goes when tossed: its top stays under the bench's plank. */
+  readonly highest: number;
 }
 
 /** A stretch of show seconds. */
@@ -203,7 +208,7 @@ export async function playWobblyTower(show: Show): Promise<void> {
     if (!set) {
       const el = tags.appendChild(nameTagFor(name, tag));
       const kit = tagSetOf(name, el);
-      set = { ...kit, width: el.offsetWidth || kit.width };
+      set = { ...kit, width: el.offsetWidth || kit.width, height: el.offsetHeight || kit.height };
       el.remove();
       sets.set(key, set);
     }
@@ -223,7 +228,7 @@ export async function playWobblyTower(show: Show): Promise<void> {
   // their tags' widths there.
   const goingSafe = plan.turns.filter((turn) => turn.safe !== null).map((turn) => turn.by);
   const seat = benchTag(goingSafe.length);
-  const plankFor = plank(goingSafe.map((name) => setTag(name, seat).width));
+  const plankFor = plank(goingSafe.map((name) => setTag(name, seat)));
   if (benches) scene.insertBefore(drawBench(plankFor), dimmed);
   /** Every head and name tag at `t`, which a bubble keeps clear of. */
   const inTheWay = (t: number) =>
@@ -273,15 +278,20 @@ export async function playWobblyTower(show: Show): Promise<void> {
   // Each block's way onto the tower, in the order they land, with the sway
   // after each round's last block.
   const flights: Flight[] = [];
-  const add = (by: string | null, flight: Omit<Flight, 'el' | 'by' | 'to'>) => {
+  /** Half the height a block takes, turned as it is. */
+  const halfOf = (block: Block) => (blockBox(block).bottom - blockBox(block).top) / 2;
+  const add = (by: string | null, flight: Omit<Flight, 'el' | 'by' | 'to' | 'highest'>) => {
     const k = flights.length;
     const to = tower(k + 1, lean.at(flight.lands), height)[k]!;
+    const highest = benches
+      ? plankFor.bottom + Math.max(halfOf(flight.from), halfOf(to))
+      : -Infinity;
     const fill = by ? `var(--color-${looks.get(by)!.ring})` : 'var(--color-paper)';
     const el = drawBlock(BLOCK_WIDTHS[k % BLOCK_WIDTHS.length]!, fill);
     el.dataset.by = by ?? '';
     el.style.visibility = 'hidden';
     built.append(el);
-    flights.push({ ...flight, el, by, to });
+    flights.push({ ...flight, el, by, to, highest });
   };
   PAPER.forEach((lands, k) => {
     const to = tower(k + 1, 0, height)[k]!;
@@ -372,6 +382,14 @@ export async function playWobblyTower(show: Show): Promise<void> {
     return final && atRisk ? 'worried' : 'calm';
   };
 
+  /** Each `Safe!` bubble, which goes up to the bench with its thrower: from their head, as it was set. */
+  const following: { el: HTMLElement; name: string; from: number; dx: number; dy: number }[] = [];
+  /** Where `name`'s head's middle is at `t`. */
+  const headAt = (name: string, t: number): Point => {
+    const spot = spotAt(name, t);
+    return { x: spot.x, y: spot.y - 0.3 * spot.size };
+  };
+
   let beat = '';
   let shownLean = '';
   let landed = -1;
@@ -412,14 +430,29 @@ export async function playWobblyTower(show: Show): Promise<void> {
     const atRisk = new Set(places.atRisk(t));
     for (const person of people.values()) {
       drawPerson(person, spotAt(person.name, t), places.tag(person.name, t));
+      // Off to the bench, behind everyone already on it.
+      if (!person.behind && (places.hopping(person.name, t) || places.benched(person.name, t))) {
+        person.behind = true;
+        crowd.prepend(person.el);
+      }
       if (!person.benched && places.benched(person.name, t))
         person.el.dataset.benched = String((person.benched = true));
       if (!person.dimmed && t >= plan.spotlight && !atRisk.has(person.name)) {
         person.dimmed = true;
-        dimmed.append(person.el);
+        // Still on the hop: behind everyone on the bench there too.
+        if (places.hopping(person.name, t)) dimmed.prepend(person.el);
+        else dimmed.append(person.el);
       }
     }
     if (stand) stand.count(atRisk.size);
+    for (const follow of following) {
+      if (t < follow.from || t >= follow.from + BUBBLE) continue;
+      const head = headAt(follow.name, t);
+      const left = `${head.x + follow.dx}px`;
+      const top = `${head.y + follow.dy}px`;
+      if (follow.el.style.left !== left) follow.el.style.left = left;
+      if (follow.el.style.top !== top) follow.el.style.top = top;
+    }
     // Faded in from the spotlight; a hair over, so it's full on time however t is rounded.
     setShown(light, Math.min(1, Math.max(0, (t - plan.spotlight) / SPOTLIGHT + 1e-9)));
 
@@ -523,7 +556,7 @@ export async function playWobblyTower(show: Show): Promise<void> {
     scene.append(speech);
     timeline.add(popIn(speech), time);
     timeline.set(speech, { autoAlpha: 0 }, time + BUBBLE);
-    return anchor;
+    return { ...anchor, el: speech };
   };
   const around = (point: Point, half: number): Box => ({
     left: point.x - half,
@@ -548,8 +581,19 @@ export async function playWobblyTower(show: Show): Promise<void> {
     if (turn.safe === null) continue;
     const others = saidSafe.get(turn.safe) ?? [];
     const head = headBox(spotAt(turn.by, turn.safe));
-    others.push(speechBox('Safe!', say(turn.safe, 'Safe!', head, others)));
+    const anchor = say(turn.safe, 'Safe!', head, others);
+    others.push(speechBox('Safe!', anchor));
     saidSafe.set(turn.safe, others);
+    // It goes up with them.
+    const from = headAt(turn.by, turn.safe);
+    anchor.el.dataset.by = turn.by;
+    following.push({
+      el: anchor.el,
+      name: turn.by,
+      from: turn.safe,
+      dx: anchor.x - from.x,
+      dy: anchor.y - from.y,
+    });
   }
   const unluckyHead = headBox(theirSpot);
   const topAt = (t: number) => around(topOf(tower(flights.length, leanAt(t), height).at(-1)!), 40);
@@ -653,9 +697,17 @@ class Sway {
   }
 }
 
-/** A point `u` of the way from `a` to `b` on a curve over the higher of the two, `rise` above it. */
-function arc(a: Point, b: Point, u: number, rise: number): Point {
-  const c = { x: (a.x + b.x) / 2, y: Math.min(a.y, b.y) - rise };
+/**
+ * A point `u` of the way from `a` to `b` on a curve over the higher of the
+ * two, `rise` above it, but no higher than `highest`.
+ */
+function arc(a: Point, b: Point, u: number, rise: number, highest = -Infinity): Point {
+  const higher = Math.min(a.y, b.y);
+  const c = { x: (a.x + b.x) / 2, y: higher - rise };
+  // The curve's highest point, from its control point; or, too high, the control point for `highest`.
+  if ((a.y * b.y - c.y * c.y) / (a.y + b.y - 2 * c.y) < highest) {
+    c.y = highest >= higher ? higher : highest - Math.sqrt((a.y - highest) * (b.y - highest));
+  }
   const v = 1 - u;
   return {
     x: v * v * a.x + 2 * v * u * c.x + u * u * b.x,
@@ -671,7 +723,7 @@ function inFlight(flight: Flight, t: number): Block {
   const paper = flight.by === null;
   const point = paper
     ? { x: to.x, y: from.y + (to.y - from.y) * ease.drop(u) }
-    : arc(from, to, ease.toss(u), ARC);
+    : arc(from, to, ease.toss(u), ARC, flight.highest);
   return {
     ...point,
     width: from.width + (to.width - from.width) * u,
@@ -830,6 +882,7 @@ function createPerson(name: string, look: Look, spot: Spot, tag: DrawnTag): Pers
     holder,
     benched: false,
     dimmed: false,
+    behind: false,
     mood: '',
     holding: false,
     raised: false,

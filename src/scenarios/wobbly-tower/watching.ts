@@ -158,8 +158,14 @@ export interface Frame {
   readonly bench: boolean;
   /** Who holds a block overhead. */
   readonly holding: readonly string[];
-  /** The speech bubbles showing, and where their tails point. */
-  readonly bubbles: readonly (Point & { readonly text: string })[];
+  /** The speech bubbles showing, where their tails point, which bubble each is, and whose `Safe!` it is. */
+  readonly bubbles: readonly (Point & {
+    readonly text: string;
+    readonly id: number;
+    readonly by?: string;
+  })[];
+  /** Everyone's head, in the order drawn: the last over the rest. */
+  readonly stacked: readonly string[];
   /** How many blocks lie in the heap after the fall. */
   readonly fallen: number;
   /** Whether speed lines are drawn. */
@@ -437,13 +443,22 @@ async function recordShow(
         holding: people
           .filter((person) => person.dataset.holding === 'true')
           .map((person) => person.dataset.person!),
-        bubbles: bubbles
-          .filter((bubble) => opacityOf(bubble) > 0)
-          .map((bubble) => ({
-            text: bubble.textContent ?? '',
-            x: Number.parseFloat(bubble.style.left),
-            y: Number.parseFloat(bubble.style.top),
-          })),
+        bubbles: bubbles.flatMap((bubble, id) =>
+          opacityOf(bubble) > 0
+            ? [
+                {
+                  text: bubble.textContent ?? '',
+                  id,
+                  by: bubble.dataset.by,
+                  x: Number.parseFloat(bubble.style.left),
+                  y: Number.parseFloat(bubble.style.top),
+                },
+              ]
+            : [],
+        ),
+        stacked: [...people]
+          .sort((one, two) => (after(one, two) ? -1 : 1))
+          .map((person) => person.dataset.person!),
         fallen: Number(drawn.dataset.fallen ?? 0),
         speedLines: parts.speedLines !== null && opacityOf(parts.speedLines) > 0,
         dust: parts.dust.filter((puff) => opacityOf(puff) > 0).length,
@@ -751,16 +766,16 @@ export function plannedCaptions(plan: Plan): Planned[] {
 export const heaped = (frames: readonly Frame[], plan: Plan) =>
   frames.find((frame) => frame.fallen === 2 + plan.turns.length)!;
 
-/** Each bubble's stay on stage: what it says, where its tail is, and its first and last frames. */
+/** Each bubble's stay on stage: what it says, where its tail is first, and its first and last frames. */
 export function said(
   frames: readonly Frame[],
 ): (Point & { text: string; from: number; to: number })[] {
   const all: (Point & { text: string; from: number; to: number })[] = [];
-  const open = new Map<string, (typeof all)[number]>();
+  const open = new Map<number, (typeof all)[number]>();
   frames.forEach((frame, index) => {
-    const now = new Set<string>();
+    const now = new Set<number>();
     for (const bubble of frame.bubbles) {
-      const key = `${bubble.text}@${bubble.x},${bubble.y}`;
+      const key = bubble.id;
       now.add(key);
       const stay = open.get(key);
       if (stay && frames[index - 1]?.time === stay.to) stay.to = frame.time;

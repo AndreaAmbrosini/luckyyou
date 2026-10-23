@@ -223,6 +223,33 @@ describeSpec(await loadFeature('./wobbly-tower.feature'), ({ Rule }) => {
             expect(frameAt(at + STEP).people[turn.by]!.spot.y, turn.by).toBeLessThan(
               frameAt(at).people[turn.by]!.spot.y,
             );
+            // Their bubble goes up with them, as far from their head all the way.
+            const hop = run.frames.filter(
+              (frame) => frame.time >= at - 1e-9 && frame.time < at + 0.8 - 1e-9,
+            );
+            const offsets = hop.flatMap((frame) => {
+              const bubble = frame.bubbles.find((each) => each.by === turn.by);
+              const spot = frame.people[turn.by]!.spot;
+              return bubble
+                ? [{ x: bubble.x - spot.x, y: bubble.y - (spot.y - 0.3 * spot.size) }]
+                : [];
+            });
+            expect(offsets.length, turn.by).toBeGreaterThanOrEqual(hop.length - 1);
+            for (const offset of offsets) {
+              expect(offset.x, turn.by).toBeCloseTo(offsets[0]!.x, 6);
+              expect(offset.y, turn.by).toBeCloseTo(offsets[0]!.y, 6);
+            }
+            // Drawn behind everyone already on the bench, so they slip into their slot.
+            for (const frame of hop) {
+              const stacked = frame.stacked;
+              for (const [name, them] of Object.entries(frame.people)) {
+                if (!them.benched || name === turn.by) continue;
+                expect(
+                  stacked.indexOf(turn.by),
+                  `${turn.by} behind ${name} at ${frame.time}`,
+                ).toBeLessThan(stacked.indexOf(name));
+              }
+            }
           }
         },
       );

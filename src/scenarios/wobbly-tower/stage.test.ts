@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { createRandom } from '../../scenario-kit/random';
 import { handOutLooks } from '../../scenario-kit';
 import { POINTER } from './parts';
-import { planHops, startTipOf } from './pointer';
+import { FLIGHT, planHops, startTipOf } from './pointer';
 import { BEATS, hopInto, LEANS as PEAKS, planShow, READ, stayOn, type Plan } from './plan';
 import {
   CAPTION_BOTTOM,
@@ -28,6 +28,7 @@ import {
   startingRows,
   signedLean,
   tagBox,
+  tagSetOf,
   tower,
   nameTagFor,
   type Box,
@@ -202,8 +203,15 @@ describe('The layout', () => {
           );
         });
         if (boxes.at(-1)!.right < 1280 - 16 - 1e-9) expect(xs[0], label).toBe(250);
-        expect(plank(widths).right, label).toBeCloseTo(xs.at(-1)! + 60, 9);
-        expect(plank(widths).top, label).toBe(250);
+        // Its top 6 under the lowest tag: they sit on it.
+        const seats = called.map((name, index) => tagSetOf(name, tags[index]!));
+        const on = plank(seats.map((seat, index) => ({ ...seat, width: widths[index]! })));
+        expect(on.right, label).toBeCloseTo(xs.at(-1)! + 60, 9);
+        const lowest = Math.max(
+          ...all.map((spot, index) => headBox(spot).top + 0.76 * 76 + seats[index]!.height),
+        );
+        expect(on.top, label).toBeCloseTo(lowest + 6, 9);
+        expect(on.top, label).toBeLessThanOrEqual(250);
       }
     }
   });
@@ -563,17 +571,16 @@ describe('Moving people', () => {
     ),
   );
 
-  it('the hop to the bench peaks 80 px over its higher end', () => {
+  it('the hop to the bench peaks 80 px over its higher end, or just under the caption', () => {
     for (const { label, plan, turn } of safeTurns) {
       const places = placesOf(plan);
-      const from = places.at(turn.by, turn.safe!);
-      const to = places.at(turn.by, turn.safe! + HOP);
-      const ys = Array.from(
-        { length: 601 },
-        (_, k) => places.at(turn.by, turn.safe! + (HOP * k) / 600).y,
-      );
-      expect(Math.min(...ys), label).toBeGreaterThanOrEqual(Math.min(from.y, to.y) - 80 - 2);
-      expect(Math.min(...ys), label).toBeLessThanOrEqual(Math.min(from.y, to.y) - 80 + 2);
+      const headTop = (t: number) => headBox(places.at(turn.by, t)).top;
+      const higher = Math.min(headTop(turn.safe!), headTop(turn.safe! + HOP));
+      const peak = Math.max(higher - 80, CAPTION_BOTTOM + 8);
+      const tops = Array.from({ length: 601 }, (_, k) => headTop(turn.safe! + (HOP * k) / 600));
+      expect(Math.min(...tops), label).toBeGreaterThanOrEqual(CAPTION_BOTTOM + 8 - 1e-9);
+      expect(Math.min(...tops), label).toBeGreaterThanOrEqual(peak - 2);
+      expect(Math.min(...tops), label).toBeLessThanOrEqual(peak + 2);
     }
   });
 
@@ -849,6 +856,35 @@ describe('Blocks and name tags', () => {
       }
     });
   }
+  it("a tossed block's top stays under the bench's plank with 7 or more at risk: 12 people, seeds 1 and 2", async () => {
+    let seen = 0;
+    for (const seed of [1, 2]) {
+      const team = names(12);
+      const { frames, plan } = await watch(team, unluckyOf(12), { seed });
+      const going = plan.turns.filter((turn) => turn.safe !== null);
+      const seat = benchTag(going.length);
+      const under = plank(going.map((turn) => estimateTag(turn.by, seat))).bottom;
+      const places = placesOf(plan);
+      plan.turns.forEach((turn, index) => {
+        if (places.atRisk(turn.lands).length < 7) return;
+        // Block 2 + index is this turn's, in the air from its whoosh to its landing: under
+        // the plank, or, held higher than that (a two-line bench), never rising from there.
+        const tossed = frames.filter(
+          (frame) => frame.time >= turn.lands - FLIGHT - 1e-9 && frame.time < turn.lands - 1e-9,
+        );
+        const held = blockBox(tossed[0]!.drawn[2 + index]!).top;
+        for (const frame of tossed) {
+          seen++;
+          const top = blockBox(frame.drawn[2 + index]!).top;
+          expect(top, `seed ${seed}, ${turn.by}'s block at ${frame.time}`).toBeGreaterThanOrEqual(
+            Math.min(under, held) - 1e-6,
+          );
+        }
+      });
+    }
+    expect(seen).toBeGreaterThan(0);
+  });
+
   it('blocks do cross name tags in those runs', () => {
     expect(crossed).toBeGreaterThan(0);
   });
