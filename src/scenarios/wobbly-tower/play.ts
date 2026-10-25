@@ -60,7 +60,7 @@ import {
   speedLines,
   spotlight as drawSpotlight,
 } from './parts';
-import { BEATS, hopInto, planShow, READ, type Beat, type Plan, type Turn } from './plan';
+import { BEATS, NEARLY_SAYS, planShow, READ, type Beat, type Plan, type Turn } from './plan';
 import { FLIGHT, planHops, startTipOf } from './pointer';
 import styles from './wobbly-tower.module.css';
 
@@ -77,14 +77,11 @@ const PAPER_SWAY = [-1.5, 1.5] as const;
  * times a second (DESIGN.md).
  */
 const SWAY = { out: 0.34, back: 0.34 };
-/** The thrower lifts the block this long after the pointer stops over them. */
-const LIFT = 0.15;
 /**
- * Nearly, from its landing: "Whoa…" at `whoa` and "Nearly!" at `caption`;
- * after its hold it swings back upright in `back` seconds, overshooting a
- * little unless motion is reduced.
+ * Nearly, from its landing: after its hold it swings back upright in `back`
+ * seconds, overshooting a little unless motion is reduced.
  */
-const NEARLY = { whoa: 0.25, caption: 1.3, back: 0.5 };
+const NEARLY = { ...NEARLY_SAYS, back: 0.5 };
 /** How far a toss arcs above the higher of its two ends. */
 const ARC = 140;
 /** Seconds a bubble stays up. */
@@ -309,7 +306,7 @@ export async function playWobblyTower(show: Show): Promise<void> {
     ]);
   });
   plan.turns.forEach((turn, index) => {
-    const lift = turn.stops + LIFT;
+    const lift = turn.lifts;
     add(turn.by, {
       lift,
       release: Math.max(lift, turn.lands - FLIGHT),
@@ -527,18 +524,9 @@ export async function playWobblyTower(show: Show): Promise<void> {
   plan.turns.forEach((turn, index) => {
     const previous = plan.turns[index - 1];
     if (previous?.round === turn.round) return;
-    if (turn.beat === 'safe') {
-      // A safe round names its thrower, or its pair in their standing order.
-      const pair = plan.turns
-        .filter((each) => each.round === turn.round)
-        .map((each) => each.by)
-        .sort((a, b) => plan.order.indexOf(a) - plan.order.indexOf(b));
-      caption(turn.stops, pair.length === 2 ? `${pair[0]} & ${pair[1]}!` : `${turn.by}'s turn`);
-    } else {
-      // A final round names each stop, and the thrower last.
-      for (const stop of turn.decoys) caption(stop.at, `${stop.name}…`);
-      caption(turn.stops, `…${turn.by}!`);
-    }
+    // Each round names its thrower, or its pair, the first along first.
+    const pair = plan.turns.filter((each) => each.round === turn.round).map((each) => each.by);
+    caption(turn.named, pair.length === 2 ? `${pair[0]} & ${pair[1]}!` : `${turn.by}'s turn`);
   });
   caption(nearly.lands + NEARLY.whoa, 'Whoa…');
   caption(nearly.lands + NEARLY.caption, 'Nearly!');
@@ -553,8 +541,8 @@ export async function playWobblyTower(show: Show): Promise<void> {
   caption(downAt, `${show.unlucky} toppled it!`);
 
   // Gags, in bubbles beside the tower's top or a head.
-  /** Every bubble so far: its box as set, when it pops up, and whose head it goes up with. */
-  const saidSoFar: { box: Box; from: number; follows?: string }[] = [];
+  /** Every bubble so far: its box as set, when it pops up and goes, and whose head it goes up with. */
+  const saidSoFar: { box: Box; from: number; to: number; follows?: string }[] = [];
   /** How far `name`'s head has moved at `t` since `from`; nobody's, nowhere. */
   const movedBy = (name: string | undefined, from: number, t: number): Point => {
     if (!name) return { x: 0, y: 0 };
@@ -562,14 +550,15 @@ export async function playWobblyTower(show: Show): Promise<void> {
     return { x: now.x - then.x, y: now.y - then.y };
   };
   /**
-   * Where each bubble already up while one pops up at `time` (going up with
-   * `follows`) is, as seen from it, through their time up together: keeping
-   * clear of those boxes as it pops up keeps them apart all the way.
+   * Where each bubble already up while one pops up at `time` until `until`
+   * (going up with `follows`) is, as seen from it, through their time up
+   * together: keeping clear of those boxes as it pops up keeps them apart all
+   * the way.
    */
-  const upWith = (time: number, follows?: string): Box[] =>
+  const upWith = (time: number, until: number, follows?: string): Box[] =>
     saidSoFar.flatMap((other) => {
       const from = Math.max(time, other.from);
-      const to = Math.min(time, other.from) + BUBBLE;
+      const to = Math.min(until, other.to);
       const boxes: Box[] = [];
       for (let t = from; t < to; t += SAMPLE) {
         const theirs = movedBy(other.follows, other.from, t);
@@ -585,25 +574,33 @@ export async function playWobblyTower(show: Show): Promise<void> {
       }
       return boxes;
     });
-  /** A bubble saying `text` beside `beside` at `time`, clear of `clearOf` and every other bubble up with it; going up with `follows`'s head. */
+  /**
+   * A bubble saying `text` beside `beside` from `time` to `until` (BUBBLE
+   * seconds unless given), clear of `clearOf` and every other bubble up with
+   * it; going up with `follows`'s head.
+   */
   const say = (
     time: number,
     text: string,
     beside: Box,
-    { clearOf = [], follows }: { clearOf?: readonly Box[]; follows?: string } = {},
+    {
+      clearOf = [],
+      follows,
+      until = time + BUBBLE,
+    }: { clearOf?: readonly Box[]; follows?: string; until?: number } = {},
   ) => {
     const avoid = [
       ...inTheWay(time).filter((box) => !overlap(box, beside)),
       ...clearOf,
-      ...upWith(time, follows),
+      ...upWith(time, until, follows),
     ];
     const anchor = speechAt(text, beside, avoid);
     const speech = bubble(text, anchor);
     speech.dataset.part = 'bubble';
     scene.append(speech);
     timeline.add(popIn(speech), time);
-    timeline.set(speech, { autoAlpha: 0 }, time + BUBBLE);
-    saidSoFar.push({ box: speechBox(text, anchor), from: time, follows });
+    timeline.set(speech, { autoAlpha: 0 }, until);
+    saidSoFar.push({ box: speechBox(text, anchor), from: time, to: until, follows });
     if (follows) {
       const from = headAt(follows, time);
       following.push({
@@ -616,6 +613,15 @@ export async function playWobblyTower(show: Show): Promise<void> {
     }
     return speech;
   };
+  /**
+   * The face at `spot`, which someone talks from: the head's circle, y 15 to
+   * 73 on its 100 grid. A bubble level with it clears the name tags below,
+   * and one just above it the bench's tags.
+   */
+  const talking = (spot: Spot): Box => {
+    const box = headBox(spot);
+    return { ...box, top: box.top + 0.15 * spot.size, bottom: box.top + 0.73 * spot.size };
+  };
   const around = (point: Point, half: number): Box => ({
     left: point.x - half,
     right: point.x + half,
@@ -623,25 +629,22 @@ export async function playWobblyTower(show: Show): Promise<void> {
     bottom: point.y + half,
   });
   say(PAPER[0], 'Thunk!', around(topOf(flights[0]!.to), 40));
-  say(plan.turns[0]!.lands, 'Thunk!', around(topOf(flights[2]!.to), 40));
+  // The first thrown block's, gone as its thrower says "Safe!".
+  const first = plan.turns[0]!;
+  say(first.lands, 'Thunk!', around(topOf(flights[2]!.to), 40), {
+    until: Math.min(first.lands + BUBBLE, first.safe ?? Infinity),
+  });
   // After Nearly, its thrower says "Phew!", then "Safe!", and both go up to
   // the bench with them.
-  say(phewAt, 'Phew!', headBox(spotAt(nearly.by, phewAt)), { follows: nearly.by });
-  // In the final, whoever the pointer leaves just before the thrower.
-  for (const turn of plan.turns) {
-    const before = turn.decoys.at(-1);
-    if (!before) continue;
-    const leaves = turn.stops - hopInto(turn.decoys.length);
-    say(leaves, 'Phew!', headBox(spotAt(before.name, leaves)));
-  }
+  say(phewAt, 'Phew!', talking(spotAt(nearly.by, phewAt)), { follows: nearly.by });
   // "Safe!" beside each thrower whose block holds, as they set off for the
   // bench, and up with them.
   for (const turn of plan.turns) {
     if (turn.safe === null) continue;
-    const head = headBox(spotAt(turn.by, turn.safe));
+    const head = talking(spotAt(turn.by, turn.safe));
     say(turn.safe, 'Safe!', head, { follows: turn.by }).dataset.by = turn.by;
   }
-  const unluckyHead = headBox(theirSpot);
+  const unluckyHead = talking(theirSpot);
   const topAt = (t: number) => around(topOf(tower(flights.length, leanAt(t), height).at(-1)!), 40);
   if (plan.ending === 'dead-still') say(creakAt, 'creak…', topAt(creakAt));
   if (plan.ending === 'it-holds') say(plan.still.from, 'Phew!', unluckyHead);

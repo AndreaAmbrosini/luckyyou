@@ -38,12 +38,6 @@ Feature: Wobbly Tower
         | 12    | first    |
         | 12    | last     |
 
-    # Old design: replaced by "Each turn goes to the next one along".
-    Scenario: With 2 people, turns don't just alternate
-      Given 2 people
-      When the show runs with 20 different random seeds
-      Then in some runs the same person has two turns in a row before the last turn
-
   Rule: Hold the tower and you're safe
 
     Scenario: A block that holds makes its thrower safe
@@ -74,14 +68,6 @@ Feature: Wobbly Tower
       Then the first turn goes to at least 5 different people
       And the two who share the final three with the unlucky person are at least 4 different people across the runs
 
-    # Old design: replaced by "The tower gets shakier, a turn at a time".
-    Scenario: The tower gets shakier
-      Given 8 people
-      When the show runs
-      Then each sway before "Nearly!" leans further than the one before
-      And each turn before the final three takes between 2 and 2.6 seconds
-
-    @pending
     Scenario: The tower gets shakier, a turn at a time
       Given 8 people
       When the show runs
@@ -101,20 +87,6 @@ Feature: Wobbly Tower
       Then every turn has one thrower
       And nothing on stage points at anyone, and nothing says "Your turn!"
 
-    # Old design: replaced by "With <count> people, two neighbours go together before the final three".
-    Scenario Outline: With <count> people, the turns before the final three go in pairs
-      Given <count> people
-      When the show runs with 20 different random seeds
-      Then before the final three, two pointers stop on two people at once, both toss a block, and both go safe together
-      And the caption names both, as "Ivo & Jonas!"
-      And the last turn before the final three has one thrower, and so does every turn from the final three on
-
-      Examples:
-        | count |
-        | 9     |
-        | 12    |
-
-    @pending
     Scenario Outline: With <count> people, two neighbours go together before the final three
       Given <count> people
       When the show runs with 20 different random seeds
@@ -143,22 +115,6 @@ Feature: Wobbly Tower
       When the first turn after "Final three!" ends in "Safe!"
       Then the caption is "Final two!"
 
-    # Old design: replaced by "The careful toss".
-    Scenario: The pointer goes round the last ones
-      Given 8 people
-      When a turn starts with 3 or 2 people at risk
-      Then the pointer stops on 2 to 4 of them before the thrower, each stop longer than the one before, never on the same person twice running
-      And the caption names each stop, as "Dario…", "Carla…", then "…Fabio!" for the thrower
-      And whoever it leaves just before the thrower says "Phew!"
-      And whoever it stops on looks scared while it stays
-
-    # Old design: replaced by "The careful toss gives nothing away".
-    Scenario: The pointer gives nothing away
-      Given 8 people, with the same unlucky person every time
-      When the show runs with 30 different random seeds
-      Then on the last turn the pointer stops on the unlucky person before the end of its round in some runs, and not in others
-      And on a turn in the final that ends in "Safe!", it stops on the unlucky person in some runs
-
   @pending
   Rule: The careful toss
 
@@ -182,22 +138,8 @@ Feature: Wobbly Tower
       When a turn starts with 4 or more people at risk
       Then the block flies from the thrower's hands onto the tower without hovering
 
+  @pending
   Rule: With 2 or 3 people it is the final from the start
-
-    # Old design: replaced by "<count> people, taking turns".
-    Scenario Outline: <count> people
-      Given <count> people
-      When the show runs with 20 different random seeds
-      Then there is no Safe bench, and nobody goes safe
-      And the "At risk" plinth under the tower shows <count> throughout
-      And the caption after the opening is "<caption>", and the spotlight and the heartbeat start before the first turn
-      And there are 4 or 5 turns, the last one the unlucky person's, and nobody has three in a row
-      And before each turn the pointer stops on 2 or 3 people
-
-      Examples:
-        | count | caption                |
-        | 2     | Just the two of you…   |
-        | 3     | Just the three of you… |
 
     @pending
     Scenario Outline: <count> people, taking turns
@@ -226,7 +168,6 @@ Feature: Wobbly Tower
       And it stays there a tenth of a second or more before it's gone, even on the quickest turns
       And it never covers a name tag
 
-  @pending
   Rule: Turns go along the line
 
     Scenario: Each turn goes to the next one along
@@ -331,27 +272,6 @@ Feature: Wobbly Tower
 
   Rule: It reads without sound
 
-    # Old design: replaced by "Captions tell the story, a turn at a time".
-    Scenario: Captions tell the Safe! story to the end
-      Given 6 people, the unlucky person is "Fabio", the turns before the final three go to "Elena", "Ben" and "Anna", Anna has "Nearly!", the pointer stops on "Dario" and "Carla" before "Fabio", and the tower goes dead still at the end
-      When the show runs
-      Then the captions include, in this order:
-        | caption                          |
-        | Whoever topples it gets the job! |
-        | Hold the tower, and you're safe! |
-        | Elena's turn                     |
-        | Ben's turn                       |
-        | Anna's turn                      |
-        | Whoa…                            |
-        | Nearly!                          |
-        | Final three!                     |
-        | Dario…                           |
-        | Carla…                           |
-        | …Fabio!                          |
-        | Uh-oh…                           |
-        | Fabio toppled it!                |
-
-    @pending
     Scenario: Captions tell the story, a turn at a time
       Given 6 people, the unlucky person is "Fabio", the turns go to "Elena", "Ben", "Anna" and then "Fabio", Anna has "Nearly!", and the tower goes dead still at the end
       When the show runs

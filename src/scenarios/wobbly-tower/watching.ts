@@ -77,13 +77,27 @@ export function roundsOf(plan: Plan): Turn[][] {
 }
 /** The first turn of each round: the one the first pointer picks. */
 export const firstTurns = (plan: Plan) => roundsOf(plan).map((round) => round[0]!);
-/** Whom the pointer stops on for `turn`, in order, the thrower last. */
-export const stopsOf = (turn: Turn) => [...turn.decoys.map((stop) => stop.name), turn.by];
+/** Whom the pointer stops on for `turn`: the thrower. */
+export const stopsOf = (turn: Turn) => [turn.by];
 /** When `beat` starts, in show seconds. */
 export const startOf = (plan: Plan, beat: Beat) => plan.starts[beat];
-/** Whether anyone takes two turns in a row, the last turn left out. */
-export const repeatsBeforeLast = (plan: Plan) =>
-  plan.turns.slice(0, -1).some((turn, index) => index > 0 && turn.by === plan.turns[index - 1]!.by);
+/** Who is at risk as `turn`'s round starts: everyone who hasn't said Safe! before it. */
+export const atRiskFor = (plan: Plan, turn: Turn) =>
+  plan.order.filter((name) =>
+    plan.turns.every((each) => each.by !== name || each.safe === null || each.safe > turn.from),
+  );
+/**
+ * Who is next along the line after `name`, among `atRisk`: the next to the
+ * right in the standing order, from the rightmost back to the leftmost.
+ */
+export function nextAlong(plan: Plan, name: string, atRisk: readonly string[]): string {
+  const seat = plan.order.indexOf(name);
+  for (let k = 1; k <= plan.order.length; k++) {
+    const next = plan.order[(seat + k) % plan.order.length]!;
+    if (atRisk.includes(next)) return next;
+  }
+  throw new Error(`nobody at risk after ${name}`);
+}
 
 /** Every head count, with seeds 1–40. */
 export function everyPlan(): { label: string; plan: Plan; unlucky: string }[] {
@@ -719,8 +733,8 @@ export interface Planned {
 
 /**
  * Every caption of a show of \`plan\`, in order, at the moment the timing
- * table gives it: the opening, each safe round's thrower or pair (in the
- * standing order), each final stop, Nearly, "Final three!" and "Final two!",
+ * table gives it: the opening, each round's thrower or pair (the first along
+ * first), Nearly, "Final three!" and "Final two!",
  * the ending, and "{unlucky} toppled it!" a READ after the fall.
  */
 export function plannedCaptions(plan: Plan): Planned[] {
@@ -739,15 +753,8 @@ export function plannedCaptions(plan: Plan): Planned[] {
   ];
   for (const round of roundsOf(plan)) {
     const turn = round[0]!;
-    if (turn.beat === 'safe') {
-      const [a, b] = round
-        .map((each) => each.by)
-        .sort((x, y) => plan.order.indexOf(x) - plan.order.indexOf(y));
-      all.push({ text: b ? `${a} & ${b}!` : `${a}'s turn`, at: turn.stops });
-    } else {
-      for (const stop of turn.decoys) all.push({ text: `${stop.name}…`, at: stop.at });
-      all.push({ text: `…${turn.by}!`, at: turn.stops });
-    }
+    const [a, b] = round.map((each) => each.by);
+    all.push({ text: b ? `${a} & ${b}!` : `${a}'s turn`, at: turn.named });
     if (turn.nearly) {
       all.push({ text: 'Whoa…', at: turn.lands + 0.25 }, { text: 'Nearly!', at: turn.lands + 1.3 });
     }

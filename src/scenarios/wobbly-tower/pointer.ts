@@ -14,17 +14,21 @@ import {
   type Point,
 } from './layout';
 import { POINTER } from './parts';
-import { hopInto, type Turn } from './plan';
+import type { Turn } from './plan';
 
 /** Seconds the pointer takes to fade in or out. */
 const FADE = 0.12;
+/** The pointer hops to the thrower this long after the round starts. */
+const HOP_IN = 0.35;
+/** When the pointer stops over `turn`'s thrower. */
+const stopOf = (turn: Turn) => turn.from + HOP_IN;
 /** How high the pointer hops between two people of the same row, at most. */
 const HOP_HEIGHT = 40;
 /** A tossed block flies at least this long, from the whoosh to the thunk. */
 export const FLIGHT = 0.4;
 
 /** How long the pointer takes to fade out from its stop over `turn`'s thrower, before the lift. */
-export const fadeOf = (turn: Turn) => Math.min(FADE, Math.max(0, turn.lands - turn.stops - FLIGHT));
+export const fadeOf = (turn: Turn) => Math.min(FADE, Math.max(0, turn.lifts - stopOf(turn)));
 
 const ease = { hop: gsap.parseEase('power1.inOut') };
 
@@ -94,8 +98,8 @@ export function planHops(turns: readonly Turn[], places: Places, startTip: Point
   turns.forEach((turn, index) => {
     const second = index > 0 && turns[index - 1]!.round === turn.round;
     const pointer = pointers[second ? 1 : 0]!;
-    const targets = [...turn.decoys, { name: turn.by, at: turn.stops }];
-    pointer.shows.push({ from: turn.from, to: turn.stops, fade: fadeOf(turn) });
+    const targets = [{ name: turn.by, at: stopOf(turn) }];
+    pointer.shows.push({ from: turn.from, to: stopOf(turn), fade: fadeOf(turn) });
     // Where it was is no stop of these rows: it comes back in over the tower.
     const first = targets[0]!;
     const heights = new Set(standing(first.at).map((spot) => pointerTip(spot).y));
@@ -103,8 +107,8 @@ export function planHops(turns: readonly Turn[], places: Places, startTip: Point
       pointer.here = { x: TOWER.x, y: pointerTip(places.at(first.name, first.at)).y };
       pointer.hops.push({ leaves: turn.from, arrives: turn.from, path: [pointer.here], height: 0 });
     }
-    targets.forEach(({ name, at }, i) => {
-      const leaves = at - hopInto(i);
+    targets.forEach(({ name, at }) => {
+      const leaves = at - HOP_IN;
       // The stop before ends as the pointer leaves it.
       if (pointer.stays.length > 0) pointer.stays.at(-1)!.to = leaves;
       const there = pointerTip(places.at(name, at));

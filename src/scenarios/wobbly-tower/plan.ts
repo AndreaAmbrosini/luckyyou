@@ -1,7 +1,8 @@
-// Whose turn it is when, who goes safe, and how long each moment lasts. The
-// show only acts out the app's pick: the plan is built backwards from the
-// fall, which always comes on the unlucky person's turn, then fitted to a
-// length and timed forwards.
+// Who stands where, whose turn it is when, who goes safe, and how long each
+// moment lasts. The show only acts out the app's pick: the turns are drawn
+// backwards from the fall, which always comes on the unlucky person's turn,
+// the line is seated so they go along it, and the plan is fitted to a length
+// and timed forwards.
 
 import { pickOne, shuffle } from '../../scenario-kit';
 
@@ -31,10 +32,14 @@ export interface Lean {
   readonly toward: Side;
 }
 
-/** A stop of the pointer: over whom, at what show seconds. */
-export interface Stop {
-  readonly name: string;
-  readonly at: number;
+/**
+ * A careful toss: the block hovers over the top of the tower from `from`,
+ * dips toward it and pulls back up `dips` times, and is set down, landing at
+ * the turn's `lands`.
+ */
+export interface Hover {
+  readonly from: number;
+  readonly dips: number;
 }
 
 export interface Turn {
@@ -43,12 +48,14 @@ export interface Turn {
   /** Turns that share a round go together: a pair at 9 or more. */
   readonly round: number;
   readonly beat: Exclude<Beat, 'opening' | 'timber'>;
-  /** Where the pointer stops before `by` this round, in order; empty in a safe round. */
-  readonly decoys: readonly Stop[];
-  /** Show seconds the round starts: the pointer leaves. */
+  /** Show seconds the round starts. */
   readonly from: number;
-  /** Show seconds the pointer stops over `by`, before they lift the block. */
-  readonly stops: number;
+  /** Show seconds the caption names the thrower: the round's start, unless a caption before needs its second. */
+  readonly named: number;
+  /** Show seconds `by` lifts the block. */
+  readonly lifts: number;
+  /** How the block hovers before it is set down, on a turn with 3 or 2 at risk; null when it is tossed straight on. */
+  readonly hover: Hover | null;
   /** Show seconds the block lands on top. */
   readonly lands: number;
   /** The round's length, from `from` to the next round's start. */
@@ -61,7 +68,11 @@ export interface Turn {
 }
 
 export interface Plan {
-  /** Everyone, in their standing order; the layout gives each place in it a spot. */
+  /**
+   * Everyone, in their standing order, left to right: the turn order seated
+   * from a random place along the line, so each turn goes to the next one
+   * along, wrapping round. The layout gives each place in it a spot.
+   */
   readonly order: readonly string[];
   readonly ending: Ending;
   /** How many are at risk when it falls: 3 or 2 at 4+; everyone with 2 or 3. */
@@ -104,25 +115,35 @@ export interface Plan {
 export const READ = 1.04;
 /** Peak leans, in degrees. */
 export const LEANS = { nearly: 11, itHolds: 4, slowLean: 10 } as const;
-/** The pointer's hop into a final round's stop i, and its stay there. */
-export const hopInto = (i: number) => 0.35 + 0.05 * i;
-export const stayOn = (i: number) => 0.65 + 0.1 * i;
+/** "Whoa…" and "Nearly!" come this long after Nearly's landing. */
+export const NEARLY_SAYS = { whoa: 0.25, caption: 1.3 } as const;
+/**
+ * A careful toss's dips: each move down or back up takes `least` to `most`
+ * seconds, so the block never turns back more than three times a second,
+ * like the tower; the last `setDown` seconds of the hover lower it onto the
+ * top. A hover too short for the dips drawn makes fewer.
+ */
+export const DIP = { least: 0.34, most: 0.6, setDown: 0.3 } as const;
 
 const ENDINGS: readonly Ending[] = ['dead-still', 'it-holds', 'slow-lean'];
 
 /** The first round starts here, after the paper blocks; with 2 or 3 the spotlight comes at `just`. */
 const OPENING = { first: 2.4, just: 1.2 };
 /**
- * A safe round, from its start: the pointer stops, the block lands (a pair's
- * second a little later, on top), and "Safe!" comes after the last landing.
- * The round lasts r, 2.0 to 2.6 s, and a pair's at least 2.1 s.
+ * A safe round, from its start: the thrower lifts the block, it lands (a
+ * pair's second a little later, on top), and "Safe!" comes after the last
+ * landing. The round lasts r, 2.0 to 3.0 s, from 2.6 before the fit; a
+ * pair's at least 2.1 s.
  */
-const SAFE = { stops: 0.35, lands: 1.15, second: 0.1, safe: 0.45 };
-const ROUND = { most: 2.6, least: 2.0, pair: 2.1 };
-/** A final round's block lands this long after the thrower's stop; on the last turn, `last`. */
-const TOSS = { final: 0.8, last: 1.05 };
-/** How many stops a final round makes before the thrower: 2 to 4, or 1 to 2 with 2 or 3 people. */
-const STOPS = { least: 2, most: 4, smallLeast: 1, smallMost: 2 };
+const SAFE = { lifts: 0.5, lands: 1.15, second: 0.1, safe: 0.45 };
+const ROUND = { least: 2.0, start: 2.6, most: 3.0, pair: 2.1 };
+/**
+ * A careful toss, from the round's start: the thrower lifts the block, it
+ * reaches the hover point at `hover`, and hovers h, 1 to 3 s, before it lands.
+ */
+const CAREFUL = { lifts: 0.5, hover: 0.9, least: 1, most: 3 };
+/** How many times a careful toss dips, drawn before the fit. */
+const DIPS = [1, 2, 3] as const;
 /**
  * Nearly, from its landing: out to its lean by `out`, held to `back`, and
  * "Safe!" at `safe` (4+). "Final three!" or "Final two!" follows at `next`.
@@ -153,13 +174,6 @@ const HEARTBEAT = { first: 0.85, quicker: 0.4 };
 /** A random side of the stage. */
 const side = (random: () => number): -1 | 1 => (random() < 0.5 ? -1 : 1);
 
-/** Seconds from a final round's start to the thrower's stop, after `k` stops. */
-function stopTimes(k: number): number[] {
-  const times = [hopInto(0)];
-  for (let i = 1; i <= k; i++) times.push(times[i - 1]! + stayOn(i - 1) + hopInto(i));
-  return times;
-}
-
 /** A round as drawn: who throws, and what kind of round it is. */
 interface Round {
   readonly by: readonly string[];
@@ -170,8 +184,10 @@ interface Round {
 /** A round as timed. */
 interface Timed {
   readonly from: number;
-  /** The pointer's stops, the thrower's last, in show seconds. */
-  readonly stops: readonly number[];
+  readonly named: number;
+  readonly lifts: number;
+  /** When the block reaches the hover point; null when it is tossed straight on. */
+  readonly hovers: number | null;
   readonly lands: readonly number[];
   readonly seconds: number;
   readonly safe: number | null;
@@ -180,41 +196,31 @@ interface Timed {
 export function planShow(names: readonly string[], unlucky: string, random: () => number): Plan {
   const count = names.length;
   const small = count <= 3;
-  const order = shuffle(names, random);
   const ending = pickOne(ENDINGS, random);
   const fallsWith = small ? count : pickOne([3, 2], random);
-  const others = names.filter((name) => name !== unlucky);
-  const final = small
-    ? [...names]
-    : shuffle([unlucky, ...shuffle(others, random).slice(0, 2)], random);
-  const safeOrder = small
-    ? []
-    : shuffle(
-        names.filter((name) => !final.includes(name)),
-        random,
-      );
 
-  // Backwards from the fall: who throws in each round.
+  // Backwards from the fall: who throws in each round, and the turn order,
+  // which seats the line.
   const rounds: Round[] = [];
+  let order: string[];
+  let final: string[];
   if (small) {
-    const throwers = [unlucky];
+    // Round the line from wherever it starts, so the last turn is theirs.
+    order = shuffle(names, random);
+    final = [...names];
     const turns = pickOne([4, 5], random);
-    while (throwers.length < turns) {
-      let by = pickOne(names, random);
-      while (by === throwers[0] && by === throwers[1]) by = pickOne(names, random);
-      throwers.unshift(by);
+    const first = order.indexOf(unlucky) - (turns - 1);
+    for (let k = 0; k < turns; k++) {
+      const by = order[(((first + k) % count) + count) % count]!;
+      rounds.push({ by: [by], final: true, nearly: k === turns - 2 });
     }
-    throwers.forEach((by, index) =>
-      rounds.push({ by: [by], final: true, nearly: index === turns - 2 }),
-    );
   } else {
-    const nearlyBy =
-      fallsWith === 2
-        ? pickOne(
-            final.filter((name) => name !== unlucky),
-            random,
-          )
-        : null;
+    const [a, b, ...safeOrder] = shuffle(
+      names.filter((name) => name !== unlucky),
+      random,
+    ) as [string, string, ...string[]];
+    final = [unlucky, a, b];
+    const nearlyBy = fallsWith === 2 ? pickOne([a, b], random) : null;
     // At 9 or more, the safe rounds but the last go in pairs from the front,
     // with one single round at a random place among them when the count is odd.
     const rest = safeOrder.slice(0, -1);
@@ -233,53 +239,47 @@ export function planShow(names: readonly string[], unlucky: string, random: () =
     rounds.push({ by: [safeOrder.at(-1)!], final: false, nearly: fallsWith === 3 });
     if (nearlyBy) rounds.push({ by: [nearlyBy], final: true, nearly: true });
     rounds.push({ by: [unlucky], final: true, nearly: false });
+    // Those who never throw stand next along after the unlucky person.
+    const turnOrder = [
+      ...rounds.flatMap((round) => round.by),
+      ...final.filter((name) => name !== unlucky && name !== nearlyBy),
+    ];
+    const seat = Math.floor(random() * count);
+    order = [...turnOrder.slice(seat), ...turnOrder.slice(0, seat)];
   }
 
-  // The fit: each final round's stops and the safe rounds' length r.
+  // The fit: how long each careful toss hovers, h, and the safe rounds' length r.
   const finals = rounds.filter((round) => round.final);
-  const [least, most] = small ? [STOPS.smallLeast, STOPS.smallMost] : [STOPS.least, STOPS.most];
-  const ks = finals.map(() =>
-    pickOne(
-      Array.from({ length: most - least + 1 }, (_, i) => least + i),
-      random,
-    ),
-  );
-  let r = ROUND.most;
-  const lengthNow = () => time(rounds, ks, r, small).end;
-  while (lengthNow() > LONGEST && ks.some((k) => k > least)) {
-    const top = Math.max(...ks);
-    ks[ks.lastIndexOf(top)] = top - 1;
-  }
+  const hs = finals.map(() => CAREFUL.least + (CAREFUL.most - CAREFUL.least) * random());
+  const drawn = finals.map(() => pickOne(DIPS, random));
+  let r = ROUND.start;
+  const lengthNow = () => time(rounds, hs, r, small).end;
   // The safe rounds that take r: all but the one into "Final three!".
   const paced = rounds.filter((round, index) => !round.final && !rounds[index + 1]!.final).length;
+  // Too long: the longest hover first, down to the next longest, then r.
+  for (let over = lengthNow() - LONGEST; over > 1e-9; over = lengthNow() - LONGEST) {
+    const top = Math.max(...hs);
+    if (top <= CAREFUL.least + 1e-9) break;
+    const next = Math.max(CAREFUL.least, ...hs.filter((h) => h < top - 1e-9));
+    hs[hs.indexOf(top)] = Math.max(next, top - over);
+  }
   if (lengthNow() > LONGEST && paced > 0) {
     r = Math.max(ROUND.least, r - (lengthNow() - LONGEST) / paced);
   }
-  while (lengthNow() < SHORTEST && ks.some((k) => k < most)) {
-    const bottom = Math.min(...ks);
-    ks[ks.indexOf(bottom)] = bottom + 1;
+  // Too short: the shortest hover first, up to 3 s, then r.
+  for (let under = SHORTEST - lengthNow(); under > 1e-9; under = SHORTEST - lengthNow()) {
+    const bottom = Math.min(...hs);
+    if (bottom >= CAREFUL.most - 1e-9) break;
+    hs[hs.indexOf(bottom)] = Math.min(CAREFUL.most, bottom + under);
   }
-  const timed = time(rounds, ks, r, small);
-
-  // Each final round's stops, backwards from the thrower: never the same
-  // person twice running, and only those still at risk.
-  const benched = new Set<string>();
-  const stopNames: string[][] = rounds.map((round, index) => {
-    const atRisk = final.filter((name) => !benched.has(name));
-    if (timed.rounds[index]!.safe !== null) for (const by of round.by) benched.add(by);
-    if (!round.final) return [];
-    const k = ks[finals.indexOf(round)]!;
-    const chain = [round.by[0]!];
-    while (chain.length <= k) {
-      chain.unshift(
-        pickOne(
-          atRisk.filter((name) => name !== chain[0]),
-          random,
-        ),
-      );
-    }
-    return chain.slice(0, -1);
-  });
+  if (lengthNow() < SHORTEST && paced > 0) {
+    r = Math.min(ROUND.most, r + (SHORTEST - lengthNow()) / paced);
+  }
+  const timed = time(rounds, hs, r, small);
+  // As many dips as were drawn, or as the hover has time for.
+  const dips = hs.map((h, i) =>
+    Math.max(1, Math.min(drawn[i]!, Math.floor((h - DIP.setDown + 1e-9) / (2 * DIP.least)))),
+  );
 
   // The turns, with their leans.
   const turns: Turn[] = [];
@@ -298,9 +298,11 @@ export function planShow(names: readonly string[], unlucky: string, random: () =
         by,
         round: index,
         beat: index === last ? 'last-turn' : round.final ? 'final' : 'safe',
-        decoys: stopNames[index]!.map((name, i) => ({ name, at: times.stops[i]! })),
         from: times.from,
-        stops: times.stops.at(-1)!,
+        named: times.named,
+        lifts: times.lifts,
+        hover:
+          times.hovers === null ? null : { from: times.hovers, dips: dips[finals.indexOf(round)]! },
         lands: times.lands[k]!,
         seconds: times.seconds,
         lean,
@@ -359,32 +361,41 @@ function lastLean(ending: Ending, unlucky: string, random: () => number): Lean {
 }
 
 /**
- * The rounds timed forwards from the opening, with `ks[i]` stops before the
- * thrower in final round i and safe rounds r long: when each round starts,
- * its stops and landings, its length and its "Safe!", the spotlight, "Final
- * two!", Nearly's hold, and when the show ends.
+ * The rounds timed forwards from the opening, final round i's block
+ * hovering `hs[i]` and safe rounds r long: when each round starts, its
+ * caption, lift and landings, its length and its "Safe!", the spotlight,
+ * "Final two!", Nearly's hold, and when the show ends. A round's caption
+ * waits until the caption before has had its READ.
  */
-function time(rounds: readonly Round[], ks: readonly number[], r: number, small: boolean) {
+function time(rounds: readonly Round[], hs: readonly number[], r: number, small: boolean) {
   const timed: Timed[] = [];
   let spotlight = OPENING.just;
   let finalTwo: number | null = null;
   let hold = { from: 0, to: 0 };
   let s = OPENING.first;
+  /** The last caption so far: the one after the opening's. */
+  let said = OPENING.just;
   let finalIndex = 0;
   rounds.forEach((round, index) => {
     const next = rounds[index + 1];
-    let stops: number[];
+    const named = Math.max(s, said + READ);
+    let lifts: number;
+    let hovers: number | null = null;
     let lands: number[];
     if (round.final) {
-      const k = ks[finalIndex++]!;
-      stops = stopTimes(k).map((at) => s + at);
-      lands = [stops.at(-1)! + (next ? TOSS.final : TOSS.last)];
+      lifts = s + CAREFUL.lifts;
+      hovers = s + CAREFUL.hover;
+      lands = [hovers + hs[finalIndex++]!];
     } else {
-      stops = [s + SAFE.stops];
+      lifts = s + SAFE.lifts;
       lands = round.by.map((_, k) => s + SAFE.lands + SAFE.second * k);
     }
+    said = named;
     const L = lands.at(-1)!;
-    if (round.nearly) hold = { from: L + NEARLY.out, to: L + NEARLY.back };
+    if (round.nearly) {
+      hold = { from: L + NEARLY.out, to: L + NEARLY.back };
+      said = L + NEARLY_SAYS.caption;
+    }
     let seconds: number;
     let safe: number | null = null;
     if (!next) {
@@ -402,16 +413,18 @@ function time(rounds: readonly Round[], ks: readonly number[], r: number, small:
         spotlight = after;
         seconds = after + FINAL_THREE.fallsWith3 - s;
       }
+      said = after;
     } else if (next.final) {
       // The last safe round before "Final three!", when it falls with 2.
       safe = L + SAFE.safe;
       spotlight = L + FINAL_THREE.afterSafe;
       seconds = spotlight + FINAL_THREE.fallsWith2 - s;
+      said = spotlight;
     } else {
       safe = L + SAFE.safe;
       seconds = round.by.length === 2 ? Math.max(r, ROUND.pair) : r;
     }
-    timed.push({ from: s, stops, lands, seconds, safe });
+    timed.push({ from: s, named, lifts, hovers, lands, seconds, safe });
     s += seconds;
   });
   const lastLands = timed.at(-1)!.lands.at(-1)!;

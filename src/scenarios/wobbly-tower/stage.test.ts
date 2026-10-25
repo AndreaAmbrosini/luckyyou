@@ -3,7 +3,7 @@ import { createRandom } from '../../scenario-kit/random';
 import { handOutLooks } from '../../scenario-kit';
 import { POINTER } from './parts';
 import { FLIGHT, planHops, startTipOf } from './pointer';
-import { BEATS, hopInto, LEANS as PEAKS, planShow, READ, stayOn, type Plan } from './plan';
+import { BEATS, DIP, LEANS as PEAKS, planShow, READ, type Plan } from './plan';
 import {
   CAPTION_BOTTOM,
   HEAP_BAND,
@@ -44,6 +44,8 @@ import {
   roundsOf,
   firstTurns,
   stopsOf,
+  atRiskFor,
+  nextAlong,
   nearlyOf,
   plannedCaptions,
   anyOverlap,
@@ -60,7 +62,6 @@ import {
   drawnAs,
   shows,
   pointerBox,
-  spotOf,
   placesOf,
   seedOf,
   eightRun,
@@ -349,7 +350,7 @@ describe('The layout', () => {
 describe('The plan', () => {
   const all = everyPlan();
 
-  it('the fit stays in bounds', () => {
+  it('the fit stays in bounds, at every count and both ways it falls', () => {
     for (let count = 4; count <= 12; count++) {
       const ways = all
         .filter(({ plan }) => plan.order.length === count)
@@ -357,7 +358,7 @@ describe('The plan', () => {
       expect(new Set(ways), `${count} people`).toEqual(new Set([3, 2]));
     }
     for (const { label, plan } of all) {
-      const small = plan.order.length <= 3;
+      const count = plan.order.length;
       const rounds = roundsOf(plan);
       // The safe rounds that take r: all but the one that leads into "Final three!".
       const paced = rounds.filter(
@@ -366,53 +367,70 @@ describe('The plan', () => {
       for (const round of paced) {
         const { seconds } = round[0]!;
         expect(seconds, label).toBeGreaterThanOrEqual((round.length === 2 ? 2.1 : 2.0) - 1e-9);
-        expect(seconds, label).toBeLessThanOrEqual(2.6 + 1e-9);
+        expect(seconds, label).toBeLessThanOrEqual(3 + 1e-9);
       }
-      const finals = rounds.filter((round) => round[0]!.beat !== 'safe');
-      const [least, most] = small ? [1, 2] : [2, 4];
-      for (const [turn] of finals) {
-        expect(turn!.decoys.length, label).toBeGreaterThanOrEqual(least!);
-        expect(turn!.decoys.length, label).toBeLessThanOrEqual(most!);
+      // Every turn with 3 or 2 at risk is a careful toss, hovering 1 to 3 s.
+      const hovers = plan.turns.flatMap((turn) => {
+        expect(turn.hover === null, label).toBe(turn.beat === 'safe');
+        return turn.hover ? [turn.lands - turn.hover.from] : [];
+      });
+      for (const h of hovers) {
+        expect(h, label).toBeGreaterThanOrEqual(1 - 1e-9);
+        expect(h, label).toBeLessThanOrEqual(3 + 1e-9);
       }
+      // Too long, only with every hover and r as short as they go; too short, as long.
+      const r = paced.map((round) => round[0]!.seconds);
+      if (plan.end > 28 + 1e-9) {
+        for (const h of hovers) expect(h, label).toBeCloseTo(1, 9);
+        for (const seconds of r) expect(seconds, label).toBeLessThanOrEqual(2.1 + 1e-9);
+      }
+      if (plan.end < 21.5 - 1e-9) {
+        for (const h of hovers) expect(h, label).toBeCloseTo(3, 9);
+        for (const seconds of r) expect(seconds, label).toBeCloseTo(3, 9);
+      }
+      expect(plan.end, label).toBeGreaterThanOrEqual(15);
       expect(plan.end, label).toBeLessThanOrEqual(28 + 1e-9);
-      const stretched =
-        finals.every(([turn]) => turn!.decoys.length === most) &&
-        paced.every((round) => Math.abs(round[0]!.seconds - 2.6) < 1e-9);
-      if (!stretched) expect(plan.end, label).toBeGreaterThanOrEqual(21.5 - 1e-9);
-      // The timing file's checkpoints.
-      const count = plan.order.length;
-      if (count === 8 && plan.fallsWith === 2) {
-        for (const round of paced) expect(round[0]!.seconds, label).toBeCloseTo(2.1, 9);
-      }
-      if (count === 12 && plan.fallsWith === 2) {
-        expect(plan.end, label).toBeCloseTo(28.0, 9);
-        for (const round of paced.filter((each) => each.length === 2)) {
-          expect(round[0]!.seconds, label).toBeCloseTo(2.1, 9);
-        }
-      }
-      if (count === 6 && plan.fallsWith === 3) {
-        expect(plan.end, label).toBeGreaterThanOrEqual(21.8 - 1e-9);
-        expect(plan.end, label).toBeLessThanOrEqual(23.3 + 1e-9);
-      }
+      // The handover's worked lengths.
+      if (count === 4 && plan.fallsWith === 3) expect(plan.end, label).toBeCloseTo(15.5, 9);
+      if (count === 6) expect(plan.end, label).toBeGreaterThanOrEqual(21);
     }
   });
 
-  it('no stop repeats the one before', () => {
+  it('a careful toss dips 1 to 3 times, as many as its hover has time for', () => {
+    const drawn = new Set<number>();
     for (const { label, plan } of all) {
-      const safe = new Set<string>();
-      for (const round of roundsOf(plan)) {
-        const turn = round[0]!;
-        const stopped = stopsOf(turn);
-        stopped.slice(1).forEach((name, index) => expect(name, label).not.toBe(stopped[index]));
-        // A final round stops only on those still at risk.
-        if (turn.beat !== 'safe') {
-          const atRisk = plan.final.filter((name) => !safe.has(name));
-          for (const name of stopped) expect(atRisk, label).toContain(name);
-        } else {
-          for (const each of round) expect(plan.final, label).not.toContain(each.by);
-        }
-        for (const each of round) if (each.safe !== null) safe.add(each.by);
+      for (const turn of plan.turns) {
+        if (!turn.hover) continue;
+        const { dips } = turn.hover;
+        drawn.add(dips);
+        expect(dips, label).toBeGreaterThanOrEqual(1);
+        expect(dips, label).toBeLessThanOrEqual(3);
+        const h = turn.lands - turn.hover.from;
+        expect(2 * dips * DIP.least + DIP.setDown, label).toBeLessThanOrEqual(h + 1e-9);
       }
+    }
+    expect(drawn).toEqual(new Set([1, 2, 3]));
+  });
+
+  it('the line is seated from the turn order, so every turn goes to the next one along', () => {
+    for (const { label, plan, unlucky } of all) {
+      const places = placesOf(plan);
+      plan.turns.forEach((turn, index) => {
+        // The line is the standing order, left to right across the stage, in one row or two.
+        const atRisk = atRiskFor(plan, turn);
+        const xs = atRisk.map((name) => places.at(name, turn.from).x);
+        expect(xs, `${label} at ${turn.from}`).toEqual([...xs].sort((a, b) => a - b));
+        if (index === 0) return;
+        const before = plan.turns[index - 1]!.by;
+        expect(turn.by, label).toBe(nextAlong(plan, before, atRisk));
+      });
+      // At 4 or more, the two who never throw stand next along after the unlucky person.
+      if (plan.order.length < 4) continue;
+      const seat = plan.order.indexOf(unlucky);
+      const after = [1, 2].map((k) => plan.order[(seat + k) % plan.order.length]!);
+      const throwers = plan.turns.map((turn) => turn.by);
+      const idle = plan.final.filter((name) => !throwers.includes(name));
+      expect(after.slice(0, idle.length).sort(), label).toEqual([...idle].sort());
     }
   });
 
@@ -433,28 +451,24 @@ describe('The plan', () => {
           expect(turn.round, at).toBe(index);
           expect(turn.from, at).toBe(first.from);
           expect(turn.seconds, at).toBe(first.seconds);
-          expect(turn.stops, at).toBeGreaterThan(turn.from);
-          expect(turn.stops, at).toBeLessThan(turn.lands);
-          expect(turn.lands - turn.stops, at).toBeGreaterThanOrEqual(0.8 - 1e-9);
+          // Named as the round starts, or once the caption before has had its second; then the lift.
+          expect(turn.named, at).toBeGreaterThanOrEqual(turn.from - 1e-9);
+          expect(turn.named, at).toBeLessThan(turn.lifts);
+          expect(turn.lifts, at).toBeCloseTo(turn.from + 0.5, 9);
         }
         if (first.beat === 'safe') {
-          // The pointer stops at 0.35, the blocks land at 1.15 and 1.25, and
-          // "Safe!" comes 0.45 after the round's last block, or 1.9 after Nearly's.
+          // The blocks land at 1.15 and 1.25, and "Safe!" comes 0.45 after
+          // the round's last block, or 1.9 after Nearly's.
           const landed = round.at(-1)!.lands;
           round.forEach((turn, k) => {
-            expect(turn.decoys, at).toEqual([]);
-            expect(turn.stops, at).toBeCloseTo(first.from + 0.35, 9);
+            expect(turn.hover, at).toBeNull();
             expect(turn.lands, at).toBeCloseTo(first.from + 1.15 + 0.1 * k, 9);
             expect(turn.safe, at).toBeCloseTo(landed + (turn.nearly ? 1.9 : 0.45), 9);
           });
         } else {
-          // A round of stops: each hop 0.05 s and each stay 0.1 s longer than the one before.
-          const times = [...first.decoys.map((stop) => stop.at), first.stops];
-          times.forEach((time, i) => {
-            const before = i === 0 ? first.from : times[i - 1]! + stayOn(i - 1);
-            expect(time - before, at).toBeCloseTo(hopInto(i), 9);
-          });
-          expect(first.lands - first.stops, at).toBeCloseTo(first === last ? 1.05 : 0.8, 9);
+          // A careful toss: at the hover point 0.9 s in, landing h later.
+          expect(first.hover!.from, at).toBeCloseTo(first.from + 0.9, 9);
+          expect(first.lands, at).toBeGreaterThan(first.hover!.from);
           if (first.nearly && !small) expect(first.safe, at).toBeCloseTo(first.lands + 1.9, 9);
           else expect(first.safe, at).toBeNull();
         }
@@ -616,7 +630,7 @@ describe('Moving people', () => {
       const hops = planHops(plan.turns, places, startTipOf(blockHeight(2 + plan.turns.length), 2));
       // Every frame of every round, from the pointer leaving until it has faded out.
       for (const turn of firstTurns(plan)) {
-        for (let frame = Math.ceil(turn.from * 30); frame / 30 <= turn.stops + 0.15; frame++) {
+        for (let frame = Math.ceil(turn.from * 30); frame / 30 <= turn.lifts; frame++) {
           const t = frame / 30;
           for (const which of [0, 1]) {
             const pointer = hops.at(t, which);
@@ -943,36 +957,6 @@ describe('Hops and tosses', () => {
           `${label}, turn ${index + 1}`,
         ).toBeGreaterThanOrEqual(0.4 - FINE);
       });
-    }
-  });
-
-  it('a bounce in place is a visible hop, clear of the name tags', async () => {
-    // With 2 or 3 people a round can start on the last round's thrower.
-    const bounces = (plan: Plan) =>
-      firstTurns(plan).some(
-        (turn, index, all) => index > 0 && stopsOf(turn)[0] === all[index - 1]!.by,
-      );
-    for (const count of [2, 3]) {
-      const seed = seedFor(count, bounces);
-      const label = `${count} people, seed ${seed}`;
-      const { frames, plan } = await watch(names(count), unluckyOf(count), { seed });
-      const stopped = stops(frames);
-      const again = stopped.slice(1).filter((stop, index) => stop.name === stopped[index]!.name);
-      expect(again.length, label).toBeGreaterThan(0);
-      for (const stop of again) {
-        const before = stopped[stopped.indexOf(stop) - 1]!;
-        const hop = frames.filter((frame) => frame.time > before.to && frame.time < stop.from);
-        const tip = pointerTip(spotOf(plan, stop.name));
-        expect(
-          tip.y - Math.min(...hop.map((frame) => frame.pointer.y)),
-          label,
-        ).toBeGreaterThanOrEqual(10);
-        for (const frame of hop.filter((each) => each.pointer.shown > 0)) {
-          for (const { tag } of Object.values(frame.people)) {
-            expect(overlap(pointerBox(frame.pointer), tag), label).toBe(false);
-          }
-        }
-      }
     }
   });
 });
