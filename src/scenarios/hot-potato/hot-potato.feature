@@ -110,7 +110,6 @@ Feature: Hot Potato
       When the show runs
       Then the heartbeat starts with "Last lap!" and comes quicker and quicker until the pop
 
-  @pending
   Rule: The last second, from the second of the three
 
     Scenario Outline: The last second in the ring, with <count> people
@@ -139,7 +138,6 @@ Feature: Hot Potato
 
   Rule: Once in a while it strays
 
-    @pending
     Scenario: It strays
       Given 6 people, and it strays
       When the last second comes

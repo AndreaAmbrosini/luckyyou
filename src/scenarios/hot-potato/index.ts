@@ -1,6 +1,6 @@
-// People stand in a ring and throw a potato with a lit sparkler, faster and
-// faster. The sparkler burns down, seems to go out, relights, and the throws
-// slow to a showdown between three. It pops in the unlucky person's hands.
+// People stand in a ring and pass a potato with a lit sparkler round it, fast
+// and then slower, while a fuse burns down. Whoever it won't come back to sits
+// down, leaving three. It pops on the unlucky person.
 
 import { defineScenario } from '../../scenario-kit';
 import { playHotPotato } from './play';

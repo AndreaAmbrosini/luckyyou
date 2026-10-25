@@ -29,11 +29,14 @@ import {
   hang,
   headBox,
   held,
+  heldOut,
+  highest,
   nameBox,
   overlap,
   POTATO,
   potatoBox,
   ring,
+  seated,
   SITTING,
   sittingHead,
   throwPath,
@@ -63,6 +66,10 @@ const GROW_THREE = 0.4;
 const PULSE = { scale: 1.25, half: 0.2 };
 /** Seconds of the kit's shake. */
 const SHAKE = 0.4;
+/** Seconds into the last second when holding on, the potato starts to be held out. */
+const HOLD_OUT = 0.5;
+/** How far the second leans in towards the third, holding on, before it pops. */
+const LEAN = 50;
 /** How far the control points of the hang's drift reach above its top: it floats up 3/4 of this. */
 const DRIFT = 16;
 /** The caption a second before the pop. */
@@ -118,14 +125,19 @@ export async function playHotPotato(show: Show): Promise<void> {
   // From the crawl the last three stand GROWN times their size; with 2
   // people nobody grows.
   const growing: readonly string[] = count > 2 ? plan.three : [];
-  /** Where `name` stands at `time`. */
-  const spotAt = (name: string, time: number) => {
+  /** Where `name` stands at `time`, and how big: their name tag is there. */
+  const standAt = (name: string, time: number) => {
     const { spot } = people.get(name)!;
     return growing.includes(name) && time >= starts.crawl ? grown(spot) : spot;
   };
+  /** When `name` sits down, if they do. */
+  const sitsAt = new Map(plan.sits.map((each) => [each.name, each.at]));
+  /** Where `name`'s head is at `time`: standing, or sitting down. */
+  const spotAt = (name: string, time: number) =>
+    (sitsAt.get(name) ?? Infinity) <= time ? seated(standAt(name, time)) : standAt(name, time);
   /** Everyone's name but `name`'s, where it is at `time`. */
   const namesBut = (name: string, time: number) =>
-    plan.ring.filter((each) => each !== name).map((each) => nameBox(spotAt(each, time)));
+    plan.ring.filter((each) => each !== name).map((each) => nameBox(standAt(each, time)));
 
   const potato = drawPotato();
   potato.el.classList.add(styles.potato);
@@ -136,9 +148,9 @@ export async function playHotPotato(show: Show): Promise<void> {
     x: point.x - POTATO.width / 2,
     y: point.y - POTATO.height / 2,
   });
-  /** Where `name` holds the potato at `time`, clear of everyone else's name. */
+  /** Where `name` holds the potato at `time`, clear of every name. */
   const over = (name: string, time: number) =>
-    held(spotAt(name, time), scale, namesBut(name, time));
+    held(spotAt(name, time), scale, [...namesBut(name, time), nameBox(standAt(name, time))]);
   const first = plan.catches[0]!;
   gsap.set(potato.el, { ...place({ x: over(first.by, 0).x, y: DROP_Y }), scale });
   const setX = gsap.quickSetter(potato.el, 'x', 'px') as (value: number) => void;
@@ -275,8 +287,18 @@ export async function playHotPotato(show: Show): Promise<void> {
    */
   function hangUp(each: Catch) {
     const two = [over(plan.three[1], each.at), over(plan.three[2], each.at)] as [Point, Point];
-    const { rise, top, drop } = hang(over(each.from!, each.at), over(each.by, each.at), two, scale);
-    const up = { x: top.x, y: top.y - DRIFT };
+    // Off both their faces, and everyone's name.
+    const faces = [plan.three[1], plan.three[2]].map((name) => headBox(spotAt(name, each.at)));
+    const names = plan.ring.map((name) => nameBox(standAt(name, each.at)));
+    const { rise, top, drop } = hang(
+      over(each.from!, each.at),
+      over(each.by, each.at),
+      two,
+      scale,
+      [...faces, ...names],
+    );
+    // Never into the sky: from the highest it may go, it hangs without drifting.
+    const up = { x: top.x, y: Math.max(highest(scale), top.y - DRIFT) };
     follow(rise, each.thrown, plan.still.from, 'power2.out');
     follow([top, up, up, top], plan.still.from, plan.still.to, 'sine.inOut');
     follow(drop, plan.still.to, each.at, 'power1.in');
@@ -378,7 +400,7 @@ export async function playHotPotato(show: Show): Promise<void> {
       time,
       'Phew!',
       sittingHead(person.spot),
-      [potatoThen, ...namesBut(name, time), nameBox(person.spot)],
+      [potatoThen, ...namesBut(name, time), nameBox(standAt(name, time))],
       'paper',
       [potatoThen],
     );
@@ -410,8 +432,39 @@ export async function playHotPotato(show: Show): Promise<void> {
       timeline.add(shake(potato.el, show), time);
     }
   }
-  /** Where the potato is when it pops: landed in the unlucky person's hands, or held. */
-  const heart: Point = over(show.unlucky, starts.pop);
+  /** Where the potato is when it pops: landed in the unlucky person's hands, or held out. */
+  let heart: Point = over(show.unlucky, starts.pop);
+  if (plan.ending === 'holding-on') {
+    // Holding on: they hold it out beside their face towards the third,
+    // hesitate, and lean in; it pops before they let go.
+    const L = starts['last-second'];
+    const towards = over(plan.three[2], L);
+    const out = heldOut(spotAt(second, L), towards, scale, [
+      ...namesBut(second, L),
+      nameBox(standAt(second, L)),
+    ]);
+    const away = Math.hypot(towards.x - out.x, towards.y - out.y);
+    const lean = {
+      x: out.x + (LEAN * (towards.x - out.x)) / away,
+      y: out.y + (LEAN * (towards.y - out.y)) / away,
+    };
+    follow(straight(over(second, L), out), L + HOLD_OUT, plan.still.from);
+    follow(straight(out, lean), plan.still.to, starts.pop, 'power2.in');
+    heart = lean;
+  }
+  if (plan.ending === 'strays') {
+    // It strays: flung across the ring with a "Whoa!", onto someone sitting.
+    const fling = plan.catches.at(-1)!;
+    const potatoThen = potatoBox(over(second, fling.thrown), scale);
+    say(
+      fling.thrown,
+      'Whoa!',
+      headBox(spotAt(second, fling.thrown)),
+      [potatoThen, ...namesBut(second, fling.thrown), nameBox(standAt(second, fling.thrown))],
+      'paper',
+      [potatoThen],
+    );
+  }
 
   // The pop: a burst behind the people where the potato is, confetti out
   // and down, and the unlucky person in front of everyone, growing, with a
@@ -432,7 +485,8 @@ export async function playHotPotato(show: Show): Promise<void> {
     scene.append(bit);
   }
   const unlucky = people.get(show.unlucky)!;
-  const final = spotAt(show.unlucky, starts.pop);
+  // Standing again at the pop, if they were sitting.
+  const final = standAt(show.unlucky, starts.pop);
   const paperCrown = crown();
   paperCrown.setAttribute('width', String(unlucky.spot.size));
   paperCrown.setAttribute('height', String(unlucky.spot.size));

@@ -93,8 +93,7 @@
 .ink,
 .steamInk,
 .steamPaper,
-.tomatoLine,
-.orangeLine {
+.tomatoLine {
   fill: none;
   stroke-linecap: round;
   stroke-linejoin: round;
@@ -111,10 +110,6 @@
 
 .tomatoLine {
   stroke: var(--color-tomato);
-}
-
-.orangeLine {
-  stroke: var(--color-orange);
 }
 
 .tomatoFill {

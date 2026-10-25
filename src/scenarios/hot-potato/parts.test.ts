@@ -32,33 +32,6 @@ describe('the potato', () => {
     expect(p.el.dataset.sparkler).toBe('0.333');
   });
 
-  it('swaps the spark for smoke when it goes out', () => {
-    const p = potato();
-    const spark = p.el.querySelector('[data-part="spark"]');
-    const smoke = p.el.querySelector('[data-part="smoke"]');
-    expect(hidden(spark)).toBe(false);
-    expect(hidden(smoke)).toBe(true);
-    p.setLit(false);
-    expect(p.el.dataset.lit).toBe('false');
-    expect(hidden(spark)).toBe(true);
-    expect(hidden(smoke)).toBe(false);
-    p.setLit(true);
-    expect(hidden(spark)).toBe(false);
-    expect(hidden(smoke)).toBe(true);
-  });
-
-  it('grows the spark and shows its second ring when flared', () => {
-    const p = potato();
-    const spark = p.el.querySelector('[data-part="spark"]');
-    const rays = p.el.querySelector('[data-part="flare"]');
-    expect(hidden(rays)).toBe(true);
-    p.setFlare(true);
-    expect(hidden(rays)).toBe(false);
-    expect(spark?.getAttribute('transform')).toContain('scale(1.7)');
-    p.setFlare(false);
-    expect(hidden(rays)).toBe(true);
-  });
-
   it('shows steam only when asked', () => {
     const p = potato();
     const steam = p.el.querySelector('[data-part="steam"]');

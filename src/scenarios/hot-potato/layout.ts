@@ -29,8 +29,8 @@ export interface Spot {
 
 /**
  * The potato's size, how much bigger it is when two people hold it, and how
- * far its drawing reaches above that box: the spark's rays at full length,
- * or the smoke while it's out (parts.ts).
+ * far its drawing reaches above that box: the spark's rays at full length
+ * (parts.ts).
  */
 export const POTATO = { width: 120, height: 110, pairScale: 1.4, above: 80 } as const;
 
@@ -116,18 +116,18 @@ export function grown(spot: Spot): Spot {
 /** Sitting down, the head shrinks to `scale` and drops `drop` of its size towards the name tag. */
 export const SITTING = { scale: 0.72, drop: 0.12 } as const;
 
-/** Someone sitting down: their head's box. Their name tag stays where it was, as big. */
+/**
+ * Someone sitting down, as far as their head goes: SITTING.scale times their
+ * size, dropped SITTING.drop of it. Their name tag stays where it was, as
+ * big: take it from the spot they stand on.
+ */
+export function seated(spot: Spot): Spot {
+  return { ...spot, size: SITTING.scale * spot.size, y: spot.y + SITTING.drop * spot.size };
+}
+
+/** Someone sitting down: their head's box. */
 export function sittingHead(spot: Spot): Box {
-  const head = headBox(spot);
-  // The head shrinks about the spot it stands on, then drops.
-  const about = (value: number, from: number) => from + SITTING.scale * (value - from);
-  const drop = SITTING.drop * spot.size;
-  return {
-    left: about(head.left, spot.x),
-    right: about(head.right, spot.x),
-    top: about(head.top, spot.y) + drop,
-    bottom: about(head.bottom, spot.y) + drop,
-  };
+  return headBox(seated(spot));
 }
 
 /** The gap between a held potato's box and the holder's face. */
@@ -336,20 +336,37 @@ export function throwPath(from: Point, to: Point, scale: number): Path {
 /** The hang's top is this far below the highest a potato may go. */
 const HANG_BELOW = 20;
 
+/** How far the hang's top moves along at a time to clear a face or a name. */
+const HANG_STEP = 5;
+
 /**
- * The hang-time throw: up to a top halfway between the pair, high under the
- * sky, then down onto `to`. Level at the top, and never higher than it.
+ * The hang-time throw: up to a top between the pair, high under the sky,
+ * then down onto `to`. Level at the top, and never higher than it. The top
+ * is halfway between them, or the nearest point to that, at most half a
+ * potato past either and up to the sky, that keeps the potato off
+ * everything in `avoid`, such as their faces and names.
  */
 export function hang(
   from: Point,
   to: Point,
   pair: readonly [Point, Point],
   scale: number,
+  avoid: readonly Box[] = [],
 ): { rise: Path; top: Point; drop: Path } {
-  const top = {
-    x: (pair[0].x + pair[1].x) / 2,
-    y: Math.min(highest(scale) + HANG_BELOW, pair[0].y, pair[1].y),
-  };
+  const level = Math.min(highest(scale) + HANG_BELOW, pair[0].y, pair[1].y);
+  const middle = (pair[0].x + pair[1].x) / 2;
+  const reach = Math.abs(pair[0].x - pair[1].x) / 2 + (scale * POTATO.width) / 2;
+  const clear = (point: Point) => !avoid.some((box) => overlap(potatoBox(point, scale), box));
+  let top = { x: middle, y: level };
+  search: for (let y = level; y >= Math.min(level, highest(scale)); y -= HANG_STEP) {
+    for (let away = 0; away <= reach; away += HANG_STEP) {
+      const found = [middle + away, middle - away].map((x) => ({ x, y })).find(clear);
+      if (found) {
+        top = found;
+        break search;
+      }
+    }
+  }
   return {
     rise: [
       from,

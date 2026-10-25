@@ -53,17 +53,11 @@ const part = (className: string, name?: string) => {
 export type Face = 'calm' | 'nervous' | 'relieved' | 'shocked' | 'squeezed' | 'smug';
 
 export interface Potato {
-  /** 120 × 110 grid, overflow visible; data-part="potato", data-face, data-sparkler, data-lit. */
+  /** 120 × 110 grid, overflow visible; data-part="potato", data-face, data-sparkler. */
   readonly el: SVGSVGElement;
-  /** The spark at the sparkler's tip; data-part="spark". */
-  readonly spark: SVGGElement;
   setFace(face: Face): void;
   /** 1 full … 0 the last spark; data-sparkler is the value rounded to 3 decimals. */
   setSparkler(left: number): void;
-  /** Out: no spark, a smoke curl. */
-  setLit(lit: boolean): void;
-  /** The relit spark: bigger, with a second ring of rays. */
-  setFlare(on: boolean): void;
   setSteam(on: boolean): void;
 }
 
@@ -96,12 +90,8 @@ const FACES: Record<Face, readonly Shape[]> = {
 
 const RAYS =
   'M0 -26 V-20 M18 -18 L14 -14 M26 0 H20 M18 18 L14 14 M-18 -18 L-14 -14 M-26 0 H-20 M-18 18 L-14 14';
-const FLARE_RAYS =
-  'M0 -34 V-30 M26 -10 L30 -12 M-26 -10 L-30 -12 M10 -30 L12 -34 M-10 -30 L-12 -34';
-
 const CURL_A = 'M28 18 q-7 -8 0 -16 q7 -8 0 -16';
 const CURL_B = 'M102 26 q-7 -8 0 -16 q7 -8 0 -16';
-const SMOKE = 'M72 -30 q-10 -10 0 -20 q10 -10 0 -22';
 
 /** The potato, a stick of sparkler in its top, and a face that changes. */
 export function potato(): Potato {
@@ -119,14 +109,6 @@ export function potato(): Potato {
       ['path', styles.steamInk, { d: CURL_B, 'stroke-width': 9 }],
       ['path', styles.steamPaper, { d: CURL_A, 'stroke-width': 4 }],
       ['path', styles.steamPaper, { d: CURL_B, 'stroke-width': 4 }],
-    ],
-  );
-  const smoke = group(
-    el,
-    ['data-part', 'smoke'],
-    [
-      ['path', styles.steamInk, { d: SMOKE, 'stroke-width': 10 }],
-      ['path', styles.steamPaper, { d: SMOKE, 'stroke-width': 5 }],
     ],
   );
 
@@ -159,7 +141,6 @@ export function potato(): Potato {
     ['data-part', 'spark'],
     [
       ['path', styles.tomatoLine, { d: RAYS, 'stroke-width': 3.5 }],
-      ['path', styles.orangeLine, { d: FLARE_RAYS, 'stroke-width': 3.5 }],
       [
         'polygon',
         styles.sun,
@@ -168,21 +149,16 @@ export function potato(): Potato {
       ['circle', styles.tomatoFill, { cx: 0, cy: 0, r: 3.5 }],
     ],
   );
-  const flareRays = spark.children[1] as SVGPathElement;
-  flareRays.dataset.part = 'flare';
-
-  let flare = false;
   let left = 1;
   const placeSpark = () => {
     const x = 65 + 9 * left;
     const y = 22 - 62 * left;
     stick.setAttribute('d', `M64 28 L${x} ${y}`);
-    spark.setAttribute('transform', `translate(${x} ${y}) scale(${flare ? 1.7 : 1.1})`);
+    spark.setAttribute('transform', `translate(${x} ${y}) scale(1.1)`);
   };
 
   const api: Potato = {
     el,
-    spark,
     setFace(face) {
       el.dataset.face = face;
       for (const [name, g] of faces) show(g, name === face);
@@ -192,24 +168,12 @@ export function potato(): Potato {
       el.dataset.sparkler = String(Math.round(value * 1000) / 1000);
       placeSpark();
     },
-    setLit(lit) {
-      el.dataset.lit = String(lit);
-      show(spark, lit);
-      show(smoke, !lit);
-    },
-    setFlare(on) {
-      flare = on;
-      show(flareRays, on);
-      placeSpark();
-    },
     setSteam(on) {
       show(steam, on);
     },
   };
   api.setFace('calm');
   api.setSparkler(1);
-  api.setLit(true);
-  api.setFlare(false);
   api.setSteam(false);
   return api;
 }
