@@ -54,10 +54,14 @@ export function tagFor(size: number): Spot['tag'] {
   };
 }
 
+/**
+ * The ring's shape: heads grow as fewer people stand in it, from 8 down,
+ * and shrink from 8 up to 64 and 92 at 12.
+ */
 const shape = (count: number): Shape => {
   if (count <= 8) {
-    const f = 1 + 0.06 * (8 - count);
-    return { cx: 640, cy: 450, rx: 470, ry: 190, back: 78 * f, front: 104 * f };
+    const f = 1 + 0.05 * (8 - count);
+    return { cx: 640, cy: 450, rx: 470, ry: 190, back: 96 * f, front: 128 * f };
   }
   const t = Math.min(1, (count - 8) / 4);
   const mix = (at8: number, at12: number) => at8 + t * (at12 - at8);
@@ -66,10 +70,18 @@ const shape = (count: number): Shape => {
     cy: mix(450, 440),
     rx: mix(470, 540),
     ry: mix(190, 215),
-    back: mix(78, 64),
-    front: mix(104, 92),
+    back: mix(96, 64),
+    front: mix(128, 92),
   };
 };
+
+/**
+ * Half a step round the ring at 6 and 10 people: with an even count, so
+ * someone stands at each side of the ring and no two neighbours stand one
+ * right above the other, where the potato held by the lower one would hide
+ * the upper one's name.
+ */
+const turn = (count: number) => (count % 4 === 2 ? 0.5 : 0);
 
 /** The spots for `count` people: the first at the back, then clockwise. */
 export function ring(count: number): Spot[] {
@@ -81,7 +93,7 @@ export function ring(count: number): Spot[] {
   }
   const { cx, cy, rx, ry, back, front } = shape(count);
   return Array.from({ length: count }, (_, k) => {
-    const a = (2 * Math.PI * k) / count;
+    const a = (2 * Math.PI * (k + turn(count))) / count;
     const x = Math.round(cx + rx * Math.sin(a));
     const y = Math.round(cy - ry * Math.cos(a));
     const size = Math.round(back + ((y - (cy - ry)) / (2 * ry)) * (front - back));
@@ -89,119 +101,33 @@ export function ring(count: number): Spot[] {
   });
 }
 
-/** Someone who is out of play: a little smaller, in the same place; the name tag keeps its size. */
-export function outOfPlay(spot: Spot): Spot {
-  return { ...spot, size: spot.size * 0.88 };
-}
+/** How much bigger the last three stand, name tags and all. */
+export const GROWN = 1.2;
 
-/** The duel's two, big in front and facing each other: their head size, name tag size and spots. */
-const DUEL = { size: 180, tag: 40, left: { x: 320, y: 580 }, right: { x: 960, y: 580 } };
-
-/**
- * How many times bigger someone from `spot` is drawn in the duel, name tag
- * and all, so the tag comes to DUEL.tag: a hair over rather than under, for
- * the drawing's rounding. The head makes up the rest to DUEL.size.
- */
-export function duelGrowth(spot: Spot): number {
-  return Math.ceil((DUEL.tag / spot.tag.size) * 1e4) / 1e4;
-}
-
-/**
- * Shares of the step-in: the watchers fade out from its start to `out`,
- * are moved while hidden, and fade back in from `in` to its end.
- */
-const FADE = { out: 0.25, in: 0.8 };
-
-/** Eases in and out, `t` (0…1) to the `power`. */
-const inOut = (power: number) => (t: number) =>
-  t < 0.5 ? 2 ** (power - 1) * t ** power : 1 - 2 ** (power - 1) * (1 - t) ** power;
-
-/**
- * The pair's walk eases in and out steeply, and they only start growing
- * once the watchers have faded out: so they're still small, near where they
- * stood, while the watchers fade out, and nearly there when they're back.
- */
-const walking = inOut(4);
-const GROW_FROM = 0.3;
-const growing = (t: number) => inOut(3)(Math.max(0, (t - GROW_FROM) / (1 - GROW_FROM)));
-
-/** How finely the watchers' arc is narrowed, in radians. */
-const ARC_STEP = 0.005;
-
-/** Who in the pair stands on the left, and where each watcher watches from. */
-function duelPlan(count: number, pair: readonly [number, number]) {
-  const spots = ring(count);
-  const { cx, cy, rx, ry } = shape(count);
-  const [one, two] = pair;
-  const oneLeft = spots[one]!.x < spots[two]!.x || (spots[one]!.x === spots[two]!.x && one < two);
-  const [left, right] = oneLeft ? [one, two] : [two, one];
-  // In ring order from the front-left, round the back, to the front-right.
-  const angle = (index: number) => {
-    const a = (2 * Math.PI * index) / count;
-    return a > Math.PI ? a - 2 * Math.PI : a;
+/** Someone of the last three: GROWN times their size, about where they stand. */
+export function grown(spot: Spot): Spot {
+  return {
+    ...spot,
+    size: GROWN * spot.size,
+    tag: { size: GROWN * spot.tag.size, maxWidth: GROWN * spot.tag.maxWidth },
   };
-  const watchers = spots
-    .map((_, index) => index)
-    .filter((index) => index !== left && index !== right)
-    .sort((a, b) => angle(a) - angle(b));
-  /** The watchers evenly spaced over an arc `width` wide, centred on the back. */
-  const spread = (width: number): Spot[] =>
-    watchers.map((index, k) => {
-      const a = watchers.length === 1 ? 0 : -width / 2 + (width * k) / (watchers.length - 1);
-      return { ...outOfPlay(spots[index]!), x: cx + rx * Math.sin(a), y: cy - ry * Math.cos(a) };
-    });
-  const apart = (placed: Spot[]) =>
-    placed.every((spot, k) =>
-      placed.slice(k + 1).every((other) => !overlap(tagBox(spot), tagBox(other))),
-    );
-  let width = 0;
-  while (!apart(spread(width))) width += ARC_STEP;
-  const watching = new Map(spread(width).map((spot, k) => [watchers[k]!, spot]));
-  return { spots, left, right, watching };
 }
 
-const duelPlans = new Map<string, ReturnType<typeof duelPlan>>();
+/** Sitting down, the head shrinks to `scale` and drops `drop` of its size towards the name tag. */
+export const SITTING = { scale: 0.72, drop: 0.12 } as const;
 
-/**
- * Everyone's spot a fraction `t` (0…1) of the way through the step-in, from
- * the showdown (the pair at their ring spots, everyone else out of play) to
- * the duel, and how visible they are (0…1). The pair walk in a straight line,
- * growing; the watchers fade out where they stand and back in on the upper
- * arc of the ring, in ring order.
- */
-export function duelMove(
-  count: number,
-  pair: readonly [number, number],
-  t: number,
-): { spot: Spot; shown: number }[] {
-  if (count === 2) return ring(2).map((spot) => ({ spot, shown: 1 }));
-  const key = `${count} ${pair[0]} ${pair[1]}`;
-  if (!duelPlans.has(key)) duelPlans.set(key, duelPlan(count, pair));
-  const { spots, left, right, watching } = duelPlans.get(key)!;
-  const walked = walking(t);
-  const grown = growing(t);
-  const shown = t <= FADE.out ? 1 - t / FADE.out : t >= FADE.in ? (t - FADE.in) / (1 - FADE.in) : 0;
-  return spots.map((spot, index) => {
-    const end = index === left ? DUEL.left : index === right ? DUEL.right : null;
-    if (!end) {
-      return { spot: t < FADE.out ? outOfPlay(spot) : watching.get(index)!, shown };
-    }
-    const growth = 1 + grown * (duelGrowth(spot) - 1);
-    return {
-      spot: {
-        x: spot.x + walked * (end.x - spot.x),
-        y: spot.y + walked * (end.y - spot.y),
-        size: spot.size + grown * (DUEL.size - spot.size),
-        tag: { size: spot.tag.size * growth, maxWidth: spot.tag.maxWidth * growth },
-      },
-      shown: 1,
-    };
-  });
-}
-
-/** Everyone's spot in the duel, by ring index: the pair big in front, facing each other, the rest watching. */
-export function duelLayout(count: number, pair: readonly [number, number]): Spot[] {
-  return duelMove(count, pair, 1).map((each) => each.spot);
+/** Someone sitting down: their head's box. Their name tag stays where it was, as big. */
+export function sittingHead(spot: Spot): Box {
+  const head = headBox(spot);
+  // The head shrinks about the spot it stands on, then drops.
+  const about = (value: number, from: number) => from + SITTING.scale * (value - from);
+  const drop = SITTING.drop * spot.size;
+  return {
+    left: about(head.left, spot.x),
+    right: about(head.right, spot.x),
+    top: about(head.top, spot.y) + drop,
+    bottom: about(head.bottom, spot.y) + drop,
+  };
 }
 
 /** The gap between a held potato's box and the holder's face. */
@@ -219,19 +145,64 @@ export function face(spot: Spot): Point & { readonly r: number } {
 }
 
 /**
- * Where a potato drawn at `scale` is held: just over the face; where that
- * would reach the sky, beside the face at about its height, towards the
- * stage's middle.
+ * Beside the face on `side` (1 right, −1 left), at about its height, below
+ * the sky and above the name tag; where the sky leaves no room above the
+ * name, out past the name's end.
  */
-export function held(spot: Spot, scale = 1): Point {
+function beside(spot: Spot, side: number, scale: number): Point {
   const { x, y, r } = face(spot);
-  const over = y - r - HOLD_GAP - (scale * POTATO.height) / 2;
-  if (over >= highest(scale)) return { x, y: over };
-  const side = x > STAGE.width / 2 ? -1 : 1;
-  return {
-    x: x + side * (r + HOLD_GAP + (scale * POTATO.width) / 2),
-    y: Math.max(highest(scale), y),
+  const name = nameBox(spot);
+  const half = (scale * POTATO.width) / 2;
+  const at = Math.max(
+    highest(scale),
+    Math.min(y, name.top - HOLD_GAP - (scale * POTATO.height) / 2),
+  );
+  const clear = at + (scale * POTATO.height) / 2 <= name.top;
+  const out = clear ? r : Math.max(r, (name.right - name.left) / 2);
+  return { x: x + side * (out + HOLD_GAP + half), y: at };
+}
+
+/**
+ * Where a potato drawn at `scale` is held: just over the face; where that
+ * would reach the sky or cover a name in `avoid`, beside the face, towards
+ * the stage's middle first. Over the face if nowhere is clear and over it
+ * stays out of the sky.
+ */
+export function held(spot: Spot, scale = 1, avoid: readonly Box[] = []): Point {
+  const { x, y, r } = face(spot);
+  const over = { x, y: y - r - HOLD_GAP - (scale * POTATO.height) / 2 };
+  const inward = x > STAGE.width / 2 ? -1 : 1;
+  const clear = (point: Point) => {
+    const box = potatoBox(point, scale);
+    return (
+      point.y >= highest(scale) &&
+      box.left >= 0 &&
+      box.right <= STAGE.width &&
+      !avoid.some((name) => overlap(box, name))
+    );
   };
+  const choices = [over, beside(spot, inward, scale), beside(spot, -inward, scale)];
+  return choices.find(clear) ?? (over.y >= highest(scale) ? over : choices[1]!);
+}
+
+/** How far a held-out potato rises at a time to clear a name. */
+const RISE_STEP = 5;
+
+/**
+ * Holding on: the potato held out beside the face, on the side of `towards`,
+ * at about the face's height, raised up that side as far as it takes to
+ * clear the names in `avoid`. Never over the head, where it would cover the
+ * face and the name above.
+ */
+export function heldOut(spot: Spot, towards: Point, scale = 1, avoid: readonly Box[] = []): Point {
+  const { x } = face(spot);
+  const side = towards.x === x ? (x > STAGE.width / 2 ? -1 : 1) : Math.sign(towards.x - x);
+  const level = beside(spot, side, scale);
+  for (let y = level.y; y >= highest(scale); y -= RISE_STEP) {
+    const box = potatoBox({ x: level.x, y }, scale);
+    if (!avoid.some((name) => overlap(box, name))) return { x: level.x, y };
+  }
+  return level;
 }
 
 /** The potato's box when its centre is at `point`. */
@@ -260,6 +231,36 @@ export function tagBox(spot: Spot): Box {
     right: spot.x + spot.tag.maxWidth / 2,
     top,
     bottom: top + 2.4 * spot.tag.size + 8,
+  };
+}
+
+/** The longest name the layout is planned for. */
+const LONGEST = 15;
+
+/** The smallest a name tag is set (--size-stage-tag-min), and roughly how wide a character is, in ems. */
+const TAG_MIN = 22;
+const EM_PER_CHARACTER = 0.6;
+
+/**
+ * The part of a name tag a name of up to LONGEST characters covers. Like
+ * nameTag, a name too long for one line shrinks first, down to TAG_MIN, and
+ * only then takes two lines. tagBox reaches as far as the longest name
+ * allowed could.
+ */
+export function nameBox(spot: Spot): Box {
+  const top = spot.y - 0.04 * spot.size;
+  const padding = 24;
+  const width = (size: number) => EM_PER_CHARACTER * LONGEST * size + padding;
+  const { maxWidth } = spot.tag;
+  const fits = (maxWidth - padding) / (EM_PER_CHARACTER * LONGEST);
+  const size = width(spot.tag.size) <= maxWidth ? spot.tag.size : Math.max(TAG_MIN, fits);
+  const lines = width(size) <= maxWidth ? 1 : 2;
+  const half = Math.min(width(size), maxWidth) / 2;
+  return {
+    left: spot.x - half,
+    right: spot.x + half,
+    top,
+    bottom: top + 1.2 * lines * size + 8,
   };
 }
 
@@ -345,7 +346,10 @@ export function hang(
   pair: readonly [Point, Point],
   scale: number,
 ): { rise: Path; top: Point; drop: Path } {
-  const top = { x: (pair[0].x + pair[1].x) / 2, y: highest(scale) + HANG_BELOW };
+  const top = {
+    x: (pair[0].x + pair[1].x) / 2,
+    y: Math.min(highest(scale) + HANG_BELOW, pair[0].y, pair[1].y),
+  };
   return {
     rise: [
       from,
@@ -356,25 +360,6 @@ export function hang(
     top,
     drop: [top, { x: (top.x + to.x) / 2, y: top.y }, { x: to.x, y: (top.y + to.y) / 2 }, to],
   };
-}
-
-/** How much higher than just over the head a potato is held up for a throw. */
-const RAISE = 40;
-
-/** Where the potato is held up for a throw: above the head, below the sky. */
-export function raised(spot: Spot, scale = 1): Point {
-  const top = spot.y - 0.8 * spot.size;
-  return {
-    x: spot.x,
-    y: Math.max(highest(scale), top - HOLD_GAP - (scale * POTATO.height) / 2 - RAISE),
-  };
-}
-
-/** The wind-up: the potato from where `spot` holds it, straight to where they hold it up. */
-export function windUp(spot: Spot, scale = 1): Path {
-  const from = held(spot, scale);
-  const to = raised(spot, scale);
-  return [from, from, to, to];
 }
 
 /** How much bigger the unlucky person stands at the pop. */
@@ -403,7 +388,7 @@ export function crowned(spot: Spot): { x: number; y: number; head: Box; tag: Box
     top: feet.y + CROWNED * (box.top - feet.y),
     bottom: feet.y + CROWNED * (box.bottom - feet.y),
   });
-  const tag = grow(tagBox(spot));
+  const tag = grow(nameBox(spot));
   const x = Math.max(0, EDGE - tag.left) + Math.min(0, STAGE.width - EDGE - tag.right);
   const y = Math.min(0, STAGE.height - EDGE - tag.bottom);
   const head = grow(headBox(spot));

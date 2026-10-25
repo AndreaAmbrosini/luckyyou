@@ -25,6 +25,7 @@ import {
   hang,
   headBox,
   held,
+  nameBox,
   POTATO,
   potatoBox,
   ring,
@@ -97,8 +98,13 @@ export async function playHotPotato(show: Show): Promise<void> {
     x: point.x - POTATO.width / 2,
     y: point.y - POTATO.height / 2,
   });
-  /** Where `name` holds the potato. */
-  const over = (name: string) => held(people.get(name)!.spot, scale);
+  /** Where `name` holds the potato, clear of everyone else's name. */
+  const over = (name: string) =>
+    held(
+      people.get(name)!.spot,
+      scale,
+      [...people.values()].filter((each) => each.name !== name).map((each) => nameBox(each.spot)),
+    );
   const first = plan.catches[0]!;
   gsap.set(potato.el, { ...place({ x: over(first.by).x, y: DROP_Y }), scale });
   const setX = gsap.quickSetter(potato.el, 'x', 'px') as (value: number) => void;

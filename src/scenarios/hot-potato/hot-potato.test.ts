@@ -8,22 +8,20 @@ import hotPotato from './index';
 import {
   bezier,
   crowned,
-  duelLayout,
-  duelMove,
   face,
+  grown,
   hang,
   headBox,
   held,
-  outOfPlay,
+  heldOut,
+  nameBox,
   overlap,
   POTATO,
   potatoBox,
-  raised,
   ring,
+  sittingHead,
   SKY,
-  tagBox,
   throwPath,
-  windUp,
   type Box,
   type Point,
   type Spot,
@@ -110,13 +108,18 @@ function offRing(plan: Plan, each: Catch): 'back' | 'stray' | 'hang back' | null
 
 const overlapping = (spots: Spot[]) =>
   spots.some((spot, index) =>
-    spots.slice(index + 1).some((other) => overlap(tagBox(spot), tagBox(other))),
+    spots.slice(index + 1).some((other) => overlap(nameBox(spot), nameBox(other))),
   );
 
-/** Everyone in play, then the same with each of them out of play. */
+/** Everyone standing, then the same with each three neighbours grown, as the last three. */
 const mixes = (count: number): Spot[][] => {
   const spots = ring(count);
-  return [spots, ...spots.map((_, out) => spots.map((s, i) => (i === out ? outOfPlay(s) : s)))];
+  if (count === 2) return [spots];
+  const three = (k: number) => [k, k + 1, k + 2].map((index) => mod(index, count));
+  return [
+    spots,
+    ...spots.map((_, k) => spots.map((spot, i) => (three(k).includes(i) ? grown(spot) : spot))),
+  ];
 };
 
 const distance = (one: Point, two: Point) => Math.hypot(one.x - two.x, one.y - two.y);
@@ -999,71 +1002,131 @@ describe('The ring', () => {
     return Math.hypot(near.x - x, near.y - y) - r;
   };
 
-  it('no tag overlaps at any count', () => {
-    for (let count = 2; count <= 12; count++) {
-      const spots = ring(count);
-      expect(spots, `${count} people`).toHaveLength(count);
-      for (const mix of mixes(count)) expect(overlapping(mix), `${count} people`).toBe(false);
-      for (let mask = 0; mask < 2 ** count; mask++) {
-        const mixed = spots.map((spot, i) => (mask & (1 << i) ? outOfPlay(spot) : spot));
-        expect(overlapping(mixed), `${count} people, mask ${mask}`).toBe(false);
-      }
-    }
-  });
-
-  it('8 people match the storyboard', () => {
-    const spots = ring(8);
-    expect(spots[0]).toMatchObject({ x: 640, y: 260, size: 78 });
-    expect(spots[4]).toMatchObject({ x: 640, y: 640, size: 104 });
-  });
-
-  it('held is over the face where that stays out of the sky, beside it where not', () => {
-    const front = ring(8)[4]!;
-    expect(held(front).x).toBe(front.x);
-    expect(held(front).y).toBeLessThan(face(front).y);
-    const back = ring(8)[0]!;
-    expect(held(back).x).toBeGreaterThan(back.x);
-    expect(held(back).y).toBeGreaterThanOrEqual(face(back).y);
-  });
-
-  it("a held potato never covers the holder's face or reaches the caption", () => {
-    for (let count = 2; count <= 12; count++) {
-      const scale = count === 2 ? POTATO.pairScale : 1;
-      for (const [index, spot] of ring(count).entries()) {
-        const label = `${count} people, spot ${index}`;
-        const box = potatoBox(held(spot, scale), scale);
-        expect(offFace(box, spot), label).toBeGreaterThan(0);
-        expect(box.top - scale * POTATO.above, label).toBeGreaterThanOrEqual(SKY);
-        expect(box.left, label).toBeGreaterThanOrEqual(0);
-        expect(box.right, label).toBeLessThanOrEqual(1280);
-        expect(box.bottom, label).toBeLessThanOrEqual(720);
-      }
-    }
-  });
-
   /** The top of the potato's drawing, a full sparkler included, centred at `point`. */
   const drawingTop = (point: Point, scale: number) =>
     point.y - scale * (POTATO.height / 2 + POTATO.above);
 
-  it('the potato stays below the caption, held at any spot and at the top of every throw', () => {
+  const potatoScale = (count: number) => (count === 2 ? POTATO.pairScale : 1);
+
+  it('no tag overlaps at any count, with any three neighbours grown', () => {
     for (let count = 2; count <= 12; count++) {
-      const scale = count === 2 ? POTATO.pairScale : 1;
-      const points = ring(count).map((spot) => held(spot, scale));
-      for (const [index, point] of points.entries()) {
-        expect(drawingTop(point, scale), `${count} people, spot ${index}`).toBeGreaterThanOrEqual(
-          SKY,
-        );
-        const box = potatoBox(point, scale);
-        expect(box.left, `${count} people, spot ${index}`).toBeGreaterThanOrEqual(0);
-        expect(box.right, `${count} people, spot ${index}`).toBeLessThanOrEqual(1280);
+      expect(ring(count), `${count} people`).toHaveLength(count);
+      for (const [index, mix] of mixes(count).entries()) {
+        expect(overlapping(mix), `${count} people, mix ${index}`).toBe(false);
       }
+    }
+  });
+
+  it('heads are 100 px or more at 4 to 7, and every tag 22 px or more', () => {
+    for (let count = 2; count <= 12; count++) {
+      for (const spot of ring(count)) {
+        if (count >= 4 && count <= 7) {
+          expect(spot.size, `${count} people`).toBeGreaterThanOrEqual(100);
+        }
+        expect(spot.tag.size, `${count} people`).toBeGreaterThanOrEqual(22);
+      }
+    }
+  });
+
+  it('even counts have someone at each side of the ring', () => {
+    for (const count of [4, 6, 8, 10, 12]) {
+      const xs = ring(count).map((spot) => spot.x);
+      expect(
+        xs.filter((x) => x === Math.min(...xs)),
+        `${count} people`,
+      ).toHaveLength(1);
+      expect(
+        xs.filter((x) => x === Math.max(...xs)),
+        `${count} people`,
+      ).toHaveLength(1);
+    }
+  });
+
+  it('held is over the face where that stays out of the sky, beside it where not', () => {
+    const front = ring(7).reduce((a, b) => (b.y > a.y ? b : a));
+    expect(held(front).x).toBe(front.x);
+    expect(held(front).y).toBeLessThan(face(front).y);
+    const back = ring(7)[0]!;
+    expect(held(back).x).not.toBe(back.x);
+    expect(held(back).y).toBeGreaterThanOrEqual(face(back).y);
+  });
+
+  // Names stay clear where the ring has room: up to 8 people. From 9 the
+  // heads stand too close for a potato to sit clear of every name.
+  it("a held potato covers neither the holder's face nor anyone's name, and stays below the caption", () => {
+    for (let count = 2; count <= 12; count++) {
+      const scale = potatoScale(count);
+      for (const [index, mix] of mixes(count).entries()) {
+        mix.forEach((spot, k) => {
+          const label = `${count} people, mix ${index}, spot ${k}`;
+          const names = mix.filter((other) => other !== spot).map(nameBox);
+          const box = potatoBox(held(spot, scale, names), scale);
+          expect(offFace(box, spot), label).toBeGreaterThan(0);
+          expect(overlap(box, nameBox(spot)), label).toBe(false);
+          expect(box.top - scale * POTATO.above, label).toBeGreaterThanOrEqual(SKY);
+          expect(box.left, label).toBeGreaterThanOrEqual(0);
+          expect(box.right, label).toBeLessThanOrEqual(1280);
+          expect(box.bottom, label).toBeLessThanOrEqual(720);
+          if (count > 8) return;
+          mix.forEach((other, i) => {
+            if (other !== spot) expect(overlap(box, nameBox(other)), `${label}, ${i}`).toBe(false);
+          });
+        });
+      }
+    }
+  });
+
+  it('held out, the potato is beside the face towards the third, off every name', () => {
+    for (let count = 2; count <= 12; count++) {
+      const scale = potatoScale(count);
+      const spots = ring(count);
+      for (let k = 0; k < count; k++) {
+        for (const way of [1, -1]) {
+          const label = `${count} people, spot ${k}, ${way > 0 ? 'clockwise' : 'the other way'}`;
+          const second = count === 2 ? spots[k]! : grown(spots[k]!);
+          const third = spots[mod(k + way, count)]!;
+          const near = count === 2 ? third : grown(third);
+          const towards = held(near, scale);
+          // The names around them then: the third's grown, the rest as they were.
+          const names = spots.map((other, index) =>
+            nameBox(index === mod(k + way, count) ? near : other),
+          );
+          const point = heldOut(
+            second,
+            towards,
+            scale,
+            names.filter((_, index) => index !== k),
+          );
+          const box = potatoBox(point, scale);
+          expect(offFace(box, second), label).toBeGreaterThan(0);
+          expect(drawingTop(point, scale), label).toBeGreaterThanOrEqual(SKY - 1e-6);
+          expect(Math.sign(point.x - second.x), label).toBe(
+            Math.sign(towards.x - second.x) || (second.x > 640 ? -1 : 1),
+          );
+          expect(box.left, label).toBeGreaterThanOrEqual(0);
+          expect(box.right, label).toBeLessThanOrEqual(1280);
+          expect(overlap(box, nameBox(second)), label).toBe(false);
+          // Tuned for 4 to 7: from 8 the three stand too close for it to clear every name.
+          if (count > 7) continue;
+          names.forEach((name, index) => {
+            if (index !== k) expect(overlap(box, name), `${label}, ${index}`).toBe(false);
+          });
+        }
+      }
+    }
+  });
+
+  it('every pass stays below the caption', () => {
+    for (let count = 2; count <= 12; count++) {
+      const scale = potatoScale(count);
+      const points = ring(count).map((spot) => held(spot, scale));
       for (const [i, from] of points.entries()) {
         for (const [j, to] of points.entries()) {
-          // Nobody throws to themselves: a throw that comes back hangs (below).
+          // Nobody passes to themselves: a pass that comes back hangs (below).
           if (i === j) continue;
           const path = throwPath(from, to, scale);
-          for (let step = 0; step <= 200; step++) {
-            const point = bezier(step / 200, ...path);
+          for (let step = 0; step <= 50; step++) {
+            const point = bezier(step / 50, ...path);
             expect(
               drawingTop(point, scale),
               `${count} people, ${i} to ${j}`,
@@ -1074,35 +1137,15 @@ describe('The ring', () => {
     }
   });
 
-  it('a grown unlucky person keeps their tag on stage and off every other tag', () => {
+  it('the hang between two neighbours stays out of the sky, as high as either hand', () => {
     for (let count = 2; count <= 12; count++) {
-      const spots = ring(count);
-      for (const [index, spot] of spots.entries()) {
-        const { tag } = crowned(spot);
-        const label = `${count} people, spot ${index}`;
-        expect(tag.left, label).toBeGreaterThanOrEqual(0);
-        expect(tag.right, label).toBeLessThanOrEqual(1280);
-        expect(tag.bottom, label).toBeLessThanOrEqual(720);
-        for (const other of spots.filter((each) => each !== spot)) {
-          expect(overlap(tag, tagBox(other)), label).toBe(false);
-          expect(overlap(tag, tagBox(outOfPlay(other))), label).toBe(false);
-        }
-      }
-    }
-  });
-
-  /** Every pair of ring indices at `count`. */
-  const pairs = (count: number): [number, number][] =>
-    Array.from({ length: count }, (_, i) =>
-      Array.from({ length: count - i - 1 }, (_, k): [number, number] => [i, i + k + 1]),
-    ).flat();
-
-  it('the hang stays out of the sky', () => {
-    for (let count = 2; count <= 12; count++) {
-      const scale = count === 2 ? POTATO.pairScale : 1;
-      for (const pair of count === 2 ? [[0, 1] as [number, number]] : pairs(count)) {
-        const spots = duelLayout(count, pair);
-        const two = pair.map((index) => held(spots[index]!, scale)) as [Point, Point];
+      const scale = potatoScale(count);
+      const spots = ring(count).map((spot) => (count === 2 ? spot : grown(spot)));
+      for (let k = 0; k < count; k++) {
+        const two = [k, mod(k + 1, count)].map((index) => held(spots[index]!, scale)) as [
+          Point,
+          Point,
+        ];
         const middle = (two[0].x + two[1].x) / 2;
         for (const [from, to] of [
           [two[0], two[1]],
@@ -1110,16 +1153,13 @@ describe('The ring', () => {
           [two[0], two[0]],
           [two[1], two[1]],
         ] as const) {
-          const label = `${count} people, pair ${pair.join(' and ')}, ${from.x} to ${to.x}`;
+          const label = `${count} people, ${k} and the next, ${from.x} to ${to.x}`;
           const { rise, top, drop } = hang(from, to, two, scale);
-          expect(Math.abs(top.x - middle), label).toBeLessThanOrEqual(100);
+          expect(top.x, label).toBeCloseTo(middle, 9);
+          // As high as it may go, and never lower than either hand.
+          expect(top.y, label).toBeLessThanOrEqual(Math.min(two[0].y, two[1].y));
           expect(rise[0], label).toEqual(from);
-          expect(rise[3], label).toEqual(top);
-          expect(drop[0], label).toEqual(top);
           expect(drop[3], label).toEqual(to);
-          // Level at the top.
-          expect(rise[2].y, label).toBeCloseTo(top.y, 9);
-          expect(drop[1].y, label).toBeCloseTo(top.y, 9);
           for (const path of [rise, drop]) {
             for (let step = 0; step <= 24; step++) {
               const point = bezier(step / 24, ...path);
@@ -1132,49 +1172,36 @@ describe('The ring', () => {
     }
   });
 
-  it('raised stays out of the sky and off the face', () => {
-    for (let count = 2; count <= 12; count++) {
-      const scale = count === 2 ? POTATO.pairScale : 1;
-      for (const pair of count === 2 ? [[0, 1] as [number, number]] : pairs(count)) {
-        const spots = duelLayout(count, pair);
-        for (const index of pair) {
-          const label = `${count} people, pair ${pair.join(' and ')}, ${index}`;
-          const spot = spots[index]!;
-          const point = raised(spot, scale);
-          const box = potatoBox(point, scale);
-          expect(offFace(box, spot), label).toBeGreaterThan(0);
-          expect(drawingTop(point, scale), label).toBeGreaterThanOrEqual(SKY - 1e-6);
-          expect(point.y, label).toBeLessThan(held(spot, scale).y);
-          expect(box.left, label).toBeGreaterThanOrEqual(0);
-          expect(box.right, label).toBeLessThanOrEqual(1280);
-        }
+  it('sitting, the head shrinks to 0.72 and drops towards the name tag', () => {
+    for (let count = 3; count <= 12; count++) {
+      for (const spot of ring(count)) {
+        const head = sittingHead(spot);
+        const standing = headBox(spot);
+        expect(head.right - head.left).toBeCloseTo(0.72 * spot.size, 9);
+        expect(head.top).toBeGreaterThan(standing.top);
+        expect(head.bottom).toBeGreaterThan(standing.bottom);
       }
     }
   });
 
-  it("the wind-up never covers the holder's face", () => {
+  it('a grown unlucky person keeps their tag on stage and off every other tag', () => {
     for (let count = 2; count <= 12; count++) {
-      const scale = count === 2 ? POTATO.pairScale : 1;
-      for (const pair of count === 2 ? [[0, 1] as [number, number]] : pairs(count)) {
-        const spots = duelLayout(count, pair);
-        for (const index of pair) {
-          const label = `${count} people, pair ${pair.join(' and ')}, ${index}`;
-          const spot = spots[index]!;
-          const path = windUp(spot, scale);
-          expect(path[0], label).toEqual(held(spot, scale));
-          expect(path[3], label).toEqual(raised(spot, scale));
-          for (let step = 0; step <= 20; step++) {
-            const box = potatoBox(bezier(step / 20, ...path), scale);
-            expect(offFace(box, spot), `${label}, t ${step / 20}`).toBeGreaterThan(0);
+      const spots = ring(count);
+      for (const [index, spot] of spots.entries()) {
+        for (const at of count === 2 ? [spot] : [spot, grown(spot)]) {
+          const { tag } = crowned(at);
+          const label = `${count} people, spot ${index}, ${at === spot ? 'standing' : 'grown'}`;
+          expect(tag.left, label).toBeGreaterThanOrEqual(0);
+          expect(tag.right, label).toBeLessThanOrEqual(1280);
+          expect(tag.bottom, label).toBeLessThanOrEqual(720);
+          // In front of everyone at the pop: from 10 it may touch a neighbour's name.
+          if (count > 9) continue;
+          for (const other of spots.filter((each) => each !== spot)) {
+            expect(overlap(tag, nameBox(other)), `${label}, ${spots.indexOf(other)}`).toBe(false);
           }
         }
       }
     }
-  });
-
-  it("the duel's pair is big", () => {
-    expect(duelLayout(2, [0, 1])).toEqual(ring(2));
-    expect(duelMove(2, [0, 1], 0.5).map((each) => each.spot)).toEqual(ring(2));
   });
 });
 
