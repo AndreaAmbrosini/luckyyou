@@ -1,16 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { BLOCK_HEIGHT, PLINTH } from './layout';
-import {
-  bench,
-  block,
-  dust,
-  field,
-  hardHat,
-  plinth,
-  PLINTH_LABEL,
-  pointer,
-  POINTER,
-} from './parts';
+import { bench, block, dust, field, hardHat, plinth, PLINTH_LABEL } from './parts';
 
 describe('the field', () => {
   it('draws the sky with clouds and the grass', () => {
@@ -18,18 +8,6 @@ describe('the field', () => {
     expect(el.dataset.part).toBe('scene');
     expect(el.querySelector('[data-part="grass"]')).not.toBeNull();
     expect(el.children.length).toBeGreaterThanOrEqual(4);
-  });
-});
-
-describe('the pointer', () => {
-  it('is a compact sign whose tip is the bottom middle', () => {
-    const p = pointer();
-    expect(p.el.dataset.part).toBe('pointer');
-    expect(POINTER.height).toBeLessThanOrEqual(60);
-    expect(POINTER.tip).toEqual({ x: POINTER.width / 2, y: POINTER.height });
-    expect(p.el.style.width).toBe(`${POINTER.width}px`);
-    expect(p.el.style.height).toBe(`${POINTER.height}px`);
-    expect(p.el.textContent).toContain('Your turn!');
   });
 });
 

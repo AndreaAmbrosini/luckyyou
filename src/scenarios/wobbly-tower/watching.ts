@@ -22,7 +22,6 @@ import {
   type Places,
   type Spot,
 } from './layout';
-import { POINTER } from './parts';
 import { grownBoxes } from './play';
 
 export const ENDINGS: readonly Ending[] = ['dead-still', 'it-holds', 'slow-lean'];
@@ -75,10 +74,8 @@ export function roundsOf(plan: Plan): Turn[][] {
   });
   return rounds;
 }
-/** The first turn of each round: the one the first pointer picks. */
+/** The first turn of each round. */
 export const firstTurns = (plan: Plan) => roundsOf(plan).map((round) => round[0]!);
-/** Whom the pointer stops on for `turn`: the thrower. */
-export const stopsOf = (turn: Turn) => [turn.by];
 /** When `beat` starts, in show seconds. */
 export const startOf = (plan: Plan, beat: Beat) => plan.starts[beat];
 /** Who is at risk as `turn`'s round starts: everyone who hasn't said Safe! before it. */
@@ -143,12 +140,6 @@ export const STEP = 1 / 30;
 export interface Frame {
   readonly time: number;
   readonly beat: string;
-  /** Whom the pointer has stopped over; '' while it hops, and before the first turn. */
-  readonly over: string;
-  /** Where the pointer's tip is, and how opaque it's drawn: 0 hidden, 1 fully. */
-  readonly pointer: Point & { readonly shown: number };
-  /** Both pointers, the first as `pointer` and `over`, the second for a pair's second thrower. */
-  readonly pointers: readonly (Point & { readonly shown: number; readonly over: string })[];
   /** Where each person is drawn, their name tag's box as the kit sets it, and whether they sit on the bench. */
   readonly people: Readonly<Record<string, { spot: Spot; tag: Box; benched: boolean }>>;
   /** Whether the "At risk" plinth is drawn, and the number on it (everyone, without it). */
@@ -173,6 +164,8 @@ export interface Frame {
   readonly bench: boolean;
   /** Who holds a block overhead. */
   readonly holding: readonly string[];
+  /** Who reaches toward the tower, and how far their head tips its way, in degrees. */
+  readonly reaching: Readonly<Record<string, number>>;
   /** The speech bubbles showing, where their tails point, which bubble each is, and whose `Safe!` it is. */
   readonly bubbles: readonly (Point & {
     readonly text: string;
@@ -282,7 +275,8 @@ async function recordShow(
   frames: Frame[];
   record: ShowRecord;
   plan: Plan;
-  sign: string;
+  words: string;
+  kinds: string[];
   built: Built[];
   shirts: Record<string, string>;
   lifts: Moment[];
@@ -297,7 +291,9 @@ async function recordShow(
   // Lifts can be shorter than a frame: each change of data-holding is noted.
   let changed: MutationRecord[] = [];
   const holding = new MutationObserver((records) => changed.push(...records));
-  let sign = '';
+  let words = '';
+  let kinds: string[] = [];
+  let started = false;
   let built: Built[] = [];
   let shirts: Record<string, string> = {};
   /** What each frame reads, found once: looking it up every frame is slow in jsdom. */
@@ -307,8 +303,6 @@ async function recordShow(
         tower: HTMLElement;
         blocks: HTMLElement[];
         people: HTMLElement[];
-        pointer: HTMLElement;
-        pointers: HTMLElement[];
         atRisk: HTMLElement | null;
         bubbles: HTMLElement[];
         them: HTMLElement;
@@ -352,8 +346,6 @@ async function recordShow(
         tower: stage.querySelector<HTMLElement>('[data-part="tower"]')!,
         blocks: [...stage.querySelectorAll<HTMLElement>('[data-part="tower"] [data-part="block"]')],
         people: [...stage.querySelectorAll<HTMLElement>('[data-person]')],
-        pointer: stage.querySelector<HTMLElement>('[data-part="pointer"]')!,
-        pointers: [...stage.querySelectorAll<HTMLElement>('[data-part="pointer"]')],
         atRisk: stage.querySelector<HTMLElement>('[data-part="at-risk"]'),
         bubbles: [...stage.querySelectorAll<HTMLElement>('[data-part="bubble"]')],
         them: [...stage.querySelectorAll<HTMLElement>('[data-person]')].find(
@@ -377,7 +369,7 @@ async function recordShow(
         spotlight: stage.querySelector<HTMLElement>('[data-part="spotlight"]')!,
         bench: stage.querySelector('[data-part="bench"]') !== null,
       };
-      const { scene, tower: drawn, blocks, people, pointer, bubbles, them, hat } = parts;
+      const { scene, tower: drawn, blocks, people, bubbles, them, hat } = parts;
       // The tags over every block, found at once, and the few in between.
       const overAll = parts.tags
         .filter((tag) => after(blocks.at(-1)!, tag))
@@ -388,11 +380,18 @@ async function recordShow(
       const theirTag = parts.tags.find((tag) => tag.textContent === unlucky)!;
       for (const cue of asked) cues.push({ cue, time });
       asked = [];
-      if (!sign) {
+      if (!started) {
+        started = true;
         for (const person of people) {
           holding.observe(person, { attributeFilter: ['data-holding'], attributeOldValue: true });
         }
-        sign = pointer.textContent ?? '';
+        // Every word and every kind of part on the stage: all made before the show.
+        words = stage.textContent ?? '';
+        // A head's own parts are its features, drawn inside it.
+        const drawn = [...stage.querySelectorAll<HTMLElement>('[data-part]')].filter(
+          (el) => !el.closest('[data-person] svg g'),
+        );
+        kinds = [...new Set(drawn.map((el) => el.dataset.part!))].sort();
         built = blocks.map((block) => ({ by: block.dataset.by!, fill: block.dataset.fill! }));
         shirts = Object.fromEntries(
           people.map((person) => [
@@ -415,18 +414,6 @@ async function recordShow(
       frames.push({
         time,
         beat: scene.dataset.beat!,
-        over: pointer.dataset.over!,
-        pointer: {
-          x: Number(gsap.getProperty(pointer, 'x')) + POINTER.tip.x,
-          y: Number(gsap.getProperty(pointer, 'y')) + POINTER.tip.y,
-          shown: opacityOf(pointer),
-        },
-        pointers: parts.pointers.map((each) => ({
-          x: Number(gsap.getProperty(each, 'x')) + POINTER.tip.x,
-          y: Number(gsap.getProperty(each, 'y')) + POINTER.tip.y,
-          shown: opacityOf(each),
-          over: each.dataset.over!,
-        })),
         people: Object.fromEntries(
           people.map((person) => {
             const name = person.dataset.person!;
@@ -459,6 +446,17 @@ async function recordShow(
         holding: people
           .filter((person) => person.dataset.holding === 'true')
           .map((person) => person.dataset.person!),
+        reaching: Object.fromEntries(
+          people
+            .filter((person) => person.dataset.reaching === 'true')
+            .map((person) => [
+              person.dataset.person!,
+              Number(
+                /rotate\((-?[\d.]+)deg\)/.exec(person.querySelector('svg')!.style.transform)?.[1] ??
+                  0,
+              ),
+            ]),
+        ),
         bubbles: bubbles.flatMap((bubble, id) =>
           opacityOf(bubble) > 0
             ? [
@@ -515,7 +513,8 @@ async function recordShow(
     frames,
     record,
     plan,
-    sign,
+    words,
+    kinds,
     built,
     shirts,
     lifts,
@@ -560,18 +559,6 @@ export function placementOf(person: HTMLElement, tag: HTMLElement): string {
 /** Each time a block lands: the frame's time and how many have landed. */
 export const landings = (frames: readonly Frame[]) =>
   frames.filter((frame, index) => index > 0 && frame.blocks > frames[index - 1]!.blocks);
-
-/** The stretches the pointer stays over someone: who, and the frames' times. */
-export function stops(frames: readonly Frame[]): { name: string; from: number; to: number }[] {
-  const all: { name: string; from: number; to: number }[] = [];
-  frames.forEach((frame, index) => {
-    if (!frame.over) return;
-    const previous = frames[index - 1];
-    if (previous?.over === frame.over) all.at(-1)!.to = frame.time;
-    else all.push({ name: frame.over, from: frame.time, to: frame.time });
-  });
-  return all;
-}
 
 /**
  * The times the lean turns back, frame to frame. Standing still for a tenth
@@ -642,14 +629,6 @@ export const swaysPerSecond = (frames: readonly Frame[]) => {
   return Math.max(0, ...times.map((from) => times.filter((t) => t >= from && t < from + 1).length));
 };
 
-/** The pointer's whole box with its tip at `tip`. */
-export const pointerBox = (tip: Point): Box => ({
-  left: tip.x - POINTER.tip.x,
-  right: tip.x - POINTER.tip.x + POINTER.width,
-  top: tip.y - POINTER.tip.y,
-  bottom: tip.y - POINTER.tip.y + POINTER.height,
-});
-
 /** Where everyone is over a show of `plan`, worked out once for each plan. */
 const placesByPlan = new WeakMap<Plan, Places>();
 export const placesOf = (plan: Plan) => {
@@ -663,6 +642,37 @@ export const spotOf = (plan: Plan, name: string, t = 0) => placesOf(plan).at(nam
 /** 8 people, Luca unlucky, seed 1: run once and shared by the scenarios that watch it. */
 let eightShow: ReturnType<typeof watch> | undefined;
 export const eightRun = () => (eightShow ??= watch(names(8), 'Luca'));
+
+/** 8 people, Luca unlucky, the first seed that falls with 2 left: run once and shared. */
+let twoLeftShow: ReturnType<typeof watch> | undefined;
+export const twoLeftRun = () =>
+  (twoLeftShow ??= watch(names(8), 'Luca', {
+    seed: seedOf(names(8), 'Luca', (plan) => plan.fallsWith === 2),
+  }));
+
+/**
+ * Where `turn`'s block is drawn in each frame of `frames` from its lift until
+ * it lands, and the top of the tower it lands on as drawn then.
+ */
+export function flightOf(frames: readonly Frame[], plan: Plan, turn: Turn) {
+  const k = 2 + plan.turns.indexOf(turn);
+  return frames
+    .filter((frame) => frame.time >= turn.lifts - 1e-9 && frame.time < turn.lands - 1e-9)
+    .map((frame) => ({ time: frame.time, block: frame.drawn[k]!, top: frame.drawn[k - 1]! }));
+}
+
+/** How many times a block dips in `ys`, its centre's y frame by frame: down, then back up. */
+export function dipsIn(ys: readonly number[]): number {
+  let dips = 0;
+  let going = 0;
+  ys.slice(1).forEach((y, index) => {
+    const delta = y - ys[index]!;
+    if (Math.abs(delta) < 1e-6) return;
+    if (going > 0 && delta < 0) dips++;
+    going = Math.sign(delta);
+  });
+  return dips;
+}
 
 /**
  * After each paper block and each round but the last, the tower sways a
@@ -913,13 +923,9 @@ export const normalRun = (count: number) => {
 /** Whether a name tag's box is drawn: a hidden one's is empty. */
 export const shows = (tag: Box) => tag.right > tag.left;
 
-/** The pointers' boxes drawn in `frame`. */
-export const pointersIn = (frame: Frame) =>
-  frame.pointers.filter((pointer) => pointer.shown > 0).map((pointer) => pointerBox(pointer));
-
 /**
- * In every frame: no name tag over another, under a pointer, or under a
- * block without being drawn over it; and every tag on the 1280 × 720 stage.
+ * In every frame: no name tag over another, or under a block without being
+ * drawn over it; and every tag on the 1280 × 720 stage.
  */
 export function expectTagsClear(frames: readonly Frame[], label: string) {
   for (const frame of frames) {
@@ -934,9 +940,6 @@ export function expectTagsClear(frames: readonly Frame[], label: string) {
       expect(tag.left, `${at}: ${name}`).toBeGreaterThanOrEqual(0);
       expect(tag.right, `${at}: ${name}`).toBeLessThanOrEqual(1280);
       expect(tag.bottom, `${at}: ${name}`).toBeLessThanOrEqual(720);
-      for (const pointer of pointersIn(frame)) {
-        expect(overlap(pointer, tag), `${at}: the pointer over ${name}`).toBe(false);
-      }
       for (const block of frame.drawn) {
         if (blockOverlaps(block, tag)) expect(block.under, `${at}: ${name}`).toContain(name);
       }

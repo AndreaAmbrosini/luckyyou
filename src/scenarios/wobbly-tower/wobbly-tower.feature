@@ -74,13 +74,6 @@ Feature: Wobbly Tower
       Then each sway before "Nearly!" leans further than the one before
       And each turn before the final three takes between 2 and 3 seconds
 
-    # Old design: replaced by "Up to 8 people, one thrower a turn, and nothing points".
-    Scenario: Up to 8 people, one thrower a turn
-      Given 8 people
-      When the show runs
-      Then every turn has one pointer and one thrower
-
-    @pending
     Scenario: Up to 8 people, one thrower a turn, and nothing points
       Given 8 people
       When the show runs
@@ -115,7 +108,6 @@ Feature: Wobbly Tower
       When the first turn after "Final three!" ends in "Safe!"
       Then the caption is "Final two!"
 
-  @pending
   Rule: The careful toss
 
     Scenario: The careful toss
@@ -138,10 +130,8 @@ Feature: Wobbly Tower
       When a turn starts with 4 or more people at risk
       Then the block flies from the thrower's hands onto the tower without hovering
 
-  @pending
   Rule: With 2 or 3 people it is the final from the start
 
-    @pending
     Scenario Outline: <count> people, taking turns
       Given <count> people
       When the show runs with 20 different random seeds
@@ -155,18 +145,6 @@ Feature: Wobbly Tower
         | count | caption                |
         | 2     | Just the two of you…   |
         | 3     | Just the three of you… |
-
-  # Old design: replaced by the rule "Turns go along the line".
-  Rule: The pointer picks each turn
-
-    # Old design: replaced by "Each turn goes to the next one along".
-    Scenario: Nobody knows who's next until it stops
-      Given 8 people
-      When the show runs
-      Then before each turn the "Your turn!" pointer hops from where it was to the next person
-      And it stops over their head before they lift a block
-      And it stays there a tenth of a second or more before it's gone, even on the quickest turns
-      And it never covers a name tag
 
   Rule: Turns go along the line
 

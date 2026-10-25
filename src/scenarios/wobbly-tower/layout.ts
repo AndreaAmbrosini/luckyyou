@@ -1,5 +1,5 @@
-// Where everyone stands, where the tower is and how it bends, where the
-// fallen blocks lie, and where the pointer stops. Those at risk stand either
+// Where everyone stands, where the tower is and how it bends, where a
+// careful toss hovers and where the fallen blocks lie. Those at risk stand either
 // side of the tower, drawn big; whoever goes safe hops up to the Safe bench
 // along the top of the stage. In stage pixels (1280 × 720), from the
 // handover's storyboard.
@@ -70,10 +70,8 @@ type Range = readonly [outer: number, inner: number];
 /**
  * Where people at risk stand, by how many are at risk: up to 6 in one row,
  * from 7 in two, alternating along each side from the inner end, which is in
- * the back row (so the front row's tags stay clear of the plinth). The front
- * row stands far enough below the back row that the pointer over a front head
- * clears the back row's tags, and the back row far enough below the bench that
- * the pointer over a back head clears the bench's tags.
+ * the back row (so the front row's tags stay clear of the plinth), the
+ * front row well below the back row, and the back row well below the bench.
  */
 const AT_RISK = {
   few: { head: 120, y: 450, left: [260, 420] as Range, right: [1020, 860] as Range },
@@ -745,8 +743,6 @@ export function heap(unlucky: Spot, count: number, height = BLOCK_HEIGHT): Block
 
 /** The gap between a head and the block held over it, on the raised hands. */
 const HANDS = 14;
-/** The pointer's tip sits this far above the head or the held block. */
-const TIP_GAP = 10;
 
 /** The block held over `spot`'s head: 0.96 × the head wide, on the raised hands. */
 export function heldBlock(spot: Spot): Block {
@@ -756,10 +752,15 @@ export function heldBlock(spot: Spot): Block {
   return { x: spot.x, y: bottom - height / 2, width, height, turn: 0 };
 }
 
-/** Where the pointer's tip stops over `spot`: 10 px above the head, or above the block held over it. */
-export function pointerTip(spot: Spot, holding = false): Point {
-  const top = holding ? blockBox(heldBlock(spot)).top : spot.y - 0.8 * spot.size;
-  return { x: spot.x, y: top - TIP_GAP };
+/**
+ * How far a careful toss's block is held over the place it lands, `to`, on
+ * the top of the tower: `high` while it hovers, `low` at the bottom of a dip.
+ */
+export const HOVER = { high: 30, low: 6 } as const;
+
+/** A careful toss's block over `to`, where it lands, `gap` higher. */
+export function hovering(to: Block, gap: number): Block {
+  return { ...to, y: to.y - gap };
 }
 
 const graphemes = new Intl.Segmenter('en', { granularity: 'grapheme' });

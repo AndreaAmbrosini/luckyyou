@@ -1,8 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { createRandom } from '../../scenario-kit/random';
 import { handOutLooks } from '../../scenario-kit';
-import { POINTER } from './parts';
-import { FLIGHT, planHops, startTipOf } from './pointer';
+import { FLIGHT } from './play';
 import { BEATS, DIP, LEANS as PEAKS, planShow, READ, type Plan } from './plan';
 import {
   CAPTION_BOTTOM,
@@ -24,7 +23,8 @@ import {
   heldBlock,
   overlap,
   plank,
-  pointerTip,
+  hovering,
+  HOVER,
   riskSpots,
   sideOf,
   startingRows,
@@ -42,8 +42,6 @@ import {
   plans,
   everyPlan,
   roundsOf,
-  firstTurns,
-  stopsOf,
   atRiskFor,
   nextAlong,
   nearlyOf,
@@ -55,16 +53,12 @@ import {
   sizeOf,
   STEP,
   watch,
-  stops,
   swings,
   swaysPerSecond,
-  pointersIn,
   drawnAs,
   shows,
-  pointerBox,
   placesOf,
   seedOf,
-  eightRun,
   expectSwaysAndSettles,
 } from './watching';
 
@@ -259,42 +253,37 @@ describe('The layout', () => {
     }
   });
 
-  it("the pointer's whole box never covers a tag, over anyone at risk or on the bench", () => {
-    for (let people = 2; people <= 12; people++) {
-      for (let count = 2; count <= people; count++) {
-        const all = riskSpots(count, people);
-        const tags = all.map((spot) => tagBox(spot));
-        // Everyone else on the bench, with tags as wide as the slots allow.
-        const benched = people - count;
-        const bench = Array.from({ length: benched }, (_, slot) =>
-          tagBox(
-            benchSpot(
-              slot,
-              Array.from({ length: benched }, () => benchTag(benched).maxWidth),
-            ),
-          ),
-        );
-        for (const spot of all) {
-          const box = pointerBox(pointerTip(spot));
-          // On the stage, over the outermost spots too.
-          expect(box.left, `${count} at risk of ${people}`).toBeGreaterThanOrEqual(0);
-          expect(box.right, `${count} at risk of ${people}`).toBeLessThanOrEqual(1280);
-          for (const tag of [...tags, ...bench]) {
-            expect(overlap(box, tag), `${count} at risk of ${people}`).toBe(false);
-          }
-        }
-      }
-    }
-  });
-
-  it('the held block and the pointer sit over the head', () => {
+  it('the held block sits over the head', () => {
     for (const spot of riskSpots(6, 6)) {
       const block = heldBlock(spot);
       expect(block.width).toBeCloseTo(0.96 * spot.size, 9);
       expect(blockBox(block).bottom).toBeLessThan(headBox(spot).top);
-      expect(pointerTip(spot).y).toBeCloseTo(headBox(spot).top - 10, 9);
-      expect(pointerTip(spot, true).y).toBeCloseTo(blockBox(block).top - 10, 9);
     }
+  });
+
+  it('a careful toss hovers under the caption and off every name tag, the tallest tower too', () => {
+    const failures: string[] = [];
+    let tallest = 0;
+    for (const { label, plan } of everyPlan()) {
+      const places = placesOf(plan);
+      const height = blockHeight(2 + plan.turns.length);
+      plan.turns.forEach((turn, index) => {
+        if (!turn.hover) return;
+        // Where it lands, on the tower upright again after the last sway.
+        const to = tower(3 + index, 0, height)[2 + index]!;
+        const high = blockBox(hovering(to, HOVER.high));
+        tallest = Math.max(tallest, 720 - high.top);
+        if (high.top < CAPTION_BOTTOM) failures.push(`${label}, ${turn.by}: under the caption`);
+        for (let t = turn.hover.from; t < turn.lands; t += 0.1) {
+          for (const name of plan.order) {
+            const tag = places.tagBox(name, t);
+            if (tag && overlap(high, tag)) failures.push(`${label}, ${turn.by}: on ${name}'s tag`);
+          }
+        }
+      });
+    }
+    expect(failures.slice(0, 10)).toEqual([]);
+    expect(tallest).toBeGreaterThan(400);
   });
 
   it('the heap lies clear of every head at risk at the end', () => {
@@ -623,35 +612,6 @@ describe('Moving people', () => {
     }
   });
 
-  it('the pointers never cover a tag, even while people move, at every count and seed', () => {
-    const failures: string[] = [];
-    for (const { label, plan } of everyPlan()) {
-      const places = placesOf(plan);
-      const hops = planHops(plan.turns, places, startTipOf(blockHeight(2 + plan.turns.length), 2));
-      // Every frame of every round, from the pointer leaving until it has faded out.
-      for (const turn of firstTurns(plan)) {
-        for (let frame = Math.ceil(turn.from * 30); frame / 30 <= turn.lifts; frame++) {
-          const t = frame / 30;
-          for (const which of [0, 1]) {
-            const pointer = hops.at(t, which);
-            if (pointer.shown === 0) continue;
-            const box = pointerBox(pointer.tip);
-            for (const name of plan.order) {
-              // No tag is more than 500 wide: one further off can't reach it.
-              if (Math.abs(places.at(name, t).x - pointer.tip.x) > POINTER.width / 2 + 260)
-                continue;
-              const tag = places.tagBox(name, t);
-              if (tag && overlap(box, tag)) {
-                failures.push(`${label}: over ${name} at ${t.toFixed(3)}`);
-              }
-            }
-          }
-        }
-      }
-    }
-    expect(failures.slice(0, 10)).toEqual([]);
-  });
-
   const long = TEAM.at(-1)!;
   /**
    * The plans at 8 to 12, seeds 1–20, the 15-character name in each place in
@@ -843,36 +803,6 @@ describe('The stage', () => {
     }
   }
 
-  for (const count of [8, 12]) {
-    for (const seed of [1, 2, 3]) {
-      it(`the pointers' whole boxes never cover a name tag, as people move: ${count} people, seed ${seed}`, async () => {
-        const team = NORMAL.slice(0, count);
-        const { frames } = await watch(team, team.at(-1)!, { seed });
-        for (const frame of frames) {
-          for (const pointer of pointersIn(frame)) {
-            for (const [name, { tag }] of Object.entries(frame.people)) {
-              expect(
-                overlap(pointer, tag),
-                `${count} people, seed ${seed}, ${name} at ${frame.time}`,
-              ).toBe(false);
-            }
-          }
-        }
-      });
-    }
-  }
-
-  it('the pointer has faded out by the lift, so it never sits over a held block', async () => {
-    for (const count of [2, 8, 12]) {
-      const { frames } = await (count === 8 ? eightRun() : watch(names(count), unluckyOf(count)));
-      for (const frame of frames) {
-        if (frame.holding.includes(frame.over)) {
-          expect(frame.pointer.shown, `${count} people, ${frame.over} at ${frame.time}`).toBe(0);
-        }
-      }
-    }
-  });
-
   // At 2 and 5, at 12 with pairs, and at 8 falling with 2 left: Nearly in the final.
   for (const { count, seed } of [
     { count: 2, seed: 1 },
@@ -924,26 +854,6 @@ describe('Hops and tosses', () => {
       }
       return all;
     })());
-
-  it('every hop lasts 0.35 s or more, and every stay 0.15 s or more', async () => {
-    for (const { label, run } of await fineRuns()) {
-      const { frames, plan } = run;
-      const stopped = stops(frames);
-      expect(
-        stopped.map((stop) => stop.name),
-        label,
-      ).toEqual(firstTurns(plan).flatMap(stopsOf));
-      stopped.forEach((stop, index) => {
-        const at = `${label}, stop ${index + 1} on ${stop.name}`;
-        const after = index === 0 ? -1 : stopped[index - 1]!.to;
-        const leaves = frames.find(
-          (frame) => frame.time > after && frame.over === '' && frame.pointer.shown > 0,
-        )!;
-        expect(stop.from - leaves.time, at).toBeGreaterThanOrEqual(0.35 - FINE);
-        expect(stop.to + FINE - stop.from, at).toBeGreaterThanOrEqual(0.15 - FINE);
-      });
-    }
-  });
 
   it('each tossed block flies 0.4 s or more, from the whoosh to the thunk', async () => {
     for (const { label, run } of await fineRuns()) {

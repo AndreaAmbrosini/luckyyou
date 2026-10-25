@@ -1,12 +1,11 @@
 // The director: builds the whole show as one timeline from the plan and plays
 // it on the show's clock. The plan says whose turn it is when; this says how
-// it looks. What moves (the tower's lean, the blocks, the pointers and the
-// people) and who looks how are worked out from the show's time each frame,
-// so every frame follows from the plan alone. The stage tells its story in
-// data attributes too: the scene's beat, the tower's lean, its blocks and how
-// many lie in the heap, whom each pointer is over, how many are at risk, and
-// each person's mood, whether they hold a block and whether they sit on the
-// Safe bench.
+// it looks. What moves (the tower's lean, the blocks and the people) and who
+// looks how are worked out from the show's time each frame, so every frame
+// follows from the plan alone. The stage tells its story in data attributes
+// too: the scene's beat, the tower's lean, its blocks and how many lie in the
+// heap, how many are at risk, and each person's mood, whether they hold a
+// block or reach toward the tower, and whether they sit on the Safe bench.
 
 import { gsap } from 'gsap';
 import {
@@ -30,10 +29,13 @@ import {
   heap,
   headBox,
   heldBlock,
+  hovering,
+  HOVER,
   overlap,
   placings,
   plank,
   nameTagFor,
+  sideOf,
   signedLean,
   tagBox,
   tagSetOf,
@@ -55,13 +57,20 @@ import {
   field,
   hardHat,
   plinth as drawPlinth,
-  pointer as drawPointer,
-  POINTER,
   speedLines,
   spotlight as drawSpotlight,
 } from './parts';
-import { BEATS, NEARLY_SAYS, planShow, READ, type Beat, type Plan, type Turn } from './plan';
-import { FLIGHT, planHops, startTipOf } from './pointer';
+import {
+  BEATS,
+  DIP,
+  NEARLY_SAYS,
+  planShow,
+  READ,
+  type Beat,
+  type Hover,
+  type Plan,
+  type Turn,
+} from './plan';
 import styles from './wobbly-tower.module.css';
 
 /** The two paper blocks land at these show seconds, each after falling for DROP seconds. */
@@ -84,6 +93,10 @@ const SWAY = { out: 0.34, back: 0.34 };
 const NEARLY = { ...NEARLY_SAYS, back: 0.5 };
 /** How far a toss arcs above the higher of its two ends. */
 const ARC = 140;
+/** A tossed block flies at least this long, from the whoosh to the thunk. */
+export const FLIGHT = 0.4;
+/** How far a reaching thrower's head tips toward the tower, in degrees. */
+const REACH = 8;
 /** Seconds a bubble stays up. */
 const BUBBLE = 0.8;
 /** Seconds between the moments two bubbles up together are checked apart. */
@@ -136,11 +149,17 @@ interface Person {
   behind: boolean;
   mood: Mood | '';
   holding: boolean;
+  /** Whether they reach toward the tower, from the lift until their block is set down. */
+  reaching: boolean;
   raised: boolean;
   sweat: boolean;
 }
 
-/** A block's way onto the tower: lifted, held overhead, released, landed; paper drops in. */
+/**
+ * A block's way onto the tower: lifted, held overhead, released, landed;
+ * paper drops in. A careful toss rises to hover over its landing place,
+ * dips toward it and is set down.
+ */
 interface Flight {
   readonly el: HTMLElement;
   readonly by: string | null;
@@ -153,6 +172,8 @@ interface Flight {
   readonly to: Block;
   /** The highest its centre goes when tossed: its top stays under the bench's plank. */
   readonly highest: number;
+  /** A careful toss's hover; null when it is tossed straight on. */
+  readonly hover: Hover | null;
 }
 
 /** A stretch of show seconds. */
@@ -279,7 +300,11 @@ export async function playWobblyTower(show: Show): Promise<void> {
   const flights: Flight[] = [];
   /** Half the height a block takes, turned as it is. */
   const halfOf = (block: Block) => (blockBox(block).bottom - blockBox(block).top) / 2;
-  const add = (by: string | null, flight: Omit<Flight, 'el' | 'by' | 'to' | 'highest'>) => {
+  const add = (
+    by: string | null,
+    flight: Omit<Flight, 'el' | 'by' | 'to' | 'highest' | 'hover'>,
+    hover: Hover | null = null,
+  ) => {
     const k = flights.length;
     const to = tower(k + 1, lean.at(flight.lands), height)[k]!;
     const highest = benches
@@ -290,7 +315,7 @@ export async function playWobblyTower(show: Show): Promise<void> {
     el.dataset.by = by ?? '';
     el.style.visibility = 'hidden';
     built.append(el);
-    flights.push({ ...flight, el, by, to, highest });
+    flights.push({ ...flight, el, by, to, highest, hover });
   };
   PAPER.forEach((lands, k) => {
     const to = tower(k + 1, 0, height)[k]!;
@@ -306,13 +331,19 @@ export async function playWobblyTower(show: Show): Promise<void> {
     ]);
   });
   plan.turns.forEach((turn, index) => {
+    // Tossed straight on, or up to the hover point.
     const lift = turn.lifts;
-    add(turn.by, {
-      lift,
-      release: Math.max(lift, turn.lands - FLIGHT),
-      lands: turn.lands,
-      from: heldBlock(spotAt(turn.by, lift)),
-    });
+    const arrives = turn.hover?.from ?? turn.lands;
+    add(
+      turn.by,
+      {
+        lift,
+        release: Math.max(lift, arrives - FLIGHT),
+        lands: turn.lands,
+        from: heldBlock(spotAt(turn.by, lift)),
+      },
+      turn.hover,
+    );
     if (turn.beat === 'last-turn') lastTurnSway(turn);
     else if (plan.turns[index + 1]!.round !== turn.round) swayAfter(turn);
   });
@@ -342,25 +373,10 @@ export async function playWobblyTower(show: Show): Promise<void> {
   /** When the last block lands in the heap. */
   const downAt = fallsAt + FALL.lands;
 
-  // The pointers: from above the tower, each hops to its round's stops and
-  // thrower (the second to a pair's second thrower), fades out as they lift
-  // the block, and fades in where it was as its next round starts.
-  const pointers = [0, 1].map(() => {
-    const { el } = drawPointer();
-    el.dataset.over = '';
-    scene.append(el);
-    return {
-      el,
-      x: gsap.quickSetter(el, 'x', 'px') as (value: number) => void,
-      y: gsap.quickSetter(el, 'y', 'px') as (value: number) => void,
-    };
-  });
-  const hops = planHops(plan.turns, places, startTipOf(height, PAPER.length));
-
-  // Who looks how: everyone is scared while Nearly nearly topples; whoever
-  // the pointer picks is worried, then scared once the spotlight is on, when
-  // everyone else at risk is worried; Nearly's thrower is relieved; at the
-  // end the unlucky person parties and everyone else cheers.
+  // Who looks how: whoever throws is worried, and once the spotlight is on
+  // so is everyone at risk, watching each block hover; everyone is scared
+  // while Nearly nearly topples, and Nearly's thrower is relieved; at the end
+  // the unlucky person parties and everyone else cheers.
   const nearly = plan.turns.find((turn) => turn.nearly)!;
   const alarm: Span = { from: nearly.lands, to: plan.hold.to + NEARLY.back };
   // Nearly's thrower says "Phew!" as it swings back.
@@ -371,14 +387,18 @@ export async function playWobblyTower(show: Show): Promise<void> {
       name === show.unlucky &&
       t >= plan.still.from &&
       t < plan.still.from + BUBBLE);
-  const moodOf = (name: string, t: number, picked: ReadonlySet<string>, atRisk: boolean): Mood => {
+  const moodOf = (
+    name: string,
+    t: number,
+    throwing: ReadonlySet<string>,
+    atRisk: boolean,
+  ): Mood => {
     if (t >= downAt) return name === show.unlucky ? 'party' : 'happy';
     if (t >= fallsAt) return 'scared';
     if (relieved(name, t)) return 'happy';
     if (t >= alarm.from - 1e-9 && t < alarm.to) return 'scared';
-    const final = t >= plan.spotlight;
-    if (picked.has(name)) return final ? 'scared' : 'worried';
-    return final && atRisk ? 'worried' : 'calm';
+    if (throwing.has(name)) return 'worried';
+    return t >= plan.spotlight && atRisk ? 'worried' : 'calm';
   };
 
   /** Each `Safe!` bubble, which goes up to the bench with its thrower: from their head, as it was set. */
@@ -414,16 +434,6 @@ export async function playWobblyTower(show: Show): Promise<void> {
     const down = tumbles.down(t);
     if (down !== fallen) built.dataset.fallen = String((fallen = down));
 
-    // The pointers.
-    const where = pointers.map((pointer, which) => {
-      const at = hops.at(t, which);
-      pointer.x(at.tip.x - POINTER.tip.x);
-      pointer.y(at.tip.y - POINTER.tip.y);
-      if (pointer.el.dataset.over !== at.over) pointer.el.dataset.over = at.over;
-      setShown(pointer.el, at.shown);
-      return at;
-    });
-
     // Everyone where they are now, and how many are still at risk; once the
     // spotlight is on, whoever has gone safe is behind it.
     const atRisk = new Set(places.atRisk(t));
@@ -455,18 +465,16 @@ export async function playWobblyTower(show: Show): Promise<void> {
     // Faded in from the spotlight; a hair over, so it's full on time however t is rounded.
     setShown(light, Math.min(1, Math.max(0, (t - plan.spotlight) / SPOTLIGHT + 1e-9)));
 
-    // Everyone's look.
-    // Whom either pointer is over, or whose block is in the air.
-    const picked = new Set(where.map((at) => at.over).filter(Boolean));
+    // Everyone's look: whose block is in the air.
+    const throwing = new Set<string>();
     for (const flight of flights) {
-      if (flight.by && t >= flight.lift && t < flight.lands) picked.add(flight.by);
+      if (flight.by && t >= flight.lift && t < flight.lands) throwing.add(flight.by);
     }
     for (const person of people.values()) {
       const risky = atRisk.has(person.name);
-      const mood = moodOf(person.name, t, picked, risky);
-      const holding = person.holding;
+      const mood = moodOf(person.name, t, throwing, risky);
       const sweat = t < fallsAt && (mood === 'scared' || (risky && t >= plan.spotlight));
-      const raised = holding || t >= downAt;
+      const raised = person.holding || person.reaching || t >= downAt;
       if (mood !== person.mood) {
         person.mood = mood;
         person.el.dataset.mood = mood;
@@ -480,8 +488,10 @@ export async function playWobblyTower(show: Show): Promise<void> {
   timeline.to(clock, { t: total, duration: total, ease: 'none', onUpdate: () => draw(clock.t) }, 0);
   draw(0);
 
-  // Who holds a block overhead, from the lift to the whoosh: set as each
-  // moment passes, so a lift too short to fall on a frame still shows.
+  // Who holds a block overhead, from the lift to the whoosh, and who reaches
+  // toward the tower, from the lift until a careful toss is set down, arms
+  // up and head tipped its way: set as each moment passes, so a lift too
+  // short to fall on a frame still shows.
   for (const flight of flights) {
     if (!flight.by) continue;
     const person = people.get(flight.by)!;
@@ -492,6 +502,18 @@ export async function playWobblyTower(show: Show): Promise<void> {
       at(time, () => {
         person.holding = on;
         person.el.dataset.holding = String(on);
+      });
+    }
+    if (!flight.hover) continue;
+    const tips = -REACH * sideOf(spotAt(flight.by, flight.lift));
+    for (const [time, on] of [
+      [flight.lift, true],
+      [flight.lands, false],
+    ] as const) {
+      at(time, () => {
+        person.reaching = on;
+        person.el.dataset.reaching = String(on);
+        person.face.el.style.transform = on ? `rotate(${tips}deg)` : '';
       });
     }
   }
@@ -764,21 +786,60 @@ function arc(a: Point, b: Point, u: number, rise: number, highest = -Infinity): 
   };
 }
 
-/** Where a block is at `t` on its way: held overhead, then tossed in an arc, or dropped in. */
+/**
+ * Where a block is at `t` on its way: held overhead, then tossed in an arc
+ * onto the tower, or up to hover over it and dip and be set down; or dropped
+ * in.
+ */
 function inFlight(flight: Flight, t: number): Block {
-  const { from, to, release, lands } = flight;
+  const { from, to, release, lands, hover } = flight;
   if (t < release) return from;
+  if (hover) {
+    const high = hovering(to, HOVER.high);
+    if (t < hover.from) return tossed(flight, high, (t - release) / (hover.from - release));
+    return { ...to, y: dipping(hover, lands, high.y, to.y - HOVER.low, to.y, t) };
+  }
   const u = (t - release) / (lands - release);
-  const paper = flight.by === null;
-  const point = paper
-    ? { x: to.x, y: from.y + (to.y - from.y) * ease.drop(u) }
-    : arc(from, to, ease.toss(u), ARC, flight.highest);
+  if (flight.by === null) {
+    return { ...to, y: from.y + (to.y - from.y) * ease.drop(u) };
+  }
+  return tossed(flight, to, u);
+}
+
+/** A tossed block `u` (0 to 1) of the way from the thrower's hands to `to`, in an arc. */
+function tossed(flight: Flight, to: Block, u: number): Block {
+  const { from } = flight;
   return {
-    ...point,
+    ...arc(from, to, ease.toss(u), ARC, flight.highest),
     width: from.width + (to.width - from.width) * u,
     height: from.height + (to.height - from.height) * u,
     turn: from.turn + (to.turn - from.turn) * u,
   };
+}
+
+/**
+ * The y of a careful toss's block at `t` in its hover, from `hover.from` to
+ * its landing at `lands`: at `high`, it dips `hover.dips` times down to
+ * `low` and back up, each move DIP.least to DIP.most seconds with still
+ * pauses alike before, between and after, then it is set down at `down` in
+ * the last DIP.setDown seconds.
+ */
+function dipping(hover: Hover, lands: number, high: number, low: number, down: number, t: number) {
+  const setDown = lands - DIP.setDown;
+  if (t >= setDown) return high + (down - high) * ease.sway((t - setDown) / DIP.setDown);
+  const room = setDown - hover.from;
+  const move = Math.min(DIP.most, room / (2 * hover.dips));
+  const pause = (room - 2 * hover.dips * move) / (hover.dips + 1);
+  let left = t - hover.from;
+  for (let dip = 0; dip < hover.dips; dip++) {
+    left -= pause;
+    if (left < 0) return high;
+    if (left < move) return high + (low - high) * ease.sway(left / move);
+    left -= move;
+    if (left < move) return low + (high - low) * ease.sway(left / move);
+    left -= move;
+  }
+  return high;
 }
 
 /**
@@ -917,6 +978,7 @@ function createPerson(name: string, look: Look, spot: Spot, tag: DrawnTag): Pers
   el.className = styles.person;
   el.dataset.person = name;
   el.dataset.holding = 'false';
+  el.dataset.reaching = 'false';
   el.dataset.benched = 'false';
   const face = head(look, { land: true, mood: 'calm' });
   el.append(face.el);
@@ -934,6 +996,7 @@ function createPerson(name: string, look: Look, spot: Spot, tag: DrawnTag): Pers
     behind: false,
     mood: '',
     holding: false,
+    reaching: false,
     raised: false,
     sweat: false,
   };

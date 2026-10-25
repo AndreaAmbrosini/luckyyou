@@ -1,10 +1,10 @@
-// Wobbly Tower's drawings, from the Design canvas: the "Your turn!" pointer,
-// the blocks, the Safe bench, the "At risk" plinth, the spotlight, the hard
-// hat, the dust puffs, the speed lines and the field.
+// Wobbly Tower's drawings, from the Design canvas: the blocks, the Safe
+// bench, the "At risk" plinth, the spotlight, the hard hat, the dust puffs,
+// the speed lines and the field.
 // Every colour comes from a class in wobbly-tower.module.css, or from the
 // `var(--…)` a block is given.
 
-import { BLOCK_HEIGHT, PLINTH, type Point } from './layout';
+import { BLOCK_HEIGHT, PLINTH } from './layout';
 import styles from './wobbly-tower.module.css';
 
 type Shape = readonly [tag: string, className: string, attributes: Record<string, string | number>];
@@ -43,40 +43,6 @@ export function field(): HTMLElement {
   }
   scene.append(part(styles.grass, 'grass'));
   return scene;
-}
-
-/** The pointer's size, in stage pixels at scale 1, and where its tip is. */
-export const POINTER = {
-  width: 150,
-  height: 56,
-  tip: { x: 75, y: 56 } as Point,
-} as const;
-
-export interface Pointer {
-  /**
-   * The "Your turn!" sign, absolutely positioned at its container's 0,0 and
-   * POINTER.width × POINTER.height stage pixels big; data-part="pointer".
-   * Put its tip on a point P with left = P.x − POINTER.tip.x and top =
-   * P.y − POINTER.tip.y (for `pointerTip`: x − 75, y − 56). The whole body
-   * is above the tip, so it covers P.x ± 75 and P.y − 56 … P.y.
-   */
-  readonly el: HTMLElement;
-}
-
-/** A short sign "Your turn!" on a tail that points down. */
-export function pointer(): Pointer {
-  const el = part(styles.pointer, 'pointer');
-  el.style.width = `${POINTER.width}px`;
-  el.style.height = `${POINTER.height}px`;
-  const label = el.appendChild(document.createElement('p'));
-  label.className = styles.pointerLabel;
-  label.textContent = 'Your turn!';
-  const tail = drawing(36, 20, [
-    ['path', styles.pointerTail, { d: 'M2 2 L18 18 L34 2 Z', 'stroke-width': 4 }],
-  ]);
-  tail.setAttribute('class', styles.pointerTailSvg);
-  el.append(tail);
-  return { el };
 }
 
 /**
