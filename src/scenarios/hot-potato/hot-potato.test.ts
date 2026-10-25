@@ -6,7 +6,10 @@ import { createRandom } from '../../scenario-kit/random';
 import { speechBox } from '../../scenario-kit';
 import hotPotato from './index';
 import {
+  apart,
+  besideHead,
   bezier,
+  CAPTION,
   crowned,
   face,
   grown,
@@ -529,7 +532,7 @@ const between = (run: Run, from: number, to = Infinity) =>
 const frameAt = (run: Run, time: number) => run.frames.find((frame) => frame.time >= time - 1e-9)!;
 
 /** Where `name` stands in `run` at `time`, as big as they are then. */
-function standing(run: Run, name: string, time: number): Spot {
+function standing(run: Pick<Run, 'plan'>, name: string, time: number): Spot {
   const { plan } = run;
   const spot = ring(plan.ring.length)[plan.ring.indexOf(name)]!;
   const three = plan.ring.length > 2 && plan.three.includes(name);
@@ -555,6 +558,40 @@ function stillest(frames: readonly Frame[], reach = 20): Frame[] {
     }
   });
   return best;
+}
+
+/** A "Whoa!" bubble's box, and the flinger's head and the potato in their hands then. */
+interface Whoa {
+  readonly label: string;
+  readonly box: Box;
+  readonly head: Box;
+  readonly potato: Box;
+}
+
+/** The "Whoa!" in `run`, as the stage showed it. */
+function whoaIn(run: Run): Whoa {
+  const fling = run.plan.catches.at(-1)!;
+  const whoa = run.bubbles.find((each) => each.text === 'Whoa!');
+  expect(whoa, run.label).toBeDefined();
+  expect(whoa!.potato, run.label).not.toBeNull();
+  return {
+    label: run.label,
+    box: whoa!.box,
+    head: headBox(standing(run, run.plan.three[1], fling.thrown)),
+    potato: whoa!.potato!,
+  };
+}
+
+/** Where the "Whoa!" goes when `plan` strays, from the plan and the layout alone. */
+function whoaFor(plan: Plan, label: string): Whoa {
+  const thrown = plan.catches.at(-1)!.thrown;
+  const flinger = standing({ plan }, plan.three[1], thrown);
+  const names = plan.ring.map((name) => nameBox(standing({ plan }, name, thrown)));
+  const potato = potatoBox(held(flinger, 1, names), 1);
+  const head = headBox(flinger);
+  const anchor = besideHead('Whoa!', head, nameBox(flinger), names, [potato]);
+  expect(anchor, label).not.toBeNull();
+  return { label, box: speechBox('Whoa!', anchor!), head, potato };
 }
 
 /** When a "Phew!" bubble went up for someone sitting down at `time`. */
@@ -1164,12 +1201,13 @@ describeSpec(await loadFeature('./hot-potato.feature'), ({ Rule }) => {
         }
         expect(gasp.some((frame) => Math.abs(frame.xs[second]!) > 4)).toBe(true);
       });
-      And('they fling it across the ring with a "Whoa!"', () => {
+      And('they fling it across the ring with a "Whoa!" beside them', () => {
         expect(fling.from).toBe(run.plan.three[1]);
         expect(fling.thrown).toBeCloseTo(run.plan.still.to, 9);
         const whoa = run.bubbles.find((each) => each.text === 'Whoa!');
         expect(whoa).toBeDefined();
         expect(Math.abs(whoa!.time - fling.thrown)).toBeLessThanOrEqual(2 * STEP);
+        expect(apart(whoaIn(run).box, whoaIn(run).head)).toBeLessThanOrEqual(60);
         for (const frame of between(run, fling.thrown + STEP, fling.at)) {
           expect(frame.holder, `at ${frame.time}`).toBe('');
         }
@@ -1192,6 +1230,33 @@ describeSpec(await loadFeature('./hot-potato.feature'), ({ Rule }) => {
         expect(end.heads.Luca!.y).toBeCloseTo(0, 3);
         expect(end.crown).toBe(true);
         expect(end.moods.Luca).toBe('party');
+      });
+    });
+
+    RuleScenario('"Whoa!" beside them, wherever they stand', ({ When, Then, And }) => {
+      let whoas: Whoa[];
+      When('it strays at 6 and at 12 people, and at 4 people with seed 7', () => {
+        const plan = planShow(names(4), 'Dario', createRandom(7));
+        expect(plan.ending).toBe('strays');
+        whoas = [
+          whoaIn(labRun(6, 'strays')),
+          whoaIn(labRun(12, 'strays')),
+          whoaFor(plan, '4 people, seed 7'),
+        ];
+      });
+      Then('the "Whoa!" is within 60 pixels of their head', () => {
+        for (const { label, box, head } of whoas) {
+          expect(apart(box, head), label).toBeLessThanOrEqual(60);
+        }
+      });
+      And('it is on the stage, below the caption, and off the potato', () => {
+        for (const { label, box, potato } of whoas) {
+          expect(box.left, label).toBeGreaterThanOrEqual(0);
+          expect(box.right, label).toBeLessThanOrEqual(1280);
+          expect(box.bottom, label).toBeLessThanOrEqual(720);
+          expect(overlap(box, CAPTION), label).toBe(false);
+          expect(overlap(box, potato), label).toBe(false);
+        }
       });
     });
 

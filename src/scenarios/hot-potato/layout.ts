@@ -4,7 +4,7 @@
 // unlucky person fits, so the potato and the names stay in view below the
 // caption.
 
-import { STAGE } from '../../scenario-kit';
+import { speechBox, STAGE } from '../../scenario-kit';
 
 export interface Point {
   readonly x: number;
@@ -377,6 +377,77 @@ export function hang(
     top,
     drop: [top, { x: (top.x + to.x) / 2, y: top.y }, { x: to.x, y: (top.y + to.y) / 2 }, to],
   };
+}
+
+/** The band at the top of the stage where the caption goes up. */
+export const CAPTION: Box = { left: 0, right: STAGE.width, top: 0, bottom: SKY };
+
+/**
+ * How far from a head a bubble beside it may sit, the gap it keeps from the
+ * head and the name tag, how close it may come to the stage's edge, and the
+ * step to look for room in.
+ */
+const BESIDE = { reach: 48, gap: 6, edge: 8, step: 4 } as const;
+
+/** How far apart two boxes are: 0 when they touch or overlap. */
+export const apart = (one: Box, two: Box) =>
+  Math.hypot(
+    Math.max(0, one.left - two.right, two.left - one.right),
+    Math.max(0, one.top - two.bottom, two.top - one.bottom),
+  );
+
+/**
+ * Where to anchor a bubble saying `text` beside `head`, whose name tag is
+ * `tag`: within BESIDE.reach of the head, on the stage, clear of the head,
+ * everything in `keepOff` and the caption. Off everything in `avoid` where
+ * there's room; then as near the head as it goes and as level with it as
+ * the tag below allows. Null when there's no room within reach. The tag is
+ * wider than the head, so a bubble level with the head runs into it.
+ */
+export function besideHead(
+  text: string,
+  head: Box,
+  tag: Box,
+  avoid: readonly Box[],
+  keepOff: readonly Box[],
+): Point | null {
+  const { reach, gap, edge, step } = BESIDE;
+  const size = speechBox(text, { x: 0, y: 0 });
+  const level = Math.min((head.top + head.bottom - size.top) / 2, tag.top - gap);
+  const firm = [
+    {
+      left: head.left - gap,
+      right: head.right + gap,
+      top: head.top - gap,
+      bottom: head.bottom + gap,
+    },
+    ...keepOff,
+    CAPTION,
+  ];
+  let best: Point | null = null;
+  let least = Infinity;
+  for (let x = head.left - reach - size.right; x <= head.right + reach + size.right; x += step) {
+    for (let y = head.top - reach; y <= head.bottom + reach - size.top; y += step) {
+      const box = shift(size, x, y);
+      const onStage =
+        box.left >= edge &&
+        box.right <= STAGE.width - edge &&
+        box.top >= edge &&
+        box.bottom <= STAGE.height - edge;
+      const away = apart(box, head);
+      if (!onStage || away > reach || firm.some((each) => overlap(box, each))) continue;
+      // Any spot off the names beats one on them.
+      const score =
+        away +
+        Math.abs(y - level) / 2 +
+        (avoid.some((each) => overlap(box, each)) ? STAGE.width : 0);
+      if (score < least) {
+        least = score;
+        best = { x, y };
+      }
+    }
+  }
+  return best;
 }
 
 /** How much bigger the unlucky person stands at the pop. */

@@ -143,9 +143,14 @@ Feature: Hot Potato
       When the last second comes
       Then neither of the last two standing is the unlucky person
       And it reaches its last spark in the second's hands, everyone gasps, and they shake
-      And they fling it across the ring with a "Whoa!"
+      And they fling it across the ring with a "Whoa!" beside them
       And it lands on the unlucky person, sitting down, and pops
       And the unlucky person stands up again, full size, for the crown
+
+    Scenario: "Whoa!" beside them, wherever they stand
+      When it strays at 6 and at 12 people, and at 4 people with seed 7
+      Then the "Whoa!" is within 60 pixels of their head
+      And it is on the stage, below the caption, and off the potato
 
     Scenario: About 1 in 8
       Given 6 people

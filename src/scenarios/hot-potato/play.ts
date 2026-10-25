@@ -13,7 +13,6 @@ import {
   popIn,
   shake,
   speechAt,
-  STAGE,
   speechBox,
   type Cue,
   type Head,
@@ -22,7 +21,9 @@ import {
   type Show,
 } from '../../scenario-kit';
 import {
+  besideHead,
   bezier,
+  CAPTION,
   crowned,
   CROWNED,
   grown,
@@ -40,7 +41,6 @@ import {
   seated,
   SITTING,
   sittingHead,
-  SKY,
   throwPath,
   type Box,
   type Path,
@@ -53,8 +53,6 @@ import styles from './hot-potato.module.css';
 
 /** Where the plop drops in from, above the stage. */
 const DROP_Y = -160;
-/** The band at the top of the stage where the caption goes up. */
-const CAPTION: Box = { left: 0, right: STAGE.width, top: 0, bottom: SKY };
 /** Seconds a gag bubble stays up. */
 const BUBBLE = 0.8;
 /** The fewest seconds between two "Hot! Hot! Hot!" bubbles. */
@@ -359,9 +357,18 @@ export async function playHotPotato(show: Show): Promise<void> {
   // of the potato and everyone's name.
   const inHands = (name: string, time: number) => potatoBox(over(name, time), scale);
   /**
-   * A bubble beside `beside`, clear of everything in `avoid` where there's
-   * room, and always clear of `keepOff` (all of `avoid` unless given) and
-   * the caption.
+   * Where a bubble beside `beside` goes: clear of everything in `avoid` where
+   * there's room, and always clear of `keepOff` and the caption.
+   */
+  const near = (text: string, beside: Box, avoid: Box[], keepOff: Box[]) => {
+    const firm = [...keepOff, CAPTION];
+    const anchor = speechAt(text, beside, [...avoid, CAPTION]);
+    if (!firm.some((box) => overlap(speechBox(text, anchor), box))) return anchor;
+    return speechAt(text, beside, firm);
+  };
+  /**
+   * A bubble beside `beside`, `near` it with `keepOff` all of `avoid` unless
+   * given; at `anchor` when given.
    */
   const say = (
     time: number,
@@ -370,12 +377,8 @@ export async function playHotPotato(show: Show): Promise<void> {
     avoid: Box[] = [],
     colour: 'paper' | 'sun' = 'paper',
     keepOff: Box[] = avoid,
+    anchor = near(text, beside, avoid, keepOff),
   ) => {
-    const firm = [...keepOff, CAPTION];
-    let anchor = speechAt(text, beside, [...avoid, CAPTION]);
-    if (firm.some((box) => overlap(speechBox(text, anchor), box))) {
-      anchor = speechAt(text, beside, firm);
-    }
     const speech = bubble(text, anchor, { colour });
     speech.dataset.part = 'bubble';
     scene.append(speech);
@@ -459,16 +462,22 @@ export async function playHotPotato(show: Show): Promise<void> {
     heart = lean;
   }
   if (plan.ending === 'strays') {
-    // It strays: flung across the ring with a "Whoa!", onto someone sitting.
+    // It strays: flung across the ring with a "Whoa!" beside them, onto
+    // someone sitting.
     const fling = plan.catches.at(-1)!;
     const potatoThen = potatoBox(over(second, fling.thrown), scale);
+    const face = headBox(spotAt(second, fling.thrown));
+    const tag = nameBox(standAt(second, fling.thrown));
+    const names = [...namesBut(second, fling.thrown), tag];
+    const whoa = besideHead('Whoa!', face, tag, names, [potatoThen]);
     say(
       fling.thrown,
       'Whoa!',
-      headBox(spotAt(second, fling.thrown)),
-      [potatoThen, ...namesBut(second, fling.thrown), nameBox(standAt(second, fling.thrown))],
+      face,
+      [potatoThen, ...names],
       'paper',
       [potatoThen],
+      whoa ?? undefined,
     );
   }
 
