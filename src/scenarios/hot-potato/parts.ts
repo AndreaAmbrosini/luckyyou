@@ -1,6 +1,7 @@
 // Hot Potato's drawings, from the Design canvas: the potato with its six
-// faces and burning sparkler, the field, the crown, the pop's burst and the
-// confetti. Every colour comes from a class in hot-potato.module.css.
+// faces and burning sparkler, the field, the fuse, the crown, the pop's
+// burst and the confetti. Every colour comes from a class in
+// hot-potato.module.css.
 
 import styles from './hot-potato.module.css';
 
@@ -221,6 +222,52 @@ export function field(): HTMLElement {
   }
   scene.append(part(styles.grass));
   return scene;
+}
+
+export interface Fuse {
+  /** A paper track with an ink rope in it; data-part="fuse", data-left. */
+  readonly el: HTMLElement;
+  /** The spark at the rope's end; data-part="fuse-spark". */
+  readonly spark: SVGSVGElement;
+  /** 1 full … 0 the last spark; data-left is the value rounded to 3 decimals. */
+  setLeft(left: number): void;
+}
+
+/** The fuse across the top of the stage: `width` by `height` at `left`, `top`, burning from the right. */
+export const FUSE = { left: 200, top: 160, width: 880, height: 18, spark: 48 } as const;
+
+/** The fuse: a paper track, an ink rope as long as what's left, and a sun spark at its end. */
+export function fuse(): Fuse {
+  const el = part(styles.fuse, 'fuse');
+  el.style.left = `${FUSE.left}px`;
+  el.style.top = `${FUSE.top}px`;
+  el.style.width = `${FUSE.width}px`;
+  el.style.height = `${FUSE.height}px`;
+  const rope = el.appendChild(part(styles.rope));
+  const spark = drawing(FUSE.spark, FUSE.spark, [
+    [
+      'polygon',
+      styles.fuseSpark,
+      { points: '24,3 29,17 45,17 32,27 37,43 24,33 11,43 16,27 3,17 19,17', 'stroke-width': 5 },
+    ],
+  ]);
+  spark.dataset.part = 'fuse-spark';
+  spark.setAttribute('class', styles.fuseSparkAt);
+  spark.setAttribute('width', String(FUSE.spark));
+  spark.setAttribute('height', String(FUSE.spark));
+  spark.style.top = `${(FUSE.height - FUSE.spark) / 2}px`;
+  el.append(spark);
+  const api: Fuse = {
+    el,
+    spark,
+    setLeft(left) {
+      el.dataset.left = String(Math.round(left * 1000) / 1000);
+      rope.style.width = `${100 * left}%`;
+      spark.style.left = `${left * FUSE.width - FUSE.spark / 2}px`;
+    },
+  };
+  api.setLeft(1);
+  return api;
 }
 
 /** A crown for a head on a 100 grid. */

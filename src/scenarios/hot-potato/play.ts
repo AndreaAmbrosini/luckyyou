@@ -1,7 +1,8 @@
 // The director: builds the whole show as one timeline from the plan and plays
 // it on the show's clock. The plan says who catches the potato when; this
 // says how it looks. The stage tells its story in data attributes too: the
-// scene's beat, who holds the potato, and each mood.
+// scene's beat, who holds the potato, who sits and who has grown, each mood,
+// and what's left of the fuse.
 
 import { gsap } from 'gsap';
 import {
@@ -12,6 +13,7 @@ import {
   popIn,
   shake,
   speechAt,
+  speechBox,
   type Cue,
   type Head,
   type Look,
@@ -22,20 +24,25 @@ import {
   bezier,
   crowned,
   CROWNED,
+  grown,
+  GROWN,
   hang,
   headBox,
   held,
   nameBox,
+  overlap,
   POTATO,
   potatoBox,
   ring,
+  SITTING,
+  sittingHead,
   throwPath,
   type Box,
   type Path,
   type Point,
   type Spot,
 } from './layout';
-import { burst, confetti, crown, field, potato as drawPotato } from './parts';
+import { burst, confetti, crown, field, fuse as drawFuse, potato as drawPotato } from './parts';
 import { BEATS, planShow, type Beat, type Catch, type Ending } from './plan';
 import styles from './hot-potato.module.css';
 
@@ -49,6 +56,11 @@ const HOT_GAP = 1.0;
 const CONFETTI = { count: 36, out: 0.45, fall: 1.4 };
 /** Seconds the unlucky person takes to grow at the pop. */
 const GROW = 0.5;
+/** Seconds to sit down, and for the last three to grow. */
+const SIT = 0.4;
+const GROW_THREE = 0.4;
+/** The fuse's spark grows to `scale` and back, `half` seconds each way: 2.5 pulses a second. */
+const PULSE = { scale: 1.25, half: 0.2 };
 /** Seconds of the kit's shake. */
 const SHAKE = 0.4;
 /** How far the control points of the hang's drift reach above its top: it floats up 3/4 of this. */
@@ -77,38 +89,7 @@ export async function playHotPotato(show: Show): Promise<void> {
   const at = (time: number, run: () => void) => void timeline.call(run, [], time);
   const cue = (time: number, sound: Cue) => at(time, () => void show.sound.play(sound));
   const caption = (time: number, text: string) => at(time, () => show.caption(text));
-
-  const scene = field();
-  show.stage.append(scene);
-
-  // Everyone at their spot in the ring, back to front so the front stands over the back.
-  const spots = ring(plan.ring.length);
-  const people = new Map<string, Person>(
-    plan.ring.map((name, index) => [name, createPerson(name, looks.get(name)!, spots[index]!)]),
-  );
-  const backToFront = [...people.values()].sort((a, b) => a.spot.y - b.spot.y);
-  for (const person of backToFront) scene.append(person.el);
-
-  const potato = drawPotato();
-  potato.el.classList.add(styles.potato);
-  potato.el.dataset.holder = '';
-  scene.append(potato.el);
-  const scale = plan.ring.length === 2 ? POTATO.pairScale : 1;
-  const place = (point: Point) => ({
-    x: point.x - POTATO.width / 2,
-    y: point.y - POTATO.height / 2,
-  });
-  /** Where `name` holds the potato, clear of everyone else's name. */
-  const over = (name: string) =>
-    held(
-      people.get(name)!.spot,
-      scale,
-      [...people.values()].filter((each) => each.name !== name).map((each) => nameBox(each.spot)),
-    );
-  const first = plan.catches[0]!;
-  gsap.set(potato.el, { ...place({ x: over(first.by).x, y: DROP_Y }), scale });
-  const setX = gsap.quickSetter(potato.el, 'x', 'px') as (value: number) => void;
-  const setY = gsap.quickSetter(potato.el, 'y', 'px') as (value: number) => void;
+  const count = plan.ring.length;
 
   /** When each part starts, in show seconds. */
   const starts = {} as Record<Beat, number>;
@@ -117,30 +98,84 @@ export async function playHotPotato(show: Show): Promise<void> {
     starts[beat] = total;
     total += plan.beats[beat];
   }
+
+  const scene = field();
+  show.stage.append(scene);
   for (const beat of BEATS) at(starts[beat], () => void (scene.dataset.beat = beat));
   scene.dataset.beat = BEATS[0];
 
-  // Who holds it, who it's flying to and what's going on: the moods follow
-  // from these. Whoever has it, or has it coming, braces for it.
+  // Everyone at their spot in the ring, back to front so the front stands
+  // over the back, and the fuse behind them all.
+  const spots = ring(count);
+  const people = new Map<string, Person>(
+    plan.ring.map((name, index) => [name, createPerson(name, looks.get(name)!, spots[index]!)]),
+  );
+  const backToFront = [...people.values()].sort((a, b) => a.spot.y - b.spot.y);
+  const fuse = drawFuse();
+  scene.append(fuse.el);
+  for (const person of backToFront) scene.append(person.el);
+
+  // From the crawl the last three stand GROWN times their size; with 2
+  // people nobody grows.
+  const growing: readonly string[] = count > 2 ? plan.three : [];
+  /** Where `name` stands at `time`. */
+  const spotAt = (name: string, time: number) => {
+    const { spot } = people.get(name)!;
+    return growing.includes(name) && time >= starts.crawl ? grown(spot) : spot;
+  };
+  /** Everyone's name but `name`'s, where it is at `time`. */
+  const namesBut = (name: string, time: number) =>
+    plan.ring.filter((each) => each !== name).map((each) => nameBox(spotAt(each, time)));
+
+  const potato = drawPotato();
+  potato.el.classList.add(styles.potato);
+  potato.el.dataset.holder = '';
+  scene.append(potato.el);
+  const scale = count === 2 ? POTATO.pairScale : 1;
+  const place = (point: Point) => ({
+    x: point.x - POTATO.width / 2,
+    y: point.y - POTATO.height / 2,
+  });
+  /** Where `name` holds the potato at `time`, clear of everyone else's name. */
+  const over = (name: string, time: number) =>
+    held(spotAt(name, time), scale, namesBut(name, time));
+  const first = plan.catches[0]!;
+  gsap.set(potato.el, { ...place({ x: over(first.by, 0).x, y: DROP_Y }), scale });
+  const setX = gsap.quickSetter(potato.el, 'x', 'px') as (value: number) => void;
+  const setY = gsap.quickSetter(potato.el, 'y', 'px') as (value: number) => void;
+
+  // Who holds it, who it's flying to, who sits and what's going on: the
+  // moods follow from these. Whoever has it, has it coming or is next in
+  // line braces for it; whoever sits is happy.
+  const nextOf = (name: string) =>
+    plan.ring[(plan.ring.indexOf(name) + plan.direction + count) % count]!;
   let holder = '';
   let coming = first.by;
   let phase: Phase = 'passing';
+  const sitting = new Set<string>();
   const refresh = () => {
     potato.el.dataset.holder = holder;
+    const next = holder ? nextOf(holder) : '';
     for (const { name, el, face } of people.values()) {
       const braced = name === holder || name === coming;
       const ending = phase === 'ending';
+      const sat = sitting.has(name);
       const mood: Mood = ending
         ? name === show.unlucky
           ? 'party'
           : 'happy'
-        : phase === 'gasp' || braced
+        : phase === 'gasp'
           ? 'scared'
-          : 'worried';
+          : sat
+            ? 'happy'
+            : braced || name === next
+              ? 'scared'
+              : 'worried';
       el.dataset.mood = mood;
+      el.dataset.sitting = String(sat);
       face.setMood(mood);
       face.setRaised(ending || braced);
-      face.setSweat(!ending && braced);
+      face.setSweat(!ending && !sat && (braced || name === next));
     }
   };
   /** From `time` it's in `name`'s hands, or flying to them when `flying`. */
@@ -157,6 +192,17 @@ export async function playHotPotato(show: Show): Promise<void> {
     });
   refresh();
 
+  /** Animates `target` to `vars` over `duration` from `time`; with reduced motion, at once. */
+  const change = (
+    target: gsap.TweenTarget,
+    vars: gsap.TweenVars,
+    time: number,
+    duration: number,
+  ) =>
+    show.reducedMotion
+      ? timeline.set(target, vars, time)
+      : timeline.to(target, { ...vars, duration, ease: 'power2.out' }, time);
+
   // The sparkler hisses from the plop to the pop.
   let stopSizzle = () => {};
   const sizzle = (time: number, on: boolean) =>
@@ -165,18 +211,38 @@ export async function playHotPotato(show: Show): Promise<void> {
       stopSizzle = on ? show.sound.play('sizzle') : () => {};
     });
 
-  // The sparkler burns down evenly from the plop to its last spark.
-  const spark = { left: 1 };
+  // The fuse and the sparkler burn down evenly from the plop to their last
+  // spark; the fuse's spark pulses until the pop, and the fuse is gone then.
+  const left = { value: 1 };
   timeline.to(
-    spark,
+    left,
     {
-      left: 0,
+      value: 0,
       duration: plan.lastSpark,
       ease: 'none',
-      onUpdate: () => potato.setSparkler(spark.left),
+      onUpdate: () => {
+        potato.setSparkler(left.value);
+        fuse.setLeft(left.value);
+      },
     },
     0,
   );
+  if (!show.reducedMotion) {
+    const pulses = Math.floor(starts.pop / (2 * PULSE.half));
+    timeline.to(
+      fuse.spark,
+      {
+        scale: PULSE.scale,
+        transformOrigin: '50% 50%',
+        duration: PULSE.half,
+        ease: 'sine.inOut',
+        yoyo: true,
+        repeat: 2 * pulses - 1,
+      },
+      0,
+    );
+  }
+  timeline.set(fuse.el, { autoAlpha: 0 }, starts.pop);
 
   /** The potato along `path`, from `from` to `to` show seconds. */
   function follow(path: Path, from: number, to: number, ease = 'power1.inOut') {
@@ -199,14 +265,17 @@ export async function playHotPotato(show: Show): Promise<void> {
     );
   }
 
+  /** A straight path from `from` to `to`. */
+  const straight = (from: Point, to: Point): Path => [from, from, to, to];
+
   /**
    * The hang: it floats up to between the second and the third, hangs there
    * while it's still, drifting up a little and back, then drops onto the
    * catcher.
    */
   function hangUp(each: Catch) {
-    const two = [over(plan.three[1]), over(plan.three[2])] as [Point, Point];
-    const { rise, top, drop } = hang(over(each.from!), over(each.by), two, scale);
+    const two = [over(plan.three[1], each.at), over(plan.three[2], each.at)] as [Point, Point];
+    const { rise, top, drop } = hang(over(each.from!, each.at), over(each.by, each.at), two, scale);
     const up = { x: top.x, y: top.y - DRIFT };
     follow(rise, each.thrown, plan.still.from, 'power2.out');
     follow([top, up, up, top], plan.still.from, plan.still.to, 'sine.inOut');
@@ -216,14 +285,23 @@ export async function playHotPotato(show: Show): Promise<void> {
   // The plop: it drops in from above onto the first catcher, shocked.
   at(0, () => potato.setFace('shocked'));
   sizzle(0, true);
-  timeline.to(potato.el, { y: place(over(first.by)).y, duration: first.at, ease: 'bounce.out' }, 0);
+  timeline.to(
+    potato.el,
+    { y: place(over(first.by, 0)).y, duration: first.at, ease: 'bounce.out' },
+    0,
+  );
   hold(first.at, first.by);
 
   for (const each of plan.catches.slice(1)) {
     hold(each.thrown, each.by, true);
     cue(each.thrown, 'whoosh');
     if (each.beat === 'last-second' && plan.ending === 'hangs') hangUp(each);
-    else follow(throwPath(over(each.from!), over(each.by), scale), each.thrown, each.at);
+    else {
+      // The last lap's last catch lands before the three grow.
+      const landed = each.beat === 'last-lap' ? each.at - 1e-6 : each.at;
+      const path = throwPath(over(each.from!, each.thrown), over(each.by, landed), scale);
+      follow(path, each.thrown, each.at);
+    }
     hold(each.at, each.by);
     if (each.beat === 'laps') timeline.add(shake(people.get(each.by)!.el, show), each.at);
   }
@@ -252,27 +330,71 @@ export async function playHotPotato(show: Show): Promise<void> {
   caption(starts.pop, `It popped on ${show.unlucky}!`);
 
   // Gags, in bubbles beside the potato, or beside someone's head and clear
-  // of the potato.
-  const inHands = (name: string) => potatoBox(over(name), scale);
+  // of the potato and everyone's name.
+  const inHands = (name: string, time: number) => potatoBox(over(name, time), scale);
+  /**
+   * A bubble beside `beside`, clear of everything in `avoid` where there's
+   * room, and always clear of `keepOff` (all of `avoid` unless given).
+   */
   const say = (
     time: number,
     text: string,
     beside: Box,
     avoid: Box[] = [],
     colour: 'paper' | 'sun' = 'paper',
+    keepOff: Box[] = avoid,
   ) => {
-    const speech = bubble(text, speechAt(text, beside, avoid), { colour });
+    let anchor = speechAt(text, beside, avoid);
+    if (keepOff.some((box) => overlap(speechBox(text, anchor), box))) {
+      anchor = speechAt(text, beside, keepOff);
+    }
+    const speech = bubble(text, anchor, { colour });
     speech.dataset.part = 'bubble';
     scene.append(speech);
     timeline.add(popIn(speech), time);
     timeline.set(speech, { autoAlpha: 0 }, time + BUBBLE);
   };
-  say(first.at, 'Fzzzt!', inHands(first.by));
+  say(first.at, 'Fzzzt!', inHands(first.by, first.at));
   let lastHot = first.at;
   for (const each of during('laps')) {
     if (each.at - lastHot < HOT_GAP) continue;
-    say(each.at, 'Hot! Hot! Hot!', inHands(each.by));
+    say(each.at, 'Hot! Hot! Hot!', inHands(each.by, each.at));
     lastHot = each.at;
+  }
+
+  // Phew: once it won't come back to them, they say so and sit down, head
+  // shrinking and dropping towards their name tag, which keeps its size.
+  for (const { name, at: time } of plan.sits) {
+    const person = people.get(name)!;
+    const catcher = plan.catches.findLast((each) => each.at <= time + 1e-9)!.by;
+    at(time, () => {
+      sitting.add(name);
+      refresh();
+    });
+    change(person.face.el, { scale: SITTING.scale, y: SITTING.drop * person.spot.size }, time, SIT);
+    // Clear of the names too where the ring has room.
+    const potatoThen = inHands(catcher, time);
+    say(
+      time,
+      'Phew!',
+      sittingHead(person.spot),
+      [potatoThen, ...namesBut(name, time), nameBox(person.spot)],
+      'paper',
+      [potatoThen],
+    );
+  }
+
+  // The crawl: the last three grow where they stand, tags and all, the
+  // potato in the first one's hands with them.
+  for (const name of growing) {
+    change(people.get(name)!.el, { scale: GROWN }, starts.crawl, GROW_THREE);
+  }
+  if (growing.length > 0) {
+    const first = plan.three[0];
+    const from = over(first, starts.crawl - 1e-6);
+    const to = over(first, starts.crawl);
+    if (show.reducedMotion) follow(straight(to, to), starts.crawl, starts.crawl + 1e-3);
+    else follow(straight(from, to), starts.crawl, starts.crawl + GROW_THREE, 'power2.out');
   }
 
   // The last second: the sparkler reaches its last spark and the face
@@ -289,11 +411,11 @@ export async function playHotPotato(show: Show): Promise<void> {
     }
   }
   /** Where the potato is when it pops: landed in the unlucky person's hands, or held. */
-  const heart: Point = over(show.unlucky);
+  const heart: Point = over(show.unlucky, starts.pop);
 
   // The pop: a burst behind the people where the potato is, confetti out
   // and down, and the unlucky person in front of everyone, growing, with a
-  // paper crown; everyone else cheers.
+  // paper crown; everyone else cheers. Sitting, they stand up for it.
   const star = burst();
   star.setAttribute('width', '300');
   star.setAttribute('height', '300');
@@ -310,10 +432,10 @@ export async function playHotPotato(show: Show): Promise<void> {
     scene.append(bit);
   }
   const unlucky = people.get(show.unlucky)!;
-  const final = unlucky.spot;
+  const final = spotAt(show.unlucky, starts.pop);
   const paperCrown = crown();
-  paperCrown.setAttribute('width', String(final.size));
-  paperCrown.setAttribute('height', String(final.size));
+  paperCrown.setAttribute('width', String(unlucky.spot.size));
+  paperCrown.setAttribute('height', String(unlucky.spot.size));
   paperCrown.style.position = 'absolute';
   paperCrown.style.left = '0px';
   paperCrown.style.top = '0px';
@@ -321,7 +443,7 @@ export async function playHotPotato(show: Show): Promise<void> {
   unlucky.el.append(paperCrown);
   // crowned() grows them about their feet; they're drawn about the spot
   // they stand on, 0.2 of a head above the feet, so that moves up the rest.
-  const grown = crowned(final);
+  const grownUp = crowned(final);
   const lift = (1 - CROWNED) * 0.2 * final.size;
 
   sizzle(starts.pop, false);
@@ -333,10 +455,23 @@ export async function playHotPotato(show: Show): Promise<void> {
   at(starts.pop, () => potato.el.before(unlucky.el));
   timeline.to(
     unlucky.el,
-    { scale: CROWNED, x: grown.x, y: grown.y + lift, duration: GROW, ease: 'back.out(1.4)' },
+    {
+      scale: (final.size / unlucky.spot.size) * CROWNED,
+      x: grownUp.x,
+      y: grownUp.y + lift,
+      duration: GROW,
+      ease: 'back.out(1.4)',
+    },
     starts.pop,
   );
-  say(starts.pop, 'Pop!', potatoBox(heart, scale), [headBox(final), grown.head], 'sun');
+  if (plan.sits.some((each) => each.name === show.unlucky)) {
+    timeline.to(
+      unlucky.face.el,
+      { scale: 1, y: 0, duration: GROW, ease: 'back.out(1.4)' },
+      starts.pop,
+    );
+  }
+  say(starts.pop, 'Pop!', potatoBox(heart, scale), [headBox(final), grownUp.head], 'sun');
   timeline.set(star, { autoAlpha: 1 }, starts.pop);
   timeline.to(star, { scale: 1.1, duration: 0.25, ease: 'power2.out' }, starts.pop);
   timeline.to(star, { autoAlpha: 0, duration: 0.3 }, starts.pop + 0.3);

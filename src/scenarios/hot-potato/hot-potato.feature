@@ -41,7 +41,6 @@ Feature: Hot Potato
       And it goes clockwise in some runs, and the other way in others
       And only "Back!" in the crawl, the stray fling and a hang that drops back onto the thrower break the rule
 
-    @pending
     Scenario: Fast laps, then slower and slower
       Given 6 people
       When the show runs
@@ -69,7 +68,6 @@ Feature: Hot Potato
 
   Rule: Phew! The danger closes in
 
-    @pending
     Scenario: Safe once it won't come back
       Given 6 people
       When the last lap starts
@@ -79,7 +77,6 @@ Feature: Hot Potato
       And sitting down, their head shrinks and drops towards their name tag, which keeps its size
       And they look happy and stay sitting until the pop
 
-    @pending
     Scenario: The last three standing
       Given 6 people
       When the last lap ends
@@ -96,7 +93,6 @@ Feature: Hot Potato
 
   Rule: The crawl
 
-    @pending
     Scenario: From the first of the three to the second
       Given 6 people
       When the crawl starts
@@ -164,7 +160,6 @@ Feature: Hot Potato
       When the show runs with 40 different random seeds
       Then it never strays
 
-  @pending
   Rule: With 2 people they pass it back and forth
 
     Scenario: Two people
@@ -174,7 +169,6 @@ Feature: Hot Potato
       And nobody says "Phew!", sits down or grows
       And the last second is holding on, too hot or hangs
 
-  @pending
   Rule: The sparkler is the clock everyone watches
 
     Scenario: The fuse burns down to the last second
