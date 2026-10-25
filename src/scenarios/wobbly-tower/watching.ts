@@ -661,6 +661,15 @@ export function flightOf(frames: readonly Frame[], plan: Plan, turn: Turn) {
     .map((frame) => ({ time: frame.time, block: frame.drawn[k]!, top: frame.drawn[k - 1]! }));
 }
 
+/** How many of `frames` show a careful toss's block hovering over the tower. */
+export const hoveringFrames = (plan: Plan, frames: readonly Frame[]) =>
+  frames.filter((frame) =>
+    plan.turns.some(
+      (turn) =>
+        turn.hover && frame.time >= turn.hover.from - 1e-9 && frame.time < turn.lands - 1e-9,
+    ),
+  ).length;
+
 /** How many times a block dips in `ys`, its centre's y frame by frame: down, then back up. */
 export function dipsIn(ys: readonly number[]): number {
   let dips = 0;

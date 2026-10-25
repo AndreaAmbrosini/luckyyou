@@ -64,6 +64,7 @@ import {
   twoLeftRun,
   flightOf,
   dipsIn,
+  hoveringFrames,
 } from './watching';
 
 /** Every kind of part Wobbly Tower draws, but for the features inside a head. */
@@ -1386,17 +1387,17 @@ describeSpec(await loadFeature('./wobbly-tower.feature'), ({ Rule }) => {
         }
       });
     });
-    RuleScenario('Names stay readable', ({ When, Then, And }) => {
-      let runs: { label: string; frames: Frame[] }[];
+    RuleScenario('Names stay readable, with no pointer', ({ When, Then, And }) => {
+      let runs: { label: string; frames: Frame[]; plan: Plan }[];
       When('the show runs at 12, at 8 and at 2 people', async () => {
         // The team, with its 15-character name: all of it at 12; at 8 and at 2, its first and that name.
         const long = TEAM.at(-1)!;
         const eight = [...TEAM.slice(0, 7), long];
         const two = [TEAM[0]!, long];
         runs = [
-          { label: '12 people', frames: (await watch(TEAM, long)).frames },
-          { label: '8 people', frames: (await watch(eight, TEAM[0]!)).frames },
-          { label: '2 people', frames: (await watch(two, long)).frames },
+          { label: '12 people', ...(await watch(TEAM, long)) },
+          { label: '8 people', ...(await watch(eight, TEAM[0]!)) },
+          { label: '2 people', ...(await watch(two, long)) },
         ];
       });
       Then('every name tag is set at 22 pixels or more on the 1280 by 720 stage', () => {
@@ -1418,12 +1419,13 @@ describeSpec(await loadFeature('./wobbly-tower.feature'), ({ Rule }) => {
           }
         }
       });
-      And('no name tag is ever over another, under a block or under the pointer', () => {
+      And('no name tag is ever over another or under a block, a hovering one included', () => {
         for (const { label, frames } of runs) expectTagsClear(frames, label);
+        expect(runs.map(({ plan, frames }) => hoveringFrames(plan, frames))).not.toContain(0);
       });
     });
 
-    RuleScenario('Whoever is at risk is drawn big', ({ When, Then, And }) => {
+    RuleScenario('Whoever is at risk is drawn big, with no pointer', ({ When, Then, And }) => {
       let runs: { label: string; run: Awaited<ReturnType<typeof watch>> }[];
       /** Every frame's people at risk standing still, with the frame. */
       function* standing() {
@@ -1506,8 +1508,9 @@ describeSpec(await loadFeature('./wobbly-tower.feature'), ({ Rule }) => {
         expect(stagePx('--size-stage-tag-duel')).toBeGreaterThanOrEqual(48);
         el.remove();
       });
-      And('no name tag is ever over another, under a block or under the pointer', () => {
+      And('no name tag is ever over another or under a block, a hovering one included', () => {
         for (const { label, run } of runs) expectTagsClear(run.frames, label);
+        expect(runs.map(({ run }) => hoveringFrames(run.plan, run.frames))).not.toContain(0);
       });
     });
   });

@@ -8,10 +8,6 @@ Feature: Wobbly Tower
   people it is the final from the start. The contract in
   specs/scenarios.feature applies as well.
 
-  # Scenarios marked "Old design" describe the show with a "Your turn!"
-  # pointer that hopped from head to head to pick each turn. The build
-  # deletes each one, with its steps, when the scenarios that replace it pass.
-
   Rule: Its card
 
     Scenario: The picker shows Wobbly Tower
@@ -275,31 +271,12 @@ Feature: Wobbly Tower
       When the show runs
       Then every caption stays on screen for at least 1 second
 
-    # Old design: replaced by "Names stay readable, with no pointer".
-    Scenario: Names stay readable
-      When the show runs at 12, at 8 and at 2 people
-      Then every name tag is set at 22 pixels or more on the 1280 by 720 stage
-      And with 2 people, both name tags are set at 44 pixels or more
-      And no name tag is ever over another, under a block or under the pointer
-
-    @pending
     Scenario: Names stay readable, with no pointer
       When the show runs at 12, at 8 and at 2 people
       Then every name tag is set at 22 pixels or more on the 1280 by 720 stage
       And with 2 people, both name tags are set at 44 pixels or more
       And no name tag is ever over another or under a block, a hovering one included
 
-    # Old design: replaced by "Whoever is at risk is drawn big, with no pointer".
-    Scenario: Whoever is at risk is drawn big
-      When the show runs at 6 and at 12 people, a 15-character name among the 12
-      Then with 6 or fewer at risk, their heads are 120 pixels tall and the name tags other than the 15-character one 36 pixels or more, on the 1280 by 720 stage
-      And with 7 or more at risk, their heads are 100 pixels tall and those other name tags 30 pixels or more
-      And the 15-character name's tag is 22 pixels or more, at risk or not
-      And on the Safe bench, name tags are 22 pixels or more
-      And the "At risk" number is 48 pixels or more
-      And no name tag is ever over another, under a block or under the pointer
-
-    @pending
     Scenario: Whoever is at risk is drawn big, with no pointer
       When the show runs at 6 and at 12 people, a 15-character name among the 12
       Then with 6 or fewer at risk, their heads are 120 pixels tall and the name tags other than the 15-character one 36 pixels or more, on the 1280 by 720 stage
