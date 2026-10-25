@@ -447,12 +447,53 @@ async function watch(
 /** The captions of one run, in order. */
 const said = (record: ShowRecord) => record.captions.map((caption) => caption.text);
 
+/** Whether `lines` appear in `texts` in this order, not necessarily next to each other. */
+function inOrder(texts: readonly string[], lines: readonly string[]): boolean {
+  let next = 0;
+  for (const text of texts) if (text === lines[next]) next++;
+  return next === lines.length;
+}
+
+/** The caption a second before the pop, for each ending. */
+const ENDING_CAPTION: Readonly<Record<Ending, string>> = {
+  'holding-on': 'Pass it!',
+  'too-hot': 'Too hot!',
+  hangs: 'Which way…?',
+  strays: 'Too hot!',
+};
+
+/**
+ * 6 people, Fabio unlucky, and Carla, Fabio and Ben the last three: run
+ * once, holding on after going back, and shared by the scenarios that read
+ * its captions.
+ */
+let fabioShow: Promise<Run> | undefined;
+function fabioRun() {
+  fabioShow ??= (async () => {
+    const team = names(6);
+    const seed = seedWhere(
+      team,
+      'Fabio',
+      (plan) =>
+        plan.three.join() === 'Carla,Fabio,Ben' && plan.back && plan.ending === 'holding-on',
+      3000,
+    );
+    return watch(team, 'Fabio', seed, 1 / 10);
+  })();
+  return fabioShow;
+}
+
 /** The first seed from 1 whose plan for `team` passes `test`. */
-function seedWhere(team: readonly string[], unlucky: string, test: (plan: Plan) => boolean) {
-  for (let seed = 1; seed <= 500; seed++) {
+function seedWhere(
+  team: readonly string[],
+  unlucky: string,
+  test: (plan: Plan) => boolean,
+  most = 500,
+) {
+  for (let seed = 1; seed <= most; seed++) {
     if (test(planShow(team, unlucky, createRandom(seed)))) return seed;
   }
-  throw new Error('no seed up to 500');
+  throw new Error(`no seed up to ${most}`);
 }
 
 /**
@@ -1426,6 +1467,62 @@ describeSpec(await loadFeature('./hot-potato.feature'), ({ Rule }) => {
   });
 
   Rule('It reads without sound', ({ RuleScenario }) => {
+    RuleScenario('Captions tell the story in the ring', ({ Given, When, Then }) => {
+      let run: Run;
+      Given(
+        '6 people, the unlucky person is "Fabio", the last three are "Carla", "Fabio" and "Ben", it goes back once, and Fabio holds on',
+        () => {},
+      );
+      When('the show runs', async () => {
+        run = await fabioRun();
+      });
+      Then('the captions include, in this order:', (_, table: { caption: string }[]) => {
+        const lines = table.map((row) => row.caption);
+        expect(inOrder(said(run.record), lines), said(run.record).join(' / ')).toBe(true);
+      });
+    });
+
+    RuleScenario('The crawl names each catch', ({ Given, When, Then }) => {
+      let run: Run;
+      Given('6 people, and the last three are "Carla", "Fabio" and "Ben"', async () => {
+        run = await fabioRun();
+      });
+      When('the crawl starts', () => {});
+      Then('the caption is "Carla…", and "Fabio…" when it reaches Fabio', () => {
+        const crawl = startOf(run.plan, 'crawl');
+        const up = (text: string) => run.record.captions.find((each) => each.text === text)!;
+        expect(Math.abs(up('Carla…').from - crawl)).toBeLessThanOrEqual(0.1 + 1e-9);
+        const reached = run.catches.find((each) => each.holder === 'Fabio' && each.time > crawl)!;
+        expect(Math.abs(up('Fabio…').from - reached.time)).toBeLessThanOrEqual(0.1 + 1e-9);
+      });
+    });
+
+    RuleScenario('Each ending has its caption, in the ring', ({ When, Then }) => {
+      When('the show runs with each ending', () => {
+        for (const ending of ENDINGS) {
+          expect(
+            lab.some((run) => run.plan.ending === ending),
+            ending,
+          ).toBe(true);
+        }
+      });
+      Then(
+        'a second before the pop the caption is "Pass it!" when holding on, "Too hot!" when too hot or it strays, and "Which way…?" when it hangs',
+        () => {
+          for (const { label, plan, record } of lab) {
+            const due = startOf(plan, 'pop') - 1;
+            const up = record.captions.find(
+              (caption) => caption.text === ENDING_CAPTION[plan.ending] && caption.from > due - 0.5,
+            );
+            expect(up, `${label}: ${said(record).join(' / ')}`).toBeDefined();
+            // Frames are a step apart, and the caption before it may be up a frame late.
+            expect(up!.from, label).toBeGreaterThanOrEqual(due - 1e-9);
+            expect(up!.from, label).toBeLessThanOrEqual(due + 2 * STEP + 1e-9);
+          }
+        },
+      );
+    });
+
     RuleScenario('Each caption stays up long enough to read', ({ When, Then }) => {
       When('the show runs', () => {});
       Then('every caption stays on screen for at least 1 second', () => {
@@ -1458,6 +1555,59 @@ describeSpec(await loadFeature('./hot-potato.feature'), ({ Rule }) => {
       });
       And('no name tag is ever over another', () => {
         for (const spots of shown) expect(overlapping(spots)).toBe(false);
+      });
+    });
+
+    RuleScenario('Bigger at 4 to 7', ({ When, Then, And }) => {
+      let runs: Run[];
+      When('the show runs at 6 people', () => {
+        runs = lab.filter((run) => run.plan.ring.length === 6);
+      });
+      Then(
+        'every head standing in the ring is 100 pixels or more, and every name tag 22 pixels or more',
+        () => {
+          const spots = ring(6);
+          for (const run of runs) {
+            const { label, plan, smallestTag } = run;
+            expect(smallestTag, label).toBeGreaterThanOrEqual(22);
+            for (const frame of between(run, 0, startOf(plan, 'pop'))) {
+              for (const name of plan.ring.filter((each) => !frame.sitting.includes(each))) {
+                const size = spots[plan.ring.indexOf(name)]!.size * frame.scales[name]!;
+                expect(size, `${label}: ${name} at ${frame.time}`).toBeGreaterThanOrEqual(100);
+              }
+            }
+          }
+        },
+      );
+      And('no "Phew!" bubble, and no potato held by anyone, covers a name tag', () => {
+        for (const run of runs) {
+          const { label, plan } = run;
+          const namesAt = (time: number) =>
+            plan.ring.map((name) => ({ name, box: nameBox(standing(run, name, time)) }));
+          for (const bubble of run.bubbles.filter((each) => each.text === 'Phew!')) {
+            for (const { name, box } of namesAt(bubble.time)) {
+              expect(overlap(bubble.box, box), `${label}: Phew! at ${bubble.time} on ${name}`).toBe(
+                false,
+              );
+            }
+          }
+          // Held, not in flight, until the pop; a grown person's name is
+          // only grown once they've finished growing.
+          for (const frame of between(run, 0, startOf(plan, 'pop'))) {
+            if (!frame.holder) continue;
+            const growing =
+              frame.time >= startOf(plan, 'crawl') - 1e-9 &&
+              frame.time < startOf(plan, 'crawl') + 0.4;
+            if (growing) continue;
+            const potato = potatoBox(frame.potato, 1);
+            for (const { name, box } of namesAt(frame.time)) {
+              expect(
+                overlap(potato, box),
+                `${label}: ${frame.holder}'s potato on ${name} at ${frame.time}`,
+              ).toBe(false);
+            }
+          }
+        }
       });
     });
   });
@@ -1867,13 +2017,14 @@ describe('The stage', () => {
     }
   });
 
-  it('bubbles appear inside the stage and off the potato', () => {
+  it('bubbles appear inside the stage, below the caption and off the potato', () => {
     for (const { label, bubbles } of lab) {
       expect(bubbles.length, label).toBeGreaterThan(2);
       for (const { text, box, potato } of bubbles) {
         expect(box.left, `${label}: ${text}`).toBeGreaterThanOrEqual(0);
         expect(box.right, `${label}: ${text}`).toBeLessThanOrEqual(1280);
-        expect(box.top, `${label}: ${text}`).toBeGreaterThanOrEqual(0);
+        // Below the caption.
+        expect(box.top, `${label}: ${text}`).toBeGreaterThanOrEqual(SKY);
         expect(box.bottom, `${label}: ${text}`).toBeLessThanOrEqual(720);
         if (potato) expect(overlap(box, potato), `${label}: ${text}`).toBe(false);
       }

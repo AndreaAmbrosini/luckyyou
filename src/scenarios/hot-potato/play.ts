@@ -13,6 +13,7 @@ import {
   popIn,
   shake,
   speechAt,
+  STAGE,
   speechBox,
   type Cue,
   type Head,
@@ -39,6 +40,7 @@ import {
   seated,
   SITTING,
   sittingHead,
+  SKY,
   throwPath,
   type Box,
   type Path,
@@ -51,6 +53,8 @@ import styles from './hot-potato.module.css';
 
 /** Where the plop drops in from, above the stage. */
 const DROP_Y = -160;
+/** The band at the top of the stage where the caption goes up. */
+const CAPTION: Box = { left: 0, right: STAGE.width, top: 0, bottom: SKY };
 /** Seconds a gag bubble stays up. */
 const BUBBLE = 0.8;
 /** The fewest seconds between two "Hot! Hot! Hot!" bubbles. */
@@ -356,7 +360,8 @@ export async function playHotPotato(show: Show): Promise<void> {
   const inHands = (name: string, time: number) => potatoBox(over(name, time), scale);
   /**
    * A bubble beside `beside`, clear of everything in `avoid` where there's
-   * room, and always clear of `keepOff` (all of `avoid` unless given).
+   * room, and always clear of `keepOff` (all of `avoid` unless given) and
+   * the caption.
    */
   const say = (
     time: number,
@@ -366,9 +371,10 @@ export async function playHotPotato(show: Show): Promise<void> {
     colour: 'paper' | 'sun' = 'paper',
     keepOff: Box[] = avoid,
   ) => {
-    let anchor = speechAt(text, beside, avoid);
-    if (keepOff.some((box) => overlap(speechBox(text, anchor), box))) {
-      anchor = speechAt(text, beside, keepOff);
+    const firm = [...keepOff, CAPTION];
+    let anchor = speechAt(text, beside, [...avoid, CAPTION]);
+    if (firm.some((box) => overlap(speechBox(text, anchor), box))) {
+      anchor = speechAt(text, beside, firm);
     }
     const speech = bubble(text, anchor, { colour });
     speech.dataset.part = 'bubble';

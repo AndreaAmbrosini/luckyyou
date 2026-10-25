@@ -218,7 +218,6 @@ Feature: Hot Potato
 
   Rule: It reads without sound
 
-    @pending
     Scenario: Captions tell the story in the ring
       Given 6 people, the unlucky person is "Fabio", the last three are "Carla", "Fabio" and "Ben", it goes back once, and Fabio holds on
       When the show runs
@@ -234,13 +233,11 @@ Feature: Hot Potato
         | Pass it!                          |
         | It popped on Fabio!               |
 
-    @pending
     Scenario: The crawl names each catch
       Given 6 people, and the last three are "Carla", "Fabio" and "Ben"
       When the crawl starts
       Then the caption is "Carla…", and "Fabio…" when it reaches Fabio
 
-    @pending
     Scenario: Each ending has its caption, in the ring
       When the show runs with each ending
       Then a second before the pop the caption is "Pass it!" when holding on, "Too hot!" when too hot or it strays, and "Which way…?" when it hangs
@@ -255,7 +252,6 @@ Feature: Hot Potato
       And with 2 people, both name tags are set at 44 pixels or more
       And no name tag is ever over another
 
-    @pending
     Scenario: Bigger at 4 to 7
       When the show runs at 6 people
       Then every head standing in the ring is 100 pixels or more, and every name tag 22 pixels or more
