@@ -203,7 +203,6 @@ Feature: Don't Wake the Dog
       Then for at least half a second after its eyes open, nothing moves
       And then it says "Woof!"
 
-  @pending
   Rule: The ending is a walk
 
     Scenario: Walkies

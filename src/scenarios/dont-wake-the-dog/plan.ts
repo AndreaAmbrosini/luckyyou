@@ -194,8 +194,19 @@ const ENDINGS: readonly Ending[] = ['on-back', 'creak', 'sniff'];
 export const WAKE = { sniffs: [1.0, 0.7], back: 1.1, peek: 0.4, creak: 0.6 } as const;
 /** After the eyes open: still for `still`, then the woof; the hop takes `hop`, the walk comes `walkies` after the woof and the show ends `end` after it. */
 export const WALK = { still: 0.75, hop: 0.5, walkies: 0.5, end: 2.9 } as const;
-/** Whoever hasn't crossed slips out after the woof: from `from`, `apart` seconds apart, `seconds` each. */
-export const SLIP = { from: 0.1, apart: 0.3, seconds: 1.2 } as const;
+/**
+ * Whoever hasn't crossed slips out after the woof, from `from`, `apart`
+ * seconds apart: into the lane by `lane`, on tiptoe to the gateway by
+ * `gateway`, behind the fence by `behind` and at their spot by `fence`.
+ */
+export const SLIP = {
+  from: 0.1,
+  apart: 0.3,
+  lane: 0.25,
+  gateway: 0.8,
+  behind: 1.0,
+  fence: 1.2,
+} as const;
 /** The first heartbeat gap, how much shorter each next one is, and the shortest. */
 const HEARTBEAT = { first: 0.95, quicker: 0.93, shortest: 0.45 };
 /**
@@ -548,13 +559,12 @@ function time({ order, drawn, unlucky, ending, small, safe: f, careful: g }: Tim
   const staying = order.filter((name) => !crossed.has(name));
   staying.forEach((name, k) => {
     const from = woof + SLIP.from + k * SLIP.apart;
-    const quarter = SLIP.seconds / 4;
     keys(name).push(
       { at: from, place: 'seat' },
-      { at: from + quarter, place: 'lane' },
-      { at: from + 2 * quarter, place: 'gateway' },
-      { at: from + 3 * quarter, place: 'behind' },
-      { at: from + SLIP.seconds, place: 'fence' },
+      { at: from + SLIP.lane, place: 'lane' },
+      { at: from + SLIP.gateway, place: 'gateway', tiptoe: true },
+      { at: from + SLIP.behind, place: 'behind' },
+      { at: from + SLIP.fence, place: 'fence' },
     );
     safe.push(name);
   });

@@ -99,7 +99,17 @@ export interface Drawn {
 export interface Frame {
   readonly time: number;
   readonly people: ReadonlyMap<string, Drawn>;
-  readonly dog: { readonly state: string; readonly marks: string; readonly lift: number };
+  readonly dog: {
+    readonly state: string;
+    readonly marks: string;
+    readonly lift: number;
+    readonly x: number;
+    readonly y: number;
+  };
+  /** The lead's path while it shows, or null. */
+  readonly lead: string | null;
+  /** How many hearts show. */
+  readonly hearts: number;
   readonly gate: number;
   readonly sign: string;
   readonly bubbles: readonly {
@@ -172,6 +182,8 @@ async function record(
         gate: SVGElement;
         sign: HTMLElement;
         bubbles: HTMLElement[];
+        lead: SVGElement;
+        hearts: SVGElement[];
       }
     | undefined;
   const record = await runShow(listened, {
@@ -194,6 +206,8 @@ async function record(
         gate: stage.querySelector<SVGElement>('[data-part="gate"]')!,
         sign: stage.querySelector<HTMLElement>('[data-part="sign"]')!,
         bubbles: [...stage.querySelectorAll<HTMLElement>('[data-part="bubble"]')],
+        lead: stage.querySelector<SVGElement>('[data-part="lead"]')!,
+        hearts: [...stage.querySelectorAll<SVGElement>('[data-part="heart"]')],
       };
       const people = new Map<string, Drawn>();
       let behindTheDog = true;
@@ -223,7 +237,14 @@ async function record(
           state: parts.dog.dataset.state!,
           marks: parts.dog.dataset.marks!,
           lift: Number(parts.dog.dataset.lift),
+          x: Number.parseFloat(parts.dog.style.left),
+          y: Number.parseFloat(parts.dog.style.top),
         },
+        lead:
+          parts.lead.style.visibility === 'hidden'
+            ? null
+            : parts.lead.querySelector('path')!.getAttribute('d'),
+        hearts: parts.hearts.filter((el) => el.style.visibility !== 'hidden').length,
         gate: Number(parts.gate.dataset.open),
         sign: parts.sign.textContent ?? '',
         bubbles: parts.bubbles

@@ -92,9 +92,9 @@ describe('the dog', () => {
 
 describe('the walk', () => {
   it('draws the lead from the collar to the hand, and hearts where asked', () => {
-    expect(
-      lead({ x: 704, y: 475 }, { x: 582, y: 544 }).querySelector('path')!.getAttribute('d'),
-    ).toMatch(/^M582 544 Q.* 704 475$/);
+    const { el, run } = lead();
+    run({ x: 704, y: 475 }, { x: 582, y: 544 });
+    expect(el.querySelector('path')!.getAttribute('d')).toMatch(/^M582 544 Q.* 704 475$/);
     const love = heart(636, 372);
     expect([love.style.left, love.style.top]).toEqual(['636px', '372px']);
   });

@@ -21,6 +21,8 @@ import {
   dog as drawDog,
   fence as drawFence,
   garden,
+  heart,
+  lead as drawLead,
   sign as drawSign,
   SIGN,
 } from './parts';
@@ -28,6 +30,7 @@ import {
   bubbleAt,
   dogFace,
   faceBox,
+  FRONT,
   nameTagFor,
   placings,
   tagSetOf,
@@ -49,6 +52,20 @@ const BREATH = { seconds: 3, rise: 0.035 };
 const SWING = 0.3;
 /** Seconds between the moments a bubble is checked clear of what moves around it. */
 const SAMPLE = 0.1;
+/**
+ * The dog jumps up `jump` px over `up` seconds at the woof, then bounces
+ * `bounce` px every `every` seconds from the walk on.
+ */
+const JUMP = { jump: 50, up: 0.4, bounce: 10, every: 0.45 };
+/** The standing dog's collar, on its drawing placed at DOG_AT.stand. */
+const COLLAR = { x: 114, y: 70 };
+/** The unlucky person's raised hand, on their head's 100 grid. */
+const HAND = { x: 98, y: 6 };
+/** Hearts over the standing dog's head, on its drawing placed at DOG_AT.stand. */
+const HEARTS = [
+  { x: 46, y: -33 },
+  { x: 82, y: -57 },
+];
 
 const ease = { lift: gsap.parseEase('back.out(2.5)'), calm: gsap.parseEase('sine.inOut') };
 
@@ -99,6 +116,16 @@ export async function playDontWakeTheDog(show: Show): Promise<void> {
     top: layer('top'),
   };
   const tags = layer('tags');
+  // The walk: the lead from the standing dog's collar to the unlucky
+  // person's hand, and hearts over its head.
+  const leash = drawLead();
+  leash.el.style.visibility = 'hidden';
+  layers.top.append(leash.el);
+  const hearts = HEARTS.map(({ x, y }) => {
+    const el = heart(DOG_AT.stand.x + x, DOG_AT.stand.y + y);
+    el.style.visibility = 'hidden';
+    return scene.appendChild(el);
+  });
   const bubbles = layer('bubbles');
 
   // How the kit sets each tag, worked out once: as wide as the browser
@@ -161,7 +188,30 @@ export async function playDontWakeTheDog(show: Show): Promise<void> {
     }
     const { state, marks } = dogAt(plan, t);
     sleeper.set(state, liftAt(t), marks);
-    board.count(atRisk(plan, t).length);
+    // Up on its feet at the woof: a jump, then bounces, unless motion is reduced.
+    const standing = state === 'stand';
+    const rise = standing && !show.reducedMotion ? jumpAt(plan, t) : 0;
+    const where = standing
+      ? { x: DOG_AT.stand.x, y: DOG_AT.stand.y - rise }
+      : { x: DOG_AT.x, y: DOG_AT.y };
+    const left = `${where.x}px`;
+    const top = `${where.y}px`;
+    if (sleeper.el.style.left !== left) sleeper.el.style.left = left;
+    if (sleeper.el.style.top !== top) sleeper.el.style.top = top;
+    if (t >= plan.walkies - 1e-9) {
+      board.say('Walkies!');
+      const hand = {
+        x: FRONT.x + ((HAND.x - 50) / 100) * FRONT.size,
+        y: FRONT.y - 0.8 * FRONT.size + (HAND.y / 100) * FRONT.size,
+      };
+      leash.run({ x: where.x + COLLAR.x, y: where.y + COLLAR.y }, hand);
+      for (const [k, el] of hearts.entries()) {
+        const top = `${where.y + HEARTS[k]!.y}px`;
+        if (el.style.top !== top) el.style.top = top;
+      }
+    } else {
+      board.count(atRisk(plan, t).length);
+    }
     const open = plan.turns.find(
       (turn) => turn.gate && t >= turn.gate.from - 1e-9 && t < turn.gate.to + SWING,
     );
@@ -199,7 +249,7 @@ export async function playDontWakeTheDog(show: Show): Promise<void> {
     const until = saying.at + BUBBLE;
     const avoid = [
       ...inTheWay(plan, places, saying.at, until),
-      dogFace(),
+      dogFace(saying.at >= plan.woof - 1e-9),
       SIGN_BOX,
       ...said
         .filter((other) => other.from < until && saying.at < other.to)
@@ -226,6 +276,8 @@ export async function playDontWakeTheDog(show: Show): Promise<void> {
   }
   for (const time of plan.heartbeats) at(time, () => void show.sound.play('heartbeat'));
   at(plan.walkies, () => void show.sound.play('fanfare'));
+  for (const el of [leash.el, ...hearts]) timeline.set(el, { visibility: 'visible' }, plan.walkies);
+  if (!show.reducedMotion) timeline.add(popIn(hearts), plan.walkies);
 
   for (const { at: time, text } of plan.captions) at(time, () => show.caption(text));
   timeline.set({}, {}, plan.end);
@@ -271,6 +323,15 @@ function preferFor(saying: Saying, places: Places): { x: number; y: number } {
   if (saying.by === 'gate') return { x: 840, y: 300 };
   const spot = places.at(saying.by, saying.at).spot;
   return { x: spot.x, y: spot.y - 0.8 * spot.size };
+}
+
+/** How high the standing dog is off the ground at `t`: its jump at the woof, then its bounces. */
+function jumpAt(plan: Plan, t: number): number {
+  const since = t - plan.woof;
+  if (since < JUMP.up) return JUMP.jump * Math.sin((Math.PI * Math.max(0, since)) / JUMP.up);
+  const bouncing = t - plan.walkies;
+  if (bouncing < 0) return 0;
+  return JUMP.bounce * Math.abs(Math.sin((Math.PI * bouncing) / JUMP.every));
 }
 
 /** While the dog's head is up: each sniff, and from its waking on. */

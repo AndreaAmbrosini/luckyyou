@@ -374,17 +374,32 @@ export function dog(): Dog {
   return { el, body, set };
 }
 
-/** A lead from `from` (the collar) to `to` (the raised hand), in stage pixels; data-part="lead". */
-export function lead(from: { x: number; y: number }, to: { x: number; y: number }): SVGSVGElement {
-  const sag = { x: (from.x + to.x) / 2, y: Math.max(from.y, to.y) + 70 };
-  const d = `M${to.x} ${to.y} Q${sag.x} ${sag.y} ${from.x} ${from.y}`;
-  const svg = drawing(1280, 720, [
-    ['path', styles.line, { d, 'stroke-width': 11 }],
-    ['path', styles.leadLine, { d, 'stroke-width': 5 }],
+type Point = { readonly x: number; readonly y: number };
+
+export interface Lead {
+  /** data-part="lead", over the whole stage. */
+  readonly el: SVGSVGElement;
+  /** Runs the lead from `from` (the collar) to `to` (the raised hand), sagging between. */
+  run(from: Point, to: Point): void;
+}
+
+/** The dog's lead, in stage pixels. */
+export function lead(): Lead {
+  const el = drawing(1280, 720, [
+    ['path', styles.line, { 'stroke-width': 11 }],
+    ['path', styles.leadLine, { 'stroke-width': 5 }],
   ]);
-  svg.dataset.part = 'lead';
-  svg.setAttribute('class', styles.layer!);
-  return svg;
+  el.dataset.part = 'lead';
+  el.setAttribute('class', styles.layer!);
+  const paths = [...el.querySelectorAll('path')];
+  return {
+    el,
+    run(from, to) {
+      const sag = { x: (from.x + to.x) / 2, y: Math.max(from.y, to.y) + 70 };
+      const d = `M${to.x} ${to.y} Q${sag.x} ${sag.y} ${from.x} ${from.y}`;
+      for (const path of paths) if (path.getAttribute('d') !== d) path.setAttribute('d', d);
+    },
+  };
 }
 
 /** A pink heart, 34 × 32, at `x`, `y`; data-part="heart". */

@@ -902,6 +902,125 @@ describeSpec(await loadFeature('./dont-wake-the-dog.feature'), ({ Rule }) => {
     });
   });
 
+  Rule('The ending is a walk', ({ RuleScenario }) => {
+    /** Six people, Marco among them. */
+    const MARCO_TEAM = ['Anna', 'Ben', 'Carla', 'Giulia', 'Marco', 'Priya'];
+
+    RuleScenario('Walkies', ({ Given, When, Then, And }) => {
+      let run: Watched;
+      let after: Frame[];
+      Given('the unlucky person is "Marco"', async () => {
+        run = await watch(MARCO_TEAM, 'Marco', 1);
+      });
+      When('the dog wakes', () => {
+        after = between(run, run.plan.wakes);
+      });
+      Then(
+        'Marco hops down in front of the dog, drawn at 130 pixels or more, in front of everyone',
+        () => {
+          const end = run.frames.at(-1)!.people.get('Marco')!;
+          expect(end.size).toBeGreaterThanOrEqual(130);
+          expect(end.layer).toBe('top');
+          expect(end.y).toBeGreaterThan(run.frames.at(-1)!.dog.y + DOG_AT.height);
+          const hop = after.map((frame) => frame.people.get('Marco')!);
+          expect(hop.some((drawn) => drawn.y < hop[0]!.y - 20)).toBe(true);
+        },
+      );
+      And('the dog jumps up, wagging, with hearts over its head', () => {
+        const up = between(run, run.plan.woof);
+        for (const frame of up) expect(frame.dog).toMatchObject({ state: 'stand', marks: 'wag' });
+        expect(Math.min(...up.map((frame) => frame.dog.y))).toBeLessThan(DOG_AT.stand.y - 20);
+        const walk = between(run, run.plan.walkies);
+        for (const frame of walk) {
+          expect(frame.hearts).toBe(2);
+          expect(frame.dog.y).toBeLessThanOrEqual(DOG_AT.stand.y);
+        }
+      });
+      And("its lead goes from its collar to Marco's raised hand, and Marco celebrates", () => {
+        expect(frameAt(run, run.plan.walkies - STEP).lead).toBeNull();
+        for (const frame of between(run, run.plan.walkies)) {
+          const marco = frame.people.get('Marco')!;
+          expect(marco).toMatchObject({ mood: 'party', raised: true });
+          const hand = {
+            x: marco.x + 0.48 * marco.size,
+            y: marco.y - 0.8 * marco.size + 0.06 * marco.size,
+          };
+          const [, x1, y1, x2, y2] = /^M(\S+) (\S+) Q\S+ \S+ (\S+) (\S+)$/
+            .exec(frame.lead!)!
+            .map(Number);
+          expect(Math.hypot(x1! - hand.x, y1! - hand.y)).toBeLessThan(3);
+          // The collar, round the standing dog's neck.
+          expect(x2! - frame.dog.x).toBeGreaterThan(100);
+          expect(x2! - frame.dog.x).toBeLessThan(130);
+          expect(y2! - frame.dog.y).toBeGreaterThan(55);
+          expect(y2! - frame.dog.y).toBeLessThan(85);
+        }
+      });
+      And('the sign over the gate says "Walkies!"', () => {
+        expect(run.frames.at(-1)!.sign).toBe('Walkies!');
+      });
+      And('the caption is "Marco woke the dog!"', () => {
+        expect(run.record.captions.at(-1)!.text).toBe('Marco woke the dog!');
+      });
+    });
+
+    RuleScenario("Whoever hasn't crossed slips out", ({ Given, When, Then }) => {
+      let run: Watched;
+      let staying: string[];
+      Given('8 people, and the dog wakes with 3 left', async () => {
+        const { seed, unlucky, team } = find(8, (plan) => plan.wakesWith === 3);
+        run = await watch(team, unlucky, seed);
+      });
+      When('the dog wakes', () => {
+        const crossed = new Set(run.plan.turns.flatMap((turn) => turn.by));
+        staying = run.plan.order.filter((name) => !crossed.has(name));
+        expect(staying).toHaveLength(2);
+      });
+      Then(
+        "the two who haven't crossed tiptoe out of the gate behind its back, happy, to stand behind the fence",
+        () => {
+          for (const name of staying) {
+            const out = between(run, run.plan.woof).map((frame) => ({
+              frame,
+              drawn: frame.people.get(name)!,
+            }));
+            for (const { drawn } of out) expect(drawn.mood).toBe('happy');
+            // To the gateway behind the dog, bobbing on tiptoe.
+            const behind = out.filter(({ drawn }) => drawn.layer === 'dog');
+            expect(behind.some(({ drawn }) => Math.hypot(drawn.x - 640, drawn.y - 330) < 80)).toBe(
+              true,
+            );
+            for (const { frame } of behind) expect(frame.behindTheDog).toBe(true);
+            const way = run.plan.paths.get(name)!.filter((key) => key.at > run.plan.woof);
+            expect(way.find((key) => key.place === 'gateway')!.tiptoe).toBe(true);
+            const end = out.at(-1)!.drawn;
+            expect(end).toMatchObject({ layer: 'fence', y: BEHIND.y });
+          }
+        },
+      );
+    });
+
+    RuleScenario('The name holds still at the end', ({ Given, When, Then }) => {
+      let run: Watched;
+      Given('the unlucky person is "Marco"', async () => {
+        run = await watch(MARCO_TEAM, 'Marco', 1);
+      });
+      When('the show runs', () => {
+        expect(run.record.outcome).toBe('finished');
+      });
+      Then('"Marco" is on stage, not moving, for the last 1.5 seconds', () => {
+        const last = between(run, run.record.duration - 1.5);
+        const end = last.at(-1)!.people.get('Marco')!;
+        for (const frame of last) {
+          const marco = frame.people.get('Marco')!;
+          expect([marco.x, marco.y, marco.size]).toEqual([end.x, end.y, end.size]);
+          expect(marco.tag).toBeGreaterThanOrEqual(22);
+        }
+        expect(run.record.stage).not.toBeNull();
+      });
+    });
+  });
+
   Rule('The beats keep every show a second or more inside the limit', ({ RuleScenario }) => {
     RuleScenario('About 21 to 25 seconds at 6 people', ({ Given, When, Then, And }) => {
       let runs: Run[];
