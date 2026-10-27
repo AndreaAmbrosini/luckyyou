@@ -7,7 +7,6 @@ Feature: Don't Wake the Dog
   person's turn, and is thrilled to take them for a walk. The contract in
   specs/scenarios.feature applies as well.
 
-  @pending
   Rule: Its card
 
     Scenario: The picker shows Don't Wake the Dog
@@ -16,7 +15,6 @@ Feature: Don't Wake the Dog
       And its picture is 🐶
       And it takes 2 to 12 people
 
-  @pending
   Rule: It wakes on the unlucky person's turn
 
     Scenario Outline: <count> people, the unlucky person <position> in the list
@@ -35,9 +33,9 @@ Feature: Don't Wake the Dog
         | 12    | first    |
         | 12    | last     |
 
-  @pending
   Rule: Get past the dog and you're safe
 
+    @pending
     Scenario: A crossing that doesn't wake it makes the crosser safe
       Given 8 people
       When someone gets through the gate, before the last turn
@@ -67,9 +65,9 @@ Feature: Don't Wake the Dog
       And the unlucky person stands in at least 5 different places along the line
       And the two who share the final three with the unlucky person are at least 4 different people across the runs
 
-  @pending
   Rule: Turns go along the line
 
+    @pending
     Scenario: Each turn goes to the next one along
       Given 8 people
       When the show runs with 20 different random seeds
@@ -95,9 +93,9 @@ Feature: Don't Wake the Dog
         | 9     |
         | 12    |
 
-  @pending
   Rule: The way past the dog
 
+    @pending
     Scenario: A crossing
       Given 6 people
       When someone's turn comes
@@ -112,7 +110,6 @@ Feature: Don't Wake the Dog
       Then each turn before the final three lasts 2.7 seconds or more
       And with 7 or 8 people, 2.3 seconds or more
 
-  @pending
   Rule: The dog is the clock
 
     Scenario: It sleeps lighter after every crossing
@@ -129,7 +126,6 @@ Feature: Don't Wake the Dog
       When 3 people are left at risk
       Then the dog has no Zs, one eye half open, its ears up and its tail raised
 
-  @pending
   Rule: Safe turns get the same scares as the last one
 
     Scenario: The scares
@@ -146,9 +142,9 @@ Feature: Don't Wake the Dog
       When the show runs with 20 different random seeds
       Then the first crossing has no scare
 
-  @pending
   Rule: The final three
 
+    @pending
     Scenario: Final three
       Given 8 people
       When 3 people are left at risk
@@ -162,7 +158,6 @@ Feature: Don't Wake the Dog
       When the first crossing after "Final three!" gets through the gate
       Then the caption is "Nearly!", then "Final two!"
 
-  @pending
   Rule: Nearly! A careful crossing gets the biggest scare
 
     Scenario: Nearly
@@ -177,7 +172,6 @@ Feature: Don't Wake the Dog
       When the show runs with 30 different random seeds
       Then "Nearly!" happens to at least 3 different people, and never to the unlucky person
 
-  @pending
   Rule: With 2 or 3 people it is the final from the start
 
     Scenario Outline: <count> people
@@ -192,7 +186,6 @@ Feature: Don't Wake the Dog
         | 2     | Just the two of you…   |
         | 3     | Just the three of you… |
 
-  @pending
   Rule: The last turn could go three ways
 
     Scenario Outline: The ending, with <count> people
@@ -236,7 +229,6 @@ Feature: Don't Wake the Dog
       When the show runs
       Then "Marco" is on stage, not moving, for the last 1.5 seconds
 
-  @pending
   Rule: The beats keep every show a second or more inside the limit
 
     Scenario: About 21 to 25 seconds at 6 people
