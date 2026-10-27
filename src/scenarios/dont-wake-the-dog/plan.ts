@@ -4,7 +4,7 @@
 // person's turn with three or two left, the line is seated so the turns go
 // along it, and the plan is fitted to a length and timed forwards.
 
-import { pickOne, shuffle } from '../../scenario-kit';
+import { pickOne, shuffle, type Mood } from '../../scenario-kit';
 import { lane, seat, sideOfSeat, type Side } from './layout';
 
 /**
@@ -126,7 +126,7 @@ export interface Plan {
   readonly woof: number;
   /** Show seconds the lead, the hearts and the fanfare come. */
   readonly walkies: number;
-  /** Show seconds of each heartbeat, from the spotlight to the woof, quicker and quicker. */
+  /** Show seconds of each heartbeat, from the spotlight until the dog wakes, quicker and quicker. */
   readonly heartbeats: readonly number[];
   /** Everyone's way, key by key; someone with none stays in their seat. */
   readonly paths: ReadonlyMap<string, readonly Key[]>;
@@ -560,7 +560,7 @@ function time({ order, drawn, unlucky, ending, small, safe: f, careful: g }: Tim
   });
 
   const heartbeats: number[] = [];
-  for (let at = spotlight, k = 0; at < woof - 1e-9; k++) {
+  for (let at = spotlight, k = 0; at < wakes - 1e-9; k++) {
     heartbeats.push(at);
     at += Math.max(HEARTBEAT.shortest, HEARTBEAT.first * HEARTBEAT.quicker ** k);
   }
@@ -625,6 +625,11 @@ export function dogAt(plan: Plan, t: number): { state: DogState; lift: boolean; 
     if (sleep[each] <= t + 1e-9) state = each;
   }
   if (peek && t + 1e-9 >= peek.from && t < peek.to) state = 'peek';
+  // On its back at the end, it peeks before its eyes open.
+  const last = plan.turns.at(-1)!;
+  if (plan.ending === 'on-back' && t + 1e-9 >= last.hold!.from + WAKE.peek && t < plan.wakes) {
+    state = 'peek';
+  }
   if (state === 'stand') return { state, lift: false, marks: 'wag' };
   const turn = plan.turns.find(
     (each) => each.hold && t + 1e-9 >= each.hold.from && t < each.hold.to,
@@ -652,4 +657,71 @@ export function atRisk(plan: Plan, t: number): string[] {
 /** The caption up at `t`. */
 export function captionAt(plan: Plan, t: number): string | null {
   return plan.captions.findLast((caption) => caption.at <= t + 1e-9)?.text ?? null;
+}
+
+/** How someone looks at a moment: their mood, arms up, sweating. */
+export interface Look {
+  readonly mood: Mood;
+  readonly raised: boolean;
+  readonly sweat: boolean;
+}
+
+/** A "Phew!" keeps its sayer happy this long, as long as its bubble is up. */
+export const BUBBLE = 0.8;
+
+const REACHING: ReadonlySet<Place> = new Set(['lane-end', 'over', 'back', 'gateway']);
+
+/**
+ * How `name` looks at `t`. Whoever crosses is worried, arms up from the
+ * lane to the gateway, and scared, sweating, while a scare holds them
+ * or from the spotlight on; a "Wuf…"
+ * scares everyone at risk. Whoever goes next is scared until their own
+ * turn. From the spotlight, those at risk are scared and sweat. The safe
+ * are happy behind the fence, and worried, watching, from the spotlight
+ * but for their "Phew!". When the dog wakes everyone is scared; from the
+ * woof the others are happy, and with the walk the unlucky person
+ * celebrates.
+ */
+export function moodAt(plan: Plan, name: string, t: number): Look {
+  const look = (mood: Mood, raised = false, sweat = false): Look => ({ mood, raised, sweat });
+  const last = plan.turns.at(-1)!;
+  const unlucky = last.by[0]!;
+  const keys = plan.paths.get(name) ?? [];
+  const risky = atRisk(plan, t).includes(name);
+  if (t >= plan.walkies - 1e-9) return name === unlucky ? look('party', true) : look('happy');
+  if (t >= plan.woof - 1e-9) return name === unlucky ? look('scared', true) : look('happy');
+  if (t >= plan.wakes - 1e-9) return look('scared', name === unlucky, risky);
+
+  // On their way past the dog.
+  const turn = plan.turns.find((each) => {
+    const crossing = each.crossings.find((one) => one.by === name);
+    return crossing && each.from <= t + 1e-9 && t < (crossing.fence ?? each.next);
+  });
+  if (turn) {
+    const crossing = turn.crossings.find((one) => one.by === name)!;
+    if (crossing.through !== null && t >= crossing.through - 1e-9) return look('happy');
+    let k = 0;
+    while (k < keys.length && keys[k]!.at <= t + 1e-9) k++;
+    const [from, to] = [keys[k - 1], keys[k]];
+    const raised =
+      !!from && (REACHING.has(from.place) || (from.place === 'lane' && to?.place === 'lane-end'));
+    const held = turn.hold && t + 1e-9 >= turn.hold.from && t < turn.hold.to;
+    const final = t >= plan.spotlight - 1e-9;
+    return held || final ? look('scared', raised, true) : look('worried', raised);
+  }
+  const phew = plan.says.find((say) => say.by === name && /^Phew/.test(say.text));
+  if (phew && t >= phew.at - 1e-9) {
+    const cheering = t < phew.at + BUBBLE || t < plan.spotlight;
+    return look(cheering ? 'happy' : 'worried');
+  }
+  if (!risky) return look('happy');
+
+  // Standing at risk.
+  if (t >= plan.spotlight - 1e-9) return look('scared', false, true);
+  const now = plan.turns.findLast((each) => each.from <= t + 1e-9);
+  const wuf = now?.scare === 'wuf' && now.hold && t + 1e-9 >= now.hold.from && t < now.hold.to;
+  if (wuf) return look('scared');
+  const next = now ? plan.turns[plan.turns.indexOf(now) + 1] : plan.turns[0];
+  if (next?.by.includes(name)) return look('scared');
+  return look('worried');
 }

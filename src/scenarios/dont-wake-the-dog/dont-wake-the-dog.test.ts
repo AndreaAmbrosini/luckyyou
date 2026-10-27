@@ -7,13 +7,44 @@ import {
   captionAt,
   DOG,
   dogAt,
+  moodAt,
+  WAY,
   type Ending,
   type Plan,
   type Scare,
   type Span,
   type Turn,
 } from './plan';
-import { ENDINGS, find, moves, names, placeAt, plansFor, turnLength, type Run } from './watching';
+import {
+  between,
+  ENDINGS,
+  find,
+  frameAt,
+  moves,
+  names,
+  placeAt,
+  plansFor,
+  STEP,
+  turnLength,
+  watch,
+  type Frame,
+  type Run,
+  type Watched,
+} from './watching';
+import {
+  BACK,
+  BEHIND,
+  BOB,
+  dogFace,
+  GROW,
+  GROWN,
+  lane,
+  OVER,
+  overlap,
+  placings,
+  seat,
+} from './layout';
+import { AT_RISK, DOG_AT } from './parts';
 
 describeSpec(await loadFeature('./dont-wake-the-dog.feature'), ({ Rule }) => {
   Rule('Its card', ({ RuleScenario }) => {
@@ -72,6 +103,75 @@ describeSpec(await loadFeature('./dont-wake-the-dog.feature'), ({ Rule }) => {
   });
 
   Rule("Get past the dog and you're safe", ({ RuleScenario, RuleScenarioOutline }) => {
+    RuleScenario(
+      "A crossing that doesn't wake it makes the crosser safe",
+      ({ Given, When, Then, And }) => {
+        let run: Watched;
+        let safe: Turn[];
+        Given('8 people', async () => {
+          run = await watch(names(8), names(8)[7]!, 1);
+        });
+        When('someone gets through the gate, before the last turn', () => {
+          safe = run.plan.turns.filter((turn) => turn.kind === 'safe');
+          expect(safe.length).toBeGreaterThan(2);
+        });
+        Then(
+          'they say "Phew!" and stand behind the fence along the top of the stage, on the side they came from',
+          () => {
+            const last = run.frames.at(-1)!;
+            for (const turn of safe) {
+              const [by] = turn.by as [string];
+              const phew = run.frames.find((frame) =>
+                frame.bubbles.some((said) => said.text === 'Phew!' && said.by === by),
+              );
+              expect(phew, by).toBeDefined();
+              expect(phew!.time).toBeGreaterThan(turn.through!);
+              const end = last.people.get(by)!;
+              expect(end.layer).toBe('fence');
+              expect(end.y).toBe(BEHIND.y);
+              const side = run.plan.order.indexOf(by) < Math.ceil(8 / 2) ? -1 : 1;
+              expect(Math.sign(end.x - 640)).toBe(side);
+            }
+          },
+        );
+        And('they stay there, smaller, until the end', () => {
+          for (const turn of safe) {
+            const [by] = turn.by as [string];
+            const there = turn.crossings[0]!.fence!;
+            const end = run.frames.at(-1)!.people.get(by)!;
+            for (const frame of between(run, there + STEP)) {
+              const now = frame.people.get(by)!;
+              expect([now.x, now.y, now.size].map(Math.round)).toEqual(
+                [end.x, end.y, end.size].map(Math.round),
+              );
+            }
+            expect(end.size).toBeLessThan(frameAt(run, 0).people.get(by)!.size);
+          }
+        });
+        And('the number on the "At risk" sign over the gate goes down by one', () => {
+          for (const turn of safe) {
+            const count = (frame: Frame) => Number(frame.sign.replace(AT_RISK, ''));
+            const before = run.frames.findLast((frame) => frame.time < turn.through! - 1e-9)!;
+            expect(count(frameAt(run, turn.through!))).toBe(count(before) - 1);
+          }
+        });
+        And('everyone still at risk stays where they stand', () => {
+          for (const turn of safe) {
+            const staying = atRisk(run.plan, turn.from).filter((name) => !turn.by.includes(name));
+            const frames = between(run, turn.from, turn.next);
+            for (const name of staying) {
+              const first = frames[0]!.people.get(name)!;
+              for (const frame of frames) {
+                const now = frame.people.get(name)!;
+                expect(now.x).toBeCloseTo(first.x, 6);
+                expect(now.y).toBeCloseTo(first.y, 6);
+              }
+            }
+          }
+        });
+      },
+    );
+
     RuleScenarioOutline(
       'Nobody goes twice, with <count> people',
       ({ Given, When, Then, And }, variables) => {
@@ -139,6 +239,64 @@ describeSpec(await loadFeature('./dont-wake-the-dog.feature'), ({ Rule }) => {
   });
 
   Rule('Turns go along the line', ({ RuleScenario, RuleScenarioOutline }) => {
+    RuleScenario('Each turn goes to the next one along', ({ Given, When, Then, And }) => {
+      let runs: Run[];
+      Given('8 people', () => undefined);
+      When('the show runs with 20 different random seeds', () => {
+        runs = plansFor(8, 20);
+      });
+      Then(
+        'each turn goes to the next person at risk along the line, from left to right across the stage, and from the rightmost back to the leftmost',
+        () => {
+          for (const { plan } of runs) {
+            const crossers = plan.turns.flatMap((turn) => turn.by);
+            crossers.slice(1).forEach((name, k) => {
+              const line = plan.order.filter((each) => !crossers.slice(0, k).includes(each));
+              const before = line.indexOf(crossers[k]!);
+              expect(name).toBe(line[(before + 1) % line.length]);
+            });
+            // The line runs left to right across the stage.
+            const xs = plan.order.map((_, k) => seat(k, 8).x);
+            xs.slice(1).forEach((x, k) => expect(x).toBeGreaterThan(xs[k]!));
+          }
+        },
+      );
+      And('the caption names whose turn it is, as "Elena\'s turn", as they step out', async () => {
+        for (const { plan } of runs) {
+          for (const turn of plan.turns) {
+            expect(captionAt(plan, turn.named)).toBe(`${turn.by[0]}'s turn`);
+            const steps = turn.crossings[0]!;
+            expect(turn.named).toBeGreaterThanOrEqual(turn.from - 1e-9);
+            expect(turn.named).toBeLessThanOrEqual(steps.lane + 1e-9);
+          }
+        }
+        // On the stage, as the plan has it.
+        const run = await watch(names(8), names(8)[0]!, 1);
+        const shown = run.record.captions.map((caption) => caption.text);
+        for (const turn of run.plan.turns) expect(shown).toContain(`${turn.by[0]}'s turn`);
+      });
+      And('whoever goes next after them looks scared until their own turn', async () => {
+        for (const { plan } of runs) {
+          plan.turns.slice(0, -1).forEach((turn, k) => {
+            const next = plan.turns[k + 1]!;
+            if (next.from > plan.spotlight) return;
+            for (let t = turn.from; t < next.from - 1e-9; t += 0.1) {
+              expect(moodAt(plan, next.by[0]!, t).mood, `${next.by[0]} at ${t}`).toBe('scared');
+            }
+          });
+        }
+        // The stage shows everyone's mood as the plan has it.
+        const run = await watch(names(8), names(8)[0]!, 1);
+        for (const frame of run.frames) {
+          for (const [name, drawn] of frame.people) {
+            expect(drawn.mood, `${name} at ${frame.time}`).toBe(
+              moodAt(run.plan, name, frame.time).mood,
+            );
+          }
+        }
+      });
+    });
+
     RuleScenario('With 2 people, they take turns', ({ Given, When, Then, And }) => {
       let runs: Run[];
       Given('2 people', () => undefined);
@@ -213,6 +371,75 @@ describeSpec(await loadFeature('./dont-wake-the-dog.feature'), ({ Rule }) => {
   });
 
   Rule('The way past the dog', ({ RuleScenario }) => {
+    RuleScenario('A crossing', ({ Given, When, Then, And }) => {
+      let run: Watched;
+      let turns: Turn[];
+      Given('6 people', async () => {
+        run = await watch(names(6), names(6)[2]!, 1);
+      });
+      When("someone's turn comes", () => {
+        turns = run.plan.turns.filter((turn) => turn.kind === 'safe');
+      });
+      Then('they step back into a lane behind the line and tiptoe along it to the dog', () => {
+        const way = lane(6);
+        for (const turn of turns) {
+          const { by, lane: inLane, reaches, side } = turn.crossings[0]!;
+          const seated = frameAt(run, turn.from).people.get(by)!;
+          const walking = between(run, inLane + STEP, reaches - STEP).map((f) => f.people.get(by)!);
+          expect(walking.length).toBeGreaterThan(3);
+          for (const drawn of walking) {
+            expect(drawn.y).toBeLessThan(seated.y);
+            expect(drawn.y).toBeGreaterThanOrEqual(way.y - BOB.height - 1e-6);
+          }
+          // On tiptoe: bobbing up and down, on towards the dog's end.
+          expect(new Set(walking.map((drawn) => Math.round(drawn.y))).size).toBeGreaterThan(1);
+          const xs = walking.map((drawn) => drawn.x * side);
+          xs.slice(1).forEach((x, k) => expect(x).toBeLessThanOrEqual(xs[k]! + 1e-6));
+          expect(frameAt(run, reaches).people.get(by)!.x).toBeCloseTo(way.end(side), 0);
+        }
+      });
+      And(
+        'they go up over its head or its tail, whichever end is on their side, and onto its back, behind it',
+        () => {
+          for (const turn of turns) {
+            const { by, side, over, back } = turn.crossings[0]!;
+            const up = frameAt(run, over!).people.get(by)!;
+            expect(Math.hypot(up.x - OVER[side].x, up.y - OVER[side].y)).toBeLessThan(25);
+            // The head is at the left end, the tail at the right.
+            expect(Math.sign(OVER[side].x - (DOG_AT.x + DOG_AT.width / 2))).toBe(side);
+            const on = run.frames.reduce((best, frame) =>
+              Math.abs(frame.time - back!) < Math.abs(best.time - back!) ? frame : best,
+            );
+            const drawn = on.people.get(by)!;
+            expect(Math.hypot(drawn.x - BACK.x, drawn.y - BACK.y)).toBeLessThan(5);
+            expect(drawn.layer).toBe('dog');
+            expect(on.behindTheDog).toBe(true);
+          }
+        },
+      );
+      And('the gate swings open, they go through, and it closes behind them', () => {
+        for (const turn of turns) {
+          const { by, reaches, gateway, through } = turn.crossings[0]!;
+          expect(frameAt(run, reaches).gate).toBe(0);
+          expect(frameAt(run, gateway!).gate).toBeGreaterThan(0.9);
+          const out = frameAt(run, through! + 0.2).people.get(by)!;
+          expect(out.layer).toBe('fence');
+          expect(frameAt(run, turn.gate!.to + 0.35).gate).toBe(0);
+        }
+      });
+      And("while they are on its back, the dog's face stays in full view", () => {
+        const places = placings(run.plan);
+        for (const turn of turns) {
+          const { by, back, gateway } = turn.crossings[0]!;
+          for (const frame of between(run, back!, gateway! - WAY.gateway)) {
+            expect(frame.people.get(by)!.layer).toBe('dog');
+            expect(frame.behindTheDog).toBe(true);
+            expect(overlap(places.tag(by, frame.time).box, dogFace())).toBe(false);
+          }
+        }
+      });
+    });
+
     RuleScenario('Unhurried before the final three', ({ Given, When, Then, And }) => {
       let runs: Run[];
       Given('6 people', () => undefined);
@@ -407,6 +634,53 @@ describeSpec(await loadFeature('./dont-wake-the-dog.feature'), ({ Rule }) => {
   });
 
   Rule('The final three', ({ RuleScenario }) => {
+    RuleScenario('Final three', ({ Given, When, Then, And }) => {
+      let run: Watched;
+      let three: string[];
+      let spotlight: number;
+      Given('8 people', async () => {
+        run = await watch(names(8), names(8)[7]!, 8);
+      });
+      When('3 people are left at risk', () => {
+        spotlight = run.plan.spotlight;
+        three = atRisk(run.plan, spotlight);
+        expect(three).toHaveLength(3);
+      });
+      Then('the caption is "Final three!"', () => {
+        const shown = run.record.captions.find((caption) => caption.text === 'Final three!')!;
+        expect(shown.from).toBeCloseTo(spotlight, 1);
+      });
+      And('the three grow to 1.2 times their size where they stand, name tags and all', () => {
+        const before = frameAt(run, spotlight - STEP);
+        const after = frameAt(run, spotlight + GROW + STEP);
+        for (const name of three) {
+          const [was, now] = [before.people.get(name)!, after.people.get(name)!];
+          expect(now.size / was.size).toBeCloseTo(GROWN, 2);
+          expect([now.x, now.y]).toEqual([was.x, was.y]);
+          expect(now.tag / was.tag).toBeGreaterThan(GROWN - 0.05);
+          expect(now.tag / was.tag).toBeLessThan(GROWN + 0.05);
+        }
+      });
+      And('they look scared and sweat', () => {
+        for (const frame of between(run, spotlight, run.plan.turns.at(-1)!.from)) {
+          for (const name of atRisk(run.plan, frame.time)) {
+            expect(frame.people.get(name)).toMatchObject({ mood: 'scared', sweat: true });
+          }
+        }
+      });
+      And('the heartbeat starts, and comes quicker and quicker until the dog wakes', () => {
+        const beats = run.cues
+          .filter((heard) => heard.cue === 'heartbeat')
+          .map((heard) => heard.time);
+        expect(beats[0]).toBeCloseTo(spotlight, 1);
+        const gaps = beats.slice(1).map((time, k) => time - beats[k]!);
+        gaps.slice(1).forEach((gap, k) => expect(gap).toBeLessThanOrEqual(gaps[k]! + STEP + 1e-9));
+        expect(gaps.at(-1)!).toBeLessThan(gaps[0]!);
+        expect(beats.at(-1)!).toBeLessThan(run.plan.wakes);
+        expect(run.plan.wakes - beats.at(-1)!).toBeLessThan(1);
+      });
+    });
+
     RuleScenario('Final two', ({ Given, When, Then }) => {
       let plan: Plan;
       let through: number;

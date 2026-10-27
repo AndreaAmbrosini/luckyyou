@@ -35,7 +35,6 @@ Feature: Don't Wake the Dog
 
   Rule: Get past the dog and you're safe
 
-    @pending
     Scenario: A crossing that doesn't wake it makes the crosser safe
       Given 8 people
       When someone gets through the gate, before the last turn
@@ -67,7 +66,6 @@ Feature: Don't Wake the Dog
 
   Rule: Turns go along the line
 
-    @pending
     Scenario: Each turn goes to the next one along
       Given 8 people
       When the show runs with 20 different random seeds
@@ -95,7 +93,6 @@ Feature: Don't Wake the Dog
 
   Rule: The way past the dog
 
-    @pending
     Scenario: A crossing
       Given 6 people
       When someone's turn comes
@@ -144,7 +141,6 @@ Feature: Don't Wake the Dog
 
   Rule: The final three
 
-    @pending
     Scenario: Final three
       Given 8 people
       When 3 people are left at risk

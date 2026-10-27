@@ -21,11 +21,11 @@ export type Side = -1 | 1;
  * The line of people at risk: in one row up to 8 people, from the inner
  * end of each side (x 440 and 840) outwards, at most 175 apart and no
  * further out than x 90 and 1190. From 9, two rows, alternating from the
- * inner end, which is in the back row, from x 430 and 850 to 60 and 1220.
+ * inner end, which is in the back row, from x 430 and 850 to 45 and 1235.
  */
 export const LINE = {
   one: { y: 620, inner: 440, outer: 90, apart: 175 },
-  two: { back: 545, front: 660, inner: 430, outer: 60 },
+  two: { back: 545, front: 660, inner: 430, outer: 45 },
 } as const;
 
 /** How many stand on the left: the first half of the line, the bigger one. */
@@ -103,7 +103,7 @@ export const tagSize = (size: number) =>
   Math.max(stagePx('--size-stage-tag-min'), Math.round(TAG_SHARE * size));
 
 /** Space kept between neighbouring name tags. */
-const TAG_GAP = 12;
+const TAG_GAP = 8;
 /** A walking crosser's tag may be this wide, so a long name stays on one line. */
 const WALKING_TAG = 260;
 
@@ -234,38 +234,39 @@ export function placings(plan: Plan, setTag: SetTag = estimateTag, calm = false)
         return [name, grown ? { ...spot, size: spot.size * GROWN } : spot];
       }),
     );
-    const fits = new Map(
-      names.map((name) => {
-        const spot = spots.get(name)!;
-        const neighbours = names
-          .filter((other) => other !== name)
-          .map((other) => spots.get(other)!)
-          .filter((other) => !twoRows(people) || other.y === spot.y)
-          .map((other) => Math.abs(other.x - spot.x) - TAG_GAP);
-        const cap = Math.max(198, Math.round(2.2 * spot.size));
-        return [
-          name,
-          { size: tagSize(spot.size), maxWidth: Math.floor(Math.min(cap, ...neighbours)) },
-        ];
-      }),
-    );
-    return { spots, fits };
+    return { spots, fits: roomFor(names, spots, people, setTag) };
   });
-  const seatAt = (name: string, t: number): { spot: Spot; fit: TagFit } => {
+  // Just before the spotlight, the final three's tags are set small enough
+  // to grow GROWN times into the room they have at the spotlight.
+  const lit = changes.findIndex((at) => Math.abs(at - plan.spotlight) < 1e-9) + 1;
+  if (lit > 0) {
+    const [before, after] = [seatings[lit - 1]!, seatings[lit]!];
+    for (const [name, grown] of after.fits) {
+      const was = before.fits.get(name);
+      if (!was) continue;
+      const size = Math.min(
+        setTag(name, was).size,
+        Math.max(tagSize(0), Math.round(setTag(name, grown).size / GROWN)),
+      );
+      before.fits.set(name, { ...was, size });
+    }
+  }
+
+  /** A move between two tags: from `from` to `to`, `u` (0…1) of the way. */
+  type Tags = { from: TagFit; to: TagFit; u: number };
+  const still = (fit: TagFit): Tags => ({ from: fit, to: fit, u: 1 });
+  const seatAt = (name: string, t: number): { spot: Spot; tags: Tags } => {
     const k = stageAt(t);
     const now = seatings[k]!;
     const spot = now.spots.get(name) ?? seat(index.get(name)!, people, risking(k).length);
     const fit = now.fits.get(name) ?? { size: tagSize(spot.size), maxWidth: 198 };
-    if (k === 0) return { spot, fit };
-    const u = Math.min(1, (t - changes[k - 1]!) / GROW);
-    const before = seatings[k - 1]!;
-    const was = before.spots.get(name);
-    if (u >= 1 || !was) return { spot, fit };
-    const wasFit = before.fits.get(name)!;
-    const mix = (a: number, b: number) => a + (b - a) * sine(u);
+    const before = k === 0 ? undefined : seatings[k - 1]!;
+    const was = before?.spots.get(name);
+    const u = k === 0 ? 1 : Math.min(1, (t - changes[k - 1]!) / GROW);
+    if (u >= 1 || !was) return { spot, tags: still(fit) };
     return {
-      spot: { x: spot.x, y: spot.y, size: mix(was.size, spot.size) },
-      fit: { size: mix(wasFit.size, fit.size), maxWidth: mix(wasFit.maxWidth, fit.maxWidth) },
+      spot: { x: spot.x, y: spot.y, size: was.size + (spot.size - was.size) * sine(u) },
+      tags: { from: before!.fits.get(name)!, to: fit, u: sine(u) },
     };
   };
 
@@ -291,11 +292,11 @@ export function placings(plan: Plan, setTag: SetTag = estimateTag, calm = false)
   }
 
   /** Where `place` is for `name` at `t`, and their tag's fit there. */
-  const placed = (name: string, place: Place, t: number): { spot: Spot; fit: TagFit } => {
+  const placed = (name: string, place: Place, t: number): { spot: Spot; tags: Tags } => {
     const side = sideOf(name);
     const walking = (spot: Spot) => ({
       spot,
-      fit: { size: tagSize(spot.size), maxWidth: WALKING_TAG },
+      tags: still({ size: tagSize(spot.size), maxWidth: WALKING_TAG }),
     });
     switch (place) {
       case 'seat':
@@ -313,15 +314,15 @@ export function placings(plan: Plan, setTag: SetTag = estimateTag, calm = false)
       case 'behind':
         return {
           spot: { x: fenceX.get(name)!, y: BEHIND.walk, size: BEHIND.size },
-          fit: fenceFit.get(name)!,
+          tags: still(fenceFit.get(name)!),
         };
       case 'fence':
         return {
           spot: { x: fenceX.get(name)!, y: BEHIND.y, size: BEHIND.size },
-          fit: fenceFit.get(name)!,
+          tags: still(fenceFit.get(name)!),
         };
       case 'front':
-        return { spot: FRONT, fit: { size: tagSize(FRONT.size), maxWidth: 360 } };
+        return { spot: FRONT, tags: still({ size: tagSize(FRONT.size), maxWidth: 360 }) };
     }
   };
 
@@ -333,10 +334,10 @@ export function placings(plan: Plan, setTag: SetTag = estimateTag, calm = false)
     return [keys[k - 1], keys[k]];
   };
 
-  const at = (
-    name: string,
-    t: number,
-  ): { spot: Spot; fit: TagFit; layer: Layer; lines?: 1 | 2 } => {
+  /** The tag a move's end settles on. */
+  const settled = (tags: Tags) => (tags.u < 0.5 ? tags.from : tags.to);
+
+  const at = (name: string, t: number): { spot: Spot; tags: Tags; layer: Layer } => {
     const [from, to] = around(name, t);
     if (!from || !to || from.place === to.place) {
       const place = from?.place ?? 'seat';
@@ -359,36 +360,33 @@ export function placings(plan: Plan, setTag: SetTag = estimateTag, calm = false)
           : to.place === 'back' || to.place === 'gateway' || from.place === 'back'
             ? 'dog'
             : 'front';
-    const linesOf = (fit: TagFit) => setTag(name, fit).lines;
     return {
       spot: { x: mix(a.spot.x, b.spot.x), y, size: mix(a.spot.size, b.spot.size) },
-      fit: { size: mix(a.fit.size, b.fit.size), maxWidth: mix(a.fit.maxWidth, b.fit.maxWidth) },
+      tags: { from: settled(a.tags), to: settled(b.tags), u },
       layer,
-      lines: linesOf(a.fit) === 2 || linesOf(b.fit) === 2 ? 2 : 1,
     };
   };
 
-  /** `name`'s tag as drawn at `t`. */
+  /**
+   * `name`'s tag as drawn at `t`: as the kit sets it at each end of a move,
+   * its size and width between the two, on two lines if either end is.
+   */
   const tag = (name: string, t: number): DrawnTag => {
-    const now = at(name, t);
-    const set = setTag(name, {
-      size: Math.round(now.fit.size),
-      maxWidth: Math.round(now.fit.maxWidth),
-    });
-    const lines = now.lines ?? set.lines;
-    const width = lines === 2 && set.lines === 1 ? set.maxWidth : set.width;
-    const shift = tagShift(now.spot, width);
+    const { spot, tags } = at(name, t);
+    const one = setTag(name, tags.from);
+    const two = setTag(name, tags.to);
+    const mix = (p: number, q: number) => p + (q - p) * tags.u;
+    const lines = one.lines === 2 || two.lines === 2 ? 2 : 1;
+    const wide = (set: TagSet) => (lines === 2 && set.lines === 1 ? set.maxWidth : set.width);
+    const size = mix(one.size, two.size);
+    const width = mix(wide(one), wide(two));
+    const shift = tagShift(spot, width);
     return {
-      size: now.fit.size,
-      maxWidth: now.fit.maxWidth,
+      size,
+      maxWidth: mix(one.maxWidth, two.maxWidth),
       lines,
       shift,
-      box: tagBox(
-        now.spot,
-        width,
-        (1.1 * lines + 0.15) * now.fit.size + 2 * stagePx('--line'),
-        shift,
-      ),
+      box: tagBox(spot, width, (1.1 * lines + 0.15) * size + 2 * stagePx('--line'), shift),
     };
   };
 
@@ -412,6 +410,60 @@ export function placings(plan: Plan, setTag: SetTag = estimateTag, calm = false)
     /** Where `name` stands behind the fence. */
     fence: (name: string): Spot => ({ x: fenceX.get(name)!, y: BEHIND.y, size: BEHIND.size }),
   };
+}
+
+/**
+ * Each seated tag's fit: its size from its head, as wide as it may be,
+ * max(198, 2.2 heads), or as its neighbours in its row leave room for: two
+ * neighbours share the room between them, less TAG_GAP, in proportion to
+ * how wide their names are set, a name that can't be set narrower keeping
+ * the width it needs.
+ */
+function roomFor(
+  names: readonly string[],
+  spots: ReadonlyMap<string, Spot>,
+  people: number,
+  setTag: SetTag,
+): Map<string, TagFit> {
+  const fits = new Map(
+    names.map((name) => {
+      const spot = spots.get(name)!;
+      return [
+        name,
+        { size: tagSize(spot.size), maxWidth: Math.max(198, Math.round(2.2 * spot.size)) },
+      ];
+    }),
+  );
+  const natural = new Map(names.map((name) => [name, setTag(name, fits.get(name)!).width]));
+  const least = new Map(
+    names.map((name) => [name, setTag(name, { size: tagSize(0), maxWidth: 1 }).width]),
+  );
+  const rows = new Map<number, string[]>();
+  for (const name of names) {
+    const y = twoRows(people) ? spots.get(name)!.y : 0;
+    rows.set(y, [...(rows.get(y) ?? []), name]);
+  }
+  for (const row of rows.values()) {
+    row.sort((one, two) => spots.get(one)!.x - spots.get(two)!.x);
+    row.slice(1).forEach((two, k) => {
+      const one = row[k]!;
+      const budget = 2 * (spots.get(two)!.x - spots.get(one)!.x - TAG_GAP);
+      const [a, b] = [natural.get(one)!, natural.get(two)!];
+      if (a + b <= budget) return;
+      const share = Math.max(
+        least.get(one)!,
+        Math.min(budget - least.get(two)!, (budget * a) / (a + b)),
+      );
+      for (const [name, width] of [
+        [one, share],
+        [two, budget - share],
+      ] as const) {
+        const fit = fits.get(name)!;
+        fits.set(name, { ...fit, maxWidth: Math.floor(Math.min(fit.maxWidth, width)) });
+      }
+    });
+  }
+  return fits;
 }
 
 /** Where everyone is over a show: `placings`. */
