@@ -30,7 +30,16 @@ export type Kind = 'safe' | 'nope' | 'nearly' | 'last';
 
 /** Places along the way past the dog; the layout says where each is for each person. */
 export type Place =
-  'seat' | 'lane' | 'lane-end' | 'over' | 'back' | 'gateway' | 'behind' | 'fence' | 'front';
+  | 'seat'
+  | 'lane'
+  | 'lane-end'
+  | 'climb'
+  | 'over'
+  | 'back'
+  | 'gateway'
+  | 'behind'
+  | 'fence'
+  | 'front';
 
 /**
  * Someone is at `place` at `at` show seconds, and moves there from the key
@@ -196,12 +205,13 @@ export const WAKE = { sniffs: [1.0, 0.7], back: 1.1, peek: 0.4, creak: 0.6 } as 
 export const WALK = { still: 0.75, hop: 0.5, walkies: 0.5, end: 2.9 } as const;
 /**
  * Whoever hasn't crossed slips out after the woof, from `from`, `apart`
- * seconds apart: into the lane by `lane`, on tiptoe to the gateway by
+ * seconds apart, so the second sets off for the gate once the first is
+ * clear of it: into the lane by `lane`, on tiptoe to the gateway by
  * `gateway`, behind the fence by `behind` and at their spot by `fence`.
  */
 export const SLIP = {
   from: 0.1,
-  apart: 0.3,
+  apart: 1.0,
   lane: 0.25,
   gateway: 0.8,
   behind: 1.0,
@@ -380,6 +390,11 @@ function time({ order, drawn, unlucky, ending, small, safe: f, careful: g }: Tim
     sleep.half = spotlight;
   }
   const safeTurns = drawn.filter((turn) => turn.kind === 'safe').length;
+  /** How far `name` stands from the end of the lane on their side, when it is shared with their pair's. */
+  const nearness = (name: string) => {
+    const index = order.indexOf(name);
+    return Math.abs(seat(index, people).x - way.end(sideOfSeat(index, people)));
+  };
   const restlessAfter = Math.max(2, Math.ceil((2 / 3) * safeTurns));
   let finalTwo: number | null = null;
   let peek: Span | null = null;
@@ -401,7 +416,10 @@ function time({ order, drawn, unlucky, ending, small, safe: f, careful: g }: Tim
     let hold: Span | null = null;
     let through: number | null = null;
     let next = 0;
-    for (const [k, by] of turn.by.entries()) {
+    // A pair from one side: whoever stands nearer the dog goes first, so
+    // their ways never cross.
+    const goers = [...turn.by].sort((one, two) => nearness(one) - nearness(two));
+    for (const [k, by] of goers.entries()) {
       const index = order.indexOf(by);
       const side = sideOfSeat(index, people);
       const own = seat(index, people);
@@ -451,6 +469,8 @@ function time({ order, drawn, unlucky, ending, small, safe: f, careful: g }: Tim
       }
       const sniff = freeze('sniff', 'lane-end');
       if (sniff) [hold, t] = [sniff, sniff.to];
+      // Straight up beside the dog's end first, then over it.
+      path.push({ at: t + walk(WAY.over) / 2, place: 'climb' });
       const over = (t += walk(WAY.over));
       path.push({ at: t, place: 'over' });
       const onBack = (t += walk(WAY.onto));
@@ -679,7 +699,7 @@ export interface Look {
 /** A "Phew!" keeps its sayer happy this long, as long as its bubble is up. */
 export const BUBBLE = 0.8;
 
-const REACHING: ReadonlySet<Place> = new Set(['lane-end', 'over', 'back', 'gateway']);
+const REACHING: ReadonlySet<Place> = new Set(['lane-end', 'climb', 'over', 'back', 'gateway']);
 
 /**
  * How `name` looks at `t`. Whoever crosses is worried, arms up from the

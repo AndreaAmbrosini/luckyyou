@@ -2,6 +2,7 @@
 // everyone is on their way past the dog. Statistical scenarios read the plan
 // alone; only stage scenarios run shows.
 
+import { gsap } from 'gsap';
 import type { Cue, Scenario } from '../../scenario-kit';
 import { createRandom } from '../../scenario-kit/random';
 import { runShow, type ShowRecord } from '../../scenario-kit/testing';
@@ -105,6 +106,8 @@ export interface Frame {
     readonly lift: number;
     readonly x: number;
     readonly y: number;
+    /** How far its body is scaled up as it breathes. */
+    readonly breath: number;
   };
   /** The lead's path while it shows, or null. */
   readonly lead: string | null;
@@ -239,6 +242,9 @@ async function record(
           lift: Number(parts.dog.dataset.lift),
           x: Number.parseFloat(parts.dog.style.left),
           y: Number.parseFloat(parts.dog.style.top),
+          breath: Number(
+            gsap.getProperty(parts.dog.querySelector('[data-part="body"]')!, 'scaleY'),
+          ),
         },
         lead:
           parts.lead.style.visibility === 'hidden'

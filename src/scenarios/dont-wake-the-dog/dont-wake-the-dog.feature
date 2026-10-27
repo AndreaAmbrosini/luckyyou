@@ -236,7 +236,6 @@ Feature: Don't Wake the Dog
       When the show runs at every head count from 2 to 12, with each ending, waking with 3 left and with 2 left
       Then each run lasts between 12 and 29 seconds
 
-  @pending
   Rule: It reads without sound
 
     Scenario: Captions tell the story, a turn at a time
@@ -275,7 +274,6 @@ Feature: Don't Wake the Dog
       And no speech bubble covers a name tag or a face
       And no one ever covers the dog's face
 
-  @pending
   Rule: Reduced motion keeps the story
 
     Scenario: With reduced motion, nobody bobs

@@ -19,12 +19,12 @@ export type Side = -1 | 1;
 
 /**
  * The line of people at risk: in one row up to 8 people, from the inner
- * end of each side (x 440 and 840) outwards, at most 175 apart and no
+ * end of each side (x 430 and 850) outwards, at most 175 apart and no
  * further out than x 90 and 1190. From 9, two rows, alternating from the
  * inner end, which is in the back row, from x 430 and 850 to 45 and 1235.
  */
 export const LINE = {
-  one: { y: 620, inner: 440, outer: 90, apart: 175 },
+  one: { y: 620, inner: 430, outer: 90, apart: 175 },
   two: { back: 545, front: 660, inner: 430, outer: 45 },
 } as const;
 
@@ -62,20 +62,25 @@ export function seat(index: number, people: number, atRisk = people): Spot {
   return { x: mirror(side, inner - k * step), y: k % 2 === 0 ? back : front, size };
 }
 
+/** Of two x on `side`, the one further from the stage's middle. */
+const outside = (side: Side, x: number, limit: number) =>
+  side === -1 ? Math.min(x, limit) : Math.max(x, limit);
+
 /** An x on the left side mirrored to `side`. */
 const mirror = (side: Side, x: number) => (side === -1 ? x : STAGE.width - x);
 
 /**
  * The lane behind the line: crossers tiptoe along it at `y`, heads `size`,
- * to its end on their side, x 430 or 850. With two rows it runs higher,
- * clear of the back row.
+ * to its end on their side, x 415 or 865, where a name tag up to 140 wide
+ * stays clear of the dog's face. With two rows it runs higher, clear of the
+ * back row.
  */
 export function lane(people: number): { y: number; size: number; end: (side: Side) => number } {
   const two = twoRows(people);
   return {
     y: two ? 415 : 480,
     size: two ? 90 : 100,
-    end: (side) => mirror(side, 430),
+    end: (side) => mirror(side, 415),
   };
 }
 
@@ -154,14 +159,22 @@ const graphemes = new Intl.Segmenter('en', { granularity: 'grapheme' });
 
 /**
  * A name tag's width as the kit sets it, estimated where nothing can
- * measure it: a single line is as wide as its name (0.6 em a character, as
- * the kit counts without a canvas), the padding and the borders, and never
- * wider than `set`; two lines take all of `set`.
+ * measure it: as wide as its longest line (0.6 em a character, as the kit
+ * counts without a canvas), the padding and the borders, and never wider
+ * than `set`. Two lines break after a space or hyphen, as many words on the
+ * first as fit; a word broken in the middle takes all of `set`.
  */
 export function tagContentWidth(name: string, size: number, set: number, lines: 1 | 2): number {
-  if (lines === 2) return set;
-  const letters = [...graphemes.segment(name)].length;
-  return Math.min(set, Math.ceil(letters * 0.6 * size + 0.6 * size + 2 * stagePx('--line') + 2));
+  const extra = 0.6 * size + 2 * stagePx('--line') + 2;
+  const across = (text: string) => [...graphemes.segment(text)].length * 0.6 * size;
+  if (lines === 1) return Math.min(set, Math.ceil(across(name) + extra));
+  const room = set - extra;
+  const words = name.split(/(?<=[\s-])/);
+  let first = '';
+  while (words.length > 1 && across((first + words[0]!).trimEnd()) <= room) first += words.shift()!;
+  const second = words.join('');
+  if (!first || across(second) > room) return set;
+  return Math.min(set, Math.ceil(Math.max(across(first.trimEnd()), across(second)) + extra));
 }
 
 /** Which layer someone is drawn in: behind the fence, behind the dog, in front, or over everyone. */
@@ -172,6 +185,8 @@ export interface DrawnTag extends TagFit {
   readonly lines: 1 | 2;
   /** Moves the tag sideways to keep it on the stage. */
   readonly shift: number;
+  /** Hidden for a moment: on the hop off the dog, stepping between two rows, or where it would cover the dog's face. */
+  readonly hidden: boolean;
   readonly box: Box;
 }
 
@@ -184,6 +199,7 @@ const PLACE_LAYER: Readonly<Record<Place, Layer>> = {
   seat: 'front',
   lane: 'front',
   'lane-end': 'front',
+  climb: 'front',
   over: 'front',
   back: 'dog',
   gateway: 'dog',
@@ -246,7 +262,7 @@ export function placings(plan: Plan, setTag: SetTag = estimateTag, calm = false)
       if (!was) continue;
       const size = Math.min(
         setTag(name, was).size,
-        Math.max(tagSize(0), Math.round(setTag(name, grown).size / GROWN)),
+        Math.max(tagSize(0), Math.ceil(setTag(name, grown).size / GROWN - 1e-9)),
       );
       before.fits.set(name, { ...was, size });
     }
@@ -302,9 +318,16 @@ export function placings(plan: Plan, setTag: SetTag = estimateTag, calm = false)
       case 'seat':
         return seatAt(name, t);
       case 'lane':
-        return walking({ x: seat(index.get(name)!, people).x, y: way.y, size: way.size });
+        // Behind their seat, but never inside the lane's end.
+        return walking({
+          x: outside(side, seat(index.get(name)!, people).x, way.end(side)),
+          y: way.y,
+          size: way.size,
+        });
       case 'lane-end':
         return walking({ x: way.end(side), y: way.y, size: way.size });
+      case 'climb':
+        return walking({ x: way.end(side), y: OVER[side].y, size: OVER[side].size });
       case 'over':
         return walking(OVER[side]);
       case 'back':
@@ -337,11 +360,18 @@ export function placings(plan: Plan, setTag: SetTag = estimateTag, calm = false)
   /** The tag a move's end settles on. */
   const settled = (tags: Tags) => (tags.u < 0.5 ? tags.from : tags.to);
 
-  const at = (name: string, t: number): { spot: Spot; tags: Tags; layer: Layer } => {
+  /** Whether `name` stands in the front row of two. */
+  const inFront = (name: string) =>
+    twoRows(people) && seat(index.get(name)!, people).y === LINE.two.front;
+
+  const at = (
+    name: string,
+    t: number,
+  ): { spot: Spot; tags: Tags; layer: Layer; hidden: boolean } => {
     const [from, to] = around(name, t);
     if (!from || !to || from.place === to.place) {
       const place = from?.place ?? 'seat';
-      return { ...placed(name, place, t), layer: PLACE_LAYER[place] };
+      return { ...placed(name, place, t), layer: PLACE_LAYER[place], hidden: false };
     }
     const a = placed(name, from.place, from.at);
     const b = placed(name, to.place, to.at);
@@ -352,18 +382,21 @@ export function placings(plan: Plan, setTag: SetTag = estimateTag, calm = false)
     if (to.tiptoe && !calm)
       y -= BOB.height * Math.abs(Math.sin((Math.PI * (t - from.at)) / BOB.every));
     if (to.hop && !calm) y -= BOB.hop * Math.sin(Math.PI * linear);
-    const layer: Layer =
-      to.place === 'front'
-        ? 'top'
-        : PLACE_LAYER[to.place] === 'fence'
-          ? 'fence'
-          : to.place === 'back' || to.place === 'gateway' || from.place === 'back'
-            ? 'dog'
-            : 'front';
+    // The hop off the dog passes its face: behind it, until they land in front.
+    const layer: Layer = to.hop
+      ? 'dog'
+      : PLACE_LAYER[to.place] === 'fence'
+        ? 'fence'
+        : to.place === 'back' || to.place === 'gateway' || from.place === 'back'
+          ? 'dog'
+          : 'front';
+    const between = new Set([from.place, to.place]);
+    const stepping = inFront(name) && between.has('seat') && between.has('lane');
     return {
       spot: { x: mix(a.spot.x, b.spot.x), y, size: mix(a.spot.size, b.spot.size) },
       tags: { from: settled(a.tags), to: settled(b.tags), u },
       layer,
+      hidden: !!to.hop || stepping,
     };
   };
 
@@ -372,7 +405,7 @@ export function placings(plan: Plan, setTag: SetTag = estimateTag, calm = false)
    * its size and width between the two, on two lines if either end is.
    */
   const tag = (name: string, t: number): DrawnTag => {
-    const { spot, tags } = at(name, t);
+    const { spot, tags, hidden: away } = at(name, t);
     const one = setTag(name, tags.from);
     const two = setTag(name, tags.to);
     const mix = (p: number, q: number) => p + (q - p) * tags.u;
@@ -381,13 +414,10 @@ export function placings(plan: Plan, setTag: SetTag = estimateTag, calm = false)
     const size = mix(one.size, two.size);
     const width = mix(wide(one), wide(two));
     const shift = tagShift(spot, width);
-    return {
-      size,
-      maxWidth: mix(one.maxWidth, two.maxWidth),
-      lines,
-      shift,
-      box: tagBox(spot, width, (1.1 * lines + 0.15) * size + 2 * stagePx('--line'), shift),
-    };
+    const box = tagBox(spot, width, (1.1 * lines + 0.15) * size + 2 * stagePx('--line'), shift);
+    // Nothing covers the dog's face: a tag that would hides for that moment.
+    const hidden = away || overlap(box, dogFace(t >= plan.woof - 1e-9));
+    return { size, maxWidth: mix(one.maxWidth, two.maxWidth), lines, shift, hidden, box };
   };
 
   // Every tag set before the show.
@@ -414,10 +444,11 @@ export function placings(plan: Plan, setTag: SetTag = estimateTag, calm = false)
 
 /**
  * Each seated tag's fit: its size from its head, as wide as it may be,
- * max(198, 2.2 heads), or as its neighbours in its row leave room for: two
- * neighbours share the room between them, less TAG_GAP, in proportion to
- * how wide their names are set, a name that can't be set narrower keeping
- * the width it needs.
+ * max(198, 2.2 heads), or as its neighbours in its row leave room for:
+ * each takes what its neighbour's name leaves of the room between them,
+ * less TAG_GAP, and when both don't fit they share it in proportion, so
+ * both can grow alike; a name of several words counts as wrapped onto two
+ * lines, as the kit sets it when squeezed.
  */
 function roomFor(
   names: readonly string[],
@@ -434,9 +465,18 @@ function roomFor(
       ];
     }),
   );
-  const natural = new Map(names.map((name) => [name, setTag(name, fits.get(name)!).width]));
   const least = new Map(
     names.map((name) => [name, setTag(name, { size: tagSize(0), maxWidth: 1 }).width]),
+  );
+  // How wide each needs to be: its own size on one line, or a name of
+  // several words on two lines at the smallest, which the kit wraps to.
+  const natural = new Map(
+    names.map((name) => {
+      const own = setTag(name, fits.get(name)!).width;
+      const wraps =
+        /[\s-]/.test(name.trim()) && setTag(name, { size: tagSize(0), maxWidth: 1 }).lines === 2;
+      return [name, wraps ? Math.min(own, least.get(name)!) : own];
+    }),
   );
   const rows = new Map<number, string[]>();
   for (const name of names) {
@@ -447,16 +487,20 @@ function roomFor(
     row.sort((one, two) => spots.get(one)!.x - spots.get(two)!.x);
     row.slice(1).forEach((two, k) => {
       const one = row[k]!;
-      const budget = 2 * (spots.get(two)!.x - spots.get(one)!.x - TAG_GAP);
+      // Where their tags sit: one at the stage's edge is moved onto it.
+      const left = Math.max(spots.get(one)!.x, natural.get(one)! / 2);
+      const right = Math.min(spots.get(two)!.x, STAGE.width - natural.get(two)! / 2);
+      const budget = 2 * (right - left - TAG_GAP);
       const [a, b] = [natural.get(one)!, natural.get(two)!];
-      if (a + b <= budget) return;
-      const share = Math.max(
-        least.get(one)!,
-        Math.min(budget - least.get(two)!, (budget * a) / (a + b)),
-      );
+      // Room for both: each may take what the other leaves. Too little: they
+      // share it in proportion, neither under what the kit can set.
+      const share =
+        a + b <= budget
+          ? null
+          : Math.min(budget - least.get(two)!, Math.max(least.get(one)!, (budget * a) / (a + b)));
       for (const [name, width] of [
-        [one, share],
-        [two, budget - share],
+        [one, share ?? budget - b],
+        [two, share === null ? budget - a : budget - share],
       ] as const) {
         const fit = fits.get(name)!;
         fits.set(name, { ...fit, maxWidth: Math.floor(Math.min(fit.maxWidth, width)) });

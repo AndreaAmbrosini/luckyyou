@@ -1,5 +1,7 @@
 import { loadFeature } from '@amiceli/vitest-cucumber';
 import { expect } from 'vitest';
+import { speechBox, stagePx } from '../../scenario-kit';
+import { createRandom } from '../../scenario-kit/random';
 import { describeSpec } from '../../scenario-kit/testing';
 import dontWakeTheDog from './index';
 import {
@@ -8,6 +10,7 @@ import {
   DOG,
   dogAt,
   moodAt,
+  planShow,
   WAY,
   type Ending,
   type Plan,
@@ -35,7 +38,9 @@ import {
   BACK,
   BEHIND,
   BOB,
+  bodyBox,
   dogFace,
+  faceBox,
   GROW,
   GROWN,
   lane,
@@ -43,8 +48,21 @@ import {
   overlap,
   placings,
   seat,
+  type Places,
 } from './layout';
-import { AT_RISK, DOG_AT } from './parts';
+import { AT_RISK, DOG_AT, sign } from './parts';
+
+/** Twelve names, one of them 15 characters long. */
+const LONG = 'Priya Natarajan';
+const LONG_TEAM = [...names(11), LONG];
+
+/** The first seed from 1 up whose plan for `team` and `unlucky` `wanted` accepts. */
+function seedWhere(team: readonly string[], unlucky: string, wanted: (plan: Plan) => boolean) {
+  for (let seed = 1; seed <= 5000; seed++) {
+    if (wanted(planShow(team, unlucky, createRandom(seed)))) return seed;
+  }
+  throw new Error('No seed gives that plan.');
+}
 
 describeSpec(await loadFeature('./dont-wake-the-dog.feature'), ({ Rule }) => {
   Rule('Its card', ({ RuleScenario }) => {
@@ -339,8 +357,9 @@ describeSpec(await loadFeature('./dont-wake-the-dog.feature'), ({ Rule }) => {
                 const [one, two] = pair.crossings as [Turn['crossings'][0], Turn['crossings'][0]];
                 // Neighbours along the line, among those still at risk.
                 const line = atRisk(plan, pair.from);
-                const at = line.indexOf(one.by);
-                expect(line[(at + 1) % line.length]).toBe(two.by);
+                const at = line.indexOf(pair.by[0]!);
+                expect(line[(at + 1) % line.length]).toBe(pair.by[1]);
+                expect(new Set([one.by, two.by])).toEqual(new Set(pair.by));
                 // Right behind: the second steps out under half a second after the first.
                 expect(two.lane - one.lane).toBeGreaterThan(0);
                 expect(two.lane - one.lane).toBeLessThanOrEqual(0.5);
@@ -1076,6 +1095,252 @@ describeSpec(await loadFeature('./dont-wake-the-dog.feature'), ({ Rule }) => {
           expect(plan.end).toBeGreaterThanOrEqual(12);
           expect(plan.end).toBeLessThanOrEqual(29);
         }
+      });
+    });
+  });
+
+  Rule('It reads without sound', ({ RuleScenario }) => {
+    RuleScenario('Captions tell the story, a turn at a time', ({ Given, When, Then }) => {
+      let run: Watched;
+      Given(
+        '6 people, the unlucky person is "Anna", the turns go to "Ben", "Marco", "Giulia", "Priya", then "Anna", and Priya has "Nearly!"',
+        async () => {
+          const team = ['Anna', 'Ben', 'Carla', 'Giulia', 'Marco', 'Priya'];
+          const turns = ['Ben', 'Marco', 'Giulia', 'Priya', 'Anna'];
+          const seed = seedWhere(team, 'Anna', (plan) => {
+            const by = plan.turns.map((turn) => turn.by.join());
+            return by.join() === turns.join() && plan.turns[3]!.kind === 'nearly';
+          });
+          run = await watch(team, 'Anna', seed);
+        },
+      );
+      When('the show runs', () => {
+        expect(run.record.outcome).toBe('finished');
+      });
+      Then('the captions include, in this order:', (_, table: { caption: string }[]) => {
+        const shown = run.record.captions.map((caption) => caption.text);
+        let at = 0;
+        for (const { caption } of table) {
+          const found = shown.indexOf(caption, at);
+          expect(found, caption).toBeGreaterThanOrEqual(at);
+          at = found + 1;
+        }
+      });
+    });
+
+    RuleScenario('Each caption stays up long enough to read', ({ When, Then }) => {
+      let runs: Watched[];
+      When('the show runs', async () => {
+        runs = [await watch(names(6), names(6)[0]!, 1), await watch(names(2), names(2)[1]!, 5)];
+      });
+      Then('every caption stays on screen for at least 1 second', () => {
+        for (const run of runs) {
+          for (const caption of run.record.captions) {
+            expect(caption.to - caption.from, caption.text).toBeGreaterThanOrEqual(1 - STEP);
+          }
+        }
+      });
+    });
+
+    RuleScenario('Whoever is at risk is drawn big', ({ When, Then, And }) => {
+      let runs: Watched[];
+      /** Every frame's people standing at risk in their places, still and done growing. */
+      function* standing() {
+        for (const run of runs) {
+          const { plan } = run;
+          const changes = plan.turns.flatMap((turn) =>
+            turn.through === null ? [] : [turn.through],
+          );
+          changes.push(plan.spotlight);
+          for (const frame of run.frames) {
+            if (frame.time >= plan.wakes) break;
+            if (changes.some((at) => frame.time >= at - 1e-9 && frame.time < at + GROW)) continue;
+            const risky = atRisk(plan, frame.time);
+            for (const name of risky) {
+              const still = { from: frame.time - 0.01, to: frame.time + 0.01 };
+              if (placeAt(plan, name, frame.time) !== 'seat' || moves(plan, name, still)) continue;
+              const grown = frame.time >= plan.spotlight ? GROWN : 1;
+              yield { name, frame, drawn: frame.people.get(name)!, risky: risky.length, grown };
+            }
+          }
+        }
+      }
+      When('the show runs at 6 and at 12 people, a 15-character name among the 12', async () => {
+        runs = [await watch(names(6), names(6)[0]!, 1), await watch(LONG_TEAM, LONG_TEAM[0]!, 1)];
+      });
+      Then(
+        'with 6 or fewer at risk, their heads are 120 pixels tall and the name tags other than the 15-character one 34 pixels or more, on the 1280 by 720 stage',
+        () => {
+          let seen = 0;
+          for (const { name, frame, drawn, risky, grown } of standing()) {
+            if (risky > 6) continue;
+            seen++;
+            expect(drawn.size / grown, `${name} at ${frame.time}`).toBeCloseTo(120, 6);
+            if (name !== LONG)
+              expect(drawn.tag, `${name} at ${frame.time}`).toBeGreaterThanOrEqual(34);
+          }
+          expect(seen).toBeGreaterThan(0);
+        },
+      );
+      And(
+        'with 7 or more at risk, their heads are 100 pixels tall and those other name tags 28 pixels or more',
+        () => {
+          let seen = 0;
+          for (const { name, frame, drawn, risky } of standing()) {
+            if (risky < 7) continue;
+            seen++;
+            expect(drawn.size, `${name} at ${frame.time}`).toBe(100);
+            if (name !== LONG)
+              expect(drawn.tag, `${name} at ${frame.time}`).toBeGreaterThanOrEqual(28);
+          }
+          expect(seen).toBeGreaterThan(0);
+        },
+      );
+      And("the 15-character name's tag is 22 pixels or more, at risk or not", () => {
+        for (const frame of runs[1]!.frames) {
+          expect(frame.people.get(LONG)!.tag, `at ${frame.time}`).toBeGreaterThanOrEqual(22);
+        }
+      });
+      And('behind the fence, name tags are 22 pixels or more', () => {
+        let seen = 0;
+        for (const run of runs) {
+          for (const frame of run.frames) {
+            for (const [name, drawn] of frame.people) {
+              if (placeAt(run.plan, name, frame.time) !== 'fence') continue;
+              seen++;
+              expect(drawn.tag, `${name} at ${frame.time}`).toBeGreaterThanOrEqual(22);
+            }
+          }
+        }
+        expect(seen).toBeGreaterThan(0);
+      });
+      And('the "At risk" number is 34 pixels or more', () => {
+        const { el } = sign();
+        document.body.append(el);
+        const number = el.querySelector<HTMLElement>('[data-part="at-risk"]')!;
+        // As the stylesheet sets it: the size from tokens.css.
+        expect(getComputedStyle(number).fontSize).toBe('var(--size-stage-caption)');
+        expect(stagePx('--size-stage-caption')).toBeGreaterThanOrEqual(34);
+        el.remove();
+      });
+    });
+
+    RuleScenario("Nothing covers a name or the dog's face", ({ When, Then, And }) => {
+      let runs: { label: string; run: Watched; places: Places }[];
+      When('the show runs at 12, at 8 and at 2 people', async () => {
+        runs = [];
+        for (const [label, team] of [
+          ['12 people', LONG_TEAM],
+          ['8 people', names(8)],
+          ['2 people', names(2)],
+        ] as const) {
+          for (const seed of [1, 5, 8]) {
+            const run = await watch(team, team.at(-1)!, seed);
+            runs.push({ label: `${label}, seed ${seed}`, run, places: placings(run.plan) });
+          }
+        }
+      });
+      Then('no name tag is ever over another', () => {
+        for (const { label, run, places } of runs) {
+          for (const { time } of run.frames) {
+            const tags = run.plan.order
+              .map((name) => ({ name, tag: places.tag(name, time) }))
+              .filter(({ tag }) => !tag.hidden);
+            tags.forEach(({ name, tag }, k) => {
+              for (const other of tags.slice(k + 1)) {
+                const at = `${label}: ${name} and ${other.name} at ${time}`;
+                expect(overlap(tag.box, other.tag.box), at).toBe(false);
+              }
+            });
+          }
+        }
+      });
+      And('no speech bubble covers a name tag or a face', () => {
+        let seen = 0;
+        for (const { label, run, places } of runs) {
+          for (const frame of run.frames) {
+            if (frame.bubbles.length === 0) continue;
+            const standing = frame.dog.state === 'stand';
+            const covered = [
+              { what: "the dog's face", box: dogFace(standing) },
+              ...run.plan.order.flatMap((name) => {
+                const tag = places.tag(name, frame.time);
+                const face = {
+                  what: `${name}'s face`,
+                  box: faceBox(places.at(name, frame.time).spot),
+                };
+                return tag.hidden ? [face] : [face, { what: `${name}'s tag`, box: tag.box }];
+              }),
+            ];
+            for (const said of frame.bubbles) {
+              seen++;
+              const box = speechBox(said.text, said);
+              for (const { what, box: other } of covered) {
+                const at = `${label}: "${said.text}" over ${what} at ${frame.time}`;
+                expect(overlap(box, other), at).toBe(false);
+              }
+            }
+          }
+        }
+        expect(seen).toBeGreaterThan(0);
+      });
+      And("no one ever covers the dog's face", () => {
+        for (const { label, run, places } of runs) {
+          for (const frame of run.frames) {
+            const face = dogFace(frame.dog.state === 'stand');
+            for (const [name, drawn] of frame.people) {
+              const at = `${label}: ${name} at ${frame.time}`;
+              if (drawn.layer === 'front' || drawn.layer === 'top') {
+                expect(overlap(bodyBox(drawn), face), at).toBe(false);
+              }
+              const tag = places.tag(name, frame.time);
+              if (!tag.hidden) expect(overlap(tag.box, face), `${at}, tag`).toBe(false);
+            }
+          }
+        }
+      });
+    });
+  });
+
+  Rule('Reduced motion keeps the story', ({ RuleScenario }) => {
+    RuleScenario('With reduced motion, nobody bobs', ({ Given, When, Then, And }) => {
+      let calm: Watched;
+      let moving: Watched;
+      Given('reduced motion is on', () => undefined);
+      When('the show runs', async () => {
+        const seed = seedWhere(names(6), names(6)[5]!, (plan) => plan.ending === 'sniff');
+        calm = await watch(names(6), names(6)[5]!, seed, { reducedMotion: true });
+        moving = await watch(names(6), names(6)[5]!, seed);
+      });
+      Then('crossers glide without bobbing on their toes', () => {
+        const way = lane(6);
+        for (const turn of calm.plan.turns) {
+          for (const { by, lane: inLane, reaches } of turn.crossings) {
+            for (const frame of between(calm, inLane, reaches)) {
+              expect(frame.people.get(by)!.y, `${by} at ${frame.time}`).toBeCloseTo(way.y, 6);
+            }
+            const bobbing = between(moving, inLane, reaches).map(
+              (frame) => frame.people.get(by)!.y,
+            );
+            expect(Math.min(...bobbing)).toBeLessThan(way.y - 1);
+          }
+        }
+      });
+      And("the dog doesn't breathe or jump, and lifts its head without a bounce", () => {
+        for (const frame of calm.frames) {
+          expect(frame.dog.breath).toBe(1);
+          expect(frame.dog.lift).toBeLessThanOrEqual(1);
+          if (frame.dog.state === 'stand') expect(frame.dog.y).toBe(DOG_AT.stand.y);
+        }
+        // Without it, it does all three.
+        expect(new Set(moving.frames.map((frame) => frame.dog.breath)).size).toBeGreaterThan(2);
+        expect(Math.max(...moving.frames.map((frame) => frame.dog.lift))).toBeGreaterThan(1);
+        expect(Math.min(...moving.frames.map((frame) => frame.dog.y))).toBeLessThan(DOG_AT.stand.y);
+      });
+      And('every caption still appears, in the same order', () => {
+        const texts = (run: Watched) => run.record.captions.map((caption) => caption.text);
+        expect(texts(calm)).toEqual(texts(moving));
+        expect(texts(calm)).toEqual(calm.plan.captions.map((caption) => caption.text));
       });
     });
   });

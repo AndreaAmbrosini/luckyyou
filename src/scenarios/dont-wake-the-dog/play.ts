@@ -51,7 +51,9 @@ const BREATH = { seconds: 3, rise: 0.035 };
 /** Seconds the gate takes to swing open, or shut. */
 const SWING = 0.3;
 /** Seconds between the moments a bubble is checked clear of what moves around it. */
-const SAMPLE = 0.1;
+const SAMPLE = 0.05;
+/** Stage pixels a bubble keeps clear of what moves round it, between samples. */
+const MARGIN = 8;
 /**
  * The dog jumps up `jump` px over `up` seconds at the woof, then bounces
  * `bounce` px every `every` seconds from the walk on.
@@ -306,12 +308,23 @@ const boxOfBubble = (text: string, anchor: { x: number; y: number }): Box => {
   };
 };
 
-/** Every face and name tag from `from` to `to`, sampled as they move. */
+/**
+ * Every face and name tag from `from` to `to`, sampled as they move, with
+ * MARGIN round each for how far they move between samples.
+ */
 function inTheWay(plan: Plan, places: Places, from: number, to: number): Box[] {
   const boxes: Box[] = [];
+  const padded = (box: Box): Box => ({
+    left: box.left - MARGIN,
+    right: box.right + MARGIN,
+    top: box.top - MARGIN,
+    bottom: box.bottom + MARGIN,
+  });
   for (let t = from; t <= to + 1e-9; t += SAMPLE) {
     for (const name of plan.order) {
-      boxes.push(faceBox(places.at(name, t).spot), places.tag(name, t).box);
+      const tag = places.tag(name, t);
+      boxes.push(padded(faceBox(places.at(name, t).spot)));
+      if (!tag.hidden) boxes.push(padded(tag.box));
     }
   }
   return boxes;
@@ -390,6 +403,8 @@ function drawPerson(person: Person, spot: Spot, tag: DrawnTag) {
     person.face.el.setAttribute('height', String(spot.size));
   }
   const { style, dataset } = person.tag;
+  const visibility = tag.hidden ? 'hidden' : '';
+  if (style.visibility !== visibility) style.visibility = visibility;
   const size = `${Math.round(tag.size * 10) / 10}px`;
   if (style.getPropertyValue('--tag-size') !== size) style.setProperty('--tag-size', size);
   const maxWidth = `${Math.round(tag.maxWidth)}px`;
