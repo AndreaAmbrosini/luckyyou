@@ -1,0 +1,189 @@
+/* Someone in the garden: the head, or their name tag's holder, the size and place of the head. */
+.person {
+  position: absolute;
+  transform-origin: 50% 80%;
+}
+
+.person > svg {
+  display: block;
+}
+
+/* A layer over the whole stage, in its stage pixels. */
+.layer {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 1280px;
+  height: 720px;
+  overflow: visible;
+}
+
+.scene {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 1280px;
+  height: 720px;
+  overflow: hidden;
+  background-color: var(--color-sky);
+}
+
+.cloud {
+  position: absolute;
+  border-radius: var(--radius-pill);
+  background-color: var(--color-paper);
+  opacity: 0.75;
+}
+
+.cloud1 {
+  top: 130px;
+  left: 36px;
+  width: 170px;
+  height: 44px;
+}
+
+.cloud2 {
+  top: 108px;
+  left: 96px;
+  width: 90px;
+  height: 44px;
+}
+
+.cloud3 {
+  top: 132px;
+  left: 1060px;
+  width: 190px;
+  height: 46px;
+}
+
+.grass {
+  position: absolute;
+  top: 330px;
+  left: 0;
+  width: 1280px;
+  height: 390px;
+  border-top: 4px solid var(--color-ink);
+  background-color: var(--color-mint);
+}
+
+/* The sun sign on the arch over the gate, with its hard shadow. */
+.sign {
+  position: absolute;
+  box-sizing: border-box;
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  justify-content: center;
+  border: 4px solid var(--color-ink);
+  border-radius: 12px;
+  background-color: var(--color-sun);
+  box-shadow: 5px 5px 0 var(--color-ink);
+  color: var(--color-ink);
+  font-family: var(--font-display);
+  font-size: var(--size-stage-caption);
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.count {
+  font-size: var(--size-stage-caption);
+}
+
+/* The dog's drawing: 340 by 170, its marks and Zs drawn past its edges. */
+.dog {
+  position: absolute;
+  width: 340px;
+  height: 170px;
+  overflow: visible;
+}
+
+.heart {
+  position: absolute;
+  width: 34px;
+  height: 32px;
+  overflow: visible;
+}
+
+/* Fills and lines, all with an ink outline unless they are the line. */
+.line {
+  fill: none;
+  stroke: var(--color-ink);
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.halo {
+  fill: none;
+  stroke: var(--color-paper);
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.outline {
+  fill: none;
+  stroke: var(--color-ink);
+}
+
+.ink {
+  fill: var(--color-ink);
+}
+
+.paper {
+  fill: var(--color-paper);
+  stroke: var(--color-ink);
+  stroke-linejoin: round;
+}
+
+.paperFill {
+  fill: var(--color-paper);
+}
+
+.sun {
+  fill: var(--color-sun);
+  stroke: var(--color-ink);
+  stroke-linejoin: round;
+}
+
+.orange {
+  fill: var(--color-orange);
+  stroke: var(--color-ink);
+}
+
+.orangeFill {
+  fill: var(--color-orange);
+}
+
+.orangeLine {
+  fill: none;
+  stroke: var(--color-orange);
+  stroke-linecap: round;
+}
+
+/* The dog's ear and back patch. */
+.patch {
+  fill: var(--color-skin-4);
+  stroke: var(--color-ink);
+  stroke-linejoin: round;
+}
+
+.patchFill {
+  fill: var(--color-skin-4);
+}
+
+.collar {
+  fill: none;
+  stroke: var(--color-tomato);
+  stroke-linecap: round;
+}
+
+.pink {
+  fill: var(--color-pink);
+  stroke: var(--color-ink);
+  stroke-linejoin: round;
+}
+
+.leadLine {
+  fill: none;
+  stroke: var(--color-grape);
+  stroke-linecap: round;
+}
