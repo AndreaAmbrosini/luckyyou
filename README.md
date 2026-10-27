@@ -13,16 +13,16 @@ Winning is losing.
 
 ## Why
 
-We used to pick with the race timers at online-stopwatch.com. They're fun,
-but freemium, and every one of them is the same left-to-right race with
-different pictures. In LuckyYou every show is code, so it can be anything,
-not only a race.
+Every show is code, so it can be anything, not only a left-to-right race.
+There are no accounts and no server: the team list stays in the browser that
+typed it ([0004](docs/decisions/0004-no-backend.md)).
 
 ## Status
 
-Built: the team list, setup in two steps, the pick, one show (Shark Bait) and
-the result. A new show is a folder in [`src/scenarios/`](src/scenarios/),
-copied from [`_template`](src/scenarios/_template/).
+Built: the team list, setup in two steps, the pick, four shows (Shark Bait,
+Hot Potato, Wobbly Tower and Don't Wake the Dog) and the result. A new show
+is a folder in [`src/scenarios/`](src/scenarios/), copied from
+[`_template`](src/scenarios/_template/).
 
 ## How it's built
 
