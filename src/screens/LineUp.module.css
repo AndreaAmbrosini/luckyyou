@@ -12,8 +12,8 @@
 
 .tiles {
   display: grid;
-  flex: 999 1 35rem;
-  grid-template-columns: repeat(auto-fill, minmax(9.5rem, 1fr));
+  flex: 2 1 28rem;
+  grid-template-columns: repeat(auto-fill, minmax(8.5rem, 1fr));
   gap: 1rem;
   min-width: 0;
   margin: 0;
@@ -80,12 +80,12 @@
 
 .big {
   flex-shrink: 0;
-  width: 12rem;
+  width: 11rem;
 }
 
 .panel {
   display: flex;
-  flex: 1 1 24rem;
+  flex: 1 1 22rem;
   flex-direction: column;
   gap: 0.875rem;
   min-width: 0;
@@ -105,7 +105,7 @@
 
 .whoText {
   display: flex;
-  flex: 1 1 8rem;
+  flex: 1 1 7rem;
   flex-direction: column;
   align-items: flex-start;
   gap: 0.625rem;

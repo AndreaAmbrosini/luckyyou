@@ -5,8 +5,8 @@
 import { gsap } from 'gsap';
 import { handOutLooks, nameTag, type Show } from '../../scenario-kit';
 import { boxAt, lane, tagAt, tagSize } from './layout';
-import { racer, type RacerLook } from './parts';
-import { noseAt, planShow } from './plan';
+import { racer, track, type RacerLook } from './parts';
+import { cameraAt, FINISH, noseAt, planShow, START } from './plan';
 import styles from './the-race.module.css';
 
 const FALLBACK: RacerLook = { mount: 'snail', colour: 'tomato', extra: 'number' };
@@ -18,6 +18,12 @@ export async function playTheRace(show: Show): Promise<void> {
 
   const scene = show.stage.appendChild(document.createElement('div'));
   scene.className = styles.scene!;
+  const field = track({
+    lanes: show.names.map((_, index) => lane(index, count).top),
+    start: START.line,
+    finish: FINISH + cameraAt(plan, plan.times.finish),
+  });
+  scene.append(field.el);
   const tags = document.createElement('div');
   tags.className = styles.layer!;
 
@@ -37,6 +43,7 @@ export async function playTheRace(show: Show): Promise<void> {
   scene.append(tags);
 
   const place = (time: number) => {
+    field.set(cameraAt(plan, time));
     for (const { name, look, at, holder, tag } of riders) {
       const nose = noseAt(plan, name, time);
       const box = boxAt(look.mount, at, nose);

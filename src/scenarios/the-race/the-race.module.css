@@ -131,3 +131,131 @@
   top: 0;
   left: 0;
 }
+
+/* An SVG over the whole of what holds it. */
+.full {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.cloud {
+  position: absolute;
+  left: 0;
+  border-radius: var(--radius-pill);
+  background-color: var(--color-paper);
+  opacity: 0.75;
+}
+
+.cloudA {
+  top: 30px;
+  width: 170px;
+  height: 44px;
+}
+
+.cloudB {
+  top: 60px;
+  width: 120px;
+  height: 38px;
+}
+
+.flag {
+  fill: var(--flag);
+  stroke: var(--color-ink);
+  stroke-linejoin: round;
+}
+
+.grass {
+  fill: var(--color-mint);
+  stroke: var(--color-ink);
+}
+
+.paperFill {
+  fill: var(--color-paper);
+}
+
+/* A sign by the rail: its post at x 0, the board centred over it. */
+.sign {
+  position: absolute;
+  top: 0;
+  left: 0;
+}
+
+.post {
+  position: absolute;
+  top: 150px;
+  left: -6px;
+  box-sizing: border-box;
+  width: 12px;
+  height: 66px;
+  border: var(--line-bold) solid var(--color-ink);
+  background-color: var(--color-paper);
+}
+
+.board {
+  position: absolute;
+  top: 100px;
+  left: 0;
+  box-sizing: border-box;
+  width: max-content;
+  min-width: 150px;
+  margin: 0;
+  padding: 2px 18px 8px;
+  border: var(--line-bold) solid var(--color-ink);
+  border-radius: 12px;
+  background-color: var(--color-paper);
+  box-shadow: 4px 4px 0 var(--color-ink);
+  color: var(--color-ink);
+  font-family: var(--font-display);
+  font-size: var(--size-stage-caption);
+  line-height: 1;
+  text-align: center;
+  translate: -50% 0;
+}
+
+.sunBoard {
+  background-color: var(--color-sun);
+}
+
+/* The photo-finish card, tilted, with its picture and the verdict. */
+.photo {
+  position: absolute;
+  top: 100px;
+  left: 330px;
+  box-sizing: border-box;
+  width: 620px;
+  height: 520px;
+  border: var(--line-bold) solid var(--color-ink);
+  border-radius: var(--radius-card);
+  background-color: var(--color-paper);
+  box-shadow: var(--shadow-big);
+  rotate: -2deg;
+}
+
+.photoWindow {
+  position: absolute;
+  top: 18px;
+  left: 18px;
+  box-sizing: border-box;
+  width: 576px;
+  height: 360px;
+  overflow: hidden;
+  border: var(--line-bold) solid var(--color-ink);
+  border-radius: 12px;
+  background-color: var(--color-sky);
+}
+
+.verdict {
+  position: absolute;
+  top: 392px;
+  right: 0;
+  left: 0;
+  margin: 0;
+  color: var(--color-ink);
+  font-family: var(--font-display);
+  font-size: var(--size-stage-tag-duel);
+  line-height: 1.1;
+  text-align: center;
+}

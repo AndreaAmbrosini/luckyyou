@@ -17,7 +17,6 @@ Feature: The Race
       And it takes 2 to 8 people
       And it has a line-up
 
-  @pending
   Rule: Its line-up
 
     Scenario: Ride, colour and extra
@@ -28,6 +27,7 @@ Feature: The Race
       And "Extra" offers "Googly eyes", "Top hat", "Number" and "Scarf"
       And each tile and the preview draw the racer as the show does, calm
 
+    @pending
     Scenario: Each racer looks as chosen
       Given Anna chose the duck, sun and the scarf, and Ben the office chair, grape and googly eyes
       When the show runs
@@ -35,6 +35,7 @@ Feature: The Race
       And Ben rides a grape office chair backwards, holding its backrest, in a grape shirt, with googly eyes on the backrest
       And each rider's head keeps the skin tone and accessory the kit hands out for the run
 
+    @pending
     Scenario: A racing number is their place in today's list
       Given Carla is third in today's list and chose "Number"
       When the show runs

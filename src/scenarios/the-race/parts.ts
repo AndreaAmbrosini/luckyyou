@@ -1,9 +1,10 @@
 // The Race's drawings, from the Design canvas: the racer on each mount, with
-// its extra, the rider's mood and pose, and the trophy. Every colour comes
-// from a class in the-race.module.css; the racer's colour comes in as
-// --racer and the hat band's and the scarf's as --band.
+// its extra, the rider's mood and pose, and the trophy; the sports-field
+// track with its bunting, rail, signs and lines; and the photo-finish card.
+// Every colour comes from a class in the-race.module.css; the racer's colour
+// comes in as --racer and the hat band's and the scarf's as --band.
 
-import { head, type Head, type Look, type Mood } from '../../scenario-kit';
+import { head, nameTag, type Head, type Look, type Mood } from '../../scenario-kit';
 import styles from './the-race.module.css';
 
 export type Mount = 'snail' | 'duck' | 'chair' | 'caterpillar';
@@ -426,4 +427,228 @@ export function racer(
   racerDrawn.setMood(mood);
   racerDrawn.setPose(pose);
   return racerDrawn;
+}
+
+/** The flags' colours along the bunting, in order. */
+const FLAGS: readonly RacerColour[] = ['tomato', 'sun', 'mint', 'grape', 'pink', 'orange'];
+/**
+ * The bunting dips once every `dip` px from `top`, `sag` deep, with a flag
+ * every `flag` px, and moves at half the camera's speed.
+ */
+const BUNTING = { dip: 640, flag: 64, top: 96, sag: 34, parallax: 0.5 };
+/** A rail post every so often, moving with the ground. */
+const POST = 160;
+/** Clouds drift at a fifth of the camera's speed, round again past `wrap`. */
+const CLOUDS = { parallax: 0.2, wrap: 1500 };
+
+const wrap = (value: number, size: number) => ((value % size) + size) % size;
+
+/** The y of the bunting's string at x. */
+const stringY = (x: number) =>
+  BUNTING.top + Math.round(BUNTING.sag * Math.sin((Math.PI * wrap(x, BUNTING.dip)) / BUNTING.dip));
+
+/** A chequered strip two squares wide, `rows` squares long, from (x, y). */
+function chequer(x: number, y: number, rows: number, size: number): string {
+  const squares: string[] = [];
+  for (let row = 0; row < rows; row++) {
+    for (let column = 0; column < 2; column++) {
+      if ((row + column) % 2 === 0) {
+        squares.push(`M${x + column * size} ${y + row * size} h${size} v${size} h-${size} Z`);
+      }
+    }
+  }
+  return squares.join(' ');
+}
+
+/** A sign on a post by the rail, saying `text`, its post at x 0 of its holder. */
+function sign(text: string, colour: 'paper' | 'sun'): HTMLElement {
+  const holder = document.createElement('div');
+  holder.className = styles.sign!;
+  holder.dataset.part = 'sign';
+  const post = holder.appendChild(document.createElement('div'));
+  post.className = styles.post!;
+  const board = holder.appendChild(document.createElement('p'));
+  board.className = colour === 'sun' ? `${styles.board} ${styles.sunBoard}` : styles.board!;
+  board.textContent = text;
+  return holder;
+}
+
+export interface Track {
+  /** Everything behind the racers. */
+  readonly el: HTMLElement;
+  /** Moves the rail's posts, the lines, signs, bunting and clouds for the camera at `camera` px. */
+  set(camera: number): void;
+}
+
+/**
+ * The sports field, from the canvas: sky with two clouds, bunting, the rail
+ * with its posts, grass with paper lines between the lanes, the Start line
+ * at `start` and the chequered Finish at `finish`, in px along the track,
+ * and distance signs counting down to it over a race of 200 m. `lanes` are
+ * the lanes' tops, back to front.
+ */
+export function track({
+  lanes,
+  start,
+  finish,
+}: {
+  lanes: readonly number[];
+  start: number;
+  finish: number;
+}): Track {
+  const el = document.createElement('div');
+  el.className = styles.layer!;
+  el.dataset.part = 'track';
+
+  const clouds = [60, 900].map((x, i) => {
+    const cloud = el.appendChild(document.createElement('span'));
+    cloud.className = `${styles.cloud} ${i === 0 ? styles.cloudA : styles.cloudB}`;
+    return { cloud, x };
+  });
+
+  // The bunting: one picture a dip wider than the stage, slid along.
+  const bunting = el.appendChild(drawing(1280, 720));
+  bunting.classList.add(styles.full!);
+  bunting.dataset.part = 'bunting';
+  const flags = group(bunting, 'flags');
+  const string: string[] = [];
+  for (let x = -BUNTING.flag; x <= 1280 + BUNTING.dip; x += 16) {
+    string.push(`${string.length ? 'L' : 'M'}${x} ${stringY(x)}`);
+  }
+  draw(flags, [['path', styles.line!, { d: string.join(' '), 'stroke-width': 4 }]]);
+  for (let j = 0, x = -BUNTING.flag; x <= 1280 + BUNTING.dip; j++, x += BUNTING.flag) {
+    const y = stringY(x + 18);
+    const [flag] = draw(flags, [
+      [
+        'path',
+        styles.flag!,
+        { d: `M${x + 2} ${y} H${x + 34} L${x + 18} ${y + 34} Z`, 'stroke-width': 3 },
+      ],
+    ]);
+    flag!.style.setProperty('--flag', `var(--color-${FLAGS[j % FLAGS.length]})`);
+  }
+
+  // The ground: the grass, the lines between lanes and the rail stay put.
+  const ground = el.appendChild(drawing(1280, 720));
+  ground.classList.add(styles.full!);
+  ground.dataset.part = 'ground';
+  const lines = lanes
+    .slice(1)
+    .map((top) => `M-10 ${top - 4} h1300 v8 h-1300 Z`)
+    .join(' ');
+  draw(ground, [
+    ['rect', styles.grass!, { x: -10, y: 214, width: 1300, height: 520, 'stroke-width': 4 }],
+    ['path', styles.paperFill!, { d: lines || 'M0 0' }],
+    ['rect', styles.paper!, { x: -10, y: 186, width: 1300, height: 16, 'stroke-width': 4 }],
+  ]);
+
+  // What passes by: the posts, the start and finish lines.
+  const postPath: string[] = [];
+  for (let x = 0; x < 1280 + POST; x += POST) postPath.push(`M${x} 180 h12 v36 h-12 Z`);
+  const posts = group(ground, 'posts', [
+    ['path', styles.paper!, { d: postPath.join(' '), 'stroke-width': 4 }],
+  ]);
+  const startLine = group(ground, 'start', [
+    ['rect', styles.paper!, { x: 0, y: 216, width: 16, height: 500, 'stroke-width': 4 }],
+  ]);
+  const finishLine = group(ground, 'finish', [
+    ['rect', styles.paper!, { x: 0, y: 216, width: 24, height: 500, 'stroke-width': 4 }],
+    ['path', styles.inkFill!, { d: chequer(0, 216, 42, 12) }],
+  ]);
+
+  const length = finish - start;
+  const signs = [
+    { text: 'Start', at: start + 8, colour: 'paper' as const },
+    ...[150, 100, 50].map((metres) => ({
+      text: `${metres} m`,
+      at: finish - (metres / 200) * length,
+      colour: 'sun' as const,
+    })),
+    { text: 'Finish', at: finish + 12, colour: 'paper' as const },
+  ].map((each) => ({ ...each, el: el.appendChild(sign(each.text, each.colour)) }));
+
+  /** Shows `target` at `x` while it is anywhere near the stage. */
+  const near = (x: number) => x > -300 && x < 1580;
+  const slide = (target: Element, x: number) => {
+    show(target, near(x));
+    if (near(x)) target.setAttribute('transform', `translate(${x.toFixed(1)} 0)`);
+  };
+
+  const scene: Track = {
+    el,
+    set(camera) {
+      for (const { cloud, x } of clouds) {
+        const at = wrap(x - camera * CLOUDS.parallax + 200, CLOUDS.wrap) - 200;
+        cloud.style.translate = `${at.toFixed(1)}px 0`;
+      }
+      const sway = -wrap(camera * BUNTING.parallax, BUNTING.dip);
+      flags.setAttribute('transform', `translate(${sway.toFixed(1)} 0)`);
+      posts.setAttribute('transform', `translate(${(-wrap(camera, POST)).toFixed(1)} 0)`);
+      slide(startLine, start - camera);
+      slide(finishLine, finish - camera);
+      for (const each of signs) {
+        const x = each.at - camera;
+        each.el.hidden = !near(x);
+        if (near(x)) each.el.style.translate = `${x.toFixed(1)}px 0`;
+      }
+    },
+  };
+  scene.set(0);
+  return scene;
+}
+
+/** Where the photo card sits, its window inside it, and the racers' scale in it. */
+export const PHOTO = {
+  scale: 1.4,
+  /** The finish line's left edge in the window, and each lane's ground: back, then front. */
+  line: 380,
+  grounds: [190, 352],
+  /** The window's size. */
+  width: 576,
+  height: 360,
+} as const;
+
+/**
+ * The photo-finish card, from the canvas: the two racers side-on at the line
+ * at 1.4 times, back lane first, each with their name tag beside their face,
+ * and the verdict under the picture. `nose` is each nose's x in the window.
+ */
+export function photoCard(
+  pair: readonly { name: string; racer: Racer; nose: number }[],
+  verdict: string,
+): HTMLElement {
+  const card = document.createElement('div');
+  card.className = styles.photo!;
+  card.dataset.part = 'photo';
+  const view = card.appendChild(document.createElement('div'));
+  view.className = styles.photoWindow!;
+  const scene = view.appendChild(drawing(PHOTO.width, PHOTO.height));
+  scene.classList.add(styles.full!);
+  draw(scene, [
+    ['rect', styles.grass!, { x: -10, y: 150, width: 600, height: 220, 'stroke-width': 4 }],
+    ['rect', styles.paper!, { x: PHOTO.line, y: -10, width: 24, height: 380, 'stroke-width': 4 }],
+    ['path', styles.inkFill!, { d: chequer(PHOTO.line, -10, 32, 12) }],
+  ]);
+  const k = PHOTO.scale;
+  const placed = pair.map(({ name, racer: drawn, nose }, i) => {
+    const spec = SPEC[drawn.look.mount];
+    const left = nose - spec.nose * k;
+    const holder = view.appendChild(document.createElement('div'));
+    holder.className = styles.holder!;
+    holder.dataset.person = name;
+    holder.style.translate = `${left}px ${PHOTO.grounds[i]! - RACER.feet * k}px`;
+    holder.style.scale = String(k);
+    holder.append(drawn.el);
+    return { name, right: left + (spec.saddle[0] - 28) * k, middle: PHOTO.grounds[i]! - 129 * k };
+  });
+  // The tags over both racers, beside each face.
+  for (const { name, right, middle } of placed) {
+    const tag = view.appendChild(nameTag(name, { size: 30, maxWidth: 220 }));
+    tag.classList.add(styles.tag!);
+    tag.style.translate = `calc(${right}px - 100%) calc(${middle}px - 50%)`;
+  }
+  const words = card.appendChild(document.createElement('p'));
+  words.className = styles.verdict!;
+  words.textContent = verdict;
+  return card;
 }

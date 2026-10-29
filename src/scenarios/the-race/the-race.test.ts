@@ -67,6 +67,59 @@ describeSpec(await loadFeature('./the-race.feature'), ({ Rule }) => {
     });
   });
 
+  Rule('Its line-up', ({ RuleScenario }) => {
+    RuleScenario('Ride, colour and extra', ({ When, Then, And }) => {
+      const lineUp = theRace.lineUp!;
+      const option = (label: string) => lineUp.options.find((each) => each.label === label)!;
+      const labels = (label: string) => option(label).choices.map((choice) => choice.label);
+      let drawings: Element[] = [];
+      When('the Line-up opens for The Race', () => {
+        drawings = names(3).map((name, index) =>
+          lineUp.draw(
+            { mount: 'chair', colour: 'mint', extra: 'number' },
+            { name, place: index + 1 },
+          ),
+        );
+      });
+      Then(
+        'its heading is {string} and its button {string}',
+        (_, heading: string, start: string) => {
+          expect(lineUp.heading).toBe(heading);
+          expect(lineUp.start).toBe(start);
+        },
+      );
+      And('"Rides" offers {any}', (_, offered: string) => {
+        expect(labels('Rides')).toEqual([...offered.matchAll(/"([^"]+)"/g)].map(([, x]) => x));
+      });
+      And('"Colour" offers tomato, sun, mint, grape, pink and orange, as swatches', () => {
+        const choices = option('Colour').choices;
+        expect(choices.map((choice) => choice.name)).toEqual([
+          'tomato',
+          'sun',
+          'mint',
+          'grape',
+          'pink',
+          'orange',
+        ]);
+        for (const choice of choices) expect(choice.swatch).toBe(choice.name);
+      });
+      And('"Extra" offers {any}', (_, offered: string) => {
+        expect(labels('Extra')).toEqual([...offered.matchAll(/"([^"]+)"/g)].map(([, x]) => x));
+      });
+      And('each tile and the preview draw the racer as the show does, calm', () => {
+        drawings.forEach((drawing, index) => {
+          const el = drawing as SVGSVGElement;
+          expect(el.dataset.part).toBe('racer');
+          expect(el.dataset.mount).toBe('chair');
+          expect(el.dataset.colour).toBe('mint');
+          expect(el.dataset.mood).toBe('calm');
+          expect(el.dataset.pose).toBe('hold');
+          expect(el.querySelector('text')!.textContent).toBe(String(index + 1));
+        });
+      });
+    });
+  });
+
   Rule('The unlucky person crosses first', ({ RuleScenario, RuleScenarioOutline }) => {
     RuleScenarioOutline(
       '<count> people, the unlucky person <position> in the list',
