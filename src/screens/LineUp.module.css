@@ -1,0 +1,185 @@
+/* Today's people as tiles, and beside them the chosen one bigger, with the show's options. */
+.body {
+  display: flex;
+  flex-grow: 1;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 1.5rem;
+  min-height: 0;
+  padding: 0 0.625rem 0.625rem 0;
+  overflow-y: auto;
+}
+
+.tiles {
+  display: grid;
+  flex: 999 1 35rem;
+  grid-template-columns: repeat(auto-fill, minmax(9.5rem, 1fr));
+  gap: 1rem;
+  min-width: 0;
+  margin: 0;
+  padding: 1.25rem;
+  border: var(--line) solid var(--color-ink);
+  border-radius: var(--radius-card);
+  background-color: var(--color-paper);
+  box-shadow: var(--shadow);
+  list-style: none;
+}
+
+.slot {
+  display: flex;
+  min-width: 0;
+}
+
+.tile {
+  display: flex;
+  flex-direction: column;
+  flex-grow: 1;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.375rem;
+  min-width: var(--target-min);
+  min-height: var(--target-min);
+  padding: 0.625rem 0.5rem 0.75rem;
+  border: var(--line) solid var(--color-ink);
+  border-radius: var(--radius-tile);
+  background-color: var(--color-paper);
+  color: var(--color-ink);
+  cursor: pointer;
+}
+
+.tile[aria-pressed='true'] {
+  background-color: var(--color-sun);
+  box-shadow: var(--shadow-small);
+}
+
+.name {
+  max-width: 100%;
+  font-size: var(--size-body);
+  font-weight: 900;
+  line-height: 1.15;
+  text-align: center;
+  overflow-wrap: anywhere;
+}
+
+/* A show's drawing fills its box, which keeps the 6:5 of a racer's. */
+.drawing {
+  display: block;
+  aspect-ratio: 6 / 5;
+}
+
+.drawing > * {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.small {
+  width: 100%;
+  max-width: 10rem;
+}
+
+.big {
+  flex-shrink: 0;
+  width: 12rem;
+}
+
+.panel {
+  display: flex;
+  flex: 1 1 24rem;
+  flex-direction: column;
+  gap: 0.875rem;
+  min-width: 0;
+  padding: 1.125rem 1.375rem 1.375rem;
+  border: var(--line) solid var(--color-ink);
+  border-radius: var(--radius-card);
+  background-color: var(--color-paper);
+  box-shadow: var(--shadow);
+}
+
+.who {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 1rem;
+}
+
+.whoText {
+  display: flex;
+  flex: 1 1 8rem;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.625rem;
+  min-width: 0;
+}
+
+.chosenName {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: var(--size-card-title);
+  font-weight: 400;
+  line-height: 1.1;
+  overflow-wrap: anywhere;
+}
+
+.surprise {
+  min-width: var(--target-min);
+  min-height: var(--target-min);
+  padding: 0 0.25rem;
+}
+
+.option {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.optionName {
+  margin: 0;
+  font-size: var(--size-small);
+  font-weight: 900;
+}
+
+.choices {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  min-width: var(--target-min);
+  min-height: var(--target-min);
+  padding: 0 0.875rem;
+  border: var(--line) solid var(--color-ink);
+  border-radius: var(--radius-pill);
+  background-color: var(--color-paper);
+  color: var(--color-ink);
+  font-size: var(--size-small);
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.chip[aria-pressed='true'] {
+  background-color: var(--color-sun);
+  box-shadow: var(--shadow-small);
+}
+
+.swatch {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 3rem;
+  height: 3rem;
+  border: var(--line) solid var(--color-ink);
+  border-radius: var(--radius-pill);
+  background-color: var(--swatch);
+  color: var(--color-ink);
+  cursor: pointer;
+}
+
+.swatch[aria-pressed='true'] {
+  border-width: var(--line-bold);
+  box-shadow: var(--shadow-small);
+}

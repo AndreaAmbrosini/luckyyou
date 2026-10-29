@@ -2,10 +2,11 @@ import { useFullscreen } from '../ui/fullscreen';
 import { FullscreenIcon, SoundIcon } from '../ui/icons';
 import styles from './Header.module.css';
 
-const STEPS = ["1 · Who's in", '2 · Pick a show'];
+/** The third step shows only on a show's Line-up. */
+const STEPS = ["1 · Who's in", '2 · Pick a show', '3 · Line-up'];
 
 export interface HeaderProps {
-  step: 1 | 2;
+  step: 1 | 2 | 3;
   muted: boolean;
   onMutedChange(muted: boolean): void;
 }
@@ -17,7 +18,7 @@ export function Header({ step, muted, onMutedChange }: HeaderProps) {
     <header className={styles.header}>
       <span className={styles.logo}>LuckyYou</span>
       <ol className={styles.steps} aria-label="Steps">
-        {STEPS.map((label, index) => (
+        {STEPS.slice(0, Math.max(2, step)).map((label, index) => (
           <li
             key={label}
             className={styles.step}

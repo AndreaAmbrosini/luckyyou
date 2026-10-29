@@ -5,7 +5,6 @@ Feature: The Line-up
   the step and keeps everyone's looks in this browser. Looks never change who
   is picked: specs/pick.feature.
 
-  @pending
   Rule: A show with a line-up opens it first
 
     Scenario: Clicking a show with a line-up opens its Line-up
@@ -44,7 +43,6 @@ Feature: The Line-up
       When I go back to the shows, then click that show again
       Then Anna has the look I chose
 
-  @pending
   Rule: Changing a look
 
     Scenario: Choosing whose look to change
