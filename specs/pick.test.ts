@@ -1,9 +1,20 @@
 import { loadFeature } from '@amiceli/vitest-cucumber';
-import { waitFor } from '@testing-library/react';
+import { screen, waitFor, within } from '@testing-library/react';
 import { expect, vi } from 'vitest';
 import { pickUnlucky } from '../src/pick/pick';
-import { choose, quoted, resultHeading, startShow, stubDraws } from './support/app';
-import { fakeScenario } from './support/fake-scenarios';
+import {
+  choose,
+  currentUser,
+  moveOnToShows,
+  quoted,
+  renderApp,
+  resultHeading,
+  showCard,
+  startShow,
+  storeTicked,
+  stubDraws,
+} from './support/app';
+import { fakeLineUp, fakeScenario } from './support/fake-scenarios';
 import { describeSpec } from './support/spec';
 
 const ANNA_BEN_CARLA = ['Anna', 'Ben', 'Carla'];
@@ -110,6 +121,52 @@ describeSpec(await loadFeature('./pick.feature'), ({ Rule }) => {
         Then('{string} is still in the pick', (_, name: string) => {
           expect(scenario.runs[1]!.names).toEqual(names);
           expect(scenario.runs[1]!.names).toContain(name);
+        });
+      },
+    );
+    RuleScenario(
+      "Looks chosen on the Line-up don't change the chances",
+      ({ Given, And, When, Then }) => {
+        const events: string[] = [];
+        const scenario = fakeScenario({
+          name: 'Hat Show',
+          lineUp: fakeLineUp(),
+          play: () => void events.push('play'),
+        });
+        Given("{any} are ticked, on a show's Line-up", async (_, ticked: string) => {
+          const draw = crypto.getRandomValues.bind(crypto);
+          vi.spyOn(crypto, 'getRandomValues').mockImplementation((array) => {
+            events.push('draw');
+            return draw(array);
+          });
+          storeTicked(quoted(ticked), ['Zoe']);
+          renderApp({ scenarios: [scenario] });
+          await moveOnToShows();
+          await currentUser().click(showCard('Hat Show'));
+        });
+        And('each of them has a different look', async () => {
+          const colours = ['Tomato', 'Sun', 'Mint'];
+          for (const [index, name] of ANNA_BEN_CARLA.entries()) {
+            await currentUser().click(screen.getByRole('button', { name }));
+            const colour = within(screen.getByRole('group', { name: 'Colour' }));
+            await currentUser().click(colour.getByRole('button', { name: colours[index] }));
+          }
+          events.push('line-up done');
+        });
+        When('the app picks {int} times as the show starts', async () => {
+          await currentUser().click(screen.getByRole('button', { name: 'Start the hats' }));
+          await waitFor(() => expect(events).toContain('play'));
+        });
+        Then('each of them is picked about a third of the time', () => {
+          // The pick is handed today's names and nothing else.
+          expect(pickUnlucky).toHaveLength(1);
+          expectAboutAThirdEach(ANNA_BEN_CARLA);
+        });
+        And('the pick is made only once the show starts, after the Line-up', () => {
+          const lineUpDone = events.indexOf('line-up done');
+          expect(events.slice(0, lineUpDone)).not.toContain('draw');
+          expect(events.indexOf('draw')).toBeGreaterThan(lineUpDone);
+          expect(events.indexOf('draw')).toBeLessThan(events.indexOf('play'));
         });
       },
     );

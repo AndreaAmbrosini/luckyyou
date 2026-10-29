@@ -29,7 +29,6 @@ Feature: The pick
       When the show ends and I run again
       Then "Anna" is still in the pick
 
-    @pending
     Scenario: Looks chosen on the Line-up don't change the chances
       Given "Anna", "Ben" and "Carla" are ticked, on a show's Line-up
       And each of them has a different look

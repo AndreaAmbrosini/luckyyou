@@ -8,12 +8,17 @@ import { discoverScenarios, validateScenario } from '../src/catalogue/discover';
 import { Lab } from '../src/lab/Lab';
 import type { ChosenLook, LineUp } from '../src/scenario-kit/contract';
 import { runShow } from '../src/scenario-kit/testing';
+import { looksKey } from '../src/line-up/looks';
 import {
+  addName,
+  blockStorage,
   choose,
   currentUser,
+  fillStorage,
   moveOnToShows,
   pickerNames,
   quoted,
+  reload,
   renderApp,
   resultHeading,
   showCard,
@@ -456,6 +461,128 @@ describeSpec(await loadFeature('./line-up.feature'), ({ Rule }) => {
         ).toBe(true);
       });
     });
+  });
+
+  Rule('Everyone keeps their look', ({ RuleScenario, RuleScenarioOutline }) => {
+    /** Changes Anna's hat on the open Line-up, and gives her new look. */
+    async function changeAnnasHat() {
+      await currentUser().click(tile('Anna'));
+      const before = lookOf(tile('Anna'));
+      const hat = otherChoice('hat', before);
+      await currentUser().click(
+        within(group('Anna', 'Hat')).getByRole('button', { name: hat.label }),
+      );
+      return { ...before, hat: hat.name };
+    }
+
+    /** Opens the Line-up of the show named `name` again, from the start. */
+    async function reopen(name = 'Hat Show') {
+      reload();
+      await moveOnToShows();
+      await currentUser().click(showCard(name));
+    }
+
+    RuleScenario('A look survives a reload', ({ Given, When, Then }) => {
+      let look: ChosenLook;
+      Given("Anna has a look on a show's Line-up", async () => {
+        await openLineUp(['Anna', 'Ben'], hatShow());
+        look = lookOf(tile('Anna'));
+      });
+      When("I reload the page and open that show's Line-up again", () => reopen());
+      Then('Anna has the same look', () => {
+        expect(lookOf(tile('Anna'))).toEqual(look);
+      });
+    });
+
+    RuleScenario('A newcomer gets a look at random', ({ Given, When, Then, And }) => {
+      let dario: ChosenLook;
+      Given("Dario has never been on a show's Line-up", () => {
+        localStorage.setItem(
+          looksKey('hat-show'),
+          JSON.stringify({ Anna: { hat: 'crown', colour: 'sun' } }),
+        );
+      });
+      When('it opens with Dario ticked', () => openLineUp(['Anna', 'Dario'], hatShow()));
+      Then('Dario has a look drawn at random', () => {
+        dario = lookOf(tile('Dario'));
+        expect(fits(fakeLineUp(), dario)).toBe(true);
+        expect(lookOf(tile('Anna'))).toEqual({ hat: 'crown', colour: 'sun' });
+      });
+      And('he keeps it from then on, unless it is changed', async () => {
+        await reopen();
+        expect(lookOf(tile('Dario'))).toEqual(dario);
+      });
+    });
+
+    RuleScenario('Each show keeps its own looks', ({ Given, When, Then }) => {
+      const other = fakeScenario({ name: 'Other Show', lineUp: fakeLineUp() });
+      let before: ChosenLook;
+      Given('two shows with a line-up', async () => {
+        storeTicked(['Anna', 'Ben']);
+        renderApp({ scenarios: [hatShow(), other] });
+        await moveOnToShows();
+        await currentUser().click(showCard('Other Show'));
+        before = lookOf(tile('Anna'));
+        await choose('Pick a show');
+      });
+      When("I change Anna's look in one of them", async () => {
+        await currentUser().click(showCard('Hat Show'));
+        await changeAnnasHat();
+      });
+      Then("her look in the other doesn't change", async () => {
+        await reopen('Other Show');
+        expect(lookOf(tile('Anna'))).toEqual(before);
+      });
+    });
+
+    RuleScenario(
+      'A stored look that no longer fits keeps what still does',
+      ({ Given, When, Then }) => {
+        Given("Anna's stored look has a choice the show no longer offers", () => {
+          localStorage.setItem(
+            looksKey('hat-show'),
+            JSON.stringify({ Anna: { hat: 'tiara', colour: 'mint' } }),
+          );
+        });
+        When("the show's Line-up opens", () => openLineUp(['Anna', 'Ben'], hatShow()));
+        Then('that option gets a choice at random, and her other choices are kept', () => {
+          const look = lookOf(tile('Anna'));
+          expect(fits(fakeLineUp(), look)).toBe(true);
+          expect(look.colour).toBe('mint');
+          const stored = JSON.parse(localStorage.getItem(looksKey('hat-show'))!);
+          expect(stored.Anna).toEqual(look);
+        });
+      },
+    );
+
+    RuleScenarioOutline(
+      "Storage that is <problem> doesn't stop the Line-up",
+      ({ Given, When, Then, And }, { problem }) => {
+        const scenario = hatShow();
+        let chosen: ChosenLook;
+        Given("this browser's storage is <problem>", () => {
+          storeTicked(['Anna', 'Ben']);
+          if (problem === 'blocked') blockStorage();
+          else fillStorage();
+        });
+        When("a show's Line-up opens and I change Anna's look", async () => {
+          renderApp({ scenarios: [scenario] });
+          // Blocked storage reads no team, so it is typed in for the visit.
+          if (problem === 'blocked') for (const name of ['Anna', 'Ben']) await addName(name);
+          await moveOnToShows();
+          await currentUser().click(showCard('Hat Show'));
+          chosen = await changeAnnasHat();
+        });
+        Then('Anna is drawn with the new look', () => {
+          expect(lookOf(tile('Anna'))).toEqual(chosen);
+        });
+        And('the show starts with it', async () => {
+          await currentUser().click(startButton());
+          await waitFor(() => expect(scenario.runs).toHaveLength(1));
+          expect(scenario.runs[0]!.looks.get('Anna')).toEqual(chosen);
+        });
+      },
+    );
   });
 
   Rule('A line-up is checked', ({ RuleScenarioOutline }) => {

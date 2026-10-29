@@ -76,7 +76,6 @@ Feature: The Line-up
       Then every name is at least --size-body, wrapping inside its tile
       And every control is at least --target-min across, and shows the keyboard focus
 
-  @pending
   Rule: Everyone keeps their look
 
     Scenario: A look survives a reload
