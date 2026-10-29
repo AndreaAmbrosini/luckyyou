@@ -616,6 +616,8 @@ export const PHOTO = {
   /** The finish line's left edge in the window, and each lane's ground: back, then front. */
   line: 380,
   grounds: [190, 352],
+  /** The highest a tag's middle goes, so it stays inside the window. */
+  tagTop: 40,
   /** The window's size. */
   width: 576,
   height: 360,
@@ -652,7 +654,10 @@ export function photoCard(
     holder.style.translate = `${left}px ${PHOTO.grounds[i]! - RACER.feet * k}px`;
     holder.style.scale = String(k);
     holder.append(drawn.el);
-    return { name, right: left + (spec.saddle[0] - 28) * k, middle: PHOTO.grounds[i]! - 129 * k };
+    // Beside the face, just short of it, as on the track.
+    const face = left + (spec.saddle[0] - RIDER.size / 2) * k;
+    // Inside the window, as on the canvas, even where the back head is cut off.
+    return { name, right: face - 2, middle: Math.max(PHOTO.tagTop, PHOTO.grounds[i]! - 129 * k) };
   });
   // The tags over both racers, beside each face.
   for (const { name, right, middle } of placed) {

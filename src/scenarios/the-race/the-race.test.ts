@@ -1,11 +1,13 @@
 import { loadFeature } from '@amiceli/vitest-cucumber';
 import { describe, expect, it } from 'vitest';
-import { handOutLooks, type ChosenLook } from '../../scenario-kit';
+import { handOutLooks, speechBox, type Box, type ChosenLook } from '../../scenario-kit';
+import { dealLooks } from '../../scenario-kit/line-up';
 import { createRandom } from '../../scenario-kit/random';
 import { describeSpec, runShow, type ShowRecord } from '../../scenario-kit/testing';
 import theRace from './index';
 import { eventCaption } from './play';
-import { RACER_COLOURS, SPEC, type Mount } from './parts';
+import { faceAt, lane, tagBox } from './layout';
+import { RACER_COLOURS, RIDER, SPEC, type Mount } from './parts';
 import {
   CAMERA,
   cameraAt,
@@ -53,8 +55,17 @@ interface Frame {
   readonly camera: number;
   readonly slow: boolean;
   readonly racers: Readonly<Record<string, Drawn>>;
-  /** Who says what in a bubble on screen. */
-  readonly says: readonly { readonly person: string; readonly text: string }[];
+  /** Who says what in a bubble on screen, and where its tail is. */
+  readonly says: readonly {
+    readonly person: string;
+    readonly text: string;
+    readonly x: number;
+    readonly y: number;
+  }[];
+  /** How many speed lines are drawn. */
+  readonly speedLines: number;
+  /** Each name tag's size in stage pixels, by name. */
+  readonly tagSizes: Readonly<Record<string, number>>;
   readonly flash: boolean;
   /** The photo's verdict and who it shows, back lane first, while it's up. */
   readonly photo: { readonly verdict: string; readonly names: readonly string[] } | null;
@@ -67,6 +78,8 @@ interface Watched {
   readonly plan: Plan;
   readonly team: readonly string[];
   readonly unlucky: string;
+  /** Everyone's look, as given or dealt for the run. */
+  readonly looks: ReadonlyMap<string, ChosenLook>;
 }
 
 /** Everyone in a show on `mount`, in the colours in turn, with a racing number. */
@@ -74,6 +87,35 @@ const allOn = (team: readonly string[], mount: Mount) =>
   new Map<string, ChosenLook>(
     team.map((name, i) => [name, { mount, colour: RACER_COLOURS[i % 6]!, extra: 'number' }]),
   );
+
+/** The elements a frame is read from. */
+function find(stage: HTMLElement) {
+  const all = <T extends Element>(selector: string) => [...stage.querySelectorAll<T>(selector)];
+  return {
+    racers: all<HTMLElement>('[data-person]')
+      .filter((el) => el.querySelector(':scope > svg') && !el.closest('[data-part="photo"]'))
+      .map((holder) => {
+        const svg = holder.querySelector<SVGSVGElement>(':scope > svg')!;
+        return {
+          name: holder.dataset.person!,
+          holder,
+          svg,
+          leaf: svg.querySelector('[data-part="leaf"]'),
+        };
+      }),
+    bubbles: all<HTMLElement>('[data-says]'),
+    tagSizes: Object.fromEntries(
+      all<HTMLElement>('[data-person][data-lines]').map((tag) => [
+        tag.dataset.person!,
+        parseFloat(tag.style.getPropertyValue('--tag-size')),
+      ]),
+    ),
+    speedLines: all<SVGPathElement>('[data-part="speed-lines"] path'),
+    card: stage.querySelector<HTMLElement>('[data-part="photo"]'),
+    flash: stage.querySelector<HTMLElement>('[data-part="flash"]'),
+    confetti: all<HTMLElement>('[data-part="confetti"]'),
+  };
+}
 
 /** Runs the race and keeps what the stage showed each frame. */
 async function watch(
@@ -93,11 +135,13 @@ async function watch(
   } = {},
 ): Promise<Watched> {
   const frames: Frame[] = [];
+  let found: ReturnType<typeof find> | undefined;
+  const dealt = looks ?? dealLooks(theRace.lineUp!, team, createRandom(seed));
   const record = await runShow(theRace, {
     names: team,
     unlucky,
     seed,
-    looks,
+    looks: dealt,
     cancelAt,
     reducedMotion,
     step: STEP,
@@ -105,28 +149,32 @@ async function watch(
       const scene = stage.firstElementChild as HTMLElement | null;
       // Once the show is over, the stage is empty.
       if (!scene) return;
+      // The show keeps its elements from start to end: found once, in the first frame.
+      found ??= find(stage);
       const racers: Record<string, Drawn> = {};
-      for (const holder of stage.querySelectorAll<HTMLElement>('[data-person]:not([data-says])')) {
-        const svg = holder.querySelector<SVGSVGElement>('[data-part="racer"]');
-        if (!svg || holder.parentElement?.closest('[data-part="photo"]')) continue;
-        const leaf = svg.querySelector('[data-part="leaf"]');
-        racers[holder.dataset.person!] = {
+      for (const { name, holder, svg, leaf } of found.racers) {
+        racers[name] = {
           nose: Number(holder.dataset.nose),
           mood: svg.dataset.mood!,
           pose: svg.dataset.pose!,
           sweat: svg.dataset.sweat === 'true',
           gait: holder.dataset.gait!,
           stopped: holder.dataset.stopped === 'true',
-          rotate: svg.style.rotate,
-          scale: svg.style.scale,
+          rotate: svg.getAttribute('data-rotate') ?? '',
+          scale: svg.getAttribute('data-scale') ?? '',
           leaf: !!leaf && leaf.getAttribute('display') !== 'none',
           trophy: svg.dataset.trophy === 'true',
         };
       }
-      const says = [...stage.querySelectorAll<HTMLElement>('[data-says]')]
+      const says = found.bubbles
         .filter((el) => !el.hidden)
-        .map((el) => ({ person: el.dataset.person!, text: el.dataset.says! }));
-      const card = stage.querySelector<HTMLElement>('[data-part="photo"]');
+        .map((el) => ({
+          person: el.dataset.person!,
+          text: el.dataset.says!,
+          x: Number(el.dataset.x),
+          y: Number(el.dataset.y),
+        }));
+      const card = found.card;
       const photo =
         card && !card.hidden
           ? {
@@ -138,11 +186,12 @@ async function watch(
           : null;
       frames.push({
         time,
-        flash: !(stage.querySelector<HTMLElement>('[data-part="flash"]')?.hidden ?? true),
+        speedLines: found.speedLines.filter((path) => path.getAttribute('display') !== 'none')
+          .length,
+        tagSizes: found.tagSizes,
+        flash: !(found.flash?.hidden ?? true),
         photo,
-        confetti: [...stage.querySelectorAll<HTMLElement>('[data-part="confetti"]')].filter(
-          (el) => !el.hidden,
-        ).length,
+        confetti: found.confetti.filter((el) => !el.hidden).length,
         beat: scene.dataset.beat!,
         camera: Number(scene.dataset.camera),
         slow: scene.dataset.slow === 'true',
@@ -152,7 +201,7 @@ async function watch(
     },
   });
   const plan = planShow(team, unlucky, createRandom(seed));
-  return { record, frames, plan, team, unlucky };
+  return { record, frames, plan, team, unlucky, looks: dealt };
 }
 
 /** The captions shown, in order. */
@@ -165,6 +214,9 @@ const shownAt = (watched: Watched, text: string) =>
   watched.record.captions.find((each) => each.text === text)?.from;
 const saying = (frame: Frame, person: string, text: string) =>
   frame.says.some((said) => said.person === person && said.text === text);
+
+const overlap = (one: Box, two: Box) =>
+  one.left < two.right && two.left < one.right && one.top < two.bottom && two.top < one.bottom;
 
 /** Runs that more than one scenario reads, each run once, when first asked for. */
 const shared = (() => {
@@ -193,13 +245,42 @@ const shared = (() => {
      * Five people on `mount`, so the first event is a burst and the second
      * that burster's stop; whoever bursts is called `name`.
      */
-    mount: (mount: Mount, name: string) =>
-      once(`mount ${mount}`, () => {
+    mount: (mount: Mount, name: string, reducedMotion = false) =>
+      once(`mount ${mount} ${reducedMotion}`, () => {
         const team = ['Dario', 'Elena', 'Fabio', 'Giulia', 'Hana'];
         const seed = 7;
         const plan = planShow(team, team.at(-1)!, createRandom(seed));
         team[team.indexOf(plan.events[0]!.subject)] = name;
-        return watch(team, { seed, looks: allOn(team, mount) });
+        return watch(team, { seed, looks: allOn(team, mount), reducedMotion });
+      }),
+    /**
+     * Six people, Anna unlucky: Ben's snail and Carla's duck burst, Carla's
+     * duck stops, and it ends in a photo finish.
+     */
+    story: (reducedMotion = false) =>
+      once(`story ${reducedMotion}`, () => {
+        const team = ['Dario', 'Elena', 'Fabio', 'Giulia', 'Hana', 'Anna'];
+        let seed = 1;
+        const fits = (plan: Plan) =>
+          plan.ending === 'photo' && plan.events.every((event) => event.subject !== 'Anna');
+        while (!fits(planShow(team, 'Anna', createRandom(seed)))) seed++;
+        const plan = planShow(team, 'Anna', createRandom(seed));
+        team[team.indexOf(plan.events[0]!.subject)] = 'Ben';
+        team[team.indexOf(plan.events[1]!.subject)] = 'Carla';
+        const looks = allOn(team, 'chair');
+        looks.set('Ben', { mount: 'snail', colour: 'tomato', extra: 'number' });
+        looks.set('Carla', { mount: 'duck', colour: 'sun', extra: 'scarf' });
+        return watch(team, { unlucky: 'Anna', seed, looks, reducedMotion });
+      }),
+    /** `count` people with a 15-character name, unlucky, and every mount. */
+    long: (count: number) =>
+      once(`long ${count}`, () => {
+        const team = [...names(count - 1), 'Annamaria Rossi'];
+        const mounts = ['snail', 'duck', 'chair', 'caterpillar'] as const;
+        const looks = new Map<string, ChosenLook>(
+          team.map((name, i) => [name, { mount: mounts[i % 4]!, colour: 'mint', extra: 'scarf' }]),
+        );
+        return watch(team, { seed: 11, looks });
       }),
   };
 })();
@@ -979,6 +1060,192 @@ describeSpec(await loadFeature('./the-race.feature'), ({ Rule }) => {
             expect(racer.rotate).toBe('');
             expect(racer.scale).toBe('');
           }
+        },
+      );
+    });
+  });
+
+  Rule('It reads without sound', ({ RuleScenario }) => {
+    RuleScenario('Captions tell the race, a thing at a time', ({ Given, When, Then }) => {
+      let watched: Watched;
+      Given(
+        "{int} people, the unlucky person is {string}, Ben's snail and Carla's duck burst ahead, Carla's duck stops, and it ends in a photo finish",
+        () => undefined,
+      );
+      When('the show runs', async () => {
+        watched = await shared.story();
+      });
+      Then('the captions include, in this order:', (_, table: { caption: string }[]) => {
+        const said = captions(watched);
+        let from = 0;
+        for (const { caption } of table) {
+          const at = said.indexOf(caption, from);
+          expect(at, caption).toBeGreaterThanOrEqual(from);
+          from = at + 1;
+        }
+      });
+    });
+
+    RuleScenario('Each caption stays up long enough to read', ({ When, Then }) => {
+      let runs: Watched[];
+      When('the show runs', async () => {
+        runs = [await shared.eight(), await shared.story(), await shared.ending('brake', 'Ben')];
+      });
+      Then('every caption stays on screen for at least 1 second', () => {
+        for (const { record } of runs) {
+          for (const { text, from, to } of record.captions) {
+            expect(to - from, text).toBeGreaterThanOrEqual(1 - 1e-9);
+          }
+        }
+      });
+    });
+
+    RuleScenario('Racers are drawn as big as the lanes allow', ({ When, Then, And }) => {
+      const heads = (count: number) =>
+        Array.from({ length: count }, (_, i) => RIDER.size * lane(i, count).k);
+      let eight: Watched;
+      When('the show runs at 8 and at 4 people', async () => {
+        eight = await shared.eight();
+      });
+      Then(
+        'at 8 people, heads are {int} pixels or more and name tags {int} pixels or more, on the 1280 by 720 stage',
+        (_, head: number, tag: number) => {
+          expect(Math.min(...heads(8))).toBeGreaterThanOrEqual(head);
+          for (const frame of eight.frames) {
+            expect(Object.keys(frame.tagSizes)).toHaveLength(8);
+            for (const size of Object.values(frame.tagSizes)) {
+              expect(size).toBeGreaterThanOrEqual(tag);
+            }
+          }
+        },
+      );
+      And('at 4 people, heads are {int} pixels or more', (_, head: number) => {
+        expect(Math.min(...heads(4))).toBeGreaterThanOrEqual(head);
+      });
+      And("every rider's head sits at the same height in its lane, whatever the mount", () => {
+        for (const count of [2, 4, 8]) {
+          for (let i = 0; i < count; i++) {
+            const tops = (['snail', 'duck', 'chair', 'caterpillar'] as const).map(
+              (mount) => faceAt(mount, lane(i, count), 900).top,
+            );
+            expect(new Set(tops).size).toBe(1);
+          }
+        }
+      });
+    });
+
+    RuleScenario('Name tags sit beside the face', ({ When, Then, And }) => {
+      let runs: Watched[];
+      /** Each racer's face and tag in each frame. */
+      const boxes = (watched: Watched, frame: Frame) =>
+        watched.team.map((name, i) => {
+          const at = lane(i, watched.team.length);
+          const mount = (watched.looks.get(name)!.mount ?? 'snail') as Mount;
+          const nose = frame.racers[name]!.nose;
+          return { name, face: faceAt(mount, at, nose), tag: tagBox(name, mount, at, nose) };
+        });
+      When('the show runs at 8, at 4 and at 2 people, a 15-character name among them', async () => {
+        runs = await Promise.all([8, 4, 2].map((count) => shared.long(count)));
+        for (const { team } of runs) expect(team).toContain('Annamaria Rossi');
+      });
+      Then(
+        "each name tag sits beside its rider's face, behind it, level with it, and moves with them",
+        () => {
+          for (const watched of runs) {
+            for (const frame of watched.frames) {
+              for (const { face, tag } of boxes(watched, frame)) {
+                expect(tag.right).toBeLessThanOrEqual(face.left);
+                expect(face.left - tag.right).toBeLessThan(6);
+                const middle = (tag.top + tag.bottom) / 2;
+                expect(middle).toBeGreaterThan(face.top);
+                expect(middle).toBeLessThan(face.bottom);
+              }
+            }
+          }
+        },
+      );
+      And('no name tag is ever over another, or over a face', () => {
+        for (const watched of runs) {
+          for (const frame of watched.frames) {
+            const drawn = boxes(watched, frame);
+            for (const one of drawn) {
+              for (const other of drawn) {
+                if (one !== other) expect(overlap(one.tag, other.tag), `${frame.time}`).toBe(false);
+                expect(overlap(one.tag, other.face), `${one.name}, ${other.name}`).toBe(false);
+              }
+            }
+          }
+        }
+      });
+      And('no speech bubble covers a name tag or a face', () => {
+        let bubbles = 0;
+        for (const watched of runs) {
+          for (const frame of watched.frames) {
+            const drawn = boxes(watched, frame);
+            for (const said of frame.says) {
+              bubbles++;
+              const box = speechBox(said.text, said);
+              for (const { name, face, tag } of drawn) {
+                expect(overlap(box, face), `${said.text} on ${name}'s face`).toBe(false);
+                expect(overlap(box, tag), `${said.text} on ${name}'s tag`).toBe(false);
+              }
+            }
+          }
+        }
+        expect(bubbles).toBeGreaterThan(0);
+      });
+    });
+
+    RuleScenario('Everyone stays on stage', ({ When, Then }) => {
+      let watched: Watched;
+      When('the show runs at {int} people', async () => {
+        watched = await shared.long(8);
+      });
+      Then('every racer is on stage from "On your marks…" to the end', () => {
+        for (const frame of watched.frames) {
+          watched.team.forEach((name, i) => {
+            const at = lane(i, 8);
+            const mount = watched.looks.get(name)!.mount as Mount;
+            const nose = frame.racers[name]!.nose;
+            expect(tagBox(name, mount, at, nose).left).toBeGreaterThanOrEqual(0);
+            expect(nose).toBeLessThanOrEqual(1280);
+          });
+        }
+      });
+    });
+  });
+
+  Rule('Reduced motion keeps the story', ({ RuleScenario }) => {
+    RuleScenario('With reduced motion, nothing shakes', ({ Given, When, Then, And }) => {
+      let still: Watched;
+      let chairs: Watched;
+      Given('reduced motion is on', () => undefined);
+      When('the show runs', async () => {
+        still = await shared.story(true);
+        chairs = await shared.mount('chair', 'Marco', true);
+      });
+      Then("there are no speed lines, the duck doesn't tip and the chair doesn't spin", () => {
+        for (const frame of [...still.frames, ...chairs.frames]) {
+          expect(frame.speedLines).toBe(0);
+          for (const racer of Object.values(frame.racers)) {
+            expect(racer.rotate).toBe('');
+            expect(racer.scale).toBe('');
+          }
+        }
+        // Both stops still happen: the duck's and the chair's.
+        expect(still.frames.some((frame) => frame.racers.Carla!.stopped)).toBe(true);
+        expect(chairs.frames.some((frame) => frame.racers.Marco!.stopped)).toBe(true);
+      });
+      And(
+        'the slow last moment, the photo and every caption still come, in the same order',
+        async () => {
+          const moving = await shared.story();
+          expect(moving.frames.some((frame) => frame.speedLines > 0)).toBe(true);
+          expect(captions(still)).toEqual(captions(moving));
+          expect(still.frames.filter((frame) => frame.slow).length).toBe(
+            moving.frames.filter((frame) => frame.slow).length,
+          );
+          expect(still.frames.some((frame) => frame.photo)).toBe(true);
         },
       );
     });

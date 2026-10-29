@@ -88,6 +88,24 @@ const AHEAD = 16;
 /** Confetti at the win: how many pieces, falling at least this fast to where they settle. */
 const CONFETTI = { count: 26, fall: 520 };
 
+/** What each element was last given, so a frame writes only what changed: jsdom parses each style. */
+const written = new WeakMap<Element, Map<string, string>>();
+
+/** Sets style property `key` on `el`, or the attribute after an "@", unless it already has `value`. */
+function write(el: HTMLElement | SVGElement, key: string, value: string) {
+  let last = written.get(el);
+  if (!last) written.set(el, (last = new Map()));
+  if (last.get(key) === value) return;
+  last.set(key, value);
+  if (key.startsWith('@')) el.setAttribute(key.slice(1), value);
+  else el.style.setProperty(key, value);
+}
+
+/** Shows or hides `el`, writing only on a change. */
+const reveal = (el: HTMLElement, on: boolean) => {
+  if (el.hidden === on) el.hidden = !on;
+};
+
 /** What someone says, and while it's up. */
 interface Saying {
   readonly name: string;
@@ -198,6 +216,8 @@ export async function playTheRace(show: Show): Promise<void> {
     holder.dataset.person = name;
     holder.style.scale = String(at.k);
     holder.append(drawn.el);
+    // Where a duck tips from, or a chair spins round.
+    drawn.el.style.transformOrigin = look.mount === 'duck' ? TIP.origin : SPIN.origin;
     const tag = tags.appendChild(nameTag(name, tagSize(at.k)));
     tag.classList.add(styles.tag!);
     tag.dataset.person = name;
@@ -306,9 +326,9 @@ export async function playTheRace(show: Show): Promise<void> {
   const place = (t: number) => {
     const camera = cameraAt(plan, t);
     field.set(camera);
-    scene.dataset.camera = camera.toFixed(1);
+    write(scene, '@data-camera', camera.toFixed(1));
     const slow = t >= times.slow && t < times.finish;
-    scene.dataset.slow = String(slow);
+    write(scene, '@data-slow', String(slow));
     const noses = riders.map((rider) => noseAt(plan, rider.name, t));
     const front = Math.max(...noses);
     const leader = t > times.go ? riders[noses.indexOf(front)]!.name : null;
@@ -317,10 +337,14 @@ export async function playTheRace(show: Show): Promise<void> {
       const { look, at, holder, drawn, tag, speed, gait } = rider;
       const nose = noses[i]!;
       const box = boxAt(look.mount, at, nose);
-      holder.style.translate = `${box.left.toFixed(1)}px ${box.top.toFixed(1)}px`;
-      holder.dataset.nose = nose.toFixed(1);
+      write(holder, 'translate', `${box.left.toFixed(1)}px ${box.top.toFixed(1)}px`);
+      write(holder, '@data-nose', nose.toFixed(1));
       const beside = tagAt(look.mount, at, nose);
-      tag.style.translate = `calc(${beside.right.toFixed(1)}px - 100%) calc(${beside.middle.toFixed(1)}px - 50%)`;
+      write(
+        tag,
+        'translate',
+        `calc(${beside.right.toFixed(1)}px - 100%) calc(${beside.middle.toFixed(1)}px - 50%)`,
+      );
 
       const next = feel(rider, t, leader, front);
       const was = rider.state;
@@ -334,8 +358,8 @@ export async function playTheRace(show: Show): Promise<void> {
       const moving = t > times.go && t < times.finish && !stop;
       if (gait.paused() === moving) gait.paused(!moving);
       gait.timeScale(slow ? CAMERA.slow : 1);
-      holder.dataset.gait = moving ? (slow ? 'slow' : 'on') : 'off';
-      holder.dataset.stopped = String(!!stop);
+      write(holder, '@data-gait', moving ? (slow ? 'slow' : 'on') : 'off');
+      write(holder, '@data-stopped', String(!!stop));
 
       // What a stop does to each mount.
       const since = stop ? t - stop.at : -1;
@@ -344,53 +368,61 @@ export async function playTheRace(show: Show): Promise<void> {
         look.mount === 'duck' && since >= 0 && since < TIP.seconds && !show.reducedMotion
           ? TIP.degrees * Math.sin((Math.PI * since) / TIP.seconds)
           : 0;
-      drawn.el.style.rotate = tip ? `${tip.toFixed(1)}deg` : '';
-      drawn.el.style.transformOrigin = look.mount === 'duck' ? TIP.origin : SPIN.origin;
+      const tilt = tip ? `${tip.toFixed(1)}deg` : '';
+      write(drawn.el, 'rotate', tilt);
+      write(drawn.el, '@data-rotate', tilt);
       const spin =
         look.mount === 'chair' && since >= 0 && since < SPIN.seconds && !show.reducedMotion
           ? Math.cos((2 * Math.PI * SPIN.turns * since) / SPIN.seconds)
           : 1;
-      drawn.el.style.scale = spin === 1 ? '' : `${spin.toFixed(2)} 1`;
+      const turned = spin === 1 ? '' : `${spin.toFixed(2)} 1`;
+      write(drawn.el, 'scale', turned);
+      write(drawn.el, '@data-scale', turned);
 
       // Speed lines behind whoever is racing along.
       const racing = moving && !show.reducedMotion && speedOf(rider.name, t) > SPEEDY;
       if (racing) {
         const tail = box.left + 20 * at.k;
-        speed.setAttribute(
-          'd',
+        write(
+          speed,
+          '@d',
           `M${(tail - 8).toFixed(1)} ${(at.ground - 40 * at.k).toFixed(1)} h-44 ` +
             `M${tail.toFixed(1)} ${(at.ground - 70 * at.k).toFixed(1)} h-28`,
         );
       }
-      speed.setAttribute('display', racing ? 'inline' : 'none');
+      write(speed, '@display', racing ? 'inline' : 'none');
     });
 
     byName.get(show.unlucky)!.drawn.setTrophy(t >= times.win);
     for (const { piece, x, y, fall } of confetti) {
-      piece.hidden = t < times.win;
+      reveal(piece, t >= times.win);
       if (piece.hidden) continue;
       const falling = show.reducedMotion ? y : Math.min(y, -40 + fall * (t - times.win));
-      piece.style.translate = `${x}px ${falling.toFixed(1)}px`;
+      write(piece, 'translate', `${x}px ${falling.toFixed(1)}px`);
     }
-    flash.hidden = !(plan.ending === 'photo' && t >= times.finish && t < times.finish + FLASH);
+    reveal(flash, plan.ending === 'photo' && t >= times.finish && t < times.finish + FLASH);
     if (photo) {
       const from = times.finish + PHOTO_AFTER;
-      photo.hidden = t < from || t >= times.win;
+      reveal(photo, t >= from && t < times.win);
       const grown = Math.min(1, (t - from) / POP);
-      photo.style.scale =
-        !photo.hidden && grown < 1 ? String(gsap.parseEase('back.out(1.7)')(grown)) : '';
+      const scale = !photo.hidden && grown < 1 ? gsap.parseEase('back.out(1.7)')(grown) : 1;
+      write(photo, 'scale', scale === 1 ? '' : String(scale));
     }
 
     for (const saying of said) {
       const up = t >= saying.from && t < saying.to;
-      saying.el.hidden = !up;
+      reveal(saying.el, up);
       if (!up) continue;
       const { look, at, name } = saying.speaker;
       const face = faceAt(look.mount, at, noseAt(plan, name, t));
-      saying.el.style.left = `${((face.left + face.right) / 2 + saying.offset.dx).toFixed(1)}px`;
-      saying.el.style.top = `${(face.top + saying.offset.dy).toFixed(1)}px`;
+      const x = ((face.left + face.right) / 2 + saying.offset.dx).toFixed(1);
+      const y = (face.top + saying.offset.dy).toFixed(1);
+      write(saying.el, 'left', `${x}px`);
+      write(saying.el, 'top', `${y}px`);
+      write(saying.el, '@data-x', x);
+      write(saying.el, '@data-y', y);
       const grown = Math.min(1, (t - saying.from) / POP);
-      saying.el.style.scale = grown < 1 ? String(gsap.parseEase('back.out(2)')(grown)) : '';
+      write(saying.el, 'scale', grown < 1 ? String(gsap.parseEase('back.out(2)')(grown)) : '');
     }
   };
 

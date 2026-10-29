@@ -2,7 +2,7 @@
 // back to front in today's order, side-on, with a mild perspective: fewer
 // people get bigger lanes.
 
-import { speechBox, STAGE, type Box } from '../../scenario-kit';
+import { speechBox, STAGE, stagePx, type Box } from '../../scenario-kit';
 import { RACER, RIDER, SPEC, type Mount } from './parts';
 
 /** The track's top and bottom on the stage, and the tallest a lane gets. */
@@ -61,23 +61,26 @@ const overlap = (one: Box, two: Box) =>
   one.left < two.right && two.left < one.right && one.top < two.bottom && two.top < one.bottom;
 
 /**
- * A name tag's box, estimated from its name: a character is 0.6 em wide in
- * the tag's font, as the kit counts where it can't measure, on at most two
- * lines.
+ * A name tag's box, estimated from its name as the kit sizes it where it
+ * can't measure: a character is 0.6 em wide, plus 0.6 em of padding and the
+ * borders. A name too long for one line shrinks first, down to
+ * `--size-stage-tag-min`, and only then takes two lines.
  */
 export function tagBox(name: string, mount: Mount, at: Lane, nose: number): Box {
   const { size, maxWidth } = tagSize(at.k);
   const { right, middle } = tagAt(mount, at, nose);
-  const text = [...name].length * 0.6 * size + 0.6 * size + 6;
-  const lines = text > maxWidth ? 2 : 1;
-  const half = (lines * 1.1 * size + 0.15 * size + 6) / 2;
-  return {
-    left: right - Math.min(text, maxWidth),
-    right,
-    top: middle - half,
-    bottom: middle + half,
-  };
+  // Read once: looking a token up parses tokens.css.
+  tokens ??= { line: stagePx('--line'), least: stagePx('--size-stage-tag-min') };
+  const ems = [...name].length * 0.6 + 0.6;
+  const room = maxWidth - 2 * tokens.line - 2;
+  const fitted = Math.max(tokens.least, Math.min(size, Math.floor(room / ems)));
+  const lines = ems * fitted > room ? 2 : 1;
+  const width = Math.min(maxWidth, (ems * fitted) / lines + 2 * tokens.line + 2);
+  const half = (lines * 1.1 * fitted + 0.15 * fitted + 2 * tokens.line) / 2;
+  return { left: right - width, right, top: middle - half, bottom: middle + half };
 }
+
+let tokens: { line: number; least: number } | undefined;
 
 /**
  * Where a bubble saying `text` sits from its speaker's face, as an offset
@@ -97,9 +100,18 @@ export function bubbleOffset(
     }
   }
   candidates.sort((one, two) => one.d - two.d);
+  // The bubble's box is the same shape wherever it goes: measured once.
+  const shape = speechBox(text, { x: 0, y: 0 });
   const clear = ({ dx, dy }: { dx: number; dy: number }) =>
     samples.every(({ face, avoid }) => {
-      const box = speechBox(text, { x: (face.left + face.right) / 2 + dx, y: face.top + dy });
+      const x = (face.left + face.right) / 2 + dx;
+      const y = face.top + dy;
+      const box = {
+        left: shape.left + x,
+        right: shape.right + x,
+        top: shape.top + y,
+        bottom: shape.bottom + y,
+      };
       const onStage =
         box.left >= CLEAR.edge &&
         box.right <= STAGE.width - CLEAR.edge &&
@@ -114,11 +126,16 @@ export function bubbleOffset(
 /** A name tag's size and widest, in a lane drawn at scale `k`. */
 export const tagSize = (k: number) => ({ size: Math.min(30, (24 * k) / 0.72), maxWidth: 240 });
 
-/** Where a name tag's right edge and middle go: beside the face, behind it. */
+/** Stage pixels between a name tag and its rider's face. */
+export const TAG_GAP = 2;
+
+/**
+ * Where a name tag's right edge and middle go: beside the face, behind it,
+ * level with it, ending just short of it so it never covers the face.
+ */
 export function tagAt(mount: Mount, at: Lane, nose: number) {
-  const box = boxAt(mount, at, nose);
   return {
-    right: box.left + (SPEC[mount].saddle[0] - 28) * at.k,
+    right: faceAt(mount, at, nose).left - TAG_GAP,
     middle: at.ground - 129 * at.k,
   };
 }

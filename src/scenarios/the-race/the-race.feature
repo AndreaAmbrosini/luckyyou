@@ -186,7 +186,6 @@ Feature: The Race
       When the show runs at every head count from 2 to 8, with each ending
       Then each run lasts between 14 and 25 seconds
 
-  @pending
   Rule: It reads without sound
 
     Scenario: Captions tell the race, a thing at a time
@@ -223,7 +222,6 @@ Feature: The Race
       When the show runs at 8 people
       Then every racer is on stage from "On your marks…" to the end
 
-  @pending
   Rule: Reduced motion keeps the story
 
     Scenario: With reduced motion, nothing shakes

@@ -124,6 +124,7 @@
 .surprise {
   min-width: var(--target-min);
   min-height: var(--target-min);
+  white-space: nowrap;
   padding: 0 0.25rem;
 }
 
