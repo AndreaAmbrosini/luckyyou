@@ -1194,6 +1194,29 @@ describeSpec(await loadFeature('./the-race.feature'), ({ Rule }) => {
         }
         expect(bubbles).toBeGreaterThan(0);
       });
+      And('each speech bubble sits by its speaker, touching their face or name tag', () => {
+        // Touching: within the gap a bubble keeps from what it sits by.
+        const touching = (one: Box, two: Box) =>
+          overlap(one, {
+            left: two.left - 16,
+            right: two.right + 16,
+            top: two.top - 16,
+            bottom: two.bottom + 16,
+          });
+        for (const watched of runs) {
+          for (const frame of watched.frames) {
+            const drawn = boxes(watched, frame);
+            for (const said of frame.says) {
+              const box = speechBox(said.text, said);
+              const { face, tag } = drawn.find(({ name }) => name === said.person)!;
+              expect(
+                touching(box, face) || touching(box, tag),
+                `${said.person}: ${said.text}`,
+              ).toBe(true);
+            }
+          }
+        }
+      });
     });
 
     RuleScenario('Everyone stays on stage', ({ When, Then }) => {

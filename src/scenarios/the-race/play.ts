@@ -17,7 +17,7 @@ import {
   type Mood,
   type Show,
 } from '../../scenario-kit';
-import { boxAt, bubbleOffset, faceAt, lane, tagAt, tagBox, tagSize, type Lane } from './layout';
+import { boxAt, bubbleOffsets, faceAt, lane, tagAt, tagBox, tagSize, type Lane } from './layout';
 import {
   photoCard,
   PHOTO,
@@ -261,10 +261,12 @@ export async function playTheRace(show: Show): Promise<void> {
   // round it while it's up, then following its speaker.
   const said = sayings(plan, show.unlucky, (name) => lookOf(name).mount).map((saying) => {
     const speaker = byName.get(saying.name)!;
-    const samples: { face: Box; avoid: Box[] }[] = [];
-    for (let t = saying.from; t <= saying.to + 1e-9; t += SAMPLE) {
+    const samples: { face: Box; tag: Box; avoid: Box[] }[] = [];
+    for (let t = saying.from; t <= saying.to + SAMPLE; t += SAMPLE) {
+      const own = noseAt(plan, speaker.name, t);
       samples.push({
-        face: faceAt(speaker.look.mount, speaker.at, noseAt(plan, speaker.name, t)),
+        face: faceAt(speaker.look.mount, speaker.at, own),
+        tag: tagBox(speaker.name, speaker.look.mount, speaker.at, own),
         avoid: riders.flatMap((rider) => {
           const nose = noseAt(plan, rider.name, t);
           return [
@@ -274,12 +276,12 @@ export async function playTheRace(show: Show): Promise<void> {
         }),
       });
     }
-    const offset = bubbleOffset(saying.text, samples);
+    const offsets = bubbleOffsets(saying.text, samples);
     const el = bubbles.appendChild(bubble(saying.text, { x: 0, y: 0 }));
     el.dataset.person = saying.name;
     el.dataset.says = saying.text;
     el.hidden = true;
-    return { ...saying, speaker, offset, el };
+    return { ...saying, speaker, offsets, el };
   });
 
   const stopOf = (name: string, t: number) => stopping(plan, name, t);
@@ -415,8 +417,9 @@ export async function playTheRace(show: Show): Promise<void> {
       if (!up) continue;
       const { look, at, name } = saying.speaker;
       const face = faceAt(look.mount, at, noseAt(plan, name, t));
-      const x = ((face.left + face.right) / 2 + saying.offset.dx).toFixed(1);
-      const y = (face.top + saying.offset.dy).toFixed(1);
+      const offset = saying.offsets[Math.floor((t - saying.from) / SAMPLE + 1e-9)]!;
+      const x = ((face.left + face.right) / 2 + offset.dx).toFixed(1);
+      const y = (face.top + offset.dy).toFixed(1);
       write(saying.el, 'left', `${x}px`);
       write(saying.el, 'top', `${y}px`);
       write(saying.el, '@data-x', x);

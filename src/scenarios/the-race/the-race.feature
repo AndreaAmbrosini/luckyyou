@@ -217,6 +217,7 @@ Feature: The Race
       Then each name tag sits beside its rider's face, behind it, level with it, and moves with them
       And no name tag is ever over another, or over a face
       And no speech bubble covers a name tag or a face
+      And each speech bubble sits by its speaker, touching their face or name tag
 
     Scenario: Everyone stays on stage
       When the show runs at 8 people

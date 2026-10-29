@@ -82,46 +82,72 @@ export function tagBox(name: string, mount: Mount, at: Lane, nose: number): Box 
 
 let tokens: { line: number; least: number } | undefined;
 
+/** Stage pixels between a bubble and the face or name tag it sits beside. */
+const BESIDE = 10;
+
 /**
- * Where a bubble saying `text` sits from its speaker's face, as an offset
- * from the middle of the face's top: the nearest to just over the head
- * whose box stays on the stage, under the caption and clear of every box in
- * `avoid`, in every one of `samples` taken while it is up.
+ * Where a bubble saying `text` sits from its speaker's face at each of
+ * `samples`, as an offset from the middle of the face's top. It hugs the
+ * speaker: just over the head, else level with the face ahead of it, else
+ * level with it past the speaker's own name tag; on the stage, under the
+ * caption, and clear of every box in `avoid` from one sample to the next. It
+ * stays put while that spot stays clear, so it moves only when it must.
  */
-export function bubbleOffset(
+export function bubbleOffsets(
   text: string,
-  samples: readonly { face: Box; avoid: readonly Box[] }[],
-): { dx: number; dy: number } {
-  const prefer = { dx: 0, dy: -6 };
-  const candidates: { dx: number; dy: number; d: number }[] = [];
-  for (let dx = -320; dx <= 420; dx += 16) {
-    for (let dy = -150; dy <= 150; dy += 12) {
-      candidates.push({ dx, dy, d: Math.hypot(dx - prefer.dx, (dy - prefer.dy) * 1.5) });
-    }
-  }
-  candidates.sort((one, two) => one.d - two.d);
+  samples: readonly { face: Box; tag: Box; avoid: readonly Box[] }[],
+): { dx: number; dy: number }[] {
   // The bubble's box is the same shape wherever it goes: measured once.
   const shape = speechBox(text, { x: 0, y: 0 });
-  const clear = ({ dx, dy }: { dx: number; dy: number }) =>
-    samples.every(({ face, avoid }) => {
-      const x = (face.left + face.right) / 2 + dx;
-      const y = face.top + dy;
-      const box = {
-        left: shape.left + x,
-        right: shape.right + x,
-        top: shape.top + y,
-        bottom: shape.bottom + y,
-      };
-      const onStage =
-        box.left >= CLEAR.edge &&
-        box.right <= STAGE.width - CLEAR.edge &&
-        box.top >= CLEAR.top &&
-        box.bottom <= STAGE.height - CLEAR.edge;
-      return onStage && !avoid.some((other) => overlap(box, other));
-    });
-  const found = candidates.find(clear);
-  return found ? { dx: found.dx, dy: found.dy } : prefer;
+  const half = shape.right;
+  const height = -shape.top;
+  const spots = ({ face, tag }: { face: Box; tag: Box }) => {
+    const middle = (face.left + face.right) / 2;
+    const level = (face.bottom - face.top) / 2 + height / 2;
+    const above = [0, 16, -16, 32, -32, 48, -48].flatMap((dx) => [
+      { dx, dy: -4 },
+      { dx, dy: -16 },
+    ]);
+    const ahead = face.right + BESIDE + half - middle;
+    const behind = tag.left - BESIDE - half - middle;
+    const sideways = [0, -16, 16, -32, 32].flatMap((dy) => [
+      { dx: ahead, dy: level + dy },
+      { dx: behind, dy: level + dy },
+    ]);
+    return [...above, ...sideways];
+  };
+  const clearAt = (at: (typeof samples)[number], { dx, dy }: { dx: number; dy: number }) => {
+    const x = (at.face.left + at.face.right) / 2 + dx;
+    const y = at.face.top + dy;
+    const box = {
+      left: shape.left + x,
+      right: shape.right + x,
+      top: shape.top + y,
+      bottom: shape.bottom + y,
+    };
+    const onStage =
+      box.left >= CLEAR.edge &&
+      box.right <= STAGE.width - CLEAR.edge &&
+      box.top >= CLEAR.top &&
+      box.bottom <= STAGE.height - CLEAR.edge;
+    return onStage && !at.avoid.some((other) => overlap(box, other));
+  };
+  const offsets: { dx: number; dy: number }[] = [];
+  let was: { dx: number; dy: number } | undefined;
+  samples.forEach((at, i) => {
+    const next = samples[i + 1];
+    const clear = (spot: { dx: number; dy: number }) =>
+      clearAt(at, spot) && (!next || clearAt(next, spot));
+    const here = spots(at);
+    const kept = was && here.find((spot) => same(spot, was!));
+    was = (kept && clear(kept) ? kept : here.find(clear)) ?? kept ?? here[0]!;
+    offsets.push(was);
+  });
+  return offsets;
 }
+
+const same = (one: { dx: number; dy: number }, two: { dx: number; dy: number }) =>
+  Math.abs(one.dx - two.dx) < 1 && Math.abs(one.dy - two.dy) < 1;
 
 /** A name tag's size and widest, in a lane drawn at scale `k`. */
 export const tagSize = (k: number) => ({ size: Math.min(30, (24 * k) / 0.72), maxWidth: 240 });
