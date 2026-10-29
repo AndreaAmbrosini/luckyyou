@@ -253,6 +253,8 @@ export interface Racer {
   setPose(pose: Pose): void;
   setSweat(on: boolean): void;
   setTrophy(on: boolean): void;
+  /** Shows or hides the lettuce leaf a snail nibbles at its mouth. */
+  setLeaf(on: boolean): void;
 }
 
 /**
@@ -345,6 +347,14 @@ export function racer(
   ]);
   hands.style.setProperty('--skin', `var(--color-skin-${faceLook.skin})`);
 
+  // The lettuce leaf a stopped snail nibbles, at its mouth.
+  const leaf = group(el, 'leaf', [
+    ['path', styles.grass!, { d: 'M2 20 Q12 0 42 4 Q38 32 2 20 Z', 'stroke-width': 3 }],
+    ['path', styles.line!, { d: 'M6 19 Q22 12 38 7', 'stroke-width': 2.5 }],
+  ]);
+  leaf.setAttribute('transform', 'translate(214 138)');
+  show(leaf, false);
+
   const trophy = drawing(72, 60, TROPHY);
   trophy.dataset.part = 'trophy';
   trophy.setAttribute('x', String(sx - 36));
@@ -422,6 +432,9 @@ export function racer(
     setTrophy(on) {
       show(trophy, on);
       el.dataset.trophy = String(on);
+    },
+    setLeaf(on) {
+      show(leaf, on);
     },
   };
   racerDrawn.setMood(mood);

@@ -27,7 +27,6 @@ Feature: The Race
       And "Extra" offers "Googly eyes", "Top hat", "Number" and "Scarf"
       And each tile and the preview draw the racer as the show does, calm
 
-    @pending
     Scenario: Each racer looks as chosen
       Given Anna chose the duck, sun and the scarf, and Ben the office chair, grape and googly eyes
       When the show runs
@@ -35,7 +34,6 @@ Feature: The Race
       And Ben rides a grape office chair backwards, holding its backrest, in a grape shirt, with googly eyes on the backrest
       And each rider's head keeps the skin tone and accessory the kit hands out for the run
 
-    @pending
     Scenario: A racing number is their place in today's list
       Given Carla is third in today's list and chose "Number"
       When the show runs
@@ -69,7 +67,6 @@ Feature: The Race
       And the unlucky person leads before the final stretch in some runs and not in others
       And the others in the front group of the final stretch are at least 4 different people across the runs
 
-  @pending
   Rule: Winning is losing
 
     Scenario: The leader is scared, the rest relieved
@@ -79,7 +76,6 @@ Feature: The Race
       And whoever is within a mount's length behind them looks worried
       And everyone further back looks happy, some of them waving
 
-  @pending
   Rule: One thing at a time
 
     Scenario: The start
@@ -125,7 +121,6 @@ Feature: The Race
         | chair       | Marco | spins round       | it spins round twice             |
         | caterpillar | Ivo   | dozes off         | it says "Zzz…" and stops bobbing |
 
-  @pending
   Rule: The final stretch, and a slow last moment
 
     Scenario: Full speed to the line
