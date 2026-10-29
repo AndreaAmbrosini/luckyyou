@@ -2,7 +2,7 @@
 // 13-second show takes a moment and every frame can be checked (decision 0010).
 
 import { gsap } from 'gsap';
-import type { Scenario, Show } from './contract';
+import type { ChosenLook, Scenario, Show } from './contract';
 import { runScenario, type RunOutcome } from './run';
 
 export { describeSpec } from '../../specs/support/spec';
@@ -29,6 +29,8 @@ export interface ShowRecord {
 export interface RunShowOptions {
   readonly names: readonly string[];
   readonly unlucky: string;
+  /** Everyone's look from the Line-up; dealt from the seed unless given. */
+  readonly looks?: ReadonlyMap<string, ChosenLook>;
   readonly seed?: number;
   /** Cancels the show at this many show seconds, as Esc would. */
   readonly cancelAt?: number;
@@ -87,6 +89,7 @@ export async function runShow(scenario: Scenario, options: RunShowOptions): Prom
       host,
       names: options.names,
       unlucky: options.unlucky,
+      looks: options.looks,
       seed: options.seed ?? 1,
       muted: true,
       signal: controller.signal,

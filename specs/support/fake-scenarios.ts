@@ -1,8 +1,15 @@
-import type { Scenario, ScenarioMeta, Show } from '../../src/scenario-kit/contract';
+import type {
+  ChosenLook,
+  LineUp,
+  Scenario,
+  ScenarioMeta,
+  Show,
+} from '../../src/scenario-kit/contract';
 
 export interface Run {
   readonly names: readonly string[];
   readonly unlucky: string;
+  readonly looks: ReadonlyMap<string, ChosenLook>;
 }
 
 export interface FakeScenario extends Scenario {
@@ -26,10 +33,57 @@ export function fakeScenario(options: FakeOptions = {}): FakeScenario {
     card: options.card ?? { emoji: '🎲' },
     people: options.people ?? { min: 2, max: 12 },
     developmentOnly: options.developmentOnly,
+    lineUp: options.lineUp,
     runs,
     async play(show) {
-      runs.push({ names: show.names, unlucky: show.unlucky });
+      runs.push({ names: show.names, unlucky: show.unlucky, looks: show.looks });
       await options.play?.(show);
     },
+  };
+}
+
+/** How a drawn look reads: `hat=crown colour=sun`, in the options' order. */
+export function lookText(look: ChosenLook): string {
+  return Object.entries(look)
+    .map(([option, choice]) => `${option}=${choice}`)
+    .join(' ');
+}
+
+/**
+ * A line-up of hats and colours. It draws a look as its text, with the
+ * person's name and place, so a test can read what is drawn.
+ */
+export function fakeLineUp(options: Partial<LineUp> = {}): LineUp {
+  return {
+    heading: 'Line up the hats',
+    start: 'Start the hats',
+    options: [
+      {
+        name: 'hat',
+        label: 'Hat',
+        choices: [
+          { name: 'cap', label: 'Cap' },
+          { name: 'crown', label: 'Crown' },
+          { name: 'beanie', label: 'Beanie' },
+        ],
+      },
+      {
+        name: 'colour',
+        label: 'Colour',
+        choices: [
+          { name: 'tomato', label: 'Tomato', swatch: 'tomato' },
+          { name: 'sun', label: 'Sun', swatch: 'sun' },
+          { name: 'mint', label: 'Mint', swatch: 'mint' },
+          { name: 'grape', label: 'Grape', swatch: 'grape' },
+        ],
+      },
+    ],
+    draw(look, person) {
+      const drawn = document.createElement('div');
+      drawn.dataset.look = lookText(look);
+      drawn.dataset.person = `${person.place} ${person.name}`;
+      return drawn;
+    },
+    ...options,
   };
 }

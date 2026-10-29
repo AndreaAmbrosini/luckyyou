@@ -1,5 +1,6 @@
 import { gsap } from 'gsap';
-import { SHOW_LENGTH, type Scenario, type Show } from './contract';
+import { SHOW_LENGTH, type ChosenLook, type Scenario, type Show } from './contract';
+import { dealLooks, freezeLooks } from './line-up';
 import { createRandom } from './random';
 import { createSound } from './sound';
 import { buildStage } from './stage';
@@ -14,6 +15,11 @@ export interface RunOptions {
   readonly host: HTMLElement;
   readonly names: readonly string[];
   readonly unlucky: string;
+  /**
+   * Each person's look from the Line-up. For a show with a line-up that is
+   * given none, as in the lab, looks are dealt from the seed.
+   */
+  readonly looks?: ReadonlyMap<string, ChosenLook>;
   readonly seed: number;
   readonly muted: boolean;
   /** Aborting it stops the show at once. */
@@ -39,6 +45,7 @@ export async function runScenario(scenario: Scenario, options: RunOptions): Prom
     stage: frame.stage,
     names: Object.freeze([...options.names]),
     unlucky: options.unlucky,
+    looks: freezeLooks(lookFor(scenario, options)),
     random: createRandom(options.seed),
     signal,
     reducedMotion,
@@ -97,6 +104,15 @@ async function stageFonts(names: readonly string[]): Promise<void> {
     // A font that can't load leaves the fallback; the show still runs.
   }
   await fonts.ready;
+}
+
+/** A seed's draws for looks, apart from the show's own, so one doesn't shift the other. */
+const LOOKS_SEED = 0x6c6f6f6b;
+
+function lookFor(scenario: Scenario, { looks, names, seed }: RunOptions) {
+  if (looks) return looks;
+  if (!scenario.lineUp) return new Map<string, ChosenLook>();
+  return dealLooks(scenario.lineUp, names, createRandom(seed ^ LOOKS_SEED));
 }
 
 const prefersReducedMotion = () =>

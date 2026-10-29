@@ -113,7 +113,6 @@ Feature: The Line-up
         | blocked |
         | full    |
 
-  @pending
   Rule: The show gets the looks
 
     Scenario: The show is handed everyone's look
@@ -126,7 +125,6 @@ Feature: The Line-up
       When I run a show with a line-up in the lab
       Then each person gets a look drawn at random from the run's seed
 
-  @pending
   Rule: A line-up is checked
 
     Scenario Outline: A show whose line-up has <problem> is skipped

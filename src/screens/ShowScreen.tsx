@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useRef } from 'react';
-import type { Scenario } from '../scenario-kit/contract';
+import type { ChosenLook, Scenario } from '../scenario-kit/contract';
 import { runScenario } from '../scenario-kit/run';
 import { isFullscreen } from '../ui/fullscreen';
 import styles from './ShowScreen.module.css';
@@ -12,6 +12,8 @@ export interface Run {
   readonly scenario: Scenario;
   readonly names: readonly string[];
   readonly unlucky: string;
+  /** Everyone's look from the Line-up; the lab leaves it out, and looks come from the seed. */
+  readonly looks?: ReadonlyMap<string, ChosenLook>;
   readonly seed: number;
   readonly muted: boolean;
 }
@@ -57,6 +59,7 @@ export function ShowScreen({ run, onFinish, onCancel }: ShowScreenProps) {
       host: host.current!,
       names: run.names,
       unlucky: run.unlucky,
+      looks: run.looks,
       seed: run.seed,
       muted: run.muted,
       signal: controller.signal,

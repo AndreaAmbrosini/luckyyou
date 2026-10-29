@@ -24,7 +24,44 @@ export interface ScenarioMeta {
   readonly people: { readonly min: number; readonly max: number };
   /** Listed in development and test builds only. */
   readonly developmentOnly?: boolean;
+  /** A step before the show where each person's look is chosen (decision 0011). */
+  readonly lineUp?: LineUp;
 }
+
+/** What a show's Line-up offers, and how it draws one person's look. */
+export interface LineUp {
+  /** The step's heading, such as "Line up the racers". */
+  readonly heading: string;
+  /** The label of the button that starts the show. */
+  readonly start: string;
+  /** What can be chosen for each person, in the order the Line-up shows it. */
+  readonly options: readonly LineUpOption[];
+  /**
+   * Draws `person` in `look`, calm, filling the element the Line-up puts it
+   * in. `place` is their place in today's list, from 1.
+   */
+  draw(look: ChosenLook, person: { readonly name: string; readonly place: number }): Element;
+}
+
+export interface LineUpOption {
+  /** The key in a look; unique in the line-up. */
+  readonly name: string;
+  readonly label: string;
+  /** At least two, with unique names. */
+  readonly choices: readonly LineUpChoice[];
+}
+
+export interface LineUpChoice {
+  /** The value in a look. */
+  readonly name: string;
+  /** Shown on its chip, or read out for a swatch. */
+  readonly label: string;
+  /** A colour from tokens.css, as in `--color-<swatch>`: the choice shows as a round swatch. */
+  readonly swatch?: string;
+}
+
+/** One person's look: a choice's name for each option's name. */
+export type ChosenLook = Readonly<Record<string, string>>;
 
 export interface Scenario extends ScenarioMeta {
   /** Acts out the pick the app already made; resolves when the show is over. */
@@ -39,6 +76,8 @@ export interface Show {
   readonly names: readonly string[];
   /** The app's pick: the show must end on this person. */
   readonly unlucky: string;
+  /** Each person's look from the Line-up, by name; empty for a show without one. Frozen. */
+  readonly looks: ReadonlyMap<string, ChosenLook>;
   /** Seeded, so a run can be replayed. Returns numbers in [0, 1). */
   readonly random: () => number;
   /** Aborted when the show is cancelled or runs out of time. */

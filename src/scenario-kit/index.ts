@@ -10,7 +10,16 @@ export {
   type Look,
   type Mood,
 } from './characters';
-export { defineScenario, type Scenario, type ScenarioMeta, type Show } from './contract';
+export {
+  defineScenario,
+  type ChosenLook,
+  type LineUp,
+  type LineUpChoice,
+  type LineUpOption,
+  type Scenario,
+  type ScenarioMeta,
+  type Show,
+} from './contract';
 export { bob, hoverWobble, popIn, scroller, shake } from './motion';
 export { eliminationOrder } from './order';
 export { pickOne, shuffle } from './random';

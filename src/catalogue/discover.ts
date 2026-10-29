@@ -10,7 +10,7 @@ const KEBAB_CASE = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
  */
 export function validateScenario(value: unknown, folder: string): string[] {
   if (typeof value !== 'object' || value === null) return ["it doesn't export a scenario"];
-  const { id, name, description, card, people, developmentOnly, play } = value as Record<
+  const { id, name, description, card, people, developmentOnly, lineUp, play } = value as Record<
     string,
     unknown
   >;
@@ -42,7 +42,6 @@ export function validateScenario(value: unknown, folder: string): string[] {
   }
 
   const picture = card as { emoji?: unknown; image?: unknown } | null | undefined;
-  const filled = (text: unknown) => typeof text === 'string' && text.trim() !== '';
   if (!filled(picture?.emoji) && !filled(picture?.image)) {
     problems.push('its card has no emoji or image');
   }
@@ -65,8 +64,51 @@ export function validateScenario(value: unknown, folder: string): string[] {
     problems.push("its development-only flag isn't true or false");
   }
 
+  if (lineUp !== undefined) problems.push(...lineUpProblems(lineUp));
+
   if (typeof play !== 'function') problems.push('it has no play function');
 
+  return problems;
+}
+
+const filled = (text: unknown) => typeof text === 'string' && text.trim() !== '';
+
+/** Every problem with a scenario's line-up (decision 0011). */
+function lineUpProblems(lineUp: unknown): string[] {
+  if (typeof lineUp !== 'object' || lineUp === null) return ["its line-up isn't an object"];
+  const { heading, start, options, draw } = lineUp as Record<string, unknown>;
+  const problems: string[] = [];
+  if (!filled(heading)) problems.push('its line-up has no heading');
+  if (!filled(start)) problems.push('its line-up has no start label');
+
+  if (!Array.isArray(options) || options.length === 0) {
+    problems.push('its line-up has no options');
+  } else {
+    const seen = new Set<unknown>();
+    for (const option of options as unknown[]) {
+      const { name, label, choices } = (option ?? {}) as Record<string, unknown>;
+      if (!filled(name) || !filled(label)) {
+        problems.push('its line-up has an option without a name or label');
+        continue;
+      }
+      if (seen.has(name)) problems.push(`its line-up has two options named "${name}"`);
+      seen.add(name);
+      if (!Array.isArray(choices) || choices.length < 2) {
+        problems.push(`its line-up option "${name}" has fewer than 2 choices`);
+        continue;
+      }
+      const given = (choices as unknown[]).map(
+        (choice) => (choice ?? {}) as Record<string, unknown>,
+      );
+      if (!given.every((choice) => filled(choice.name) && filled(choice.label))) {
+        problems.push(`its line-up option "${name}" has a choice without a name or label`);
+      } else if (new Set(given.map((choice) => choice.name)).size < given.length) {
+        problems.push(`its line-up option "${name}" has two choices with the same name`);
+      }
+    }
+  }
+
+  if (typeof draw !== 'function') problems.push('its line-up has no draw function');
   return problems;
 }
 
