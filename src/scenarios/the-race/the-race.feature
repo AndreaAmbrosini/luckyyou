@@ -8,7 +8,6 @@ Feature: The Race
   nose in a photo finish, past a rival who brakes, or in a surge from behind.
   The contract in specs/scenarios.feature applies as well.
 
-  @pending
   Rule: Its card
 
     Scenario: The picker shows The Race
@@ -41,7 +40,6 @@ Feature: The Race
       When the show runs
       Then her mount wears a paper roundel with "3"
 
-  @pending
   Rule: The unlucky person crosses first
 
     Scenario Outline: <count> people, the unlucky person <position> in the list
@@ -141,7 +139,6 @@ Feature: The Race
       Then everything slows to a quarter of its speed, the camera, the racers and their gaits, for 1.2 to 1.6 seconds
       And nothing before that is slowed
 
-  @pending
   Rule: The last moment could go three ways
 
     Scenario: The ending, over many runs
@@ -149,6 +146,7 @@ Feature: The Race
       When the show runs with 40 different random seeds
       Then about half end in a photo finish, and the rest in a late brake or a surge
 
+    @pending
     Scenario: Photo finish
       Given the unlucky person is "Anna", side by side with "Priya" at the line
       When their noses cross
@@ -156,12 +154,14 @@ Feature: The Race
       And a photo pops up showing the two side-on at the line, Anna's nose over it first
       And it says "Anna, by a nose!"
 
+    @pending
     Scenario: Late brake
       Given the unlucky person is "Anna", just behind "Ben" at the start of the slow moment
       When the slow moment starts
       Then the caption is "Ben slams on the brakes!" and Ben stops short of the line, saying "Phew!"
       And the caption is "Anna can't stop!" as Anna sails past him and over the line
 
+    @pending
     Scenario: Surge
       Given the unlucky person is "Anna", third behind two others at the start of the slow moment
       When the slow moment starts
@@ -183,7 +183,6 @@ Feature: The Race
       When the show runs
       Then "Anna" is on stage, not moving, for the last 1.5 seconds
 
-  @pending
   Rule: The beats keep every show inside the limit
 
     Scenario: About 20 to 22 seconds at 8 people

@@ -1,0 +1,133 @@
+/* A drawing's SVG, drawn past its edges. */
+.drawing {
+  overflow: visible;
+}
+
+/* Fills and lines, all with an ink outline unless they are the line. */
+.line {
+  fill: none;
+  stroke: var(--color-ink);
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.ink {
+  fill: var(--color-ink);
+  stroke: var(--color-ink);
+  stroke-linejoin: round;
+}
+
+.inkFill {
+  fill: var(--color-ink);
+}
+
+.paper {
+  fill: var(--color-paper);
+  stroke: var(--color-ink);
+  stroke-linejoin: round;
+}
+
+.shark {
+  fill: var(--color-shark);
+  stroke: var(--color-ink);
+  stroke-linejoin: round;
+}
+
+/* The mount, in the racer's colour. */
+.racer {
+  fill: var(--racer);
+  stroke: var(--color-ink);
+  stroke-linejoin: round;
+}
+
+.board {
+  fill: var(--color-ink-soft);
+  stroke: var(--color-ink);
+}
+
+.wheel {
+  fill: var(--color-paper);
+  stroke: var(--color-ink);
+}
+
+.orange {
+  fill: var(--color-orange);
+  stroke: var(--color-ink);
+  stroke-linejoin: round;
+}
+
+/* The hat band and the scarf: sun, or tomato on a sun racer. */
+.band {
+  fill: var(--band);
+  stroke: var(--color-ink);
+  stroke-linejoin: round;
+}
+
+.stripe {
+  fill: none;
+  stroke: var(--color-paper);
+  stroke-linecap: round;
+}
+
+.sun {
+  fill: var(--color-sun);
+  stroke: var(--color-ink);
+  stroke-linejoin: round;
+}
+
+/* The rider's hands, in their skin tone. */
+.skin {
+  fill: var(--skin);
+  stroke: var(--color-ink);
+}
+
+/* The racing number on its paper roundel. */
+.number {
+  fill: var(--color-ink);
+  font-family: var(--font-display);
+  font-size: var(--size-stage-tag-min);
+  text-anchor: middle;
+  dominant-baseline: central;
+}
+
+/* The whole stage, in its stage pixels. */
+.scene {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 1280px;
+  height: 720px;
+  overflow: hidden;
+  background-color: var(--color-sky);
+}
+
+.layer {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 1280px;
+  height: 720px;
+}
+
+/* A racer's 240 by 200 drawing, placed by its top left and scaled from there. */
+.holder {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 240px;
+  height: 200px;
+  transform-origin: 0 0;
+}
+
+.holder > svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+/* A name tag beside its rider's face, placed by its right edge and middle. */
+.tag {
+  position: absolute;
+  top: 0;
+  left: 0;
+}
