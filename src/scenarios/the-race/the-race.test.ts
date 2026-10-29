@@ -4,6 +4,7 @@ import { handOutLooks, type ChosenLook } from '../../scenario-kit';
 import { createRandom } from '../../scenario-kit/random';
 import { describeSpec, runShow, type ShowRecord } from '../../scenario-kit/testing';
 import theRace from './index';
+import { eventCaption } from './play';
 import { RACER_COLOURS, SPEC, type Mount } from './parts';
 import {
   CAMERA,
@@ -42,6 +43,7 @@ interface Drawn {
   readonly rotate: string;
   readonly scale: string;
   readonly leaf: boolean;
+  readonly trophy: boolean;
 }
 
 /** What the stage showed in one frame. */
@@ -53,6 +55,10 @@ interface Frame {
   readonly racers: Readonly<Record<string, Drawn>>;
   /** Who says what in a bubble on screen. */
   readonly says: readonly { readonly person: string; readonly text: string }[];
+  readonly flash: boolean;
+  /** The photo's verdict and who it shows, back lane first, while it's up. */
+  readonly photo: { readonly verdict: string; readonly names: readonly string[] } | null;
+  readonly confetti: number;
 }
 
 interface Watched {
@@ -114,13 +120,29 @@ async function watch(
           rotate: svg.style.rotate,
           scale: svg.style.scale,
           leaf: !!leaf && leaf.getAttribute('display') !== 'none',
+          trophy: svg.dataset.trophy === 'true',
         };
       }
       const says = [...stage.querySelectorAll<HTMLElement>('[data-says]')]
         .filter((el) => !el.hidden)
         .map((el) => ({ person: el.dataset.person!, text: el.dataset.says! }));
+      const card = stage.querySelector<HTMLElement>('[data-part="photo"]');
+      const photo =
+        card && !card.hidden
+          ? {
+              verdict: card.querySelector('p:last-child')!.textContent!,
+              names: [...card.querySelectorAll<HTMLElement>('[data-person]')].map(
+                (el) => el.dataset.person!,
+              ),
+            }
+          : null;
       frames.push({
         time,
+        flash: !(stage.querySelector<HTMLElement>('[data-part="flash"]')?.hidden ?? true),
+        photo,
+        confetti: [...stage.querySelectorAll<HTMLElement>('[data-part="confetti"]')].filter(
+          (el) => !el.hidden,
+        ).length,
         beat: scene.dataset.beat!,
         camera: Number(scene.dataset.camera),
         slow: scene.dataset.slow === 'true',
@@ -136,6 +158,14 @@ async function watch(
 /** The captions shown, in order. */
 const captions = (watched: Watched) => watched.record.captions.map((each) => each.text);
 
+/** The frames from `from` up to `to`, in show seconds. */
+const between = (watched: Watched, from: number, to: number) =>
+  watched.frames.filter((frame) => frame.time >= from - 1e-9 && frame.time < to - 1e-9);
+const shownAt = (watched: Watched, text: string) =>
+  watched.record.captions.find((each) => each.text === text)?.from;
+const saying = (frame: Frame, person: string, text: string) =>
+  frame.says.some((said) => said.person === person && said.text === text);
+
 /** Runs that more than one scenario reads, each run once, when first asked for. */
 const shared = (() => {
   const runs = new Map<string, Promise<Watched>>();
@@ -145,6 +175,18 @@ const shared = (() => {
   };
   return {
     eight: () => once('8', () => watch(names(8), { seed: 3 })),
+    /**
+     * Four people ending `ending`, Anna unlucky and the rival called `rival`.
+     */
+    ending: (ending: Ending, rival = 'Priya') =>
+      once(`ending ${ending}`, () => {
+        const team = ['Dario', 'Elena', 'Fabio', 'Anna'];
+        let seed = 1;
+        while (planShow(team, 'Anna', createRandom(seed)).ending !== ending) seed++;
+        const plan = planShow(team, 'Anna', createRandom(seed));
+        team[team.indexOf(plan.rival)] = rival;
+        return watch(team, { unlucky: 'Anna', seed });
+      }),
     count: (count: number) =>
       count === 8 ? shared.eight() : once(`count ${count}`, () => watch(names(count), { seed: 5 })),
     /**
@@ -762,6 +804,183 @@ describeSpec(await loadFeature('./the-race.feature'), ({ Rule }) => {
         expect(share('brake')).toBeGreaterThan(0);
         expect(share('surge')).toBeGreaterThan(0);
       });
+    });
+
+    RuleScenario('Photo finish', ({ Given, When, Then, And }) => {
+      let watched: Watched;
+      Given('the unlucky person is {string}, side by side with {string} at the line', async () => {
+        watched = await shared.ending('photo', 'Priya');
+        expect(orderAt(watched.plan, watched.plan.times.finish).slice(0, 2).sort()).toEqual([
+          'Anna',
+          'Priya',
+        ]);
+      });
+      When('their noses cross', () => {
+        const crossing = crossingOf(watched.plan, 'Anna')!;
+        expect(crossing).toBeLessThanOrEqual(watched.plan.times.finish);
+        expect(crossingOf(watched.plan, 'Priya')).toBeNull();
+      });
+      Then(
+        'everything freezes, the stage flashes once, and the caption is {string}',
+        (_, caption: string) => {
+          const { finish, win } = watched.plan.times;
+          const frozen = between(watched, finish + STEP, win);
+          for (const frame of frozen) {
+            expect(frame.camera).toBe(frozen[0]!.camera);
+            for (const [name, racer] of Object.entries(frame.racers)) {
+              expect(racer.nose).toBe(frozen[0]!.racers[name]!.nose);
+              expect(racer.gait).toBe('off');
+            }
+          }
+          const flashes = watched.frames.filter((frame) => frame.flash);
+          expect(flashes.length).toBeGreaterThan(0);
+          expect(flashes.length * STEP).toBeLessThanOrEqual(0.3 + 1e-9);
+          expect(flashes[0]!.time).toBeGreaterThanOrEqual(finish - 1e-9);
+          expect(flashes[0]!.time).toBeLessThanOrEqual(finish + STEP + 1e-9);
+          expect(shownAt(watched, caption)).toBeCloseTo(finish, 1);
+        },
+      );
+      And("a photo pops up showing the two side-on at the line, Anna's nose over it first", () => {
+        const { finish, win } = watched.plan.times;
+        const up = watched.frames.filter((frame) => frame.photo);
+        expect(up[0]!.time).toBeGreaterThanOrEqual(finish + 0.3 - 1e-9);
+        expect(up.at(-1)!.time).toBeLessThan(win);
+        expect(up.length * STEP).toBeGreaterThanOrEqual(1.5);
+        const lanes = watched.team.filter((name) => name === 'Anna' || name === 'Priya');
+        expect(up[0]!.photo!.names).toEqual(lanes);
+      });
+      And('it says {string}', (_, verdict: string) => {
+        expect(watched.frames.find((frame) => frame.photo)!.photo!.verdict).toBe(verdict);
+      });
+    });
+
+    RuleScenario('Late brake', ({ Given, When, Then, And }) => {
+      let watched: Watched;
+      Given(
+        'the unlucky person is {string}, just behind {string} at the start of the slow moment',
+        async () => {
+          watched = await shared.ending('brake', 'Ben');
+          expect(orderAt(watched.plan, watched.plan.times.slow).slice(0, 2)).toEqual([
+            'Ben',
+            'Anna',
+          ]);
+        },
+      );
+      When('the slow moment starts', () => undefined);
+      Then(
+        'the caption is {string} and Ben stops short of the line, saying {string}',
+        (_, caption: string, phew: string) => {
+          const { slow, finish, win } = watched.plan.times;
+          expect(shownAt(watched, caption)).toBeCloseTo(slow, 1);
+          expect(crossingOf(watched.plan, 'Ben')).toBeNull();
+          const ben = between(watched, slow, win).map((frame) => frame.racers.Ben!.nose);
+          expect(ben.at(-1)!).toBeLessThan(ben[0]! - 60);
+          expect(between(watched, slow + 0.5, finish).every((f) => saying(f, 'Ben', phew))).toBe(
+            true,
+          );
+        },
+      );
+      And('the caption is {string} as Anna sails past him and over the line', (_, text: string) => {
+        const { slow, finish } = watched.plan.times;
+        const shown = shownAt(watched, text)!;
+        expect(shown).toBeGreaterThan(slow);
+        expect(shown).toBeLessThan(finish);
+        expect(orderAt(watched.plan, finish)[0]).toBe('Anna');
+        expect(crossingOf(watched.plan, 'Anna')!).toBeLessThanOrEqual(finish);
+      });
+    });
+
+    RuleScenario('Surge', ({ Given, When, Then, And }) => {
+      let watched: Watched;
+      Given(
+        'the unlucky person is {string}, third behind two others at the start of the slow moment',
+        async () => {
+          watched = await shared.ending('surge');
+          expect(orderAt(watched.plan, watched.plan.times.slow).indexOf('Anna')).toBe(2);
+        },
+      );
+      When('the slow moment starts', () => undefined);
+      Then(
+        "the caption is Anna's mount bursting ahead, as in an event, and she shouts {string}",
+        (_, shout: string) => {
+          const { slow, finish } = watched.plan.times;
+          const surge = { kind: 'burst', subject: 'Anna', at: slow } as const;
+          const said = (['snail', 'duck', 'chair', 'caterpillar'] as const).map((mount) =>
+            eventCaption(surge, mount),
+          );
+          const shown = watched.record.captions.find((each) => said.includes(each.text))!;
+          expect(shown.from).toBeCloseTo(slow, 1);
+          expect(between(watched, slow + 0.2, finish).every((f) => saying(f, 'Anna', shout))).toBe(
+            true,
+          );
+        },
+      );
+      And('she passes both and crosses first', () => {
+        const { slow, finish } = watched.plan.times;
+        const [first, second] = orderAt(watched.plan, slow);
+        const crossing = crossingOf(watched.plan, 'Anna')!;
+        expect(crossing).toBeLessThanOrEqual(finish);
+        expect(orderAt(watched.plan, crossing).indexOf('Anna')).toBe(0);
+        for (const passed of [first!, second!]) {
+          const theirs = crossingOf(watched.plan, passed);
+          if (theirs !== null) expect(theirs).toBeGreaterThan(crossing);
+        }
+      });
+    });
+  });
+
+  Rule('The winner gets the trophy', ({ RuleScenario }) => {
+    RuleScenario('The win', ({ Given, When, Then, And }) => {
+      let watched: Watched;
+      Given('the unlucky person is {string}', async () => {
+        watched = await shared.ending('photo', 'Priya');
+      });
+      When('she has crossed the line', () => undefined);
+      Then('the caption is {string}, with a fanfare and confetti', (_, caption: string) => {
+        const { win } = watched.plan.times;
+        expect(watched.record.captions.at(-1)).toMatchObject({ text: caption });
+        expect(watched.record.captions.at(-1)!.from).toBeCloseTo(win, 1);
+        // Sound isn't recorded: play.ts cues the fanfare as the caption comes.
+        expect(between(watched, win + 0.5, Infinity).every((f) => f.confetti > 20)).toBe(true);
+        expect(between(watched, 0, win).every((f) => f.confetti === 0)).toBe(true);
+      });
+      And('Anna holds a trophy over her head, in the party mood', () => {
+        for (const frame of between(watched, watched.plan.times.win + STEP, Infinity)) {
+          expect(frame.racers.Anna).toMatchObject({ trophy: true, mood: 'party', pose: 'party' });
+        }
+      });
+      And('everyone else celebrates', () => {
+        const last = watched.frames.at(-1)!;
+        for (const [name, racer] of Object.entries(last.racers)) {
+          if (name === 'Anna') continue;
+          expect(racer.trophy).toBe(false);
+          expect(racer.mood === 'party' || (racer.mood === 'happy' && racer.pose === 'wave')).toBe(
+            true,
+          );
+        }
+      });
+    });
+
+    RuleScenario('The name holds still at the end', ({ Given, When, Then }) => {
+      let watched: Watched;
+      Given('the unlucky person is {string}', () => undefined);
+      When('the show runs', async () => {
+        watched = await shared.ending('brake', 'Ben');
+      });
+      Then(
+        '{string} is on stage, not moving, for the last {number} seconds',
+        (_, name: string, seconds: number) => {
+          const last = between(watched, watched.record.duration - seconds, Infinity);
+          expect(last.length * STEP).toBeGreaterThanOrEqual(seconds - STEP);
+          for (const frame of last) {
+            const racer = frame.racers[name]!;
+            expect(racer.nose).toBe(last[0]!.racers[name]!.nose);
+            expect(racer.gait).toBe('off');
+            expect(racer.rotate).toBe('');
+            expect(racer.scale).toBe('');
+          }
+        },
+      );
     });
   });
 

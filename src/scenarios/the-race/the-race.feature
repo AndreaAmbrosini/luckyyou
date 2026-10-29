@@ -142,7 +142,6 @@ Feature: The Race
       When the show runs with 40 different random seeds
       Then about half end in a photo finish, and the rest in a late brake or a surge
 
-    @pending
     Scenario: Photo finish
       Given the unlucky person is "Anna", side by side with "Priya" at the line
       When their noses cross
@@ -150,21 +149,18 @@ Feature: The Race
       And a photo pops up showing the two side-on at the line, Anna's nose over it first
       And it says "Anna, by a nose!"
 
-    @pending
     Scenario: Late brake
       Given the unlucky person is "Anna", just behind "Ben" at the start of the slow moment
       When the slow moment starts
       Then the caption is "Ben slams on the brakes!" and Ben stops short of the line, saying "Phew!"
       And the caption is "Anna can't stop!" as Anna sails past him and over the line
 
-    @pending
     Scenario: Surge
       Given the unlucky person is "Anna", third behind two others at the start of the slow moment
       When the slow moment starts
       Then the caption is Anna's mount bursting ahead, as in an event, and she shouts "Nooo!"
       And she passes both and crosses first
 
-  @pending
   Rule: The winner gets the trophy
 
     Scenario: The win

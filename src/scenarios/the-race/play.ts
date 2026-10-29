@@ -18,7 +18,17 @@ import {
   type Show,
 } from '../../scenario-kit';
 import { boxAt, bubbleOffset, faceAt, lane, tagAt, tagBox, tagSize, type Lane } from './layout';
-import { racer, track, type Mount, type Pose, type Racer, type RacerLook } from './parts';
+import {
+  photoCard,
+  PHOTO,
+  RACER_COLOURS,
+  racer,
+  track,
+  type Mount,
+  type Pose,
+  type Racer,
+  type RacerLook,
+} from './parts';
 import {
   BEATS,
   CAMERA,
@@ -69,6 +79,14 @@ const POP = 0.25;
 const SAMPLE = 0.1;
 /** Noses moving at least this fast along the track trail speed lines. */
 const SPEEDY = 150;
+/** The stage flashes once for this long as a photo finish freezes. */
+const FLASH = 0.25;
+/** The photo pops up this long after the freeze. */
+const PHOTO_AFTER = 0.3;
+/** In the photo, the unlucky nose is this far over the line. */
+const AHEAD = 16;
+/** Confetti at the win: how many pieces, falling at least this fast to where they settle. */
+const CONFETTI = { count: 26, fall: 520 };
 
 /** What someone says, and while it's up. */
 interface Saying {
@@ -97,9 +115,19 @@ export function eventCaption(event: RaceEvent, mount: Mount): string {
   return `${event.subject}'s ${mount} ${did}!`;
 }
 
-/** What gets said when: "Nooo!" in a burst; "Zzz…" from a dozing caterpillar and "Phew!" in a stop. */
-function sayings(plan: Plan, mountOf: (name: string) => Mount): Saying[] {
-  return plan.events.flatMap((event): Saying[] => {
+/**
+ * What gets said when: "Nooo!" in a burst and in a surge; "Zzz…" from a
+ * dozing caterpillar and "Phew!" in a stop, and from the rival who brakes.
+ */
+function sayings(plan: Plan, unlucky: string, mountOf: (name: string) => Mount): Saying[] {
+  const { slow, finish, win } = plan.times;
+  const ending: Saying[] =
+    plan.ending === 'brake'
+      ? [{ name: plan.rival, text: 'Phew!', from: slow + 0.4, to: win }]
+      : plan.ending === 'surge'
+        ? [{ name: unlucky, text: 'Nooo!', from: slow + 0.1, to: finish + 0.3 }]
+        : [];
+  const events = plan.events.flatMap((event): Saying[] => {
     const { subject: name, at } = event;
     if (event.kind === 'burst') return [{ name, text: 'Nooo!', from: at + 0.1, to: at + 1.4 }];
     return [
@@ -109,6 +137,7 @@ function sayings(plan: Plan, mountOf: (name: string) => Mount): Saying[] {
       { name, text: 'Phew!', from: at + STOP.phew, to: at + STOP.phew + 1.1 },
     ];
   });
+  return [...events, ...ending];
 }
 
 export async function playTheRace(show: Show): Promise<void> {
@@ -131,12 +160,33 @@ export async function playTheRace(show: Show): Promise<void> {
   trails.setAttribute('viewBox', '0 0 1280 720');
   trails.setAttribute('aria-hidden', 'true');
   trails.dataset.part = 'speed-lines';
+  const confetti = Array.from({ length: CONFETTI.count }, (_, j) => {
+    const piece = scene.appendChild(document.createElement('span'));
+    piece.className = styles.confetti!;
+    piece.dataset.part = 'confetti';
+    piece.style.setProperty(
+      '--confetti',
+      `var(--color-${RACER_COLOURS[j % RACER_COLOURS.length]})`,
+    );
+    piece.style.rotate = `${((j * 37) % 90) - 45}deg`;
+    piece.hidden = true;
+    return {
+      piece,
+      x: (j * 97 + 40) % 1260,
+      y: 110 + ((j * 53) % 250),
+      fall: CONFETTI.fall + ((j * 29) % 160),
+    };
+  });
   const racers = scene.appendChild(document.createElement('div'));
   racers.className = styles.layer!;
   const tags = scene.appendChild(document.createElement('div'));
   tags.className = styles.layer!;
   const bubbles = scene.appendChild(document.createElement('div'));
   bubbles.className = styles.layer!;
+  const flash = scene.appendChild(document.createElement('div'));
+  flash.className = styles.flash!;
+  flash.dataset.part = 'flash';
+  flash.hidden = true;
 
   // Back lane first, so each lane in front is drawn over the one behind.
   const riders: Rider[] = show.names.map((name, index) => {
@@ -165,9 +215,31 @@ export async function playTheRace(show: Show): Promise<void> {
   });
   const byName = new Map(riders.map((rider) => [rider.name, rider]));
 
+  // The photo finish: the two side-on at the line, the unlucky nose over it.
+  const photo =
+    plan.ending === 'photo'
+      ? scene.appendChild(
+          photoCard(
+            [plan.rival, show.unlucky]
+              .map((name) => byName.get(name)!)
+              .sort((one, two) => one.index - two.index)
+              .map(({ name, look, index }) => {
+                const drawn = racer(look, { face: faces.get(name)!, number: index + 1 });
+                drawn.setMood('scared');
+                drawn.setPose('pull');
+                drawn.setSweat(true);
+                const nose = PHOTO.line + (name === show.unlucky ? AHEAD : -2);
+                return { name, racer: drawn, nose };
+              }),
+            `${show.unlucky}, by a nose!`,
+          ),
+        )
+      : null;
+  if (photo) photo.hidden = true;
+
   // Bubbles, each placed once where it stays clear of every face and tag
   // round it while it's up, then following its speaker.
-  const said = sayings(plan, (name) => lookOf(name).mount).map((saying) => {
+  const said = sayings(plan, show.unlucky, (name) => lookOf(name).mount).map((saying) => {
     const speaker = byName.get(saying.name)!;
     const samples: { face: Box; avoid: Box[] }[] = [];
     for (let t = saying.from; t <= saying.to + 1e-9; t += SAMPLE) {
@@ -201,6 +273,16 @@ export async function playTheRace(show: Show): Promise<void> {
 
   const feel = (rider: Rider, t: number, leader: string | null, front: number) => {
     const nose = noseAt(plan, rider.name, t);
+    if (t >= times.win) {
+      if (rider.name === show.unlucky)
+        return { mood: 'party', pose: 'party', sweat: false } as const;
+      return plan.wavers.has(rider.name)
+        ? ({ mood: 'happy', pose: 'wave', sweat: false } as const)
+        : ({ mood: 'party', pose: 'party', sweat: false } as const);
+    }
+    if (plan.ending === 'brake' && rider.name === plan.rival && t >= times.slow + 0.4) {
+      return { mood: 'happy', pose: 'wave', sweat: false } as const;
+    }
     if (t < times.go)
       return {
         mood: rider.index % 3 === 0 ? 'calm' : 'worried',
@@ -283,6 +365,22 @@ export async function playTheRace(show: Show): Promise<void> {
       speed.setAttribute('display', racing ? 'inline' : 'none');
     });
 
+    byName.get(show.unlucky)!.drawn.setTrophy(t >= times.win);
+    for (const { piece, x, y, fall } of confetti) {
+      piece.hidden = t < times.win;
+      if (piece.hidden) continue;
+      const falling = show.reducedMotion ? y : Math.min(y, -40 + fall * (t - times.win));
+      piece.style.translate = `${x}px ${falling.toFixed(1)}px`;
+    }
+    flash.hidden = !(plan.ending === 'photo' && t >= times.finish && t < times.finish + FLASH);
+    if (photo) {
+      const from = times.finish + PHOTO_AFTER;
+      photo.hidden = t < from || t >= times.win;
+      const grown = Math.min(1, (t - from) / POP);
+      photo.style.scale =
+        !photo.hidden && grown < 1 ? String(gsap.parseEase('back.out(1.7)')(grown)) : '';
+    }
+
     for (const saying of said) {
       const up = t >= saying.from && t < saying.to;
       saying.el.hidden = !up;
@@ -312,7 +410,21 @@ export async function playTheRace(show: Show): Promise<void> {
   }
   at(times.stretch, () => show.caption('Final stretch!'));
   for (const time of plan.heartbeats) cue(time, 'heartbeat');
+  const { rival } = plan;
+  if (plan.ending === 'photo') {
+    at(times.finish, () => show.caption('Photo finish!'));
+    cue(times.finish, 'pop');
+  } else if (plan.ending === 'brake') {
+    at(times.slow, () => show.caption(`${rival} slams on the brakes!`));
+    cue(times.slow, 'creak');
+    at(times.slow + 1, () => show.caption(`${show.unlucky} can't stop!`));
+  } else {
+    const surge = { kind: 'burst', subject: show.unlucky, at: times.slow } as const;
+    at(times.slow, () => show.caption(eventCaption(surge, lookOf(show.unlucky).mount)));
+    cue(times.slow, 'whoosh');
+  }
   at(times.win, () => show.caption(`${show.unlucky} wins!`));
+  cue(times.win, 'fanfare');
   timeline.set({}, {}, times.end);
 
   place(0);

@@ -219,6 +219,27 @@
   background-color: var(--color-sun);
 }
 
+/* A piece of confetti, placed by its top left, in a colour that comes in as --confetti. */
+.confetti {
+  position: absolute;
+  top: 0;
+  left: 0;
+  box-sizing: border-box;
+  width: 14px;
+  height: 24px;
+  border: var(--line) solid var(--color-ink);
+  border-radius: 3px;
+  background-color: var(--confetti);
+}
+
+/* The flash as a photo finish freezes. */
+.flash {
+  position: absolute;
+  inset: 0;
+  background-color: var(--color-paper);
+  opacity: 0.55;
+}
+
 /* The photo-finish card, tilted, with its picture and the verdict. */
 .photo {
   position: absolute;
