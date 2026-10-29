@@ -1,6 +1,7 @@
 Feature: Setting up a pick
   Two steps before the show: the person sharing their screen ticks who is in
-  today, then clicks the show to play.
+  today, then clicks the show to play. A show with a line-up adds a third:
+  specs/line-up.feature.
 
   Rule: Moving on needs 2 to 12 ticked people
 

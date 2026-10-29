@@ -62,8 +62,7 @@ This file says how they're used.
 - **Buttons**: primary in tomato with `--shadow`; secondary in paper with
   `--shadow-small`; quiet as underlined text; disabled in paper with a
   dashed ink-soft outline, no shadow, and its reason.
-- **Step pills**: "1 · Who's in" and "2 · Pick a show"; the current one in
-  sun with a shadow.
+- **Step pills**: one per step; the current one in sun with a shadow.
 - **Show card**: paper, `--radius-card`, `--shadow`, a round sticker with the
   scenario's picture, its name, its description, and either a mint "Last
   time" badge or a dashed badge with the reason it can't run. The whole card
@@ -85,6 +84,10 @@ followed by the names. Show cards sit in a grid at least 300px wide; more
 shows add rows and the page scrolls. The footer says "Click a show to start
 it."
 
+**Line-up.** "Pick a show" to go back, the heading, today's people as tiles,
+and beside them the chosen one bigger, with the show's options. The footer has
+"Shuffle everyone" and the primary button.
+
 **Show.** The scenario owns the window ([show.feature](specs/show.feature)).
 
 **Result.** The sky with a few clouds and star stickers. A paper card tilted
@@ -103,7 +106,8 @@ Every scenario follows these so the shows look like one app:
 - Name tags are paper stickers with an ink outline and ink text, straight
   (never on a curve), at least `--size-stage-tag-min`, at most two lines,
   never over another tag. They grow as fewer people are left. On land they
-  sit on the chest, so hands can hold things overhead.
+  sit on the chest, so hands can hold things overhead; on a mount, beside the
+  face, behind it.
 - Captions are one at a time, top centre, in the display font at
   `--size-stage-caption` on a paper sticker, each for at least a second.
 - People are cartoon heads with a mood (calm, worried, scared, happy, party)

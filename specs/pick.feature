@@ -29,6 +29,14 @@ Feature: The pick
       When the show ends and I run again
       Then "Anna" is still in the pick
 
+    @pending
+    Scenario: Looks chosen on the Line-up don't change the chances
+      Given "Anna", "Ben" and "Carla" are ticked, on a show's Line-up
+      And each of them has a different look
+      When the app picks 30000 times as the show starts
+      Then each of them is picked about a third of the time
+      And the pick is made only once the show starts, after the Line-up
+
   Rule: Every run is a fresh pick
 
     Scenario: The person picked last time can be picked again
