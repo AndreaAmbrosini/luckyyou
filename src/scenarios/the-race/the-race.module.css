@@ -40,6 +40,49 @@
   stroke-linejoin: round;
 }
 
+/* A coloured line drawn over a thicker ink one: the hopper's horns, the ostrich's legs and neck. */
+.racerLine {
+  fill: none;
+  stroke: var(--racer);
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.pinkLine {
+  fill: none;
+  stroke: var(--color-pink);
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.pink {
+  fill: var(--color-pink);
+  stroke: var(--color-ink);
+}
+
+/* The rocket's porthole. */
+.glass {
+  fill: var(--color-glass);
+  stroke: var(--color-ink);
+}
+
+.sunFill {
+  fill: var(--color-sun);
+}
+
+/* The sandwich's slices and its lettuce. */
+.bread {
+  fill: var(--color-tomato-soft);
+  stroke: var(--color-ink);
+  stroke-linejoin: round;
+}
+
+.lettuce {
+  fill: var(--color-mint);
+  stroke: var(--color-ink);
+  stroke-linejoin: round;
+}
+
 .board {
   fill: var(--color-ink-soft);
   stroke: var(--color-ink);

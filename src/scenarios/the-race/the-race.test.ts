@@ -7,7 +7,7 @@ import { describeSpec, runShow, type ShowRecord } from '../../scenario-kit/testi
 import theRace from './index';
 import { eventCaption } from './play';
 import { faceAt, lane, tagBox } from './layout';
-import { RACER_COLOURS, RIDER, SPEC, type Mount } from './parts';
+import { MOUNTS, RACER_COLOURS, racer, RIDER, SPEC, type Mount } from './parts';
 import {
   CAMERA,
   cameraAt,
@@ -218,6 +218,10 @@ const saying = (frame: Frame, person: string, text: string) =>
 const overlap = (one: Box, two: Box) =>
   one.left < two.right && two.left < one.right && one.top < two.bottom && two.top < one.bottom;
 
+/** The rider's head in a racer's drawing: the one picture in its holder that isn't an extra. */
+const headOf = (svg: SVGSVGElement) =>
+  svg.querySelector<SVGSVGElement>('[data-part="lean"] > svg:not([data-part])')!;
+
 /** Runs that more than one scenario reads, each run once, when first asked for. */
 const shared = (() => {
   const runs = new Map<string, Promise<Watched>>();
@@ -272,13 +276,15 @@ const shared = (() => {
         looks.set('Carla', { mount: 'duck', colour: 'sun', extra: 'scarf' });
         return watch(team, { unlucky: 'Anna', seed, looks, reducedMotion });
       }),
-    /** `count` people with a 15-character name, unlucky, and every mount. */
+    /** `count` people with a 15-character name, unlucky, on mounts in turn, in capes. */
     long: (count: number) =>
       once(`long ${count}`, () => {
         const team = [...names(count - 1), 'Annamaria Rossi'];
-        const mounts = ['snail', 'duck', 'chair', 'caterpillar'] as const;
         const looks = new Map<string, ChosenLook>(
-          team.map((name, i) => [name, { mount: mounts[i % 4]!, colour: 'mint', extra: 'scarf' }]),
+          team.map((name, i) => [
+            name,
+            { mount: MOUNTS[(i + count) % MOUNTS.length]!, colour: 'mint', extra: 'cape' },
+          ]),
         );
         return watch(team, { seed: 11, looks });
       }),
@@ -331,7 +337,7 @@ describeSpec(await loadFeature('./the-race.feature'), ({ Rule }) => {
   });
 
   Rule('Its line-up', ({ RuleScenario }) => {
-    RuleScenario('Ride, colour and extra', ({ When, Then, And }) => {
+    RuleScenario('Eight rides, eight colours, six extras', ({ When, Then, And }) => {
       const lineUp = theRace.lineUp!;
       const option = (label: string) => lineUp.options.find((each) => each.label === label)!;
       const labels = (label: string) => option(label).choices.map((choice) => choice.label);
@@ -354,18 +360,24 @@ describeSpec(await loadFeature('./the-race.feature'), ({ Rule }) => {
       And('"Rides" offers {any}', (_, offered: string) => {
         expect(labels('Rides')).toEqual([...offered.matchAll(/"([^"]+)"/g)].map(([, x]) => x));
       });
-      And('"Colour" offers tomato, sun, mint, grape, pink and orange, as swatches', () => {
-        const choices = option('Colour').choices;
-        expect(choices.map((choice) => choice.name)).toEqual([
-          'tomato',
-          'sun',
-          'mint',
-          'grape',
-          'pink',
-          'orange',
-        ]);
-        for (const choice of choices) expect(choice.swatch).toBe(choice.name);
-      });
+      And(
+        '"Colour" offers tomato, sun, mint, grape, pink, orange, sea and shark, as swatches, shark read out as {string}',
+        (_, grey: string) => {
+          const choices = option('Colour').choices;
+          expect(choices.map((choice) => choice.name)).toEqual([
+            'tomato',
+            'sun',
+            'mint',
+            'grape',
+            'pink',
+            'orange',
+            'sea',
+            'shark',
+          ]);
+          for (const choice of choices) expect(choice.swatch).toBe(choice.name);
+          expect(choices.find((choice) => choice.name === 'shark')!.label).toBe(grey);
+        },
+      );
       And('"Extra" offers {any}', (_, offered: string) => {
         expect(labels('Extra')).toEqual([...offered.matchAll(/"([^"]+)"/g)].map(([, x]) => x));
       });
@@ -382,13 +394,13 @@ describeSpec(await loadFeature('./the-race.feature'), ({ Rule }) => {
       });
     });
 
-    /** Anna, Ben and Carla as the show first draws them, with the looks given. */
+    /** Everyone with a look given, as the show first draws them, the last unlucky. */
     async function firstDrawn(looks: Map<string, ChosenLook>, seed = 4) {
-      const team = ['Anna', 'Ben', 'Carla'];
+      const team = [...looks.keys()];
       const drawn = new Map<string, SVGSVGElement>();
       await runShow(theRace, {
         names: team,
-        unlucky: 'Carla',
+        unlucky: team.at(-1)!,
         seed,
         looks,
         cancelAt: 0.2,
@@ -406,10 +418,7 @@ describeSpec(await loadFeature('./the-race.feature'), ({ Rule }) => {
     RuleScenario('Each racer looks as chosen', ({ Given, When, Then, And }) => {
       const looks = new Map<string, ChosenLook>();
       let drawn: Map<string, SVGSVGElement>;
-      const shirt = (svg: SVGSVGElement) =>
-        svg
-          .querySelector<SVGSVGElement>('[data-part="lean"] svg')!
-          .style.getPropertyValue('--shirt');
+      const shirt = (svg: SVGSVGElement) => headOf(svg).style.getPropertyValue('--shirt');
       Given(
         'Anna chose the duck, sun and the scarf, and Ben the office chair, grape and googly eyes',
         () => {
@@ -457,7 +466,7 @@ describeSpec(await loadFeature('./the-race.feature'), ({ Rule }) => {
           planShow(['Anna', 'Ben', 'Carla'], 'Carla', random);
           const faces = handOutLooks(['Anna', 'Ben', 'Carla'], random);
           for (const [name, svg] of drawn) {
-            const head = svg.querySelector<SVGSVGElement>('[data-part="lean"] svg')!;
+            const head = headOf(svg);
             const face = faces.get(name)!;
             expect(head.style.getPropertyValue('--skin')).toBe(`var(--color-skin-${face.skin})`);
             expect(head.querySelector(`[data-part="${face.accessory}"]`)).not.toBeNull();
@@ -481,6 +490,149 @@ describeSpec(await loadFeature('./the-race.feature'), ({ Rule }) => {
         const roundel = drawn.get('Carla')!.querySelector('[data-part="number"]')!;
         expect(roundel.querySelector('circle')).not.toBeNull();
         expect(roundel.textContent).toBe(number);
+      });
+    });
+
+    /** The end of a path's `d`, as "x y". */
+    const ends = (path: Element | null) =>
+      path!
+        .getAttribute('d')!
+        .trim()
+        .split(/[ A-Z]+/)
+        .slice(-2)
+        .join(' ');
+    /** Whether `svg` shows the reins. */
+    const reined = (svg: SVGSVGElement) =>
+      svg.querySelector('[data-part="reins"]')!.getAttribute('display') !== 'none';
+
+    RuleScenario('Each new ride looks as chosen', ({ Given, When, Then, And }) => {
+      const looks = new Map<string, ChosenLook>();
+      let drawn: Map<string, SVGSVGElement>;
+      Given(
+        'Anna chose the space hopper, Ben the ostrich, Carla the rocket and Dario the sandwich',
+        () => {
+          looks.set('Anna', { mount: 'hopper', colour: 'sea', extra: 'number' });
+          looks.set('Ben', { mount: 'ostrich', colour: 'shark', extra: 'cape' });
+          looks.set('Carla', { mount: 'rocket', colour: 'orange', extra: 'bowtie' });
+          looks.set('Dario', { mount: 'sandwich', colour: 'pink', extra: 'scarf' });
+        },
+      );
+      When('the show runs', async () => {
+        drawn = await firstDrawn(looks);
+      });
+      const arm = (name: string) => drawn.get(name)!.querySelector('[data-part="hands"] path');
+      Then('Anna sits on the hopper and holds its horns', () => {
+        const anna = drawn.get('Anna')!;
+        expect(anna.dataset.mount).toBe('hopper');
+        expect(ends(arm('Anna'))).toBe(SPEC.hopper.hold!.join(' '));
+        expect(reined(anna)).toBe(false);
+        // The hand is on a horn's tip, the horn's end at (146, 84).
+        const horns = anna.querySelector('[data-part="mount"] path')!.getAttribute('d')!;
+        expect(horns).toContain('146 84');
+      });
+      And("Ben holds reins tied to the ostrich's neck", () => {
+        const ben = drawn.get('Ben')!;
+        expect(ben.dataset.mount).toBe('ostrich');
+        expect(reined(ben)).toBe(true);
+        const [x, y] = SPEC.ostrich.reins!;
+        expect(ends(ben.querySelector('[data-part="reins"]'))).toBe(`${x} ${y}`);
+        // On the neck, which runs from (150, 126) up to the head at (180, 70).
+        expect(x).toBeGreaterThan(150);
+        expect(x).toBeLessThan(184);
+        expect(y).toBeGreaterThan(70);
+        expect(y).toBeLessThan(126);
+      });
+      And('Carla sits astride the rocket and holds its handlebar', () => {
+        const carla = drawn.get('Carla')!;
+        expect(carla.dataset.mount).toBe('rocket');
+        expect(ends(arm('Carla'))).toBe(SPEC.rocket.hold!.join(' '));
+        expect(reined(carla)).toBe(false);
+        // The handlebar rises from the rocket's top to (164, 94).
+        const bar = [...carla.querySelectorAll('[data-part="mount"] path')].at(-1)!;
+        expect(ends(bar)).toBe('164 94');
+        // Astride: the shirt's foot is on the rocket's top, at y 110.
+        expect(SPEC.rocket.saddle[1]).toBe(110);
+      });
+      And('Dario sits on the top slice and holds reins tied to its cocktail stick', () => {
+        const dario = drawn.get('Dario')!;
+        expect(dario.dataset.mount).toBe('sandwich');
+        expect(reined(dario)).toBe(true);
+        const [x, y] = SPEC.sandwich.reins!;
+        expect(ends(dario.querySelector('[data-part="reins"]'))).toBe(`${x} ${y}`);
+        // On the stick, from (196, 110) up to (200, 82).
+        expect(x).toBeGreaterThanOrEqual(196);
+        expect(x).toBeLessThanOrEqual(200);
+        expect(y).toBeGreaterThanOrEqual(82);
+        expect(y).toBeLessThanOrEqual(110);
+      });
+      And(
+        "each mount and shirt is in the colour chosen, and every rider's head sits at the same height in its lane",
+        () => {
+          const rows = [...drawn].map(([name, svg]) => {
+            const { colour } = looks.get(name)!;
+            expect(svg.style.getPropertyValue('--racer')).toBe(`var(--color-${colour})`);
+            expect(headOf(svg).style.getPropertyValue('--shirt')).toBe(`var(--color-${colour})`);
+            return svg
+              .querySelector('[data-part="rider"]')!
+              .getAttribute('transform')!
+              .split(' ')[1];
+          });
+          expect(new Set(rows).size).toBe(1);
+          for (const count of [2, 4, 8]) {
+            for (let i = 0; i < count; i++) {
+              const tops = MOUNTS.map((mount) => faceAt(mount, lane(i, count), 900).top);
+              expect(new Set(tops).size).toBe(1);
+            }
+          }
+        },
+      );
+    });
+
+    RuleScenario('A cape and a bow tie', ({ Given, When, Then, And }) => {
+      const looks = new Map<string, ChosenLook>();
+      let drawn: Map<string, SVGSVGElement>;
+      Given('Anna chose the cape and Ben the bow tie', () => {
+        looks.set('Anna', { mount: 'duck', colour: 'sun', extra: 'cape' });
+        looks.set('Ben', { mount: 'snail', colour: 'mint', extra: 'bowtie' });
+        looks.set('Carla', { mount: 'chair', colour: 'grape', extra: 'number' });
+      });
+      When('the show runs', async () => {
+        drawn = await firstDrawn(looks);
+      });
+      /** The rider's parts in `lean`, back to front. */
+      const layers = (name: string) =>
+        [...drawn.get(name)!.querySelector('[data-part="lean"]')!.children].map(
+          (child) => (child as SVGElement).dataset.part ?? 'head',
+        );
+      Then("Anna's cape flies out behind the rider's shoulders", () => {
+        expect(layers('Anna')).toEqual(['cape', 'head']);
+        const cape = drawn.get('Anna')!.querySelector('[data-part="cape"] path')!;
+        const xs = [...cape.getAttribute('d')!.matchAll(/(-?\d+) (-?\d+)/g)].map(([, x]) => +x!);
+        // From the shoulders on the head's grid, out behind the head's left edge.
+        expect(Math.max(...xs)).toBeGreaterThanOrEqual(30);
+        expect(Math.min(...xs)).toBeLessThan(-30);
+      });
+      And('Ben wears a bow tie at the collar', () => {
+        expect(layers('Ben')).toEqual(['head', 'bowtie']);
+        const knot = drawn.get('Ben')!.querySelector('[data-part="bowtie"] circle')!;
+        expect([knot.getAttribute('cx'), knot.getAttribute('cy')]).toEqual(['50', '80']);
+      });
+      And('each is in sun, or in tomato on a sun shirt, as the scarf is', () => {
+        expect(drawn.get('Anna')!.style.getPropertyValue('--band')).toBe('var(--color-tomato)');
+        expect(drawn.get('Ben')!.style.getPropertyValue('--band')).toBe('var(--color-sun)');
+        // Drawn in the scarf's class, which takes --band.
+        const scarf = racer(
+          { mount: 'duck', colour: 'sun', extra: 'scarf' },
+          { face: handOutLooks(['Anna'], createRandom(1)).get('Anna')!, number: 1 },
+        ).el.querySelector('[data-part="scarf"] path')!;
+        for (const [name, part] of [
+          ['Anna', 'cape'],
+          ['Ben', 'bowtie'],
+        ] as const) {
+          for (const shape of drawn.get(name)!.querySelectorAll(`[data-part="${part}"] > *`)) {
+            expect(shape.getAttribute('class')).toBe(scarf.getAttribute('class'));
+          }
+        }
       });
     });
   });
@@ -1125,9 +1277,7 @@ describeSpec(await loadFeature('./the-race.feature'), ({ Rule }) => {
       And("every rider's head sits at the same height in its lane, whatever the mount", () => {
         for (const count of [2, 4, 8]) {
           for (let i = 0; i < count; i++) {
-            const tops = (['snail', 'duck', 'chair', 'caterpillar'] as const).map(
-              (mount) => faceAt(mount, lane(i, count), 900).top,
-            );
+            const tops = MOUNTS.map((mount) => faceAt(mount, lane(i, count), 900).top);
             expect(new Set(tops).size).toBe(1);
           }
         }

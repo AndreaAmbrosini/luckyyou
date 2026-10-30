@@ -53,12 +53,20 @@ const BURSTS: Record<Mount, string> = {
   duck: 'rolls downhill',
   chair: 'catches a gust',
   caterpillar: 'goes full wiggle',
+  hopper: 'finds its bounce',
+  ostrich: 'stretches its legs',
+  rocket: 'fires its boosters',
+  sandwich: 'gets extra spicy',
 };
 const STOPS: Record<Mount, string> = {
   snail: 'stops for a snack',
   duck: 'hits a pebble',
   chair: 'spins round',
   caterpillar: 'dozes off',
+  hopper: 'bounces on the spot',
+  ostrich: 'lays an egg',
+  rocket: 'runs out of fuel',
+  sandwich: 'drops its pickle',
 };
 
 /** Each mount's gait: how far it bobs, in stage pixels, and how often. */
@@ -67,6 +75,10 @@ const GAITS: Record<Mount, { px: number; seconds: number }> = {
   duck: { px: 4, seconds: 0.42 },
   chair: { px: 3, seconds: 0.3 },
   caterpillar: { px: 7, seconds: 0.7 },
+  hopper: { px: 10, seconds: 0.5 },
+  ostrich: { px: 5, seconds: 0.32 },
+  rocket: { px: 2, seconds: 0.2 },
+  sandwich: { px: 4, seconds: 0.36 },
 };
 
 /** A duck that hits a pebble tips up by `degrees` and back over `seconds`, about its back wheel. */

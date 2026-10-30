@@ -2,18 +2,29 @@
 // its extra, the rider's mood and pose, and the trophy; the sports-field
 // track with its bunting, rail, signs and lines; and the photo-finish card.
 // Every colour comes from a class in the-race.module.css; the racer's colour
-// comes in as --racer and the hat band's and the scarf's as --band.
+// comes in as --racer, and the contrast for the hat band, the scarf, the
+// cape and the bow tie as --band.
 
 import { head, nameTag, type Head, type Look, type Mood } from '../../scenario-kit';
 import styles from './the-race.module.css';
 
-export type Mount = 'snail' | 'duck' | 'chair' | 'caterpillar';
-export type RacerColour = 'tomato' | 'sun' | 'mint' | 'grape' | 'pink' | 'orange';
-export type Extra = 'googly' | 'tophat' | 'number' | 'scarf';
+export type Mount =
+  'snail' | 'duck' | 'chair' | 'caterpillar' | 'hopper' | 'ostrich' | 'rocket' | 'sandwich';
+export type RacerColour = 'tomato' | 'sun' | 'mint' | 'grape' | 'pink' | 'orange' | 'sea' | 'shark';
+export type Extra = 'googly' | 'tophat' | 'number' | 'scarf' | 'cape' | 'bowtie';
 /** `hold`, the reins or the backrest; `pull`, leaning back on them; `wave`; `party`, arms up. */
 export type Pose = 'hold' | 'pull' | 'wave' | 'party';
 
-export const MOUNTS: readonly Mount[] = ['snail', 'duck', 'chair', 'caterpillar'];
+export const MOUNTS: readonly Mount[] = [
+  'snail',
+  'duck',
+  'chair',
+  'caterpillar',
+  'hopper',
+  'ostrich',
+  'rocket',
+  'sandwich',
+];
 export const RACER_COLOURS: readonly RacerColour[] = [
   'tomato',
   'sun',
@@ -21,8 +32,10 @@ export const RACER_COLOURS: readonly RacerColour[] = [
   'grape',
   'pink',
   'orange',
+  'sea',
+  'shark',
 ];
-export const EXTRAS: readonly Extra[] = ['googly', 'tophat', 'number', 'scarf'];
+export const EXTRAS: readonly Extra[] = ['googly', 'tophat', 'number', 'scarf', 'cape', 'bowtie'];
 
 /** What the Line-up chooses for one racer. */
 export interface RacerLook {
@@ -98,6 +111,46 @@ export const SPEC: Readonly<
     ],
     roundel: [36, 132],
   },
+  hopper: {
+    saddle: [104, 110],
+    nose: 164,
+    reins: null,
+    hold: [146, 86],
+    hat: [170, 92],
+    googly: [
+      [146, 134, 9, 3, 2],
+      [161, 137, 9, -2, 3],
+    ],
+    roundel: [104, 162],
+  },
+  ostrich: {
+    saddle: [100, 110],
+    nose: 216,
+    reins: [176, 82],
+    hat: [182, 50],
+    googly: [[185, 57, 8, 3, 2]],
+    roundel: [84, 132],
+  },
+  rocket: {
+    saddle: [92, 110],
+    nose: 238,
+    reins: null,
+    hold: [162, 94],
+    hat: [214, 122],
+    googly: [[206, 130, 8, 3, 2]],
+    roundel: [72, 134],
+  },
+  sandwich: {
+    saddle: [104, 110],
+    nose: 212,
+    reins: [200, 86],
+    hat: [201, 72],
+    googly: [
+      [184, 118, 8, 3, 2],
+      [168, 118, 8, -2, 3],
+    ],
+    roundel: [120, 154],
+  },
 };
 
 /** The rider's head holder: 72 px, its foot 81 px down, where it leans from. */
@@ -140,6 +193,14 @@ export function show(el: Element, on: boolean) {
   if (on) el.removeAttribute('display');
   else el.setAttribute('display', 'none');
 }
+
+/** The hopper's horns, and the ostrich's legs and neck: an ink line under a coloured one. */
+const HORNS = 'M140 112 Q134 94 146 84 M156 118 Q156 102 170 94';
+const OSTRICH = {
+  legs: 'M98 146 L90 168 L98 188 M124 146 L132 168 L124 188',
+  feet: 'M98 188 H114 M124 188 H140',
+  neck: 'M150 126 Q172 104 180 70',
+} as const;
 
 const MOUNT_SHAPES: Record<Mount, (eyes: boolean) => Shape[]> = {
   snail: (eyes) => [
@@ -220,6 +281,82 @@ const MOUNT_SHAPES: Record<Mount, (eyes: boolean) => Shape[]> = {
       : []),
     ['path', styles.line!, { d: 'M176 126 Q188 140 202 126', 'stroke-width': 4 }],
   ],
+  hopper: (eyes) => [
+    ['path', styles.line!, { d: HORNS, 'stroke-width': 14 }],
+    ['path', styles.racerLine!, { d: HORNS, 'stroke-width': 6 }],
+    ['circle', styles.racer!, { cx: 122, cy: 146, r: 42, 'stroke-width': 4 }],
+    ['path', styles.stripe!, { d: 'M94 132 Q100 116 116 110', 'stroke-width': 6 }],
+    ...(eyes
+      ? ([
+          ['circle', styles.ink!, { cx: 146, cy: 136, r: 4.5 }],
+          ['circle', styles.ink!, { cx: 160, cy: 138, r: 4.5 }],
+        ] as Shape[])
+      : []),
+    ['path', styles.line!, { d: 'M142 152 Q153 162 163 150', 'stroke-width': 4 }],
+  ],
+  ostrich: (eyes) => [
+    [
+      'path',
+      styles.racer!,
+      { d: 'M66 118 Q40 96 28 112 Q42 118 34 132 Q52 128 64 138 Z', 'stroke-width': 4 },
+    ],
+    ['path', styles.line!, { d: OSTRICH.legs, 'stroke-width': 11, 'data-part': 'legs' }],
+    ['path', styles.pinkLine!, { d: OSTRICH.legs, 'stroke-width': 4, 'data-part': 'legs' }],
+    ['path', styles.line!, { d: OSTRICH.feet, 'stroke-width': 6, 'data-part': 'legs' }],
+    ['path', styles.line!, { d: OSTRICH.neck, 'stroke-width': 15 }],
+    ['path', styles.pinkLine!, { d: OSTRICH.neck, 'stroke-width': 7 }],
+    ['ellipse', styles.racer!, { cx: 110, cy: 128, rx: 50, ry: 28, 'stroke-width': 4 }],
+    ['path', styles.racer!, { d: 'M84 124 Q110 104 140 120 Q114 144 84 124 Z', 'stroke-width': 4 }],
+    ['circle', styles.pink!, { cx: 182, cy: 62, r: 14, 'stroke-width': 4 }],
+    ['path', styles.orange!, { d: 'M193 57 Q216 59 216 64 Q208 72 193 68 Z', 'stroke-width': 4 }],
+    ...(eyes ? ([['circle', styles.ink!, { cx: 185, cy: 58, r: 3.5 }]] as Shape[]) : []),
+  ],
+  rocket: (eyes) => [
+    ['path', styles.line!, { d: 'M70 158 L64 184 M152 158 L158 184', 'stroke-width': 5 }],
+    ['path', styles.line!, { d: 'M48 187 H178', 'stroke-width': 6 }],
+    [
+      'path',
+      styles.orange!,
+      { d: 'M38 116 L6 134 L38 152 Z', 'stroke-width': 4, 'data-part': 'flame' },
+    ],
+    ['path', styles.sunFill!, { d: 'M38 126 L20 134 L38 142 Z', 'data-part': 'flame' }],
+    ['path', styles.racer!, { d: 'M52 110 L32 84 L84 108 Z', 'stroke-width': 4 }],
+    [
+      'path',
+      styles.racer!,
+      { d: 'M36 108 H176 Q224 114 238 134 Q224 154 176 160 H36 Z', 'stroke-width': 4 },
+    ],
+    ['rect', styles.paper!, { x: 120, y: 108, width: 14, height: 52, 'stroke-width': 3 }],
+    ...(eyes
+      ? ([['circle', styles.glass!, { cx: 188, cy: 134, r: 10, 'stroke-width': 3 }]] as Shape[])
+      : []),
+    ['path', styles.line!, { d: 'M146 108 L152 94 L164 94', 'stroke-width': 5 }],
+  ],
+  sandwich: () => [
+    ['path', styles.line!, { d: 'M72 158 V182 M168 158 V182', 'stroke-width': 6 }],
+    ['ellipse', styles.inkFill!, { cx: 80, cy: 186, rx: 13, ry: 6 }],
+    ['ellipse', styles.inkFill!, { cx: 176, cy: 186, rx: 13, ry: 6 }],
+    ['rect', styles.bread!, { x: 34, y: 144, width: 176, height: 20, rx: 10, 'stroke-width': 4 }],
+    [
+      'path',
+      styles.lettuce!,
+      {
+        d:
+          'M30 147 Q40 134 52 144 Q64 134 76 144 Q88 134 100 144 Q112 134 124 144 ' +
+          'Q136 134 148 144 Q160 134 172 144 Q184 134 196 144 Q206 136 214 147 Z',
+        'stroke-width': 3,
+      },
+    ],
+    ['rect', styles.racer!, { x: 36, y: 124, width: 172, height: 17, rx: 6, 'stroke-width': 4 }],
+    [
+      'path',
+      styles.bread!,
+      { d: 'M32 129 Q32 108 66 108 H178 Q212 108 212 129 Z', 'stroke-width': 4 },
+    ],
+    ['path', styles.line!, { d: 'M58 116 l6 -2 M150 114 l6 2 M182 119 l5 -3', 'stroke-width': 3 }],
+    ['path', styles.line!, { d: 'M196 110 L200 82', 'stroke-width': 4 }],
+    ['circle', styles.lettuce!, { cx: 201, cy: 78, r: 8, 'stroke-width': 3 }],
+  ],
 };
 
 /** The rider's scarf, on the head's 100 grid, under the chin and out behind. */
@@ -227,6 +364,17 @@ const SCARF: readonly Shape[] = [
   ['path', styles.band!, { d: 'M34 74 Q4 60 -36 72 L-32 88 Q2 78 34 84 Z', 'stroke-width': 4 }],
   ['path', styles.stripe!, { d: 'M-6 66 L-2 82 M-22 69 L-18 85', 'stroke-width': 5 }],
   ['rect', styles.band!, { x: 30, y: 68, width: 40, height: 13, rx: 6.5, 'stroke-width': 4 }],
+];
+
+/** The cape, on the head's 100 grid, from the shoulders and flying out behind. */
+const CAPE: readonly Shape[] = [
+  ['path', styles.band!, { d: 'M30 80 Q-6 80 -48 114 L-30 130 Q0 102 36 94 Z', 'stroke-width': 4 }],
+];
+
+/** The bow tie, on the head's 100 grid, at the collar. */
+const BOW_TIE: readonly Shape[] = [
+  ['path', styles.band!, { d: 'M50 80 L34 70 V90 Z M50 80 L66 70 V90 Z', 'stroke-width': 3.5 }],
+  ['circle', styles.band!, { cx: 50, cy: 80, r: 5, 'stroke-width': 3 }],
 ];
 
 const TROPHY: readonly Shape[] = [
@@ -326,13 +474,18 @@ export function racer(
   face.el.style.setProperty('--shirt', `var(--color-${look.colour})`);
   face.el.setAttribute('width', String(RIDER.size));
   face.el.setAttribute('height', String(RIDER.size));
+  /** Puts on an extra drawn on the head's grid, at the rider's size. */
+  const wear = (name: string, shapes: readonly Shape[]) => {
+    const extra = lean.appendChild(drawing(100, 100, shapes));
+    extra.dataset.part = name;
+    extra.setAttribute('width', String(RIDER.size));
+    extra.setAttribute('height', String(RIDER.size));
+  };
+  // The cape goes behind the rider; the scarf and the bow tie over the shirt.
+  if (look.extra === 'cape') wear('cape', CAPE);
   lean.append(face.el);
-  if (look.extra === 'scarf') {
-    const scarf = lean.appendChild(drawing(100, 100, SCARF));
-    scarf.dataset.part = 'scarf';
-    scarf.setAttribute('width', String(RIDER.size));
-    scarf.setAttribute('height', String(RIDER.size));
-  }
+  if (look.extra === 'scarf') wear('scarf', SCARF);
+  if (look.extra === 'bowtie') wear('bowtie', BOW_TIE);
 
   // Arms, reins and hands, over the rider and the mount.
   const hands = group(el, 'hands');

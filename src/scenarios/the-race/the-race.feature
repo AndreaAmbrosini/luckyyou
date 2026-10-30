@@ -26,17 +26,7 @@ Feature: The Race
 
   Rule: Its line-up
 
-    # Old design: replaced by "Eight rides, eight colours, six extras" (step 1).
-    Scenario: Ride, colour and extra
-      When the Line-up opens for The Race
-      Then its heading is "Line up the racers" and its button "Start the race"
-      And "Rides" offers "Snail", "Duck", "Office chair" and "Caterpillar"
-      And "Colour" offers tomato, sun, mint, grape, pink and orange, as swatches
-      And "Extra" offers "Googly eyes", "Top hat", "Number" and "Scarf"
-      And each tile and the preview draw the racer as the show does, calm
-
-    # Step 1. Replaced in step 2 by "Rides and creatures, in one Racer option".
-    @pending
+    # Old design: replaced by "Rides and creatures, in one Racer option" (step 2).
     Scenario: Eight rides, eight colours, six extras
       When the Line-up opens for The Race
       Then its heading is "Line up the racers" and its button "Start the race"
@@ -67,8 +57,6 @@ Feature: The Race
       When the show runs
       Then her mount wears a paper roundel with "3"
 
-    # Step 1.
-    @pending
     Scenario: Each new ride looks as chosen
       Given Anna chose the space hopper, Ben the ostrich, Carla the rocket and Dario the sandwich
       When the show runs
@@ -78,8 +66,6 @@ Feature: The Race
       And Dario sits on the top slice and holds reins tied to its cocktail stick
       And each mount and shirt is in the colour chosen, and every rider's head sits at the same height in its lane
 
-    # Step 1.
-    @pending
     Scenario: A cape and a bow tie
       Given Anna chose the cape and Ben the bow tie
       When the show runs
