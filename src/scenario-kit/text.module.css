@@ -43,7 +43,11 @@
   transform: translateX(-50%) rotate(-2deg);
 }
 
-/* A bubble sits at its anchor; the speech sits above it, its tail pointing down. */
+/*
+ * A bubble sits at its anchor; the speech sits above it, its tail pointing
+ * down at the anchor. --lean moves the speech sideways by its left, which
+ * GSAP's transforms leave alone, and the tail back by as much.
+ */
 .bubble {
   position: absolute;
   width: 0;
@@ -53,7 +57,7 @@
 .speech {
   position: absolute;
   bottom: 22px;
-  left: 0;
+  left: var(--lean, 0px);
   box-sizing: border-box;
   width: max-content;
   max-width: 480px;
@@ -74,7 +78,7 @@
 .speech::after {
   position: absolute;
   bottom: -15px;
-  left: 50%;
+  left: calc(50% - var(--lean, 0px));
   width: 24px;
   height: 24px;
   border: solid var(--color-ink);

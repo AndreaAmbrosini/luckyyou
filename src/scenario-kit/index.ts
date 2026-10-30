@@ -25,6 +25,6 @@ export { eliminationOrder } from './order';
 export { pickOne, shuffle } from './random';
 export type { Cue, SoundPlayer } from './sound';
 export { spread, STAGE } from './stage';
-export { bubble, nameTag, speechAt, speechBox, type Box } from './text';
+export { bubble, leanRoom, nameTag, speechAt, speechBox, type Box } from './text';
 export { fitBeats, type Beat } from './time';
 export { stagePx } from './tokens';

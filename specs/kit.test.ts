@@ -15,7 +15,7 @@ import { createRandom } from '../src/scenario-kit/random';
 import { spread } from '../src/scenario-kit/stage';
 import { createSound, type Cue } from '../src/scenario-kit/sound';
 import { runShow, type ShowRecord } from '../src/scenario-kit/testing';
-import { bubble, nameTag, speechAt, speechBox, type Box } from '../src/scenario-kit/text';
+import { bubble, leanRoom, nameTag, speechAt, speechBox, type Box } from '../src/scenario-kit/text';
 import { fitBeats } from '../src/scenario-kit/time';
 import { onReset } from '../src/test/reset';
 import { TEAM } from './support/app';
@@ -555,6 +555,34 @@ describeSpec(await loadFeature('./kit.feature'), ({ Rule }) => {
       And('it points at 640, 300', () => {
         expect([speech.style.left, speech.style.top]).toEqual(['640px', '300px']);
       });
+    });
+
+    RuleScenario('A bubble can lean to one side of its tail', ({ When, Then, And }) => {
+      let speech: HTMLElement;
+      When('a bubble says "Phew!" at 640, 300, leaning 40 to the right', () => {
+        speech = bubble('Phew!', { x: 640, y: 300 }, { lean: 40 });
+      });
+      Then('it still points at 640, 300', () => {
+        expect([speech.style.left, speech.style.top]).toEqual(['640px', '300px']);
+        expect(speech.style.getPropertyValue('--lean')).toBe('40px');
+      });
+      And('its box is 40 further right than with no lean', () => {
+        const straight = speechBox('Phew!', { x: 640, y: 300 });
+        const leaning = speechBox('Phew!', { x: 640, y: 300 }, 40);
+        expect(leaning.left - straight.left).toBe(40);
+        expect(leaning.right - straight.right).toBe(40);
+        expect([leaning.top, leaning.bottom]).toEqual([straight.top, straight.bottom]);
+      });
+      And(
+        'it may lean less than half its width either way, so its tail stays under its straight edge',
+        () => {
+          const { left, right } = speechBox('Phew!', { x: 0, y: 0 });
+          const room = leanRoom('Phew!');
+          expect(room).toBeGreaterThan(0);
+          // Short of the rounded corner and the tail's own width.
+          expect(room).toBeLessThan((right - left) / 2 - 24 - 12);
+        },
+      );
     });
 
     RuleScenarioOutline(

@@ -139,6 +139,12 @@ Feature: The scenario kit
       Then it reads "Woo-hoo!"
       And it points at 640, 300
 
+    Scenario: A bubble can lean to one side of its tail
+      When a bubble says "Phew!" at 640, 300, leaning 40 to the right
+      Then it still points at 640, 300
+      And its box is 40 further right than with no lean
+      And it may lean less than half its width either way, so its tail stays under its straight edge
+
     Scenario Outline: A bubble goes beside what it's about, <where>
       Given a head at 500 to 600 across and 300 to 400 down, with <blocked> in the way
       When a bubble saying "Phew!" is placed by it

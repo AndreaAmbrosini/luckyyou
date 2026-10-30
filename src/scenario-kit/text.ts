@@ -129,18 +129,20 @@ export function nameTag(
 }
 
 /**
- * A speech bubble saying `text`, its tail at `anchor` in stage pixels. Paper
- * unless `colour` is "sun".
+ * A speech bubble saying `text`, its tail at `anchor` in stage pixels, the
+ * speech `lean` px to the right of its tail (left when negative; at most
+ * leanRoom). Paper unless `colour` is "sun".
  */
 export function bubble(
   text: string,
   anchor: { x: number; y: number },
-  { colour = 'paper' }: { colour?: 'paper' | 'sun' } = {},
+  { colour = 'paper', lean = 0 }: { colour?: 'paper' | 'sun'; lean?: number } = {},
 ): HTMLElement {
   const element = document.createElement('div');
   element.className = styles.bubble;
   element.style.left = `${anchor.x}px`;
   element.style.top = `${anchor.y}px`;
+  if (lean !== 0) element.style.setProperty('--lean', `${lean}px`);
   const speech = element.appendChild(document.createElement('div'));
   speech.className = colour === 'sun' ? `${styles.speech} ${styles.sun}` : styles.speech;
   const words = speech.appendChild(document.createElement('span'));
@@ -166,16 +168,28 @@ const overlap = (one: Box, two: Box) =>
  * inside a 4 px line, its tail down to the anchor. A tenth more all round for
  * its tilt and popIn's overshoot.
  */
-export function speechBox(text: string, anchor: { x: number; y: number }): Box {
+export function speechBox(text: string, anchor: { x: number; y: number }, lean = 0): Box {
   const font = stagePx('--size-stage-caption');
   const half = (1.1 * (0.62 * font * [...text].length + 2 * (22 + 4))) / 2;
   const height = 1.1 * (22 + 1.1 * font + 2 * (6 + 4));
   return {
-    left: anchor.x - half,
-    right: anchor.x + half,
+    left: anchor.x + lean - half,
+    right: anchor.x + lean + half,
     top: anchor.y - height,
     bottom: anchor.y,
   };
+}
+
+/**
+ * How far a bubble saying `text` may lean either way and keep its tail
+ * under the speech's straight bottom edge: half the speech, as speechBox
+ * estimates it before its tenth more, less its 24 px rounded corner, its
+ * 4 px line and half the tail, 17 px corner to corner.
+ */
+export function leanRoom(text: string): number {
+  const font = stagePx('--size-stage-caption');
+  const half = (0.62 * font * [...text].length + 2 * (22 + 4)) / 2;
+  return Math.max(0, half - 24 - 4 - 17);
 }
 
 /** Space kept between a bubble and what it sits beside, and the stage's edge. */
