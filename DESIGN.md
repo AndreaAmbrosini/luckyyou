@@ -51,10 +51,9 @@ This file says how they're used.
 ## Parts
 
 - **Sheet**: paper, ink outline, `--radius-card`, `--shadow`. Holds the team.
-- **Person tile**: a grid of equal tiles at least 250px wide, so rows line up
-  for 3 people or 20. Ticked: sun, solid outline, `--shadow-small`, a check
-  in a paper box. Unticked: paper, dashed ink-soft outline, an empty box.
-  A long name wraps inside its tile. In remove mode: paper, solid outline,
+- **Person tile**: a grid of equal tiles at least 250px wide. Ticked: sun,
+  solid outline, `--shadow-small`, a check in a paper box. Unticked: paper,
+  dashed ink-soft outline, an empty box. A long name wraps inside its tile. In remove mode: paper, solid outline,
   and a round tomato × labelled "Remove" and the name.
 - **Count pill**: "8 of 10 in", mint from 2 to 12 ticked, tomato otherwise.
 - **Notes**: a refused name's note in tomato-soft beside the add field; the
@@ -80,13 +79,13 @@ first visit the heading is "Who's on the team?" and the sheet says "Add each
 teammate once, below. They stay in this browser, ready for the next call."
 
 **Pick a show.** "Who's in" to go back, the heading, then a mint "3 in" pill
-followed by the names. Show cards sit in a grid at least 300px wide; more
-shows add rows and the page scrolls. The footer says "Click a show to start
-it."
+followed by the names. Show cards sit in a grid at least 300px wide. The
+footer says "Click a show to start it."
 
 **Line-up.** "Pick a show" to go back, the heading, today's people as tiles,
-and beside them the chosen one bigger, with the show's options. The footer has
-"Shuffle everyone" and the primary button.
+and beside them the chosen one bigger, with the show's options, their choices
+under group labels when a show groups them. The footer has "Shuffle everyone"
+and the primary button.
 
 **Show.** The scenario owns the window ([show.feature](specs/show.feature)).
 
@@ -97,7 +96,7 @@ buttons, and a disabled button's reason under the row.
 
 ## Shows
 
-Every scenario follows these so the shows look like one app:
+Every scenario follows these:
 
 - Each show is drawn first for the usual head count in
   [PRODUCT.md](PRODUCT.md), then checked at its smallest and largest.
@@ -106,13 +105,14 @@ Every scenario follows these so the shows look like one app:
 - Name tags are paper stickers with an ink outline and ink text, straight
   (never on a curve), at least `--size-stage-tag-min`, at most two lines,
   never over another tag. They grow as fewer people are left. On land they
-  sit on the chest, so hands can hold things overhead; on a mount, beside the
-  face, behind it.
+  sit on the chest, so hands can hold things overhead; on a mount or a
+  creature, beside the face, behind it.
 - Captions are one at a time, top centre, in the display font at
   `--size-stage-caption` on a paper sticker, each for at least a second.
 - People are cartoon heads with a mood (calm, worried, scared, happy, party)
   and a cap, goggles or snorkel, handed out per run. On land they wear a
-  shirt and raise their arms from the shoulders, and sweat when nervous.
+  shirt and raise their arms from the shoulders, and sweat when nervous. A
+  show may cast people as creatures, whose own faces carry the mood.
 - Movement that matters lasts at least 0.4 seconds, and nothing flashes more
   than three times a second. With `prefers-reduced-motion`, a show keeps its
   story and drops shaking and speed lines.

@@ -88,7 +88,7 @@ const RUN_OUT = 0.6;
 const WIN = 2.6;
 /** The pack after "Go!": the front nose, and the gap between noses at most. */
 const PACK = { front: 940, gap: 70, spread: 440 };
-const BURST = { ahead: 80, most: 1060, seconds: 0.9 };
+export const BURST = { ahead: 80, most: 1060, seconds: 0.9 };
 /** A stop: back so far over `seconds`, never behind `least`; "Phew!" at `phew`; off again at `off`. */
 export const STOP = { back: 360, least: 400, seconds: 1.3, phew: 1.6, off: 1.9 };
 /** The front group's noses in the stretch, front to back, closed up after `closeUp` s. */

@@ -54,7 +54,36 @@ describe('a racer', () => {
       expect(!!el.querySelector('[data-part="tophat"]'), extra).toBe(extra === 'tophat');
       expect(!!el.querySelector('[data-part="number"]'), extra).toBe(extra === 'number');
       expect(!!el.querySelector('[data-part="scarf"]'), extra).toBe(extra === 'scarf');
+      expect(!!el.querySelector('[data-part="cape"]'), extra).toBe(extra === 'cape');
+      expect(!!el.querySelector('[data-part="bowtie"]'), extra).toBe(extra === 'bowtie');
     }
+  });
+
+  it('wears the cape behind the rider, and the scarf and the bow tie in front', () => {
+    const layers = (extra: RacerLook['extra']) =>
+      [...drawn({ extra }).el.querySelector('[data-part="lean"]')!.children].map(
+        (child) => (child as SVGElement).dataset.part ?? 'head',
+      );
+    expect(layers('cape')).toEqual(['cape', 'head']);
+    expect(layers('scarf')).toEqual(['head', 'scarf']);
+    expect(layers('bowtie')).toEqual(['head', 'bowtie']);
+    expect(layers('number')).toEqual(['head']);
+  });
+
+  it('keeps each mount’s props hidden until its burst or stop shows them', () => {
+    const props = (mount: Mount) => Object.keys(drawn({ mount }).props).sort();
+    expect(props('ostrich')).toEqual(['egg']);
+    expect(props('rocket')).toEqual(['smoke']);
+    expect(props('sandwich')).toEqual(['pickle', 'steam']);
+    expect(props('hopper')).toEqual([]);
+    for (const prop of Object.values(drawn({ mount: 'sandwich' }).props)) {
+      expect(prop.getAttribute('display')).toBe('none');
+    }
+  });
+
+  it('marks the rocket’s flame, and the ostrich’s legs', () => {
+    expect(drawn({ mount: 'rocket' }).el.querySelectorAll('[data-part="flame"]')).toHaveLength(2);
+    expect(drawn({ mount: 'ostrich' }).el.querySelectorAll('[data-part="legs"]')).toHaveLength(3);
   });
 
   it('has googly eyes instead of its own, one per eye', () => {
@@ -80,11 +109,14 @@ describe('a racer', () => {
     expect(drawn({ colour: 'mint' }).el.style.getPropertyValue('--band')).toBe('var(--color-sun)');
   });
 
-  it('holds the reins, or the backrest on the chair', () => {
+  it('holds the reins, or the chair’s backrest, the hopper’s horns or the rocket’s handlebar', () => {
     for (const mount of MOUNTS) {
       const { el } = drawn({ mount });
       expect(el.dataset.pose).toBe('hold');
-      expect(shown(el, '[data-part="reins"]'), mount).toBe(mount !== 'chair');
+      expect(shown(el, '[data-part="reins"]'), mount).toBe(
+        !['chair', 'hopper', 'rocket'].includes(mount),
+      );
+      expect(SPEC[mount].reins === null, mount).toBe(SPEC[mount].hold !== undefined);
     }
   });
 
