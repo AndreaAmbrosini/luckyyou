@@ -278,8 +278,6 @@ Feature: The Race
         | chair       | Marco | spins round       | it spins round twice             |
         | caterpillar | Ivo   | dozes off         | it says "Zzz…" and stops bobbing |
 
-    # Step 1.
-    @pending
     Scenario Outline: A new <ride> bursts ahead
       When someone's <ride> bursts ahead
       Then the caption is "<name>'s <ride> <burst>!"
@@ -292,8 +290,6 @@ Feature: The Race
         | rocket   | Carla | fires its boosters | its flame grows twice as long  |
         | sandwich | Dario | gets extra spicy   | puffs of steam shoot out of it |
 
-    # Step 1.
-    @pending
     Scenario Outline: A new <ride> stops
       When someone's <ride> stops
       Then the caption is "<name>'s <ride> <stop>!"
@@ -471,8 +467,6 @@ Feature: The Race
       Then there are no speed lines, the duck doesn't tip and the chair doesn't spin
       And the slow last moment, the photo and every caption still come, in the same order
 
-    # Step 1.
-    @pending
     Scenario: With reduced motion, the new rides keep still too
       Given reduced motion is on
       When the show runs

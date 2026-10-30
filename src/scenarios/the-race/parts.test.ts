@@ -70,6 +70,17 @@ describe('a racer', () => {
     expect(layers('number')).toEqual(['head']);
   });
 
+  it('keeps each mount’s props hidden until its burst or stop shows them', () => {
+    const props = (mount: Mount) => Object.keys(drawn({ mount }).props).sort();
+    expect(props('ostrich')).toEqual(['egg']);
+    expect(props('rocket')).toEqual(['smoke']);
+    expect(props('sandwich')).toEqual(['pickle', 'steam']);
+    expect(props('hopper')).toEqual([]);
+    for (const prop of Object.values(drawn({ mount: 'sandwich' }).props)) {
+      expect(prop.getAttribute('display')).toBe('none');
+    }
+  });
+
   it('marks the rocket’s flame, and the ostrich’s legs', () => {
     expect(drawn({ mount: 'rocket' }).el.querySelectorAll('[data-part="flame"]')).toHaveLength(2);
     expect(drawn({ mount: 'ostrich' }).el.querySelectorAll('[data-part="legs"]')).toHaveLength(3);

@@ -23,6 +23,7 @@ import {
   PHOTO,
   RACER_COLOURS,
   racer,
+  show as showPart,
   track,
   type Mount,
   type Pose,
@@ -31,6 +32,7 @@ import {
 } from './parts';
 import {
   BEATS,
+  BURST,
   CAMERA,
   cameraAt,
   FINISH,
@@ -85,6 +87,31 @@ const GAITS: Record<Mount, { px: number; seconds: number }> = {
 const TIP = { degrees: -24, seconds: 1, origin: '74px 183px' };
 /** A chair spins round twice over `seconds`, about its stem. */
 const SPIN = { turns: 2, seconds: 1.2, origin: '112px 0' };
+/** A hopper bounds this high, in drawing pixels, this many times in a burst, and lower on the spot in a stop. */
+const BOUNCE = { burst: { px: 44, count: 3 }, stop: { px: 28, count: 5 } };
+/** An ostrich's legs swing this wide from its hips, this many times in a burst. */
+const STRIDE = { wide: 1.7, count: 3, hip: 111 };
+/**
+ * A rocket's flame flickers by `flicker` while it races, grows `burst` times
+ * as long in a burst, from its tail at x `tail`, and goes out in a stop in a
+ * puff of smoke that is up for `smoke` seconds, growing as it drifts back
+ * from the tail.
+ */
+const FLAME = {
+  flicker: 0.15,
+  rate: 30,
+  burst: 2,
+  tail: 38,
+  smoke: 1.2,
+  from: [24, 134],
+  to: [4, 128],
+};
+/** An egg drops from under the ostrich's tail `drop` s into a stop, over `fall` s; it looks back from `look` s. */
+const LAY = { drop: 0.2, fall: 0.3, from: [30, 100], to: [10, 142], look: 0.5 };
+/** Steam rises this far over a burst. */
+const STEAM = { rise: 30 };
+/** A pickle drops out `drop` s into a stop, over `fall` s, to the ground in front, and is picked up at "Phew!". */
+const DROP = { drop: 0.1, fall: 0.35, from: [184, 134], to: [222, 180] };
 /** A bubble pops in over this many seconds. */
 const POP = 0.25;
 /** Seconds between the moments a bubble is checked clear of the faces and tags round it. */
@@ -136,6 +163,10 @@ interface Rider {
   readonly tag: HTMLElement;
   readonly speed: SVGPathElement;
   readonly gait: gsap.core.Animation;
+  /** The rocket's flame, the ostrich's legs and its head, where the mount has them. */
+  readonly flame: SVGElement[];
+  readonly legs: SVGElement[];
+  readonly head: SVGElement[];
   state: { mood: Mood; pose: Pose; sweat: boolean } | null;
 }
 
@@ -243,7 +274,26 @@ export async function playTheRace(show: Show): Promise<void> {
       seconds: GAITS[look.mount].seconds,
     });
     gait.pause();
-    return { name, index, look, at, holder, drawn, tag, speed, gait, state: null };
+    // A hopper's bounces go on top of its gait.
+    drawn.el.style.setProperty('translate', '0 calc(var(--bob) + var(--hop, 0px))');
+    const parts = (part: string) => [
+      ...drawn.el.querySelectorAll<SVGElement>(`[data-part="${part}"]`),
+    ];
+    return {
+      name,
+      index,
+      look,
+      at,
+      holder,
+      drawn,
+      tag,
+      speed,
+      gait,
+      flame: parts('flame'),
+      legs: parts('legs'),
+      head: parts('bird-head'),
+      state: null,
+    };
   });
   const byName = new Map(riders.map((rider) => [rider.name, rider]));
 
@@ -295,6 +345,119 @@ export async function playTheRace(show: Show): Promise<void> {
   });
 
   const stopOf = (name: string, t: number) => stopping(plan, name, t);
+
+  /** How far into `name`'s burst, or their surge, show second `t` is, and how long it lasts. */
+  const burstOf = (name: string, t: number) => {
+    const event = plan.events.find(
+      (each) =>
+        each.kind === 'burst' &&
+        each.subject === name &&
+        t >= each.at &&
+        t < each.at + BURST.seconds,
+    );
+    if (event) return { since: t - event.at, seconds: BURST.seconds };
+    const surging =
+      plan.ending === 'surge' && name === show.unlucky && t >= times.slow && t < times.finish;
+    return surging ? { since: t - times.slow, seconds: times.finish - times.slow } : null;
+  };
+
+  /** Puts a prop at `from`, moving to `to` as `done` goes from 0 to 1, turned `degrees`. */
+  const move = (
+    prop: SVGGElement,
+    from: readonly number[],
+    to: readonly number[],
+    done: number,
+    extra = '',
+  ) => {
+    const x = from[0]! + (to[0]! - from[0]!) * done;
+    const y = from[1]! + (to[1]! - from[1]!) * done;
+    write(prop, '@transform', `translate(${x.toFixed(1)} ${y.toFixed(1)})${extra}`);
+  };
+
+  /** What a new mount does in a burst and in a stop; `since` is how far into a stop. */
+  const ride = (rider: Rider, t: number, moving: boolean, since: number) => {
+    const { look, drawn } = rider;
+    const { props } = drawn;
+    const still = show.reducedMotion;
+    const burst = burstOf(rider.name, t);
+    const stopped = since >= 0;
+    const shown: string[] = [];
+    if (look.mount === 'hopper') {
+      let hop = 0;
+      if (burst && !still) {
+        const { px, count } = BOUNCE.burst;
+        hop = px * Math.abs(Math.sin((Math.PI * count * burst.since) / burst.seconds));
+      } else if (stopped && !still) {
+        const { px, count } = BOUNCE.stop;
+        hop = px * Math.abs(Math.sin((Math.PI * count * since) / STOP.off));
+      }
+      write(drawn.el, '--hop', hop ? `${(-hop).toFixed(1)}px` : '0px');
+      write(drawn.el, '@data-hop', hop.toFixed(1));
+    }
+    if (look.mount === 'ostrich') {
+      const swing = burst
+        ? still
+          ? STRIDE.wide
+          : STRIDE.wide * Math.cos((2 * Math.PI * STRIDE.count * burst.since) / burst.seconds)
+        : 1;
+      const legs =
+        swing === 1
+          ? ''
+          : `matrix(${swing.toFixed(2)} 0 0 1 ${(STRIDE.hip * (1 - swing)).toFixed(1)} 0)`;
+      for (const leg of rider.legs) write(leg, '@transform', legs);
+      write(drawn.el, '@data-stride', swing.toFixed(2));
+      const egg = props.egg!;
+      const laid = stopped && since >= LAY.drop;
+      showPart(egg, laid);
+      if (laid) move(egg, LAY.from, LAY.to, still ? 1 : Math.min(1, (since - LAY.drop) / LAY.fall));
+      if (laid) shown.push('egg');
+      const back = stopped && since >= LAY.look && since < STOP.phew;
+      for (const part of rider.head)
+        write(part, '@transform', back ? 'matrix(-1 0 0 1 364 0)' : '');
+      write(drawn.el, '@data-look', back ? 'back' : '');
+    }
+    if (look.mount === 'rocket') {
+      const length = burst
+        ? FLAME.burst
+        : moving && !still
+          ? 1 + FLAME.flicker * Math.sin(FLAME.rate * t)
+          : 1;
+      const flame =
+        length === 1
+          ? ''
+          : `matrix(${length.toFixed(2)} 0 0 1 ${(FLAME.tail * (1 - length)).toFixed(1)} 0)`;
+      for (const part of rider.flame) {
+        write(part, '@transform', flame);
+        write(part, '@display', stopped ? 'none' : 'inline');
+      }
+      write(drawn.el, '@data-flame', stopped ? 'out' : length.toFixed(2));
+      const smoke = props.smoke!;
+      const puff = stopped && since < FLAME.smoke;
+      showPart(smoke, puff);
+      if (puff) {
+        const done = still ? 1 : since / FLAME.smoke;
+        move(smoke, FLAME.from, FLAME.to, done, ` scale(${(0.8 + 0.6 * done).toFixed(2)})`);
+        shown.push('smoke');
+      }
+    }
+    if (look.mount === 'sandwich') {
+      const steam = props.steam!;
+      showPart(steam, !!burst);
+      if (burst) {
+        move(steam, [0, 0], [0, -STEAM.rise], still ? 0 : burst.since / burst.seconds);
+        shown.push('steam');
+      }
+      const pickle = props.pickle!;
+      const dropped = stopped && since >= DROP.drop && since < STOP.phew;
+      showPart(pickle, dropped);
+      if (dropped) {
+        const done = still ? 1 : Math.min(1, (since - DROP.drop) / DROP.fall);
+        move(pickle, DROP.from, DROP.to, done, ` rotate(${still ? 0 : Math.round(200 * done)})`);
+        shown.push('pickle');
+      }
+    }
+    write(drawn.el, '@data-props', shown.join(' '));
+  };
 
   /** How fast `name`'s nose moves along the track at show second `t`. */
   const speedOf = (name: string, t: number) => {
@@ -390,6 +553,7 @@ export async function playTheRace(show: Show): Promise<void> {
       const turned = spin === 1 ? '' : `${spin.toFixed(2)} 1`;
       write(drawn.el, 'scale', turned);
       write(drawn.el, '@data-scale', turned);
+      ride(rider, t, moving, since);
 
       // Speed lines behind whoever is racing along.
       const racing = moving && !show.reducedMotion && speedOf(rider.name, t) > SPEEDY;

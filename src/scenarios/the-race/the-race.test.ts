@@ -9,6 +9,7 @@ import { eventCaption } from './play';
 import { faceAt, lane, tagBox } from './layout';
 import { MOUNTS, RACER_COLOURS, racer, RIDER, SPEC, type Mount } from './parts';
 import {
+  BURST,
   CAMERA,
   cameraAt,
   crossingOf,
@@ -46,6 +47,13 @@ interface Drawn {
   readonly scale: string;
   readonly leaf: boolean;
   readonly trophy: boolean;
+  /** How high a hopper bounces, the ostrich's stride and where it looks, the rocket's flame. */
+  readonly hop: number;
+  readonly stride: number;
+  readonly look: string;
+  readonly flame: number | 'out' | null;
+  /** The props it shows, as "egg smoke steam pickle". */
+  readonly props: string;
 }
 
 /** What the stage showed in one frame. */
@@ -164,6 +172,16 @@ async function watch(
           scale: svg.getAttribute('data-scale') ?? '',
           leaf: !!leaf && leaf.getAttribute('display') !== 'none',
           trophy: svg.dataset.trophy === 'true',
+          hop: Number(svg.dataset.hop ?? 0),
+          stride: Number(svg.dataset.stride ?? 1),
+          look: svg.dataset.look ?? '',
+          flame:
+            svg.dataset.flame === undefined
+              ? null
+              : svg.dataset.flame === 'out'
+                ? 'out'
+                : Number(svg.dataset.flame),
+          props: svg.dataset.props ?? '',
         };
       }
       const says = found.bubbles
@@ -251,7 +269,7 @@ const shared = (() => {
      */
     mount: (mount: Mount, name: string, reducedMotion = false) =>
       once(`mount ${mount} ${reducedMotion}`, () => {
-        const team = ['Dario', 'Elena', 'Fabio', 'Giulia', 'Hana'];
+        const team = ['Kofi', 'Luca', 'Mia', 'Nora', 'Omar'];
         const seed = 7;
         const plan = planShow(team, team.at(-1)!, createRandom(seed));
         team[team.indexOf(plan.events[0]!.subject)] = name;
@@ -934,6 +952,128 @@ describeSpec(await loadFeature('./the-race.feature'), ({ Rule }) => {
         );
       });
     });
+
+    RuleScenarioOutline(
+      'A new <ride> bursts ahead',
+      ({ When, Then, And }, { ride, name, burst }) => {
+        let watched: Watched;
+        /** The burster, frame by frame from just before the burst to its end. */
+        const bursting = () => {
+          const { at } = watched.plan.events[0]!;
+          return watched.frames
+            .filter((frame) => frame.time >= at && frame.time < at + BURST.seconds)
+            .map((frame) => frame.racers[name]!);
+        };
+        When("someone's <ride> bursts ahead", async () => {
+          watched = await shared.mount(ride as Mount, name);
+        });
+        Then(`the caption is "<name>'s <ride> <burst>!"`, () => {
+          expect(captions(watched)).toContain(`${name}'s ${ride} ${burst}!`);
+          expect(watched.plan.events[0]).toMatchObject({ kind: 'burst', subject: name });
+        });
+        And('<what>, and it shoots into the lead, its rider shouting "Nooo!"', () => {
+          const during = bursting();
+          const before = watched.frames.find(
+            (frame) => frame.time < watched.plan.events[0]!.at && frame.time > 1,
+          )!.racers[name]!;
+          if (ride === 'hopper') {
+            const hops = during.map((racer) => racer.hop);
+            expect(Math.max(...hops)).toBeGreaterThan(35);
+            // Big bounces: up, down to the ground, and up again.
+            const landed = hops.findIndex(
+              (hop, i) => i > hops.indexOf(Math.max(...hops)) && hop < 5,
+            );
+            expect(landed).toBeGreaterThan(0);
+            expect(Math.max(...hops.slice(landed))).toBeGreaterThan(35);
+          }
+          if (ride === 'ostrich') {
+            expect(before.stride).toBe(1);
+            const strides = during.map((racer) => racer.stride);
+            // Wider than it walks, the legs swinging from one side to the other.
+            expect(Math.max(...strides)).toBeGreaterThan(1.5);
+            expect(Math.min(...strides)).toBeLessThan(0);
+          }
+          if (ride === 'rocket') {
+            expect(before.flame).toBeGreaterThan(0.8);
+            expect(before.flame).toBeLessThan(1.2);
+            expect(during.every((racer) => racer.flame === 2)).toBe(true);
+          }
+          if (ride === 'sandwich') {
+            expect(before.props).not.toContain('steam');
+            expect(during.every((racer) => racer.props.includes('steam'))).toBe(true);
+          }
+          const { at } = watched.plan.events[0]!;
+          expect(leaderAt(watched.plan, at)).not.toBe(name);
+          expect(leaderAt(watched.plan, at + BURST.seconds)).toBe(name);
+          expect(
+            watched.frames.some((frame) => frame.time < at + 0.5 && saying(frame, name, 'Nooo!')),
+          ).toBe(true);
+        });
+      },
+    );
+
+    RuleScenarioOutline('A new <ride> stops', ({ When, Then, And }, { ride, name, stop }) => {
+      let watched: Watched;
+      /** The stopped racer, frame by frame from the stop to the next event. */
+      const during = () => {
+        const { at } = watched.plan.events[1]!;
+        return watched.frames
+          .filter((frame) => frame.time >= at && frame.time < at + spacing(5))
+          .map((frame) => ({ ...frame, racer: frame.racers[name]!, since: frame.time - at }));
+      };
+      When("someone's <ride> stops", async () => {
+        watched = await shared.mount(ride as Mount, name);
+      });
+      Then(`the caption is "<name>'s <ride> <stop>!"`, () => {
+        expect(captions(watched)).toContain(`${name}'s ${ride} ${stop}!`);
+        expect(watched.plan.events[1]).toMatchObject({ kind: 'stop', subject: name });
+      });
+      And('<what>, and it drops back while the camera goes on', () => {
+        const stopped = during().filter((frame) => frame.racer.stopped);
+        expect(stopped.length).toBeGreaterThan(10);
+        if (ride === 'hopper') {
+          expect(Math.max(...stopped.map((frame) => frame.racer.hop))).toBeGreaterThan(20);
+          // On the spot: never forward on screen, while the camera goes on.
+          stopped.slice(1).forEach((frame, i) => {
+            expect(frame.racer.nose).toBeLessThanOrEqual(stopped[i]!.racer.nose + 1e-6);
+          });
+        }
+        if (ride === 'ostrich') {
+          const laid = stopped.filter((frame) => frame.racer.props.includes('egg'));
+          expect(laid.length).toBeGreaterThan(10);
+          expect(stopped.some((frame) => frame.racer.look === 'back')).toBe(true);
+          expect(stopped.every((frame) => frame.racer.stride === 1)).toBe(true);
+        }
+        if (ride === 'rocket') {
+          expect(stopped.every((frame) => frame.racer.flame === 'out')).toBe(true);
+          expect(stopped[0]!.racer.props).toContain('smoke');
+          expect(stopped.at(-1)!.racer.props).not.toContain('smoke');
+        }
+        if (ride === 'sandwich') {
+          const dropped = stopped.filter((frame) => frame.racer.props.includes('pickle'));
+          expect(dropped.length).toBeGreaterThan(10);
+          // Picked up again before it sets off.
+          expect(stopped.at(-1)!.racer.props).not.toContain('pickle');
+          expect(stopped.every((frame) => frame.racer.gait === 'off')).toBe(true);
+        }
+        const first = stopped[0]!;
+        const last = stopped.at(-1)!;
+        expect(last.racer.nose).toBeLessThan(first.racer.nose - 200);
+        expect(last.camera).toBeGreaterThan(first.camera + 300);
+      });
+      And('its rider waves, says "Phew!", and the mount sets off again further back', () => {
+        const frames = during();
+        expect(frames.some((frame) => frame.racer.stopped && frame.racer.pose === 'wave')).toBe(
+          true,
+        );
+        expect(frames.some((frame) => saying(frame, name, 'Phew!'))).toBe(true);
+        const off = frames.find((frame) => frame.since > STOP.off + 0.1)!;
+        expect(off.racer.stopped).toBe(false);
+        expect(off.racer.gait).toBe('on');
+        expect(off.racer.props).toBe('');
+        if (ride === 'rocket') expect(off.racer.flame).not.toBe('out');
+      });
+    });
   });
 
   Rule('The final stretch, and a slow last moment', ({ RuleScenario }) => {
@@ -1396,6 +1536,39 @@ describeSpec(await loadFeature('./the-race.feature'), ({ Rule }) => {
             moving.frames.filter((frame) => frame.slow).length,
           );
           expect(still.frames.some((frame) => frame.photo)).toBe(true);
+        },
+      );
+    });
+
+    RuleScenario('With reduced motion, the new rides keep still too', ({ Given, When, Then }) => {
+      let rockets: Watched;
+      let hoppers: Watched;
+      Given('reduced motion is on', () => undefined);
+      When('the show runs', async () => {
+        rockets = await shared.mount('rocket', 'Carla', true);
+        hoppers = await shared.mount('hopper', 'Anna', true);
+      });
+      Then(
+        "the rocket's flame doesn't flicker, and a hopper that stops doesn't bounce on the spot",
+        async () => {
+          const flames = rockets.frames.flatMap((frame) =>
+            Object.values(frame.racers).map((racer) => racer.flame),
+          );
+          expect(new Set(flames)).toEqual(new Set([1, 2, 'out']));
+          const moving = await shared.mount('rocket', 'Carla');
+          expect(
+            moving.frames.some((frame) =>
+              Object.values(frame.racers).some(
+                (racer) =>
+                  typeof racer.flame === 'number' && racer.flame !== 1 && racer.flame !== 2,
+              ),
+            ),
+          ).toBe(true);
+          for (const frame of hoppers.frames) {
+            for (const racer of Object.values(frame.racers)) expect(racer.hop).toBe(0);
+          }
+          // The stop still happens.
+          expect(hoppers.frames.some((frame) => frame.racers.Anna!.stopped)).toBe(true);
         },
       );
     });

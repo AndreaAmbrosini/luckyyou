@@ -307,9 +307,21 @@ const MOUNT_SHAPES: Record<Mount, (eyes: boolean) => Shape[]> = {
     ['path', styles.pinkLine!, { d: OSTRICH.neck, 'stroke-width': 7 }],
     ['ellipse', styles.racer!, { cx: 110, cy: 128, rx: 50, ry: 28, 'stroke-width': 4 }],
     ['path', styles.racer!, { d: 'M84 124 Q110 104 140 120 Q114 144 84 124 Z', 'stroke-width': 4 }],
-    ['circle', styles.pink!, { cx: 182, cy: 62, r: 14, 'stroke-width': 4 }],
-    ['path', styles.orange!, { d: 'M193 57 Q216 59 216 64 Q208 72 193 68 Z', 'stroke-width': 4 }],
-    ...(eyes ? ([['circle', styles.ink!, { cx: 185, cy: 58, r: 3.5 }]] as Shape[]) : []),
+    [
+      'circle',
+      styles.pink!,
+      { cx: 182, cy: 62, r: 14, 'stroke-width': 4, 'data-part': 'bird-head' },
+    ],
+    [
+      'path',
+      styles.orange!,
+      { d: 'M193 57 Q216 59 216 64 Q208 72 193 68 Z', 'stroke-width': 4, 'data-part': 'bird-head' },
+    ],
+    ...(eyes
+      ? ([
+          ['circle', styles.ink!, { cx: 185, cy: 58, r: 3.5, 'data-part': 'bird-head' }],
+        ] as Shape[])
+      : []),
   ],
   rocket: (eyes) => [
     ['path', styles.line!, { d: 'M70 158 L64 184 M152 158 L158 184', 'stroke-width': 5 }],
@@ -359,6 +371,46 @@ const MOUNT_SHAPES: Record<Mount, (eyes: boolean) => Shape[]> = {
   ],
 };
 
+/** The egg an ostrich lays, from the canvas, on its 40 by 48 grid. */
+const EGG: readonly Shape[] = [
+  [
+    'path',
+    styles.paper!,
+    { d: 'M20 2 Q38 4 38 28 Q38 46 20 46 Q2 46 2 28 Q2 4 20 2 Z', 'stroke-width': 4 },
+  ],
+  ['path', styles.line!, { d: 'M10 22 l4 -3 M26 30 l5 -2 M18 38 l3 -3', 'stroke-width': 3 }],
+];
+
+/** The puff of smoke from a rocket out of fuel, round (0, 0). */
+const SMOKE: readonly Shape[] = [
+  ['circle', styles.paper!, { cx: -20, cy: 8, r: 16, 'stroke-width': 4 }],
+  ['circle', styles.paper!, { cx: 0, cy: -10, r: 20, 'stroke-width': 4 }],
+  ['circle', styles.paper!, { cx: 18, cy: 8, r: 16, 'stroke-width': 4 }],
+];
+
+/** Puffs of steam out of a spicy sandwich, behind its rider and at its nose: an ink wisp under a paper one. */
+const WISPS =
+  'M32 112 q-8 -10 0 -20 q8 -10 0 -20 M58 108 q-8 -10 0 -20 q8 -10 0 -20 ' +
+  'M220 116 q-8 -10 0 -20 q8 -10 0 -20';
+const STEAM: readonly Shape[] = [
+  ['path', styles.line!, { d: WISPS, 'stroke-width': 10 }],
+  ['path', styles.stripe!, { d: WISPS, 'stroke-width': 5 }],
+];
+
+/** The pickle a sandwich drops, round (0, 0), pale so it shows on the grass. */
+const PICKLE: readonly Shape[] = [
+  ['ellipse', styles.pickle!, { cx: 0, cy: 0, rx: 18, ry: 9, 'stroke-width': 4 }],
+  ['path', styles.line!, { d: 'M-8 -2 h1 M0 2 h1 M8 -2 h1', 'stroke-width': 3 }],
+];
+
+/** What a burst or a stop brings out, per mount, each hidden until then. */
+export type Prop = 'egg' | 'smoke' | 'steam' | 'pickle';
+const PROPS: Partial<Record<Mount, Partial<Record<Prop, readonly Shape[]>>>> = {
+  ostrich: { egg: EGG },
+  rocket: { smoke: SMOKE },
+  sandwich: { steam: STEAM, pickle: PICKLE },
+};
+
 /** The rider's scarf, on the head's 100 grid, under the chin and out behind. */
 const SCARF: readonly Shape[] = [
   ['path', styles.band!, { d: 'M34 74 Q4 60 -36 72 L-32 88 Q2 78 34 84 Z', 'stroke-width': 4 }],
@@ -403,6 +455,8 @@ export interface Racer {
   setTrophy(on: boolean): void;
   /** Shows or hides the lettuce leaf a snail nibbles at its mouth. */
   setLeaf(on: boolean): void;
+  /** The mount's props, hidden until shown, to place and show. */
+  readonly props: Readonly<Partial<Record<Prop, SVGGElement>>>;
 }
 
 /**
@@ -500,6 +554,14 @@ export function racer(
   ]);
   hands.style.setProperty('--skin', `var(--color-skin-${faceLook.skin})`);
 
+  // What a burst or a stop brings out, over the racer.
+  const props: Partial<Record<Prop, SVGGElement>> = {};
+  for (const [name, shapes] of Object.entries(PROPS[look.mount] ?? {})) {
+    const prop = group(el, name, shapes);
+    show(prop, false);
+    props[name as Prop] = prop;
+  }
+
   // The lettuce leaf a stopped snail nibbles, at its mouth.
   const leaf = group(el, 'leaf', [
     ['path', styles.grass!, { d: 'M2 20 Q12 0 42 4 Q38 32 2 20 Z', 'stroke-width': 3 }],
@@ -589,6 +651,7 @@ export function racer(
     setLeaf(on) {
       show(leaf, on);
     },
+    props,
   };
   racerDrawn.setMood(mood);
   racerDrawn.setPose(pose);
