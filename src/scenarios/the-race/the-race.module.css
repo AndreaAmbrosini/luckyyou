@@ -155,6 +155,38 @@
   stroke-linejoin: round;
 }
 
+/* A creature's flat shadow: the one see-through fill. */
+.shade {
+  fill: var(--color-ink);
+  opacity: 0.18;
+}
+
+/* A sneaker's stripe in the contrast, when the sneaker is in the racer's colour. */
+.bandLine {
+  fill: none;
+  stroke: var(--band);
+  stroke-linecap: round;
+}
+
+/* A robot's mouth, glowing on its screen: a line, or filled when open. */
+.glassLine {
+  fill: none;
+  stroke: var(--color-glass);
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.glow {
+  fill: var(--color-glass);
+  stroke: var(--color-glass);
+  stroke-linejoin: round;
+}
+
+/* A creature's tongue. */
+.pinkFill {
+  fill: var(--color-pink);
+}
+
 /* The rider's hands, in their skin tone. */
 .skin {
   fill: var(--skin);

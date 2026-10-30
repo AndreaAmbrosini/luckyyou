@@ -1,6 +1,6 @@
 import { loadFeature } from '@amiceli/vitest-cucumber';
 import { describe, expect, it } from 'vitest';
-import { handOutLooks, speechBox, type Box, type ChosenLook } from '../../scenario-kit';
+import { handOutLooks, speechBox, type Box, type ChosenLook, type Mood } from '../../scenario-kit';
 import { dealLooks } from '../../scenario-kit/line-up';
 import { createRandom } from '../../scenario-kit/random';
 import { describeSpec, runShow, type ShowRecord } from '../../scenario-kit/testing';
@@ -13,6 +13,7 @@ import {
   EXTRAS,
   isCreature,
   MOUNTS,
+  RACER,
   RACER_COLOURS,
   racer,
   RIDER,
@@ -22,6 +23,7 @@ import {
   type Mount,
 } from './parts';
 import styles from './the-race.module.css';
+import css from './the-race.module.css?raw';
 import {
   BURST,
   CAMERA,
@@ -1026,8 +1028,8 @@ describeSpec(await loadFeature('./the-race.feature'), ({ Rule }) => {
         const giulia = drawn.get('Giulia')!;
         expect(giulia.dataset).toMatchObject({ part: 'creature', mount: 'shark' });
         expect(giulia.style.getPropertyValue('--racer')).toBe('var(--color-sea)');
-        const legs = giulia.querySelector('path[data-part="legs"]')!.getAttribute('d')!;
-        expect(legs.match(/M/g)).toHaveLength(2);
+        const legs = [...giulia.querySelectorAll('path[data-part="legs"]')];
+        expect(legs.map((leg) => leg.getAttribute('d')!.match(/M/g))).toEqual([['M'], ['M']]);
         const shoes = giulia.querySelectorAll('[data-part="shoe"]');
         expect(shoes).toHaveLength(2);
         for (const shoe of shoes) expect(shoe.getAttribute('class')).toBe(styles.racer);
@@ -1111,6 +1113,311 @@ describeSpec(await loadFeature('./the-race.feature'), ({ Rule }) => {
         }
       });
     });
+
+    /** `kind` in tomato with a scarf, as the show draws it, `mood`. */
+    const modern = (kind: Creature, mood: Mood = 'calm') => {
+      const face = handOutLooks(['Anna'], createRandom(1)).get('Anna')!;
+      return creature({ mount: kind, colour: 'tomato', extra: 'scarf' }, { face, number: 1, mood });
+    };
+    /** Whether `el` and everything round it up to `root` is shown. */
+    const visible = (el: Element | null, root: Element) => {
+      for (let at = el; at && at !== root; at = at.parentElement) {
+        if (at.getAttribute('display') === 'none') return false;
+      }
+      return !!el;
+    };
+    /** Every number in `text`, in order. */
+    const numbers = (text: string) => (text.match(/-?\d+(\.\d+)?/g) ?? []).map(Number);
+    /** A path's points, as [x, y] pairs: every pair of numbers in it. */
+    const points = (d: string) => {
+      const all = numbers(d);
+      return all.flatMap((_, i) => (i % 2 ? [] : [[all[i]!, all[i + 1]!] as const]));
+    };
+    /** A foot's place: its ankle, how far it's turned, and its size. */
+    const footAt = (foot: Element) => {
+      const [x, y, turn, k] = numbers(foot.getAttribute('transform')!);
+      return { x: x!, y: y!, turn: turn!, k: k! };
+    };
+
+    RuleScenario('Creatures are modern cartoons', ({ When, Then, And }) => {
+      let all: ReturnType<typeof modern>[];
+      When('someone races as any creature', () => {
+        all = CREATURES.map((kind) => modern(kind));
+      });
+      Then(
+        'each main part of its body has a flat shadow on its lower left, ink at 18%, and most have a white highlight on the upper right',
+        () => {
+          const rule = /\.shade\s*{([^}]*)}/.exec(css)![1]!;
+          expect(rule).toMatch(/fill:\s*var\(--color-ink\)/);
+          expect(rule).toMatch(/opacity:\s*0?\.18/);
+          let highlighted = 0;
+          for (const { el, look } of all) {
+            const kind = look.mount;
+            const shades = [...el.querySelectorAll('[data-part="own"] [data-part="shade"]')];
+            expect(shades.length, kind).toBeGreaterThan(0);
+            for (const shade of shades) {
+              expect(shade.getAttribute('class')).toBe(styles.shade);
+              // The part less itself moved up and right, so what's left is its lower left.
+              const id = /url\(#(.+)\)/.exec(shade.getAttribute('clip-path')!)![1]!;
+              const clip = el.querySelector(`clipPath[id="${id}"] path`)!;
+              expect(clip.getAttribute('d')).toContain(shade.getAttribute('d'));
+              expect(clip.getAttribute('clip-rule')).toBe('evenodd');
+              const [dx, dy] = numbers(clip.getAttribute('transform')!);
+              expect(dx, kind).toBeGreaterThan(0);
+              expect(dy, kind).toBeLessThan(0);
+              // Its outline over it.
+              expect(shade.nextElementSibling!.getAttribute('d')).toBe(shade.getAttribute('d'));
+              expect(shade.nextElementSibling!.getAttribute('class')).toBe(styles.line);
+            }
+            const [h1, h2] = CREATURE_SPEC[kind].hips;
+            const highlights = [...el.querySelectorAll('[data-part="highlight"]')];
+            if (highlights.length) highlighted++;
+            for (const highlight of highlights) {
+              expect(highlight.getAttribute('class')).toBe(styles.stripe);
+              expect(Number(highlight.getAttribute('opacity'))).toBeLessThanOrEqual(0.8);
+              const line = points(highlight.getAttribute('d')!);
+              expect(Math.max(...line.map(([x]) => x)), kind).toBeGreaterThan((h1[0] + h2[0]) / 2);
+              expect(Math.max(...line.map(([, y]) => y)), kind).toBeLessThan(h1[1] - 40);
+            }
+          }
+          expect(highlighted).toBeGreaterThan(CREATURES.length / 2);
+        },
+      );
+      And('each pupil has a white shine', () => {
+        for (const one of all) {
+          for (const mood of ['calm', 'worried', 'scared', 'happy'] as const) {
+            one.setMood(mood);
+            // A pupil, or a person's dark eye, which is all pupil; a robot's screen has none.
+            for (const eye of one.face.querySelectorAll('[data-part="eye"]')) {
+              const pupil = eye.nextElementSibling!;
+              const shine = pupil.nextElementSibling!;
+              const dark = visible(pupil, one.el) || eye.getAttribute('class') === styles.ink;
+              expect(dark, `${one.look.mount} ${mood}`).toBe(!CREATURE_SPEC[one.look.mount].screen);
+              expect(shine.getAttribute('data-part')).toBe('shine');
+              expect(shine.getAttribute('class')).toBe(styles.paperFill);
+              expect(visible(shine, one.el)).toBe(dark);
+            }
+          }
+          one.setMood('calm');
+        }
+      });
+      And('its arms bend at the elbow and end in gloves, paws, tentacle tips or fins', () => {
+        for (const { el, look } of all) {
+          const spec = CREATURE_SPEC[look.mount];
+          for (const which of ['back', 'front']) {
+            const holder = el.querySelector(`[data-part="${which}-arm"]`)!;
+            const d = holder.querySelector('path')!.getAttribute('d')!;
+            const hand = holder.querySelector('[data-part="hand"]');
+            const thumb = holder.querySelector('[data-part="thumb"]');
+            if (spec.fins) {
+              // A leaf from the shoulder.
+              expect(d.match(/Q/g)).toHaveLength(2);
+              expect(d.endsWith('Z')).toBe(true);
+              expect(visible(hand, el)).toBe(false);
+            } else {
+              // Shoulder, elbow, hand.
+              expect(d, look.mount).toMatch(/^M\S+ \S+ Q\S+ \S+ \S+ \S+$/);
+              expect(visible(hand, el)).toBe(true);
+              // A glove has a thumb; a paw doesn't.
+              expect(visible(thumb, el)).toBe(!spec.noThumb);
+            }
+          }
+        }
+      });
+      And('it sprints: its front foot planted, its back foot kicked up behind', () => {
+        for (const { look, shoes } of all) {
+          const [back, front] = shoes.map(footAt);
+          expect(front!.turn, look.mount).toBe(0);
+          expect(front!.y + 11 * front!.k, look.mount).toBeCloseTo(RACER.feet, 5);
+          expect(back!.turn, look.mount).toBeGreaterThan(45);
+          expect(back!.y, look.mount).toBeLessThan(front!.y);
+          expect(back!.x, look.mount).toBeLessThan(front!.x);
+        }
+      });
+      And(
+        'it fills the same box as before, its feet on the same line and its face at the same height',
+        () => {
+          // Its face and nose where they were, so tags and bubbles don't move.
+          const places = CREATURES.map((kind) => [
+            kind,
+            [CREATURE_SPEC[kind].face, CREATURE_SPEC[kind].nose],
+          ]);
+          expect(Object.fromEntries(places)).toEqual({
+            zombie: [130, 206],
+            robot: [130, 176],
+            shark: [188, 228],
+            astronaut: [130, 180],
+            monster: [130, 196],
+            villain: [130, 172],
+            alien: [130, 176],
+            dinosaur: [162, 220],
+          });
+          for (const { el, look } of all) {
+            expect(el.getAttribute('viewBox')).toBe(`0 0 ${RACER.width} ${RACER.height}`);
+            // Its eyes in the 72 px box a rider's head fills, which stands on y 110.
+            for (const [, y] of CREATURE_SPEC[look.mount].eyes) {
+              expect(y).toBeGreaterThan(110 - RIDER.foot);
+              expect(y).toBeLessThan(110 - RIDER.foot + RIDER.size);
+            }
+          }
+        },
+      );
+    });
+
+    RuleScenarioOutline(
+      "A <creature>'s face when it is <mood>",
+      ({ When, Then }, { creature: kind, mood }) => {
+        let one: ReturnType<typeof modern>;
+        const part = (name: string) => [...one.face.querySelectorAll(`[data-part="${name}"]`)];
+        const shownPart = (name: string) => part(name).filter((el) => visible(el, one.el));
+        /** Each brow's points. */
+        const brows = () =>
+          shownPart('brows').flatMap((el) =>
+            el
+              .getAttribute('d')!
+              .split('M')
+              .filter((each) => each.trim())
+              .map(points),
+          );
+        When('a <creature> is <mood>', () => {
+          one = modern(kind as Creature, mood as Mood);
+          expect(one.el.dataset.mood).toBe(mood);
+        });
+        Then('<face>', () => {
+          const eyes = CREATURE_SPEC[kind as Creature].eyes;
+          const middle = eyes.reduce((sum, [x]) => sum + x, 0) / eyes.length;
+          const mouth = part('mouth')[0]!;
+          const d = mouth.getAttribute('d')!;
+          switch (`${kind} ${mood}`) {
+            case 'zombie calm': {
+              // Half shut: each lid's edge level, between the eye's top and its middle.
+              const lids = shownPart('lid');
+              expect(lids).toHaveLength(eyes.length);
+              lids.forEach((lid, i) => {
+                const y = eyes[i]![1];
+                const ry = Number(part('eye')[i]!.getAttribute('ry'));
+                const all = numbers(lid.getAttribute('d')!);
+                const [left, right] = [all[1]!, all.at(-1)!];
+                expect(left).toBeCloseTo(right, 5);
+                expect(left).toBeGreaterThan(y - ry);
+                expect(left).toBeLessThan(y);
+              });
+              // The front brow higher.
+              const [back, front] = brows();
+              expect(Math.min(...front!.map(([, y]) => y))).toBeLessThan(
+                Math.min(...back!.map(([, y]) => y)),
+              );
+              // A smirk: open, its front corner up.
+              const line = points(d);
+              expect(d).not.toContain('Z');
+              expect(line.at(-1)![1]).toBeLessThan(line[0]![1]);
+              break;
+            }
+            case 'zombie worried': {
+              for (const [i, lid] of shownPart('lid').entries()) {
+                const all = numbers(lid.getAttribute('d')!);
+                const [left, right] = [all[1]!, all.at(-1)!];
+                // Lower on the outside.
+                if (eyes[i]![0] < middle) expect(left).toBeGreaterThan(right);
+                else expect(right).toBeGreaterThan(left);
+              }
+              expect(brows()).toHaveLength(2);
+              for (const brow of brows()) {
+                // Each brow ends higher, nearer the middle.
+                const [start, end] = [brow[0]!, brow.at(-1)!];
+                expect(end[1]).toBeLessThan(start[1]);
+                expect(Math.abs(end[0] - middle)).toBeLessThan(Math.abs(start[0] - middle));
+              }
+              expect(d.match(/Q/g)).toHaveLength(2);
+              expect(d).not.toContain('Z');
+              break;
+            }
+            case 'zombie scared': {
+              const calm = modern('zombie');
+              part('eye').forEach((eye, i) => {
+                const before = calm.face.querySelectorAll('[data-part="eye"]')[i]!;
+                const rx = Number(eye.getAttribute('rx'));
+                expect(rx).toBeGreaterThan(Number(before.getAttribute('rx')));
+                expect(Number(part('pupil')[i]!.getAttribute('rx'))).toBeLessThan(rx * 0.3);
+              });
+              expect(shownPart('lid')).toHaveLength(0);
+              expect(d).toMatch(/ a.* a.*Z$/);
+              expect(mouth.getAttribute('class')).toBe(styles.ink);
+              break;
+            }
+            case 'zombie happy':
+              expect(d).toMatch(/Z$/);
+              expect(mouth.getAttribute('class')).toBe(styles.ink);
+              expect(shownPart('teeth')).toHaveLength(1);
+              expect(shownPart('tongue')).toHaveLength(1);
+              break;
+            case 'zombie party':
+              expect(shownPart('shades')).toHaveLength(1);
+              expect(part('shades')[0]!.getAttribute('class')).toBe(styles.ink);
+              expect(shownPart('glint')).toHaveLength(1);
+              expect(d).toMatch(/Z$/);
+              expect(mouth.getAttribute('class')).toBe(styles.ink);
+              break;
+            case 'monster calm':
+              expect(shownPart('fangs')).toHaveLength(1);
+              expect(part('fangs')[0]!.getAttribute('d')!.match(/M/g)).toHaveLength(5);
+              expect(d).not.toContain('Z');
+              break;
+            case 'robot calm':
+              expect(one.el.querySelector('[data-part="screen"]')!.getAttribute('class')).toBe(
+                styles.ink,
+              );
+              for (const eye of part('eye')) expect(eye.getAttribute('class')).toBe(styles.glass);
+              expect(shownPart('pupil')).toHaveLength(0);
+              expect(mouth.getAttribute('class')).toBe(styles.glassLine);
+              expect(shownPart('brows')).toHaveLength(0);
+              break;
+            default:
+              throw new Error(`No face for a ${kind} ${mood}`);
+          }
+        });
+      },
+    );
+
+    /** The paints the feature names, as the classes a shoe or its stripe is drawn in, in tomato. */
+    const SHOE_PAINTS: Record<string, string> = {
+      tomato: styles.racer!,
+      'ink-soft': styles.inkSoft!,
+      ink: styles.ink!,
+      grey: styles.shark!,
+      glass: styles.glass!,
+    };
+    const STRIPE_PAINTS: Record<string, string> = {
+      tomato: styles.racerLine!,
+      sun: styles.bandLine!,
+    };
+
+    RuleScenarioOutline(
+      'A <creature> runs in <feet>',
+      ({ When, Then }, { creature: kind, feet }) => {
+        let one: ReturnType<typeof modern>;
+        When('someone races as a <creature> in tomato', () => {
+          one = modern(kind as Creature);
+          expect(one.el.style.getPropertyValue('--racer')).toBe('var(--color-tomato)');
+        });
+        Then('it runs in <feet>', () => {
+          const shod = /^(\S+) (sneakers|boots)(?: with a (\S+) stripe)?$/.exec(feet);
+          const bare = /^big bare feet, (\S+)$/.exec(feet);
+          const paint = (shod ?? bare)?.[1];
+          expect(paint, feet).toBeDefined();
+          const foot = shod ? (shod[2] === 'sneakers' ? 'sneaker' : 'boot') : 'bare';
+          for (const each of one.shoes) {
+            expect(each.dataset.foot).toBe(foot);
+            const shoe = each.querySelector('[data-part="shoe"]')!;
+            expect(shoe.getAttribute('class')).toBe(SHOE_PAINTS[paint!]);
+            const stripe = each.querySelector('[data-part="stripe"]');
+            if (shod?.[3]) expect(stripe!.getAttribute('class')).toBe(STRIPE_PAINTS[shod[3]]);
+            else expect(stripe).toBeNull();
+            if (bare) expect(footAt(each).k).toBeGreaterThan(1);
+          }
+        });
+      },
+    );
   });
 
   Rule('A track drawn at random', ({ RuleScenario, RuleScenarioOutline }) => {
@@ -2330,13 +2637,13 @@ describeSpec(await loadFeature('./the-race.feature'), ({ Rule }) => {
             expect(y + 57).toBeGreaterThan(2);
             expect(y + 57).toBeLessThan(46);
           } else if (kind !== 'dinosaur') {
-            const hands = [...one.el.querySelectorAll('[data-part$="-arm"] circle')].map((hand) => [
+            const hands = [...one.el.querySelectorAll('[data-part="hand"]')].map((hand) => [
               Number(hand.getAttribute('cx')),
               Number(hand.getAttribute('cy')),
             ]);
             expect(hands, kind).toEqual([
-              [x - 24, y + 26],
-              [x + 24, y + 26],
+              [x - 22, y + 30],
+              [x + 22, y + 30],
             ]);
           }
         }

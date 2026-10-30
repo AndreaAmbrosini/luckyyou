@@ -97,7 +97,6 @@ Feature: The Race
       Then its face has the skin tone the kit hands out for the run
 
     # Step 2.
-    @pending
     Scenario: Creatures are modern cartoons
       When someone races as any creature
       Then each main part of its body has a flat shadow on its lower left, ink at 18%, and most have a white highlight on the upper right
@@ -107,7 +106,6 @@ Feature: The Race
       And it fills the same box as before, its feet on the same line and its face at the same height
 
     # Step 2.
-    @pending
     Scenario Outline: A <creature>'s face when it is <mood>
       When a <creature> is <mood>
       Then <face>
@@ -123,7 +121,6 @@ Feature: The Race
         | robot    | calm    | its eyes and mouth glow light blue on its dark screen, and it has no brows |
 
     # Step 2.
-    @pending
     Scenario Outline: A <creature> runs in <feet>
       When someone races as a <creature> in tomato
       Then it runs in <feet>
