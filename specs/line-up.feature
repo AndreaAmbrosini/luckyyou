@@ -45,31 +45,13 @@ Feature: The Line-up
 
   Rule: Changing a look
 
-    # Old design: replaced by "Today's people in a row, the chosen one under it"
-    # (step 1 of The Race's creatures, src/scenarios/the-race/the-race.feature).
-    Scenario: Choosing whose look to change
-      Given a show's Line-up is open
-      When I click Ben's tile
-      Then Ben's tile is marked as chosen, in sun, and pressed
-      And beside the tiles, Ben is drawn bigger, with his name and each of the show's options
-
-    # Step 1 of The Race's creatures.
-    @pending
     Scenario: Today's people in a row, the chosen one under it
       Given a show's Line-up is open with 8 people
       When I click Ben's tile
       Then today's people sit in one row of tiles, in today's order, Ben's marked as chosen, in sun, and pressed
       And under the row, Ben is drawn bigger with his name, "Surprise me" and the show's options
-      And an option shown as pictures has a sheet of its own beside him
+      And an option that shows him in each choice has a sheet of its own beside him
 
-    # Old design: replaced by "The chosen one of each option is marked and named" (step 1).
-    Scenario: The chosen one of each option is marked
-      When Ben's look is shown beside the tiles
-      Then each option is a row of choices, with the one he has marked by a check mark as well as by colour
-      And a colour option shows its choices as round swatches, each named for screen readers
-
-    # Step 1 of The Race's creatures.
-    @pending
     Scenario: The chosen one of each option is marked and named
       When Ben's look is shown
       Then in each option, the choice he has is marked by a check mark as well as by colour
@@ -77,24 +59,16 @@ Feature: The Line-up
       And a colour option shows its choices as round swatches, each named for screen readers
 
     Scenario: A choice changes the look at once
-      Given Ben's look is shown beside the tiles
+      Given Ben's look is shown
       When I choose another choice of an option
-      Then Ben is drawn with it beside the tiles and on his tile
+      Then Ben is drawn with it, bigger and on his tile
 
     Scenario: Surprise me
-      Given Ben's look is shown beside the tiles
+      Given Ben's look is shown
       When I choose "Surprise me"
       Then Ben gets a look drawn at random from the show's choices
 
-    # Decision 0012. Old design: replaced by "An option's groups are tabs" (step 1).
-    Scenario: An option's choices can come in groups
-      Given a show whose first option has choices in two groups
-      When Ben's look is shown beside the tiles
-      Then that option's choices sit under each group's label, the groups in the order their first choices come
-      And it is still one option: one choice marked, and the choices read out under the option's label
-
-    # Decision 0013. Step 1 of The Race's creatures.
-    @pending
+    # Decision 0013.
     Scenario: An option's groups are tabs
       Given a show whose first option has choices in two groups
       When Ben's look is shown
@@ -103,8 +77,7 @@ Feature: The Line-up
       And choosing the other tab shows its choices and leaves Ben's look as it was
       And it is still one option: one choice marked, and the choices read out under the option's label
 
-    # Decision 0013. Step 1 of The Race's creatures.
-    @pending
+    # Decision 0013.
     Scenario: Choices can be pictures
       Given a show whose first option shows its choices as Ben in each, and whose second gives each choice a picture
       When Ben's look is shown
@@ -188,3 +161,4 @@ Feature: The Line-up
         | two options with the same name      |
         | no way to draw a look               |
       | a choice in a group without a label |
+      | a picture for only some choices     |

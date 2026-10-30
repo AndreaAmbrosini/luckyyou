@@ -47,20 +47,27 @@ export interface LineUpOption {
   /** The key in a look; unique in the line-up. */
   readonly name: string;
   readonly label: string;
-  /** At least two, with unique names; they may come in groups. */
+  /** At least two, with unique names; they may come in groups, shown as tabs (decision 0013). */
   readonly choices: readonly LineUpChoice[];
+  /** Each choice shows as the person drawn with it in the rest of their look (`draw`). */
+  readonly drawn?: boolean;
 }
 
 export interface LineUpChoice {
   /** The value in a look. */
   readonly name: string;
-  /** Shown on its chip, or read out for a swatch. */
+  /** Shown on its chip or under its drawing, or read out for a swatch or a picture. */
   readonly label: string;
   /** A colour from tokens.css, as in `--color-<swatch>`: the choice shows as a round swatch. */
   readonly swatch?: string;
   /**
-   * The label of the group it shows under, such as "Rides" (decision 0012).
-   * Groups come in the order their first choices do.
+   * Draws the choice's own picture, filling the button it shows on. All of
+   * an option's choices have one, or none do (decision 0013).
+   */
+  picture?(): Element;
+  /**
+   * The label of the tab it shows under, such as "Rides" (decision 0013).
+   * Tabs come in the order their first choices do.
    */
   readonly group?: string;
 }

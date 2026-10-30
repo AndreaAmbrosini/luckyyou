@@ -27,17 +27,6 @@ Feature: The Race
 
   Rule: Its line-up
 
-    # Old design: replaced by "Racers as pictures, by kind" (step 1).
-    Scenario: Rides and creatures, in one Racer option
-      When the Line-up opens for The Race
-      Then its first option is "Racer", its choices in two groups
-      And the group "Rides" holds "Snail", "Duck", "Office chair", "Caterpillar", "Space hopper", "Ostrich", "Rocket" and "Sandwich"
-      And the group "Creatures" holds "Zombie", "Robot", "Shark with feet", "Astronaut", "Monster", "Villain", "Alien" and "Dinosaur"
-      And "Colour" and "Extra" offer the same choices as in step 1, for riders and creatures alike
-      And each tile and the preview draw a creature as the show does, calm
-
-    # Step 1.
-    @pending
     Scenario: Racers as pictures, by kind
       When the Line-up opens for The Race
       Then its first option is "Racer", its choices in groups, as tabs
@@ -48,8 +37,6 @@ Feature: The Race
       And each racer is shown as the chosen person racing as it, in their colour and extra, calm, its name under it
       And "Colour" offers the same swatches as before, and "Extra" a picture of each extra, each named for screen readers
 
-    # Step 1.
-    @pending
     Scenario: The Line-up fits the window
       Given 8 people, a 15-character name among them, in a 1280 by 800 window
       When the Line-up opens for The Race

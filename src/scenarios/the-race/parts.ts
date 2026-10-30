@@ -216,6 +216,50 @@ export function group(parent: Element, name: string, shapes: readonly Shape[] = 
   return g;
 }
 
+/** Each extra on its own, on a 32 by 32 grid, for the Line-up's picture buttons. */
+const EXTRA_PICTURES: Record<Extra, readonly Shape[]> = {
+  googly: [
+    ['circle', styles.paper!, { cx: 10.5, cy: 16, r: 7 }],
+    ['circle', styles.paper!, { cx: 22, cy: 15, r: 6 }],
+    ['circle', styles.inkFill!, { cx: 12.5, cy: 18.5, r: 3 }],
+    ['circle', styles.inkFill!, { cx: 20, cy: 17.5, r: 2.6 }],
+  ],
+  tophat: [
+    ['rect', styles.ink!, { x: 9.5, y: 6, width: 13, height: 17, rx: 1.5 }],
+    ['rect', styles.tomato!, { x: 9.5, y: 17, width: 13, height: 3.5, 'stroke-width': 0 }],
+    ['rect', styles.ink!, { x: 4, y: 22.5, width: 24, height: 4, rx: 2 }],
+  ],
+  number: [['circle', styles.paper!, { cx: 16, cy: 16, r: 11.5 }]],
+  scarf: [
+    ['path', styles.tomato!, { d: 'M19 15 L17 28 L23 28 L24.5 14 Z' }],
+    ['path', styles.tomato!, { d: 'M5 9 Q16 15 27 9 L27 15 Q16 21 5 15 Z' }],
+  ],
+  cape: [
+    ['path', styles.tomato!, { d: 'M11 5 H21 L28 27 Q16 23 4 27 Z' }],
+    ['path', styles.line!, { d: 'M11 5 Q16 9 21 5' }],
+  ],
+  bowtie: [
+    ['path', styles.tomato!, { d: 'M16 16 L4 8.5 V23.5 Z' }],
+    ['path', styles.tomato!, { d: 'M16 16 L28 8.5 V23.5 Z' }],
+    ['circle', styles.tomato!, { cx: 16, cy: 16, r: 3.8 }],
+  ],
+};
+
+/** `extra` on its own, as the Line-up shows it on its button. */
+export function extraPicture(extra: Extra): SVGSVGElement {
+  const svg = drawing(32, 32);
+  const g = group(svg, extra, EXTRA_PICTURES[extra]);
+  g.setAttribute('stroke-width', '2.5');
+  if (extra === 'number') {
+    // The racing number's own type, at 15 of the grid's 32.
+    const [label] = draw(g, [
+      ['text', styles.number!, { transform: `translate(16 16.5) scale(${15 / 22})` }],
+    ]);
+    label!.textContent = '3';
+  }
+  return svg;
+}
+
 /** Shows `el` when `on`, hides it otherwise; writes only on a change. */
 export function show(el: Element, on: boolean) {
   const shown = !el.hasAttribute('display');

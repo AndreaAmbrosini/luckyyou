@@ -10,6 +10,7 @@ import { creature } from './creature';
 import {
   CREATURES,
   EXTRAS,
+  extraPicture,
   isCreature,
   MOUNTS,
   RACER_COLOURS,
@@ -39,6 +40,18 @@ const RACERS = {
   alien: 'Alien',
   dinosaur: 'Dinosaur',
 } as const;
+
+/** Each creature's tab on the Line-up, after the rides'. */
+const KINDS: Record<Creature, 'Animals' | 'Spooky' | 'Space'> = {
+  shark: 'Animals',
+  dinosaur: 'Animals',
+  zombie: 'Spooky',
+  monster: 'Spooky',
+  villain: 'Spooky',
+  robot: 'Space',
+  astronaut: 'Space',
+  alien: 'Space',
+};
 
 /** Colours and extras: "shark" is a colour here, read out as "Grey". */
 const LABELS = {
@@ -78,9 +91,16 @@ const lineUp: LineUp = {
       // Still `mount`, so looks stored before creatures keep their ride (decision 0012).
       name: 'mount',
       label: 'Racer',
+      drawn: true,
       choices: [
         ...MOUNTS.map((mount) => ({ name: mount, label: RACERS[mount], group: 'Rides' })),
-        ...CREATURES.map((kind) => ({ name: kind, label: RACERS[kind], group: 'Creatures' })),
+        ...(['Animals', 'Spooky', 'Space'] as const).flatMap((group) =>
+          CREATURES.filter((kind) => KINDS[kind] === group).map((kind) => ({
+            name: kind,
+            label: RACERS[kind],
+            group,
+          })),
+        ),
       ],
     },
     {
@@ -95,7 +115,11 @@ const lineUp: LineUp = {
     {
       name: 'extra',
       label: 'Extra',
-      choices: EXTRAS.map((extra) => ({ name: extra, label: LABELS[extra] })),
+      choices: EXTRAS.map((extra) => ({
+        name: extra,
+        label: LABELS[extra],
+        picture: () => extraPicture(extra),
+      })),
     },
   ],
   draw: (chosen, { name, place }) => {
