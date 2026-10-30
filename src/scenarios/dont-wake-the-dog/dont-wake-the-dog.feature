@@ -272,7 +272,7 @@ Feature: Don't Wake the Dog
       When the show runs at 12, at 8 and at 2 people
       Then no name tag is ever over another
       And no speech bubble covers a name tag or a face
-      And each person's speech bubble sits by them, touching their face or name tag, its tail no lower than the tag
+      And each person's speech bubble moves with them, its tail just over their head, within the middle half of it
       And no one ever covers the dog's face
 
   Rule: Reduced motion keeps the story

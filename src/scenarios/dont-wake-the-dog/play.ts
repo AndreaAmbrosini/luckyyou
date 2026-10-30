@@ -34,6 +34,7 @@ import {
   dogFace,
   faceBox,
   FRONT,
+  headBox,
   nameTagFor,
   placings,
   tagSetOf,
@@ -184,7 +185,7 @@ export async function playDontWakeTheDog(show: Show): Promise<void> {
   const following: {
     el: HTMLElement;
     name: string;
-    offset: { dx: number; dy: number };
+    offset: { dx: number; dy: number; lean: number };
     from: number;
     to: number;
   }[] = [];
@@ -192,7 +193,7 @@ export async function playDontWakeTheDog(show: Show): Promise<void> {
   const draw = (t: number) => {
     for (const bubble of following) {
       if (t < bubble.from - 1e-9 || t > bubble.to + 1e-9) continue;
-      const { x, y } = anchorBy(faceBox(places.at(bubble.name, t).spot), bubble.offset);
+      const { x, y } = anchorBy(headBox(places.at(bubble.name, t).spot), bubble.offset);
       const left = `${x.toFixed(1)}px`;
       const top = `${y.toFixed(1)}px`;
       if (bubble.el.style.left !== left) bubble.el.style.left = left;
@@ -264,10 +265,11 @@ export async function playDontWakeTheDog(show: Show): Promise<void> {
     });
   }
 
-  // Bubbles: each beside whoever says it, clear of every face and name tag
+  // Bubbles: each by whoever says it, clear of every face and name tag
   // while it is up, and of every other bubble up with it and the caption.
-  // A person's moves with them, and stays by them where the row is too full
-  // for that: over another bubble, about to go, else up against the caption.
+  // A person's moves with them, its tail over their head; where the row is
+  // too full for that, over another bubble, about to go, else up against
+  // the caption; only then beside them, its tail leaning towards them.
   const said: { boxAt: (t: number) => Box; from: number; to: number }[] = [];
   for (const saying of plan.says) {
     const until = saying.at + BUBBLE;
@@ -279,16 +281,18 @@ export async function playDontWakeTheDog(show: Show): Promise<void> {
     const othersAt = (t: number) =>
       said.filter((other) => other.from <= t && t <= other.to).map((other) => other.boxAt(t));
     const person = saying.by !== 'dog' && saying.by !== 'gate';
-    const offset = person
-      ? (byTheSpeaker(saying, places, (t) => [
-          ...firmAt(t),
-          ...othersAt(t),
-          ...captionsAt(plan, t),
-        ]) ??
-        byTheSpeaker(saying, places, (t) => [...firmAt(t), ...captionsAt(plan, t)]) ??
-        byTheSpeaker(saying, places, firmAt))
-      : null;
-    const faceAt = (t: number) => faceBox(places.at(saying.by, t).spot);
+    const tries = [
+      (t: number) => [...firmAt(t), ...othersAt(t), ...captionsAt(plan, t)],
+      (t: number) => [...firmAt(t), ...captionsAt(plan, t)],
+      firmAt,
+    ];
+    let offset: { dx: number; dy: number; lean: number } | null = null;
+    for (const where of ['over', 'beside'] as const) {
+      for (const avoidAt of tries) {
+        if (person && !offset) offset = byTheSpeaker(saying, places, avoidAt, where);
+      }
+    }
+    const headAt = (t: number) => headBox(places.at(saying.by, t).spot);
     const fixed = offset
       ? null
       : bubbleAt(
@@ -296,10 +300,12 @@ export async function playDontWakeTheDog(show: Show): Promise<void> {
           preferFor(saying, places),
           times(saying.at, until).flatMap((t) => [...firmAt(t), ...othersAt(t)]),
         );
-    const anchorAt = (t: number) => (offset ? anchorBy(faceAt(t), offset) : fixed!);
+    const anchorAt = (t: number) => (offset ? anchorBy(headAt(t), offset) : fixed!);
+    const lean = offset?.lean ?? 0;
     const el = bubbles.appendChild(
       bubble(saying.text, anchorAt(saying.at), {
         colour: saying.by === 'gate' || saying.text === 'Woof!' ? 'sun' : 'paper',
+        lean,
       }),
     );
     el.dataset.part = 'bubble';
@@ -307,7 +313,7 @@ export async function playDontWakeTheDog(show: Show): Promise<void> {
     el.style.visibility = 'hidden';
     if (offset) following.push({ el, name: saying.by, offset, from: saying.at, to: until });
     said.push({
-      boxAt: (t) => boxOfBubble(saying.text, anchorAt(t)),
+      boxAt: (t) => boxOfBubble(saying.text, anchorAt(t), lean),
       from: saying.at,
       to: until,
     });
@@ -338,15 +344,15 @@ const SIGN_BOX: Box = {
   bottom: SIGN.top + SIGN.height + 5,
 };
 
-/** A bubble's box as `bubbleAt` placed it. */
-const boxOfBubble = (text: string, anchor: { x: number; y: number }): Box => {
+/** A bubble's box as `bubbleAt` or `bubbleBy` placed it, leaning `lean`. */
+const boxOfBubble = (text: string, anchor: { x: number; y: number }, lean = 0): Box => {
   // The kit's estimate, as bubbleAt uses it.
   const font = 46;
   const half = (1.1 * (0.62 * font * [...text].length + 2 * (22 + 4))) / 2;
   const height = 1.1 * (22 + 1.1 * font + 2 * (6 + 4));
   return {
-    left: anchor.x - half,
-    right: anchor.x + half,
+    left: anchor.x + lean - half,
+    right: anchor.x + lean + half,
     top: anchor.y - height,
     bottom: anchor.y,
   };
@@ -384,19 +390,26 @@ function captionsAt(plan: Plan, t: number): Box[] {
 }
 
 /**
- * Where a person's bubble sits from them while it is up, as anchorBy's
- * offset, clear of `avoidAt` each moment; null when nowhere by them is.
+ * Where a person's bubble sits `where` they are while it is up, as
+ * bubbleBy's offset, clear of `avoidAt` each moment; null when it can't.
  */
-function byTheSpeaker(saying: Saying, places: Places, avoidAt: (t: number) => Box[]) {
+function byTheSpeaker(
+  saying: Saying,
+  places: Places,
+  avoidAt: (t: number) => Box[],
+  where: 'over' | 'beside',
+) {
   const speaker = times(saying.at, saying.at + BUBBLE).map((t) => {
+    const { spot } = places.at(saying.by, t);
     const tag = places.tag(saying.by, t);
     return {
-      face: faceBox(places.at(saying.by, t).spot),
+      head: headBox(spot),
+      face: faceBox(spot),
       tag: tag.hidden ? null : tag.box,
       avoid: avoidAt(t),
     };
   });
-  return bubbleBy(saying.text, speaker);
+  return bubbleBy(saying.text, speaker, where);
 }
 
 /** Where a bubble would rather be: over its sayer's head, by the dog's nose, or by the gate. */

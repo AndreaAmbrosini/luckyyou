@@ -35,7 +35,6 @@ import {
   type Watched,
 } from './watching';
 import {
-  apart,
   BACK,
   BEHIND,
   BOB,
@@ -44,6 +43,7 @@ import {
   faceBox,
   GROW,
   GROWN,
+  headBox,
   lane,
   OVER,
   overlap,
@@ -1275,7 +1275,7 @@ describeSpec(await loadFeature('./dont-wake-the-dog.feature'), ({ Rule }) => {
             ];
             for (const said of frame.bubbles) {
               seen++;
-              const box = speechBox(said.text, said);
+              const box = speechBox(said.text, said, said.lean);
               for (const { what, box: other } of covered) {
                 const at = `${label}: "${said.text}" over ${what} at ${frame.time}`;
                 expect(overlap(box, other), at).toBe(false);
@@ -1286,7 +1286,7 @@ describeSpec(await loadFeature('./dont-wake-the-dog.feature'), ({ Rule }) => {
         expect(seen).toBeGreaterThan(0);
       });
       And(
-        "each person's speech bubble sits by them, touching their face or name tag, its tail no lower than the tag",
+        "each person's speech bubble moves with them, its tail just over their head, within the middle half of it",
         () => {
           let seen = 0;
           for (const { label, run, places } of runs) {
@@ -1295,15 +1295,15 @@ describeSpec(await loadFeature('./dont-wake-the-dog.feature'), ({ Rule }) => {
                 if (said.by === 'dog' || said.by === 'gate') continue;
                 seen++;
                 const at = `${label}: ${said.by}'s "${said.text}" at ${frame.time}`;
-                const box = speechBox(said.text, said);
-                const face = faceBox(places.at(said.by, frame.time).spot);
-                const tag = places.tag(said.by, frame.time);
-                const own = tag.hidden ? [face] : [face, tag.box];
-                // Touching: within the gap a bubble keeps from what it sits by.
-                expect(Math.min(...own.map((each) => apart(box, each))), at).toBeLessThanOrEqual(
-                  16,
+                const head = headBox(places.at(said.by, frame.time).spot);
+                const middle = (head.left + head.right) / 2;
+                expect(Math.abs(said.x - middle), at).toBeLessThanOrEqual(
+                  (head.right - head.left) / 4 + 0.1,
                 );
-                expect(said.y, at).toBeLessThanOrEqual(Math.max(...own.map((each) => each.bottom)));
+                expect(said.y, at).toBeGreaterThanOrEqual(head.top - 24 - 0.1);
+                expect(said.y, at).toBeLessThanOrEqual(
+                  faceBox(places.at(said.by, frame.time).spot).top + 0.1,
+                );
               }
             }
           }

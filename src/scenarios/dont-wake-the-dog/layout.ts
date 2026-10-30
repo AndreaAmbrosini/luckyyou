@@ -4,7 +4,15 @@
 // tail and along its back, and out through the gate to a spot behind the
 // fence. In stage pixels (1280 × 720), from the handover's spike.
 
-import { nameTag, speechAt, speechBox, STAGE, stagePx, type Box } from '../../scenario-kit';
+import {
+  leanRoom,
+  nameTag,
+  speechAt,
+  speechBox,
+  STAGE,
+  stagePx,
+  type Box,
+} from '../../scenario-kit';
 import type { Key, Place, Plan } from './plan';
 
 /** Where someone is, and how big their head is: the head's box is x − size/2 … x + size/2, y − 0.8·size … y + 0.2·size. */
@@ -691,62 +699,88 @@ export function bubbleAt(text: string, prefer: { x: number; y: number }, avoid: 
 
 /** How far a bubble may sit from the face or name tag of whoever says it. */
 const BY_SPEAKER = 16;
+/** How far above the top of a head a bubble's tail may end over it. */
+const RISE = 24;
 
-/** Where a bubble's tail goes, `offset` from the middle of the top of `face`. */
-export const anchorBy = (face: Box, offset: { dx: number; dy: number }) => ({
-  x: (face.left + face.right) / 2 + offset.dx,
-  y: face.top + offset.dy,
+/** Where a bubble's tail ends and how far it leans: `offset` from the middle of the top of `head`. */
+export const anchorBy = (head: Box, offset: { dx: number; dy: number }) => ({
+  x: (head.left + head.right) / 2 + offset.dx,
+  y: head.top + offset.dy,
 });
 
 /**
  * Where a bubble saying `text` sits from whoever says it, as an offset from
- * their face for anchorBy, given their face and name tag (null while
- * hidden) and what to keep clear of at each moment it is up. It moves with
- * them: the nearest place to just over their head that stays within
- * BY_SPEAKER of the face or tag, its tail no lower than the tag, so it
- * never points at whoever is below them; on the stage and clear of `avoid`.
- * Null when nowhere is.
+ * their head for anchorBy and a lean for the kit's bubble, given their
+ * head, face and name tag (null while hidden) and what to keep clear of at
+ * each moment it is up. It moves with them, on the stage and clear of
+ * `avoid`. Over them, its tail, which points straight down, ends up to
+ * RISE above their head, within the middle half of it, the bubble as
+ * upright as it goes. Beside them, it is within BY_SPEAKER of their face or
+ * tag, its tail no lower than the tag, so it never points at whoever is
+ * below them, and leaning as near their head as it may. Null when nowhere
+ * is.
  */
 export function bubbleBy(
   text: string,
-  speaker: readonly { face: Box; tag: Box | null; avoid: readonly Box[] }[],
-): { dx: number; dy: number } | null {
-  const { face, tag } = speaker[0]!;
+  speaker: readonly { head: Box; face: Box; tag: Box | null; avoid: readonly Box[] }[],
+  where: 'over' | 'beside',
+): { dx: number; dy: number; lean: number } | null {
+  const { head, face, tag } = speaker[0]!;
   const shape = speechBox(text, { x: 0, y: 0 });
-  const near = tag ? union([face, tag]) : face;
-  const middle = (face.left + face.right) / 2;
-  const candidates: { dx: number; dy: number; d: number }[] = [];
-  for (
-    let x = near.left - BY_SPEAKER - shape.right;
-    x <= near.right + BY_SPEAKER - shape.left;
-    x += 4
-  ) {
-    for (let y = face.top - BY_SPEAKER; y <= near.bottom; y += 4) {
-      candidates.push({
-        dx: x - middle,
-        dy: y - face.top,
-        d: Math.hypot(x - middle, y - face.top),
-      });
+  const room = leanRoom(text);
+  const middle = (head.left + head.right) / 2;
+  const candidates: { dx: number; dy: number; lean: number; d: number }[] = [];
+  if (where === 'over') {
+    const quarter = (head.right - head.left) / 4;
+    for (const lean of across(room)) {
+      for (const dx of across(quarter)) {
+        for (let y = face.top; y >= head.top - RISE - 1e-9; y -= 4) {
+          const dy = y - head.top;
+          candidates.push({ dx, dy, lean, d: Math.abs(dx) + Math.abs(dy) + Math.abs(lean) / 4 });
+        }
+      }
+    }
+  } else {
+    // Each place for the bubble, its tail leaning towards the head.
+    const near = tag ? union([face, tag]) : face;
+    for (
+      let x = near.left - BY_SPEAKER - shape.right;
+      x <= near.right + BY_SPEAKER - shape.left;
+      x += 4
+    ) {
+      for (let y = face.top - BY_SPEAKER; y <= near.bottom; y += 4) {
+        const lean = Math.max(-room, Math.min(room, x - middle));
+        const d = Math.hypot(x - middle, y - face.top);
+        candidates.push({ dx: x - lean - middle, dy: y - head.top, lean, d });
+      }
     }
   }
   candidates.sort((one, two) => one.d - two.d);
-  const fits = (offset: { dx: number; dy: number }) =>
+  const fits = (offset: { dx: number; dy: number; lean: number }) =>
     speaker.every((at) => {
-      const anchor = anchorBy(at.face, offset);
-      const box = speechBox(text, anchor);
+      const anchor = anchorBy(at.head, offset);
+      const box = speechBox(text, anchor, offset.lean);
       const own = [at.face, ...(at.tag ? [at.tag] : [])];
+      const beside =
+        own.some((each) => apart(box, each) <= BY_SPEAKER) &&
+        anchor.y <= Math.max(...own.map((each) => each.bottom));
       return (
         box.left >= EDGE &&
         box.right <= STAGE.width - EDGE &&
         box.top >= EDGE &&
         box.bottom <= STAGE.height - EDGE &&
-        own.some((each) => apart(box, each) <= BY_SPEAKER) &&
-        anchor.y <= Math.max(...own.map((each) => each.bottom)) &&
+        (where === 'over' || beside) &&
         !at.avoid.some((other) => overlap(box, other))
       );
     });
   const found = candidates.find(fits);
-  return found ? { dx: found.dx, dy: found.dy } : null;
+  return found ? { dx: found.dx, dy: found.dy, lean: found.lean } : null;
+}
+
+/** From -`most` to `most`, about 4 px apart, both ends and 0 among them. */
+function across(most: number): number[] {
+  const steps = Math.ceil(most / 4);
+  return Array.from({ length: 2 * steps + 1 }, (_, k) => steps && ((k - steps) / steps) * most);
 }
 
 /** How far apart two boxes are: 0 when they touch or overlap. */

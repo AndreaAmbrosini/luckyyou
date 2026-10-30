@@ -120,6 +120,8 @@ export interface Frame {
     readonly by: string;
     readonly x: number;
     readonly y: number;
+    /** How far the speech leans from its tail at x, y. */
+    readonly lean: number;
   }[];
   /** Whether everyone behind the dog is drawn before it, so it covers them. */
   readonly behindTheDog: boolean;
@@ -260,6 +262,7 @@ async function record(
             by: el.dataset.by!,
             x: Number.parseFloat(el.style.left),
             y: Number.parseFloat(el.style.top),
+            lean: Number.parseFloat(el.style.getPropertyValue('--lean')) || 0,
           })),
         behindTheDog,
       });
