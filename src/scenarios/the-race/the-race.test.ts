@@ -26,6 +26,7 @@ import {
   BURST,
   CAMERA,
   cameraAt,
+  COURSES,
   crossingOf,
   eventCount,
   leaderAt,
@@ -35,6 +36,7 @@ import {
   planShow,
   spacing,
   STOP,
+  type Course,
   type Ending,
   type Plan,
 } from './plan';
@@ -372,6 +374,30 @@ function plans(team: readonly string[], unlucky: string, seeds = 20): Plan[] {
   return Array.from({ length: seeds }, (_, index) =>
     planShow(team, unlucky, createRandom(index + 1)),
   );
+}
+
+/** What the feature calls each track. */
+const COURSE_NAMES: Readonly<Record<string, Course>> = {
+  'the sports field': 'field',
+  'the office': 'office',
+  'under the sea': 'sea',
+  'the Moon': 'moon',
+};
+
+/** The first `runs` plans on `course`, and `fits` if given, from seed 1 on. */
+function plansOn(
+  team: readonly string[],
+  unlucky: string,
+  course: Course,
+  runs = 20,
+  fits: (plan: Plan) => boolean = () => true,
+): Plan[] {
+  const found: Plan[] = [];
+  for (let seed = 1; found.length < runs; seed++) {
+    const plan = planShow(team, unlucky, createRandom(seed));
+    if (plan.course === course && fits(plan)) found.push(plan);
+  }
+  return found;
 }
 
 /** Show seconds from `from` to `to`, every frame. */
@@ -849,6 +875,105 @@ describeSpec(await loadFeature('./the-race.feature'), ({ Rule }) => {
             `var(--color-skin-${faces.get(name)!.skin})`,
           );
           expect(svg.querySelector('[data-part="skin"]')!.getAttribute('class')).toBe(styles.skin);
+        }
+      });
+    });
+  });
+
+  Rule('A track drawn at random', ({ RuleScenario, RuleScenarioOutline }) => {
+    const team = names(8);
+    const unlucky = team.at(-1)!;
+    const own = (plan: Plan) => plan.events.filter((event) => event.cause === 'track');
+
+    RuleScenario('Each race draws its track', ({ Given, When, Then, And }) => {
+      let runs: Plan[];
+      Given('{int} people', () => undefined);
+      When('the show runs with {int} different random seeds', (_, seeds: number) => {
+        runs = plans(team, unlucky, seeds);
+      });
+      Then('each run is on the sports field, the office, under the sea or the Moon', () => {
+        for (const plan of runs) expect(COURSES).toContain(plan.course);
+      });
+      And('each of the four comes up in at least {int} runs', (_, least: number) => {
+        for (const course of COURSES) {
+          const on = runs.filter((plan) => plan.course === course);
+          expect(on.length, course).toBeGreaterThanOrEqual(least);
+        }
+      });
+    });
+
+    RuleScenarioOutline(
+      '<track> has a stop and a burst of its own',
+      ({ Given, When, Then, And }, { track }) => {
+        let runs: Plan[];
+        Given('8 people, on <track>', () => undefined);
+        When('the show runs with {int} different random seeds', (_, seeds: number) => {
+          runs = plansOn(team, unlucky, COURSE_NAMES[track]!, seeds);
+        });
+        Then(
+          `in every run, one event before "Final stretch!" is the track's own stop or burst`,
+          () => {
+            for (const plan of runs) {
+              expect(own(plan)).toHaveLength(1);
+              expect(own(plan)[0]!.at).toBeLessThan(plan.times.stretch);
+            }
+          },
+        );
+        And('both come up across the runs', () => {
+          const kinds = new Set(runs.flatMap((plan) => own(plan).map((event) => event.kind)));
+          expect(kinds).toEqual(new Set(['burst', 'stop']));
+        });
+      },
+    );
+
+    RuleScenario('The sports field keeps the events it has', ({ When, Then }) => {
+      let runs: Plan[];
+      When('the show runs on the sports field', () => {
+        runs = [2, 5, 8].flatMap((count) => plansOn(names(count), names(count).at(-1)!, 'field'));
+      });
+      Then("every event is a racer's own burst or stop", () => {
+        for (const plan of runs) expect(own(plan)).toEqual([]);
+      });
+    });
+
+    RuleScenarioOutline(
+      'On <track>, the unlucky person still crosses first',
+      ({ Given, When, Then }, { track }) => {
+        let runs: Plan[];
+        Given('8 people, on <track>', () => undefined);
+        When('the show runs with {int} different random seeds', (_, seeds: number) => {
+          runs = plansOn(team, unlucky, COURSE_NAMES[track]!, seeds);
+        });
+        Then("the first nose over the finish line is always the unlucky person's", () => {
+          for (const plan of runs) {
+            const crossing = crossingOf(plan, unlucky);
+            expect(crossing).not.toBeNull();
+            expect(crossing!).toBeLessThanOrEqual(plan.times.finish + 1e-9);
+            for (const name of team.filter((each) => each !== unlucky)) {
+              const theirs = crossingOf(plan, name);
+              if (theirs !== null) expect(theirs).toBeGreaterThan(crossing!);
+            }
+          }
+        });
+      },
+    );
+
+    RuleScenario('Every track keeps the show inside the limit', ({ When, Then }) => {
+      let runs: Plan[];
+      When('the show runs at 2, 5 and 8 people on each track, with each ending', () => {
+        runs = [2, 5, 8].flatMap((count) =>
+          COURSES.flatMap((course) =>
+            ENDINGS.flatMap((ending) =>
+              plansOn(names(count), names(count).at(-1)!, course, 1, (p) => p.ending === ending),
+            ),
+          ),
+        );
+      });
+      Then('each run lasts between {int} and {int} seconds', (_, least: number, most: number) => {
+        expect(runs).toHaveLength(36);
+        for (const plan of runs) {
+          expect(plan.times.end, `${plan.course} ${plan.ending}`).toBeGreaterThanOrEqual(least);
+          expect(plan.times.end, `${plan.course} ${plan.ending}`).toBeLessThanOrEqual(most);
         }
       });
     });
@@ -1623,7 +1748,7 @@ describeSpec(await loadFeature('./the-race.feature'), ({ Rule }) => {
         "the caption is Anna's mount bursting ahead, as in an event, and she shouts {string}",
         (_, shout: string) => {
           const { slow, finish } = watched.plan.times;
-          const surge = { kind: 'burst', subject: 'Anna', at: slow } as const;
+          const surge = { kind: 'burst', subject: 'Anna', cause: 'racer', at: slow } as const;
           const said = eventCaption(surge, kindOf(watched, 'Anna'));
           const shown = watched.record.captions.find((each) => each.text === said)!;
           expect(shown.from).toBeCloseTo(slow, 1);
@@ -2197,6 +2322,13 @@ describe('the plan', () => {
         }
       });
       expect(plan.events.at(-1)!.at + spacing(count), label).toBeCloseTo(plan.times.stretch);
+    }
+  });
+
+  it('has one event of the track’s own off the sports field, and none on it', () => {
+    for (const { label, plan } of all) {
+      const own = plan.events.filter((event) => event.cause === 'track');
+      expect(own, label).toHaveLength(plan.course === 'field' ? 0 : 1);
     }
   });
 

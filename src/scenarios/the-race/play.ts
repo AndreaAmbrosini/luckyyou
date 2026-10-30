@@ -789,7 +789,7 @@ export async function playTheRace(show: Show): Promise<void> {
     cue(times.slow, 'creak');
     at(times.slow + 1, () => show.caption(`${show.unlucky} can't stop!`));
   } else {
-    const surge = { kind: 'burst', subject: show.unlucky, at: times.slow } as const;
+    const surge = { kind: 'burst', subject: show.unlucky, cause: 'racer', at: times.slow } as const;
     at(times.slow, () => show.caption(eventCaption(surge, lookOf(show.unlucky).mount)));
     cue(times.slow, 'whoosh');
   }
