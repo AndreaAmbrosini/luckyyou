@@ -19,7 +19,7 @@ import {
   type Mood,
   type Show,
 } from '../../scenario-kit';
-import { creature, CREATURE_SPEC, type CreatureRunner } from './creature';
+import { creature, CREATURE_SPEC, TENTACLES, type CreatureRunner } from './creature';
 import { boxAt, bubbleOffsets, faceAt, lane, tagAt, tagBox, tagSize, type Lane } from './layout';
 import {
   isCreature,
@@ -85,6 +85,14 @@ const BURSTS: Record<Kind, string> = {
   banana: 'slips on its own peel',
   icecream: 'gets a sugar rush',
   sushi: 'rides the conveyor belt',
+  cat: 'chases a laser dot',
+  octopus: 'uses all eight legs',
+  penguin: 'belly-slides',
+  pigeon: 'spots a chip',
+  ghost: 'gets spooked',
+  mummy: 'unrolls downhill',
+  yeti: 'skis ahead',
+  gnome: 'sneaks ahead',
 };
 const STOPS: Record<Kind, string> = {
   snail: 'stops for a snack',
@@ -109,6 +117,14 @@ const STOPS: Record<Kind, string> = {
   banana: 'does the splits',
   icecream: 'starts to melt',
   sushi: 'gets too much wasabi',
+  cat: 'sits in a box',
+  octopus: 'ties its legs in a knot',
+  penguin: 'drops its fish',
+  pigeon: 'puffs up its chest',
+  ghost: 'trips on its sheet',
+  mummy: 'comes unwrapped',
+  yeti: 'makes a snow angel',
+  gnome: 'freezes like a statue',
 };
 /** What the commentator calls a racer, where it isn't its kind's name. */
 const CALLED: Partial<Record<Kind, string>> = {
@@ -148,6 +164,14 @@ const GAITS: Record<Kind, { px: number; seconds: number }> = {
   banana: { px: 4, seconds: 0.36 },
   icecream: { px: 4, seconds: 0.38 },
   sushi: { px: 3, seconds: 0.28 },
+  cat: { px: 4, seconds: 0.3 },
+  octopus: { px: 5, seconds: 0.4 },
+  penguin: { px: 4, seconds: 0.26 },
+  pigeon: { px: 3, seconds: 0.24 },
+  ghost: { px: 6, seconds: 0.5 },
+  mummy: { px: 3, seconds: 0.46 },
+  yeti: { px: 6, seconds: 0.44 },
+  gnome: { px: 3, seconds: 0.3 },
 };
 
 /** `look` drawn: a rider on its mount, or a creature. */
@@ -277,6 +301,62 @@ const MELT = { top: 88, long: 2, peak: 0.9, puddle: [168, 189] };
 const BELT = { from: -220, slide: 0.3 };
 /** Wasabi drops from this far above onto the sushi's fish at (x, y) over `fall` s; then its eyes water. */
 const WASABI = { from: -70, at: [150, 34], fall: 0.3 };
+/** The animals and spooky creatures that tilt from their feet, as the things on legs do. */
+const CRITTERS: readonly Creature[] = [
+  'cat',
+  'octopus',
+  'penguin',
+  'pigeon',
+  'ghost',
+  'mummy',
+  'yeti',
+  'gnome',
+];
+/** Where each of the octopus's hanging tentacles starts, to whirl about. */
+const TENTACLES_FROM = TENTACLES.map((d) => d.slice(1).split(' ').slice(0, 2).map(Number));
+/** A laser dot zips along the ground from `from` to `to` ahead of a cat, wobbling this far this often; the cat crouches this far. */
+const LASER = { from: [214, 188], to: [262, 188], wobble: 14, rate: 4, crouch: 12 };
+/** A cat sits in its box from `from` s into its stop until "Phew!". */
+const BOXED = 0.15;
+/** An octopus's tentacles whirl this far either way, this many times a second. */
+const WHIRL = { degrees: 30, rate: 4 };
+/** An octopus's legs are knotted from `from` s into its stop until `to`, then whirl free until "Phew!". */
+const KNOT = { from: 0.15, to: 1.1 };
+/** A penguin drops onto its belly this far over `drop` s, and gets up over the burst's last `drop` s. */
+const BELLY = { degrees: 80, drop: 0.15 };
+/**
+ * A penguin's fish falls from its flipper at `from` to the ground at `to`
+ * over `fall` s; it bends this far for it from `reach` s until it picks it
+ * up at `picked`.
+ */
+const FISH = { from: [190, 104], to: [210, 182], fall: 0.35, reach: 0.4, degrees: 30, picked: 1.3 };
+/** A chip lies on the ground from `from` to `to` as a pigeon dashes up to it, its head bobbing this far this often. */
+const CHIP = { from: [262, 188], to: [214, 188], bob: 6, rate: 3.5 };
+/** A pigeon puffs up its chest from `from` s into its stop, strutting this far either way this often. */
+const STRUT = { from: 0.1, degrees: 5, rate: 2.5 };
+/** A ghost jumps this high over the first `seconds` of its burst, and its sheet flaps this far this often. */
+const SPOOKED = { px: 36, seconds: 0.45, flap: 6, rate: 4.5 };
+/** A ghost trips forward this far from `from` s into its stop, over `fall` s, lies until `up`, and is up by "Phew!". */
+const TRIP = { degrees: 60, from: 0.1, fall: 0.25, up: 1.1 };
+/** A gnome sneaks along bent this far, in this many long, low steps of this height. */
+const SNEAK = { degrees: 14, steps: 2, px: 8 };
+/** A gnome stands still on a plinth this high from `from` s into its stop until "Phew!". */
+const STATUE = { px: 20, from: 0.1 };
+/** A mummy spins this many times about its middle over its burst. */
+const ROLL = { turns: 2, middle: [130, 100] };
+/**
+ * A mummy's bandage unrolls from `from` s into its stop over `out` s, then
+ * winds back on from `wind` s, the mummy turning once, until "Phew!".
+ */
+const UNWRAP = { from: 0.1, out: 0.5, wind: 0.9 };
+/** A yeti glides on skis, crouched this far. */
+const GLIDE = 10;
+/**
+ * A yeti lies back in the snow from `from` s into its stop over `fall` s,
+ * sweeps its arms this far and its legs `legs` far, `rate` times a second,
+ * and is up by "Phew!" after `up`.
+ */
+const ANGEL = { from: 0.1, fall: 0.25, arms: 40, legs: 18, rate: 1.5, up: 1.35 };
 
 /** What each element was last given, so a frame writes only what changed: jsdom parses each style. */
 const written = new WeakMap<Element, Map<string, string>>();
@@ -443,7 +523,7 @@ export async function playTheRace(show: Show): Promise<void> {
     drawn.el.style.transformOrigin =
       look.mount === 'duck'
         ? TIP.origin
-        : THINGS.includes(look.mount as Creature)
+        : THINGS.includes(look.mount as Creature) || CRITTERS.includes(look.mount as Creature)
           ? `${drawn.faceX}px ${RACER.feet}px`
           : isCreature(look.mount)
             ? `${drawn.faceX}px 0`
@@ -839,7 +919,11 @@ export async function playTheRace(show: Show): Promise<void> {
       drawn.setStretch(reaching);
       if (reaching) shown.push('snack');
     }
-    const tilt = THINGS.includes(kind) ? thing(rider, t, since, shown, (lift) => (hop = lift)) : 0;
+    const tilt = THINGS.includes(kind)
+      ? thing(rider, t, since, shown, (lift) => (hop = lift))
+      : CRITTERS.includes(kind)
+        ? critter(rider, t, since, shown, (lift) => (hop = lift))
+        : 0;
     write(drawn.el, '--hop', hop ? `${(-hop).toFixed(1)}px` : '0px');
     write(drawn.el, '@data-hop', hop.toFixed(1));
     write(drawn.el, '@data-props', shown.join(' '));
@@ -974,6 +1058,184 @@ export async function playTheRace(show: Show): Promise<void> {
         steam('steam', still ? 0 : JET.rise * (((since - WASABI.fall) / JET.loop) % 1));
       }
     }
+    return tilt;
+  };
+
+  /**
+   * What an animal or a spooky creature does in its burst and its stop,
+   * noting the props it shows in `shown` and lifting it with `lift`; `since`
+   * is how far into a stop. Returns how far it tilts from its feet, or, for
+   * a mummy, about its middle.
+   */
+  const critter = (
+    rider: Rider,
+    t: number,
+    since: number,
+    shown: string[],
+    lift: (px: number) => void,
+  ) => {
+    const drawn = rider.creature!;
+    const { props } = drawn;
+    const kind = drawn.look.mount;
+    const spec = CREATURE_SPEC[kind];
+    const still = show.reducedMotion;
+    const burst = burstOf(rider.name, t);
+    const done = burst ? burst.since / burst.seconds : 0;
+    const until = (from: number, to: number) => since >= from && since < to;
+    /** Shows `prop` while `on`, noting it. */
+    const showing = (prop: keyof typeof props, on: boolean) => {
+      showPart(props[prop]!, on);
+      if (on) shown.push(prop);
+      return on;
+    };
+    /** How far from 0 to 1 a ramp up from `from` over `over` s, and down again from `down`, is at `at`. */
+    const ramp = (at: number, from: number, over: number, down: number, to: number) =>
+      at < from || at >= to
+        ? 0
+        : Math.min(1, (at - from) / over, (to - at) / Math.max(1e-6, to - down));
+    /** Keeps a prop on the ground flat while the creature tilts `degrees` about (x, y). */
+    const flat = (prop: SVGGElement, degrees: number, [x, y]: readonly number[], then = '') =>
+      write(
+        prop,
+        '@transform',
+        `${degrees ? `rotate(${(-degrees).toFixed(1)} ${x} ${y}) ` : ''}${then}`.trim(),
+      );
+    const feet = [spec.face, RACER.feet] as const;
+    /** Each leg swung `degrees` from its hip, the back one the other way. */
+    const swing = (degrees: number) =>
+      drawn.shoes.forEach((shoe, i) => {
+        const [x, y] = spec.hips[i]!;
+        const turn = i ? degrees : -degrees;
+        write(
+          shoe.parentNode as SVGGElement,
+          '@transform',
+          degrees ? `rotate(${turn.toFixed(1)} ${x} ${y})` : '',
+        );
+      });
+    let tilt = 0;
+    let origin: readonly number[] = feet;
+    if (kind === 'cat') {
+      if (showing('laser', !!burst)) {
+        const wobble = still ? 0 : LASER.wobble * Math.sin(2 * Math.PI * LASER.rate * burst!.since);
+        const at = still ? 0.5 : done;
+        move(props.laser!, LASER.from, [LASER.to[0]! + wobble, LASER.to[1]!], at);
+      }
+      const boxed = showing('box', until(BOXED, STOP.phew));
+      for (const shoe of drawn.shoes) showPart(shoe.parentNode as SVGGElement, !boxed);
+      drawn.setBend(burst ? LASER.crouch : 0);
+    }
+    if (kind === 'octopus') {
+      const knotted = showing('knot', until(KNOT.from, still ? STOP.phew : KNOT.to));
+      const freeing = !still && until(KNOT.to, STOP.phew);
+      const whirling = !still && (!!burst || freeing);
+      const at = burst ? burst.since : since;
+      const whirl = (i: number) =>
+        whirling ? WHIRL.degrees * Math.sin(2 * Math.PI * WHIRL.rate * at + (i * Math.PI) / 2) : 0;
+      drawn.tentacles.forEach((parts, i) => {
+        const [x, y] = TENTACLES_FROM[i]!;
+        for (const part of parts) {
+          showPart(part, !knotted);
+          write(part, '@transform', whirling ? `rotate(${whirl(i).toFixed(1)} ${x} ${y})` : '');
+        }
+      });
+      for (const shoe of drawn.shoes) showPart(shoe.parentNode as SVGGElement, !knotted);
+      swing(whirl(1));
+      write(drawn.el, '@data-whirl', Math.abs(whirl(0)).toFixed(1));
+    }
+    if (kind === 'penguin') {
+      if (showing('ice', !!burst)) {
+        tilt = still
+          ? 0
+          : BELLY.degrees *
+            ramp(burst!.since, 0, BELLY.drop, burst!.seconds - BELLY.drop, burst!.seconds);
+        flat(props.ice!, tilt, feet);
+      }
+      const dropped = showing('fish', until(0.1, FISH.picked));
+      if (dropped) {
+        const fallen = still ? 1 : Math.min(1, (since - 0.1) / FISH.fall);
+        move(
+          props.fish!,
+          FISH.from,
+          FISH.to,
+          fallen,
+          ` rotate(${still ? 0 : Math.round(160 * fallen)})`,
+        );
+      }
+      drawn.setBend(until(FISH.reach, FISH.picked) ? FISH.degrees : 0);
+    }
+    if (kind === 'pigeon') {
+      if (showing('chip', !!burst)) {
+        move(props.chip!, CHIP.from, CHIP.to, still ? 0.5 : done);
+        if (!still) tilt = CHIP.bob * Math.sin(2 * Math.PI * CHIP.rate * burst!.since);
+      }
+      if (showing('chest', until(STRUT.from, STOP.phew)) && !still) {
+        tilt = STRUT.degrees * Math.sin(2 * Math.PI * STRUT.rate * (since - STRUT.from));
+      }
+    }
+    if (kind === 'ghost') {
+      if (showing('fright', !!burst) && !still) {
+        if (burst!.since < SPOOKED.seconds) {
+          lift(SPOOKED.px * Math.sin((Math.PI * burst!.since) / SPOOKED.seconds));
+        }
+        tilt = SPOOKED.flap * Math.sin(2 * Math.PI * SPOOKED.rate * burst!.since);
+      }
+      if (showing('hem', until(0, STOP.phew)) && !still) {
+        tilt = TRIP.degrees * ramp(since, TRIP.from, TRIP.fall, TRIP.up, STOP.phew);
+      }
+    }
+    if (kind === 'gnome') {
+      drawn.setBend(burst ? SNEAK.degrees : 0);
+      if (burst && !still) {
+        lift(SNEAK.px * Math.abs(Math.sin((Math.PI * SNEAK.steps * burst.since) / burst.seconds)));
+      }
+      if (showing('plinth', until(STATUE.from, STOP.phew))) lift(STATUE.px);
+    }
+    if (kind === 'mummy') {
+      origin = ROLL.middle;
+      if (showing('trail', !!burst)) {
+        tilt = still ? 0 : 360 * ROLL.turns * done;
+        const k = still ? 1 : Math.min(1, 0.2 + done);
+        flat(
+          props.trail!,
+          tilt,
+          origin,
+          `matrix(${k.toFixed(2)} 0 0 1 ${(112 * (1 - k)).toFixed(1)} 0)`,
+        );
+      }
+      if (showing('unwrap', until(UNWRAP.from, STOP.phew))) {
+        const out = Math.min(1, (since - UNWRAP.from) / UNWRAP.out);
+        const back = Math.max(0, (since - UNWRAP.wind) / (STOP.phew - UNWRAP.wind));
+        const k = still ? 1 : Math.max(0.05, Math.min(out, 1 - back));
+        if (!still && back > 0) tilt = 360 * back;
+        flat(
+          props.unwrap!,
+          tilt,
+          origin,
+          `matrix(${k.toFixed(2)} 0 0 1 ${(150 * (1 - k)).toFixed(1)} 0)`,
+        );
+      }
+    }
+    if (kind === 'yeti') {
+      showing('skis', !!burst);
+      drawn.setBend(burst ? GLIDE : 0);
+      const lying = showing('snow', until(0, STOP.phew));
+      let sweep = 0;
+      if (lying && !still) {
+        tilt = -90 * ramp(since, ANGEL.from, ANGEL.fall, ANGEL.up, STOP.phew);
+        if (until(ANGEL.from + ANGEL.fall, ANGEL.up)) {
+          sweep = Math.sin(2 * Math.PI * ANGEL.rate * (since - ANGEL.from - ANGEL.fall));
+        }
+        flat(props.snow!, tilt, feet);
+      }
+      drawn.arms.forEach((arm, i) => {
+        const [x, y] = spec.shoulders[i]!;
+        const degrees = ANGEL.arms * sweep * (i ? -1 : 1);
+        if (sweep) write(arm, '@transform', `rotate(${degrees.toFixed(1)} ${x} ${y})`);
+      });
+      swing(ANGEL.legs * sweep);
+      write(drawn.el, '@data-sweep', Math.abs(ANGEL.arms * sweep).toFixed(1));
+    }
+    write(drawn.el, 'transform-origin', `${origin[0]}px ${origin[1]}px`);
     return tilt;
   };
 

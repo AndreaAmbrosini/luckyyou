@@ -258,7 +258,14 @@ describe('a creature', () => {
         String(cy),
       ]);
       // Overhead: the hands at the cup's handles; short arms only wave.
-      const [hx, hy] = end(arm(one.el, 'front'));
+      // A fin's tip is the middle of its leaf: M root Q bulge tip Q bulge root Z.
+      const [hx, hy] = CREATURE_SPEC[kind].fins
+        ? arm(one.el, 'front')
+            .getAttribute('d')!
+            .match(/-?[\d.]+/g)!
+            .slice(4, 6)
+            .map(Number)
+        : end(arm(one.el, 'front'));
       if (CREATURE_SPEC[kind].reach === 1) {
         expect([hx, hy], kind).toEqual([cx + 22, cy + 30]);
       } else if (!CREATURE_SPEC[kind].fins) {

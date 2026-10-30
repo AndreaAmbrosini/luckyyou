@@ -27,7 +27,18 @@ import styles from './the-race.module.css';
 type Point = readonly [x: number, y: number];
 
 /** What a limb or a shoe is painted: the creature's colour, the person's skin, or a token. */
-type Paint = 'colour' | 'skin' | 'ink' | 'ink-soft' | 'shark' | 'paper' | 'glass' | 'mint-soft';
+type Paint =
+  | 'colour'
+  | 'skin'
+  | 'ink'
+  | 'ink-soft'
+  | 'shark'
+  | 'paper'
+  | 'glass'
+  | 'mint-soft'
+  | 'orange'
+  | 'pink'
+  | 'sea';
 
 /** Sneakers, boots, big bare feet, flat paddles, bird's toes or a curled tentacle tip. */
 export type Foot = 'sneaker' | 'boot' | 'bare' | 'paddle' | 'toes' | 'tip';
@@ -66,6 +77,8 @@ interface Spec {
   /** One square tooth, or a row of pointy teeth. */
   readonly tooth?: boolean;
   readonly teeth?: boolean;
+  /** A cat's slit pupils. */
+  readonly slit?: boolean;
   /** Each eye's x, y and radius; the paint round them, for lids; its pupils' size. */
   readonly eyes: readonly (readonly [number, number, number])[];
   readonly lid: Paint;
@@ -548,6 +561,291 @@ export const CREATURE_SPEC: Readonly<Record<Creature, Spec>> = {
     hat: [140, 38],
     cup: [136, -30],
   }),
+  // Animals.
+  cat: {
+    face: 137,
+    nose: 189,
+    hips: [
+      [118, 146],
+      [134, 147],
+    ],
+    legW: 11,
+    legs: 'colour',
+    foot: 'sneaker',
+    shoes: 'paper',
+    shoulders: [
+      [110, 100],
+      [142, 100],
+    ],
+    armW: 9,
+    arms: 'colour',
+    hands: 'paper',
+    slit: true,
+    eyes: [
+      [120, 50, 12],
+      [154, 50, 12],
+    ],
+    lid: 'colour',
+    mouth: [142, 80, 16],
+    sweat: [
+      [84, 28],
+      [190, 32],
+    ],
+    neck: [128, 94],
+    chest: [128, 124],
+    hat: [134, 20],
+    cup: [134, -46],
+    reach: 1,
+  },
+  octopus: {
+    face: 130,
+    nose: 178,
+    hips: [
+      [118, 100],
+      [142, 100],
+    ],
+    legW: 10,
+    legs: 'colour',
+    foot: 'tip',
+    shoes: 'colour',
+    shoulders: [
+      [94, 78],
+      [166, 78],
+    ],
+    armW: 10,
+    arms: 'colour',
+    hands: 'colour',
+    noThumb: true,
+    eyes: [
+      [113, 62, 11],
+      [147, 62, 11],
+    ],
+    lid: 'colour',
+    mouth: [130, 85, 14],
+    sweat: [
+      [74, 34],
+      [186, 34],
+    ],
+    neck: [130, 100],
+    chest: [130, 28],
+    hat: [130, 2],
+    cup: [130, -50],
+    reach: 1,
+  },
+  penguin: {
+    face: 130,
+    nose: 177,
+    hips: [
+      [118, 150],
+      [142, 150],
+    ],
+    legW: 9,
+    legs: 'orange',
+    foot: 'paddle',
+    shoes: 'orange',
+    shoulders: [
+      [90, 90],
+      [170, 90],
+    ],
+    armW: 0,
+    arms: 'colour',
+    hands: 'colour',
+    fins: true,
+    finK: 1.1,
+    eyes: [
+      [115, 54, 9],
+      [145, 54, 9],
+    ],
+    lid: 'paper',
+    mouth: [130, 76, 22],
+    sweat: [
+      [84, 26],
+      [176, 26],
+    ],
+    neck: [130, 100],
+    chest: [130, 126],
+    hat: [130, 8],
+    cup: [130, -46],
+    reach: 1,
+  },
+  pigeon: {
+    face: 167,
+    nose: 204,
+    hips: [
+      [112, 148],
+      [132, 148],
+    ],
+    legW: 5,
+    legs: 'pink',
+    foot: 'toes',
+    shoes: 'pink',
+    shoulders: [
+      [108, 100],
+      [124, 102],
+    ],
+    armW: 0,
+    arms: 'colour',
+    hands: 'colour',
+    fins: true,
+    finK: 1.5,
+    eyes: [
+      [156, 40, 9],
+      [177, 41, 7],
+    ],
+    lid: 'shark',
+    mouth: [181, 64, 14],
+    sweat: [
+      [138, 14],
+      [200, 20],
+    ],
+    neck: [150, 86],
+    chest: [104, 116],
+    hat: [162, 22],
+    cup: [162, -36],
+    reach: 0.6,
+  },
+  // Spooky. The gnome has a face in the kit's skin tone, and balances the trophy on its hat.
+  ghost: {
+    face: 131,
+    nose: 176,
+    hips: [
+      [118, 150],
+      [142, 150],
+    ],
+    legW: 9,
+    legs: 'ink-soft',
+    foot: 'sneaker',
+    shoes: 'colour',
+    shoulders: [
+      [88, 92],
+      [172, 92],
+    ],
+    armW: 12,
+    arms: 'paper',
+    hands: 'paper',
+    noThumb: true,
+    eyes: [
+      [116, 56, 11],
+      [146, 56, 11],
+    ],
+    lid: 'paper',
+    mouth: [131, 83, 18],
+    sweat: [
+      [76, 36],
+      [184, 36],
+    ],
+    neck: [130, 104],
+    chest: [130, 124],
+    hat: [130, 14],
+    cup: [130, -44],
+    reach: 1,
+  },
+  mummy: {
+    face: 130,
+    nose: 160,
+    hips: [
+      [118, 146],
+      [142, 146],
+    ],
+    legW: 13,
+    legs: 'paper',
+    foot: 'sneaker',
+    shoes: 'colour',
+    shoulders: [
+      [104, 100],
+      [156, 100],
+    ],
+    armW: 11,
+    arms: 'paper',
+    hands: 'paper',
+    eyes: [
+      [118, 55, 9],
+      [142, 53, 9],
+    ],
+    lid: 'ink-soft',
+    mouth: [130, 80, 16],
+    sweat: [
+      [86, 40],
+      [174, 36],
+    ],
+    neck: [130, 94],
+    chest: [130, 124],
+    hat: [130, 24],
+    cup: [130, -30],
+    reach: 1,
+  },
+  yeti: {
+    face: 130,
+    nose: 188,
+    hips: [
+      [112, 164],
+      [148, 164],
+    ],
+    legW: 16,
+    legs: 'paper',
+    foot: 'bare',
+    footK: 1.3,
+    shoes: 'glass',
+    shoulders: [
+      [78, 100],
+      [182, 100],
+    ],
+    armW: 13,
+    arms: 'paper',
+    hands: 'glass',
+    tooth: true,
+    eyes: [
+      [119, 57, 9],
+      [141, 57, 9],
+    ],
+    lid: 'glass',
+    mouth: [130, 79, 20],
+    sweat: [
+      [80, 28],
+      [180, 28],
+    ],
+    neck: [130, 104],
+    chest: [108, 134],
+    hat: [130, 8],
+    cup: [130, -38],
+    reach: 1,
+  },
+  gnome: {
+    face: 130,
+    nose: 168,
+    hips: [
+      [118, 150],
+      [142, 150],
+    ],
+    legW: 10,
+    legs: 'ink-soft',
+    foot: 'boot',
+    shoes: 'ink',
+    sole: 'ink-soft',
+    shoulders: [
+      [106, 104],
+      [154, 104],
+    ],
+    armW: 10,
+    arms: 'sea',
+    hands: 'skin',
+    dots: true,
+    eyes: [
+      [118, 55, 4.5],
+      [142, 55, 4.5],
+    ],
+    lid: 'skin',
+    mouth: [130, 94, 12],
+    sweat: [
+      [90, 44],
+      [170, 44],
+    ],
+    neck: [130, 100],
+    chest: [146, 124],
+    hat: [130, -24],
+    cup: [130, -86],
+    reach: 0.45,
+  },
 };
 
 /** A paint as a fill class, and as a line's colour. */
@@ -560,6 +858,9 @@ const FILLS: Record<Paint, string> = {
   paper: styles.paper!,
   glass: styles.glass!,
   'mint-soft': styles.mintSoft!,
+  orange: styles.orange!,
+  pink: styles.pink!,
+  sea: styles.seaBlue!,
 };
 const LINES: Record<Paint, string> = {
   colour: 'var(--racer)',
@@ -570,6 +871,9 @@ const LINES: Record<Paint, string> = {
   paper: 'var(--color-paper)',
   glass: 'var(--color-glass)',
   'mint-soft': 'var(--color-mint-soft)',
+  orange: 'var(--color-orange)',
+  pink: 'var(--color-pink)',
+  sea: 'var(--color-sea)',
 };
 
 const paint = (el: Element, p: Paint) => (el as SVGElement).style.setProperty('--paint', LINES[p]);
@@ -634,6 +938,28 @@ const inkUnder = (
 const SCOOP =
   'M94 70 Q90 30 130 24 Q172 28 168 68 Q172 84 162 96 Q156 108 150 96 Q144 104 138 98 ' +
   'Q130 110 122 98 Q114 106 108 96 Q98 102 96 90 Q86 82 94 70 Z';
+
+/** The cat's tail, curling up behind it. */
+const CAT_TAIL = 'M110 132 Q80 140 72 116 Q66 94 82 82';
+
+/** The octopus's four hanging tentacles, back to front, each from its root. */
+export const TENTACLES = [
+  'M102 92 Q80 112 86 134 Q90 150 76 158',
+  'M114 98 Q102 124 110 146 Q114 160 102 168',
+  'M146 98 Q158 124 150 146 Q146 160 158 168',
+  'M158 92 Q180 112 174 134 Q170 150 184 158',
+] as const;
+
+/** The ghost's sheet, its hem in scallops. */
+const GHOST_SHEET =
+  'M84 150 L86 60 Q86 12 130 12 Q174 12 174 60 L176 150 Q168 142 160 152 Q152 142 144 152 ' +
+  'Q136 142 128 152 Q120 142 112 152 Q104 142 96 152 Q90 144 84 150 Z';
+
+/** The band over the yeti's head, between its earmuffs. */
+const EARMUFF_BAND = 'M94 52 Q94 6 130 6 Q166 6 166 52';
+
+/** The gnome's pointy hat, its tip at (130, -28). */
+const GNOME_HAT = 'M92 48 L124 -22 Q130 -30 136 -22 L168 48 Q130 38 92 48 Z';
 
 /**
  * Each creature's body and head, back to front. The parts in its colour are
@@ -1107,6 +1433,329 @@ const BODIES: Record<Creature, readonly (Shape | Shaded)[]> = {
     // The nori band.
     ['rect', styles.inkSoft!, { x: 96, y: 38, width: 16, height: 108, 'stroke-width': 3 }],
   ],
+  cat: [
+    // Its tail, curling up behind, with a white tip.
+    ['path', styles.line!, { d: CAT_TAIL, 'stroke-width': 17 }],
+    [
+      'path',
+      styles.limb!,
+      { d: CAT_TAIL, 'stroke-width': 10, style: '--paint: var(--racer)', 'data-part': 'fur' },
+    ],
+    ['circle', styles.paper!, { cx: 82, cy: 82, r: 6.5, 'stroke-width': 3 }],
+    {
+      paint: styles.racer!,
+      d: 'M106 110 Q104 90 126 89 Q148 90 148 110 L146 132 Q144 150 126 150 Q108 150 107 132 Z',
+      shadow: [9, -6],
+      part: 'fur',
+      on: [
+        [
+          'path',
+          styles.paper!,
+          {
+            d: 'M118 104 Q128 98 138 104 Q142 122 136 140 Q128 146 120 140 Q114 122 118 104 Z',
+            'stroke-width': 3,
+          },
+        ],
+      ],
+    },
+    [
+      'path',
+      styles.racer!,
+      {
+        d: 'M96 46 Q90 16 102 4 Q118 14 126 28 Z M150 26 Q160 10 174 6 Q178 24 172 46 Z',
+        'stroke-width': 4,
+        'data-part': 'fur',
+      },
+    ],
+    [
+      'path',
+      styles.pinkFill!,
+      { d: 'M102 36 Q100 20 105 12 Q114 20 118 28 Z M156 26 Q163 16 170 14 Q171 26 168 36 Z' },
+    ],
+    // Tufts at its cheeks.
+    [
+      'path',
+      styles.racer!,
+      {
+        d: 'M94 64 L80 72 L95 78 Z M174 64 L189 70 L175 78 Z',
+        'stroke-width': 4,
+        'data-part': 'fur',
+      },
+    ],
+    {
+      paint: styles.racer!,
+      d: 'M90 56 A44 37 0 1 0 178 56 A44 37 0 1 0 90 56 Z',
+      shadow: [9, -7],
+      part: 'fur',
+    },
+    shine('M156 27 Q170 33 175 47'),
+    [
+      'path',
+      styles.line!,
+      { d: 'M130 19 Q133 25 131 31 M141 19 Q144 25 142 31', 'stroke-width': 3.5 },
+    ],
+    ['ellipse', styles.paper!, { cx: 142, cy: 75, rx: 17, ry: 11, 'stroke-width': 3 }],
+    [
+      'path',
+      styles.pink!,
+      { d: 'M136 66 Q142 63 148 66 Q146 71 142 72 Q138 71 136 66 Z', 'stroke-width': 2.5 },
+    ],
+    [
+      'path',
+      styles.line!,
+      {
+        d: 'M125 74 L104 70 M125 80 L104 83 M159 74 L181 70 M159 80 L181 83',
+        'stroke-width': 3,
+      },
+    ],
+  ],
+  octopus: [
+    // Four tentacles hanging from its mantle, each to whirl on its own.
+    ...TENTACLES.flatMap((d, i): Shape[] => [
+      ['path', styles.line!, { d, 'stroke-width': 17, 'data-tentacle': i }],
+      [
+        'path',
+        styles.limb!,
+        {
+          d,
+          'stroke-width': 10,
+          style: '--paint: var(--racer)',
+          'data-part': 'tentacles',
+          'data-tentacle': i,
+        },
+      ],
+    ]),
+    ...(
+      [
+        [85, 128, 0],
+        [89, 142, 0],
+        [108, 138, 1],
+        [111, 152, 1],
+        [152, 138, 2],
+        [149, 152, 2],
+        [175, 128, 3],
+        [171, 142, 3],
+      ] as const
+    ).map(([cx, cy, i]): Shape => [
+      'circle',
+      styles.tomatoSoft!,
+      { cx, cy, r: 2.8, 'stroke-width': 2, 'data-tentacle': i },
+    ]),
+    {
+      paint: styles.racer!,
+      d: 'M86 64 Q78 2 130 0 Q182 2 174 64 Q176 98 152 102 H108 Q84 98 86 64 Z',
+      shadow: [9, -7],
+      part: 'body',
+      on: [
+        ['circle', styles.paper!, { cx: 100, cy: 30, r: 5, 'stroke-width': 2.5 }],
+        ['circle', styles.paper!, { cx: 112, cy: 14, r: 3.5, 'stroke-width': 2.5 }],
+        ['circle', styles.paper!, { cx: 93, cy: 46, r: 3, 'stroke-width': 2.5 }],
+      ],
+    },
+    shine('M150 10 Q168 18 172 36'),
+  ],
+  penguin: [
+    {
+      paint: styles.racer!,
+      d: 'M130 6 Q84 8 84 70 Q82 128 100 148 Q130 162 160 148 Q178 128 176 70 Q176 8 130 6 Z',
+      shadow: [9, -6],
+      part: 'back',
+      on: [
+        [
+          'path',
+          styles.paper!,
+          {
+            d:
+              'M130 42 Q118 28 104 36 Q92 46 98 70 Q104 92 130 98 Q156 92 162 70 Q168 46 156 36 ' +
+              'Q142 28 130 42 Z',
+            'stroke-width': 3,
+          },
+        ],
+        ['ellipse', styles.paper!, { cx: 130, cy: 124, rx: 28, ry: 24, 'stroke-width': 3 }],
+      ],
+    },
+    ['circle', styles.pinkFill!, { cx: 104, cy: 76, r: 5, opacity: 0.7 }],
+    ['circle', styles.pinkFill!, { cx: 156, cy: 76, r: 5, opacity: 0.7 }],
+    ['path', styles.orange!, { d: 'M112 74 Q130 62 148 74 Q130 90 112 74 Z', 'stroke-width': 3 }],
+    shine('M150 14 Q166 22 172 40'),
+  ],
+  pigeon: [
+    ['path', styles.inkSoft!, { d: 'M84 100 L46 106 L50 124 L90 120 Z', 'stroke-width': 4 }],
+    {
+      paint: styles.shark!,
+      d: 'M80 104 Q78 74 112 70 Q150 68 162 92 Q170 120 150 140 Q120 156 96 140 Q80 128 80 104 Z',
+      shadow: [8, -6],
+    },
+    [
+      'path',
+      styles.racer!,
+      {
+        d: 'M128 84 Q130 62 146 58 L176 68 Q172 90 158 100 Q140 98 128 84 Z',
+        'stroke-width': 4,
+        'data-part': 'neck',
+      },
+    ],
+    // The sheen on its neck.
+    ['path', styles.stripe!, { d: 'M136 78 Q146 70 160 74', 'stroke-width': 3, opacity: 0.6 }],
+    {
+      paint: styles.shark!,
+      d: 'M136 46 A26 26 0 1 0 188 46 A26 26 0 1 0 136 46 Z',
+      shadow: [7, -6],
+    },
+    ['circle', styles.orange!, { cx: 156, cy: 40, r: 12.5, 'stroke-width': 3 }],
+    ['path', styles.inkSoft!, { d: 'M186 42 L204 50 L186 57 Z', 'stroke-width': 3 }],
+    ['ellipse', styles.paper!, { cx: 188, cy: 42, rx: 5, ry: 4, 'stroke-width': 2 }],
+    shine('M168 22 Q181 26 185 35', 4),
+  ],
+  ghost: [
+    {
+      paint: styles.paper!,
+      d: GHOST_SHEET,
+      shadow: [10, -6],
+      on: [
+        ...(
+          [
+            [104, 32, 6],
+            [158, 28, 5],
+            [98, 102, 7],
+            [160, 108, 6],
+            [120, 132, 6],
+            [150, 136, 4],
+          ] as const
+        ).map(([cx, cy, r]): Shape => [
+          'circle',
+          styles.racer!,
+          { cx, cy, r, 'stroke-width': 2.5, 'data-part': 'dots' },
+        ]),
+        [
+          'path',
+          styles.inkSoftLine!,
+          { d: 'M108 116 Q104 132 110 146 M154 116 Q158 132 152 146', 'stroke-width': 2.5 },
+        ],
+      ],
+    },
+  ],
+  mummy: [
+    // A loose end of bandage, trailing behind.
+    [
+      'path',
+      styles.paper!,
+      { d: 'M102 62 Q72 64 52 84 L58 94 Q76 76 102 72 Z', 'stroke-width': 3 },
+    ],
+    {
+      paint: styles.paper!,
+      d: 'M104 98 Q106 90 118 90 H142 Q154 90 156 98 L158 148 H102 Z',
+      shadow: [8, -4],
+      on: [
+        [
+          'path',
+          styles.line!,
+          {
+            d: 'M104 106 L156 100 M103 118 L157 112 M102 130 L158 124 M102 141 L158 136',
+            'stroke-width': 2.5,
+          },
+        ],
+      ],
+    },
+    {
+      paint: styles.paper!,
+      d: 'M100 42 Q100 22 130 22 Q160 22 160 42 L160 74 Q160 94 130 94 Q100 94 100 74 Z',
+      shadow: [8, -6],
+      on: [
+        // The gap in its bandages its eyes look out of.
+        ['path', styles.inkSoft!, { d: 'M100 44 L160 40 L160 64 L100 68 Z', 'stroke-width': 3 }],
+        ['path', styles.line!, { d: 'M101 74 L159 70 M102 88 L158 85', 'stroke-width': 2.5 }],
+      ],
+    },
+    [
+      'path',
+      styles.racer!,
+      { d: 'M100 30 L160 26 L160 38 L100 42 Z', 'stroke-width': 4, 'data-part': 'sweatband' },
+    ],
+    ['path', styles.stripe!, { d: 'M140 30 L154 29', 'stroke-width': 2.5, opacity: 0.7 }],
+  ],
+  yeti: [
+    { paint: styles.paper!, d: fur(130, 94, 58, 76), shadow: [9, -7] },
+    ['path', styles.line!, { d: EARMUFF_BAND, 'stroke-width': 12 }],
+    [
+      'path',
+      styles.limb!,
+      {
+        d: EARMUFF_BAND,
+        'stroke-width': 5,
+        style: '--paint: var(--racer)',
+        'data-part': 'earmuffs',
+      },
+    ],
+    {
+      paint: styles.glass!,
+      d: 'M104 52 Q104 34 130 34 Q156 34 156 52 L156 72 Q156 92 130 92 Q104 92 104 72 Z',
+      shadow: [6, -5],
+    },
+    [
+      'circle',
+      styles.racer!,
+      { cx: 93, cy: 58, r: 13, 'stroke-width': 4, 'data-part': 'earmuffs' },
+    ],
+    [
+      'circle',
+      styles.racer!,
+      { cx: 167, cy: 58, r: 13, 'stroke-width': 4, 'data-part': 'earmuffs' },
+    ],
+    ['circle', styles.paperFill!, { cx: 171, cy: 53, r: 3, opacity: 0.8 }],
+    ['circle', styles.paperFill!, { cx: 97, cy: 53, r: 3, opacity: 0.8 }],
+  ],
+  gnome: [
+    {
+      paint: styles.seaBlue!,
+      d: 'M104 106 Q104 96 116 96 H144 Q156 96 156 106 L158 150 H102 Z',
+      shadow: [7, -4],
+      on: [
+        ['rect', styles.inkFill!, { x: 102, y: 134, width: 56, height: 9 }],
+        ['rect', styles.sun!, { x: 123, y: 131, width: 14, height: 14, rx: 2, 'stroke-width': 3 }],
+      ],
+    },
+    {
+      paint: styles.skin!,
+      d: 'M103 62 A27 27 0 1 0 157 62 A27 27 0 1 0 103 62 Z',
+      shadow: [5, -5],
+      part: 'skin',
+    },
+    ['circle', styles.pinkFill!, { cx: 113, cy: 68, r: 5, opacity: 0.6 }],
+    ['circle', styles.pinkFill!, { cx: 147, cy: 68, r: 5, opacity: 0.6 }],
+    {
+      paint: styles.paper!,
+      d:
+        'M100 64 Q98 92 110 114 Q122 134 130 140 Q138 134 150 114 Q162 92 160 64 ' +
+        'Q150 80 130 80 Q110 80 100 64 Z',
+      shadow: [6, -4],
+      part: 'beard',
+      on: [
+        [
+          'path',
+          styles.inkSoftLine!,
+          {
+            d: 'M114 100 Q119 105 117 112 M146 100 Q141 105 143 112 M130 116 Q133 122 130 128',
+            'stroke-width': 2.5,
+          },
+        ],
+      ],
+    },
+    // Its moustache.
+    [
+      'path',
+      styles.paper!,
+      {
+        d: 'M130 79 Q118 71 108 79 Q116 86 130 83 Q144 86 152 79 Q142 71 130 79 Z',
+        'stroke-width': 3,
+      },
+    ],
+    { paint: styles.racer!, d: GNOME_HAT, shadow: [7, -6], part: 'hat' },
+    shine('M138 -10 Q150 14 158 36', 4),
+    // Its round nose.
+    ['circle', styles.skin!, { cx: 130, cy: 69, r: 9, 'stroke-width': 3, 'data-part': 'skin' }],
+    ['circle', styles.paperFill!, { cx: 133, cy: 66, r: 2.2, opacity: 0.8 }],
+  ],
 };
 
 /**
@@ -1227,7 +1876,21 @@ export type CreatureProp =
   | 'belt'
   | 'wasabi'
   | 'tears'
-  | 'steam';
+  | 'steam'
+  | 'laser'
+  | 'box'
+  | 'knot'
+  | 'ice'
+  | 'fish'
+  | 'chip'
+  | 'chest'
+  | 'fright'
+  | 'hem'
+  | 'plinth'
+  | 'trail'
+  | 'unwrap'
+  | 'skis'
+  | 'snow';
 
 /**
  * Where a prop goes: on the ground, behind everything; under the body,
@@ -1241,6 +1904,11 @@ const LAYERS: Partial<Record<CreatureProp, 'ground' | 'under' | 'front'>> = {
   wasabi: 'front',
   tears: 'front',
   steam: 'front',
+  box: 'front',
+  knot: 'front',
+  chest: 'front',
+  fright: 'front',
+  hem: 'under',
   drips: 'under',
   stream: 'ground',
   wind: 'ground',
@@ -1248,6 +1916,14 @@ const LAYERS: Partial<Record<CreatureProp, 'ground' | 'under' | 'front'>> = {
   skid: 'ground',
   puddle: 'ground',
   belt: 'ground',
+  laser: 'ground',
+  ice: 'ground',
+  chip: 'ground',
+  plinth: 'ground',
+  trail: 'ground',
+  unwrap: 'ground',
+  skis: 'ground',
+  snow: 'ground',
 };
 
 /** Two puffs of steam shooting up from (0, 0). */
@@ -1433,6 +2109,163 @@ const SNACK: readonly Shape[] = [
   ['path', styles.line!, { d: 'M206 111 Q222 104 236 99', 'stroke-width': 2.5 }],
 ];
 
+/** A red laser dot, centred on (0, 0), zipping along with lines behind it. */
+const LASER: readonly Shape[] = [
+  ['path', styles.line!, { d: 'M-34 -3 H-16 M-28 4 H-14', 'stroke-width': 3 }],
+  ['circle', styles.tomato!, { cx: 0, cy: 0, r: 6, 'stroke-width': 2.5 }],
+  ['circle', styles.paperFill!, { cx: -2, cy: -2, r: 1.8 }],
+];
+
+/** A cardboard box round the cat's legs, its flaps open. */
+const BOX: readonly Shape[] = [
+  ['path', styles.orange!, { d: 'M96 124 L84 104 L120 100 L124 124 Z', 'stroke-width': 3 }],
+  ['path', styles.orange!, { d: 'M94 124 H170 L166 190 H98 Z', 'stroke-width': 4 }],
+  ['path', styles.orange!, { d: 'M170 124 L190 106 L184 130 Z', 'stroke-width': 3 }],
+  [
+    'path',
+    styles.line!,
+    { d: 'M96 138 H168 M132 150 V176 M125 157 L132 150 L139 157', 'stroke-width': 3 },
+  ],
+];
+
+/** The octopus's legs in a knot, below its mantle. */
+const KNOT_PATH =
+  'M100 100 Q82 142 116 150 Q152 160 150 128 Q146 104 124 118 Q102 134 128 162 ' +
+  'Q148 180 164 152 Q178 126 160 100';
+const KNOT: readonly Shape[] = [
+  ['path', styles.line!, { d: KNOT_PATH, 'stroke-width': 17 }],
+  ['path', styles.limb!, { d: KNOT_PATH, 'stroke-width': 10, style: '--paint: var(--racer)' }],
+  ...(
+    [
+      [112, 140],
+      [140, 126],
+      [130, 156],
+    ] as const
+  ).map(([cx, cy]): Shape => ['circle', styles.tomatoSoft!, { cx, cy, r: 2.8, 'stroke-width': 2 }]),
+];
+
+/** A strip of ice the penguin slides along on its belly. */
+const ICE: readonly Shape[] = [
+  [
+    'path',
+    styles.glass!,
+    {
+      d: 'M44 186 Q180 180 324 186 Q332 192 322 195 Q180 199 40 195 Q34 190 44 186 Z',
+      'stroke-width': 3,
+    },
+  ],
+  ['path', styles.stripe!, { d: 'M180 188 H214 M232 189 H246', 'stroke-width': 2.5 }],
+];
+
+/** A fish, centred on (0, 0), facing right. */
+const FISH: readonly Shape[] = [
+  ['path', styles.seaBlue!, { d: 'M-14 0 L-25 -9 L-22 0 L-25 9 Z', 'stroke-width': 3 }],
+  [
+    'path',
+    styles.seaBlue!,
+    { d: 'M-15 0 Q-4 -11 10 -7 Q18 -4 21 0 Q18 4 10 7 Q-4 11 -15 0 Z', 'stroke-width': 3 },
+  ],
+  ['path', styles.stripe!, { d: 'M0 -4 Q6 -5 10 -3', 'stroke-width': 2 }],
+  ['circle', styles.inkFill!, { cx: 13, cy: -1.5, r: 1.8 }],
+];
+
+/** Two chips on the ground, centred on (0, 0). */
+const CHIP: readonly Shape[] = [
+  ['path', styles.sun!, { d: 'M-17 -2 L13 -9 L15 -3 L-15 4 Z', 'stroke-width': 3 }],
+  ['path', styles.sun!, { d: 'M-6 1 L18 3 L17 9 L-7 7 Z', 'stroke-width': 3 }],
+];
+
+/** The pigeon's chest, puffed up in its colour, with a sheen. */
+const CHEST: readonly Shape[] = [
+  ['ellipse', styles.racer!, { cx: 144, cy: 104, rx: 34, ry: 31, 'stroke-width': 4 }],
+  ['path', styles.stripe!, { d: 'M152 84 Q166 90 170 104', 'stroke-width': 3, opacity: 0.6 }],
+];
+
+/** Startle lines either side of the ghost's head. */
+const FRIGHT: readonly Shape[] = [
+  [
+    'path',
+    styles.line!,
+    {
+      d: 'M78 30 L64 22 M78 46 L60 46 M86 14 L78 2 M182 30 L196 22 M182 46 L200 46 M174 14 L182 2',
+      'stroke-width': 4,
+    },
+  ],
+];
+
+/** A fold of the ghost's sheet, caught under its front foot. */
+const HEM: readonly Shape[] = [
+  [
+    'path',
+    styles.paper!,
+    { d: 'M148 146 Q158 168 166 188 L190 188 Q178 166 174 146 Z', 'stroke-width': 3 },
+  ],
+];
+
+/** A stone plinth the gnome stands on, its top at the feet's line and 20 deep. */
+const PLINTH: readonly Shape[] = [
+  ['rect', styles.shark!, { x: 98, y: 194, width: 76, height: 16, 'stroke-width': 4 }],
+  ['rect', styles.shark!, { x: 90, y: 188, width: 92, height: 8, rx: 2, 'stroke-width': 3 }],
+  ['path', styles.line!, { d: 'M120 198 L126 204 L124 210', 'stroke-width': 2.5 }],
+];
+
+/** A bandage unrolling behind the mummy, from its waist. */
+const TRAIL: readonly Shape[] = [
+  [
+    'path',
+    styles.paper!,
+    {
+      d:
+        'M112 160 Q60 150 20 174 Q-30 196 -110 180 L-112 190 Q-30 206 22 186 ' +
+        'Q62 162 110 172 Z',
+      'stroke-width': 3,
+    },
+  ],
+  [
+    'path',
+    styles.line!,
+    { d: 'M70 160 L68 170 M10 184 L12 194 M-60 188 L-58 198', 'stroke-width': 2.5 },
+  ],
+];
+
+/** A bandage come loose from the mummy's waist, along the ground ahead. */
+const UNWRAP: readonly Shape[] = [
+  [
+    'path',
+    styles.paper!,
+    {
+      d: 'M150 118 Q190 136 196 184 L300 182 L300 194 L186 196 Q180 148 146 130 Z',
+      'stroke-width': 3,
+    },
+  ],
+  [
+    'path',
+    styles.line!,
+    { d: 'M176 150 L186 146 M230 184 L230 195 M270 183 L270 194', 'stroke-width': 2.5 },
+  ],
+];
+
+/** A ski in the yeti's colour, its tip curled up in front. */
+const SKI = 'M36 188 H214 Q228 188 230 176 Q236 174 236 182 Q232 196 212 196 H36 Q30 192 36 188 Z';
+const SKIS: readonly Shape[] = [
+  ['path', styles.racer!, { d: SKI, 'stroke-width': 3, transform: 'translate(-18 -5)' }],
+  ['path', styles.racer!, { d: SKI, 'stroke-width': 3 }],
+];
+
+/** A patch of snow behind the yeti, where it lies down. */
+const SNOW: readonly Shape[] = [
+  [
+    'path',
+    styles.paper!,
+    {
+      d: 'M-74 190 Q-64 174 0 178 Q70 170 152 180 Q180 184 176 193 Q100 202 -62 199 Q-80 197 -74 190 Z',
+      'stroke-width': 3,
+    },
+  ],
+  ['path', styles.glass!, { d: 'M-30 186 Q0 182 30 186 Q0 190 -30 186 Z', 'stroke-width': 2 }],
+  ['path', styles.glass!, { d: 'M80 184 Q104 181 126 185 Q104 188 80 184 Z', 'stroke-width': 2 }],
+];
+
 /** The paints of a creature's feet, as `FEET` takes them. */
 const footPaints = (spec: Spec) => ({
   shoe: FILLS[spec.shoes],
@@ -1469,6 +2302,14 @@ const PROPS: Partial<Record<Creature, Partial<Record<CreatureProp, (spec: Spec) 
     tears: () => [...TEARS],
     steam: () => [...JETS],
   },
+  cat: { laser: () => [...LASER], box: () => [...BOX] },
+  octopus: { knot: () => [...KNOT] },
+  penguin: { ice: () => [...ICE], fish: () => [...FISH] },
+  pigeon: { chip: () => [...CHIP], chest: () => [...CHEST] },
+  ghost: { fright: () => [...FRIGHT], hem: () => [...HEM] },
+  gnome: { plinth: () => [...PLINTH] },
+  mummy: { trail: () => [...TRAIL], unwrap: () => [...UNWRAP] },
+  yeti: { skis: () => [...SKIS], snow: () => [...SNOW] },
 };
 
 export interface CreatureRunner extends Runner {
@@ -1487,6 +2328,8 @@ export interface CreatureRunner extends Runner {
   readonly light: SVGElement | null;
   /** The mug's wisps of steam, to hide while it's empty. */
   readonly wisps: readonly SVGElement[];
+  /** The octopus's hanging tentacles, each its parts, back to front, to whirl or hide. */
+  readonly tentacles: readonly (readonly SVGElement[])[];
   /** Stretches both arms forward, for what's out of reach. */
   setStretch(on: boolean): void;
   /** Bends forward from its hips by `degrees`, unless it leans back scared. */
@@ -1892,6 +2735,11 @@ export function creature(
         py = y;
         prx = er * 0.26;
         pry = prx;
+      } else if (spec.slit && !party) {
+        px = x + er * 0.25;
+        py = y + er * 0.1;
+        prx = er * 0.24;
+        pry = er * 0.66;
       }
       white.setAttribute('class', spec.screen ? styles.glass! : styles.paper!);
       set(white, { cx: x, cy: y, rx, ry, 'stroke-width': googly ? 3.5 : 3 });
@@ -2086,6 +2934,10 @@ export function creature(
     props,
     light: own.querySelector<SVGElement>('[data-part="light"]'),
     wisps: [...own.querySelectorAll<SVGElement>('[data-part="wisps"]')],
+    tentacles:
+      kind === 'octopus'
+        ? TENTACLES.map((_, i) => [...own.querySelectorAll<SVGElement>(`[data-tentacle="${i}"]`)])
+        : [],
     setStretch(on) {
       if (on === current.stretch) return;
       current = { ...current, stretch: on };
