@@ -26,7 +26,15 @@ export type Creature =
   | 'sticky'
   | 'banana'
   | 'icecream'
-  | 'sushi';
+  | 'sushi'
+  | 'cat'
+  | 'octopus'
+  | 'penguin'
+  | 'pigeon'
+  | 'ghost'
+  | 'mummy'
+  | 'yeti'
+  | 'gnome';
 export type RacerColour = 'tomato' | 'sun' | 'mint' | 'grape' | 'pink' | 'orange' | 'sea' | 'shark';
 export type Extra = 'googly' | 'tophat' | 'number' | 'scarf' | 'cape' | 'bowtie';
 /** `hold`, the reins or the backrest; `pull`, leaning back on them; `wave`; `party`, arms up. */
@@ -57,6 +65,14 @@ export const CREATURES: readonly Creature[] = [
   'banana',
   'icecream',
   'sushi',
+  'cat',
+  'octopus',
+  'penguin',
+  'pigeon',
+  'ghost',
+  'mummy',
+  'yeti',
+  'gnome',
 ];
 /** The creatures that are things on legs, which tilt from their feet. */
 export const THINGS: readonly Creature[] = [

@@ -85,6 +85,14 @@ const BURSTS: Record<Kind, string> = {
   banana: 'slips on its own peel',
   icecream: 'gets a sugar rush',
   sushi: 'rides the conveyor belt',
+  cat: 'chases a laser dot',
+  octopus: 'uses all eight legs',
+  penguin: 'belly-slides',
+  pigeon: 'spots a chip',
+  ghost: 'gets spooked',
+  mummy: 'unrolls downhill',
+  yeti: 'skis ahead',
+  gnome: 'sneaks ahead',
 };
 const STOPS: Record<Kind, string> = {
   snail: 'stops for a snack',
@@ -109,6 +117,14 @@ const STOPS: Record<Kind, string> = {
   banana: 'does the splits',
   icecream: 'starts to melt',
   sushi: 'gets too much wasabi',
+  cat: 'sits in a box',
+  octopus: 'ties its legs in a knot',
+  penguin: 'drops its fish',
+  pigeon: 'puffs up its chest',
+  ghost: 'trips on its sheet',
+  mummy: 'comes unwrapped',
+  yeti: 'makes a snow angel',
+  gnome: 'freezes like a statue',
 };
 /** What the commentator calls a racer, where it isn't its kind's name. */
 const CALLED: Partial<Record<Kind, string>> = {
@@ -148,6 +164,14 @@ const GAITS: Record<Kind, { px: number; seconds: number }> = {
   banana: { px: 4, seconds: 0.36 },
   icecream: { px: 4, seconds: 0.38 },
   sushi: { px: 3, seconds: 0.28 },
+  cat: { px: 4, seconds: 0.3 },
+  octopus: { px: 5, seconds: 0.4 },
+  penguin: { px: 4, seconds: 0.26 },
+  pigeon: { px: 3, seconds: 0.24 },
+  ghost: { px: 6, seconds: 0.5 },
+  mummy: { px: 3, seconds: 0.46 },
+  yeti: { px: 6, seconds: 0.44 },
+  gnome: { px: 3, seconds: 0.3 },
 };
 
 /** `look` drawn: a rider on its mount, or a creature. */

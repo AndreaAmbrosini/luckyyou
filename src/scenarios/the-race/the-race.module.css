@@ -153,6 +153,13 @@
   stroke: var(--color-ink);
 }
 
+/* The gnome's tunic and sleeves. */
+.seaBlue {
+  fill: var(--color-sea);
+  stroke: var(--color-ink);
+  stroke-linejoin: round;
+}
+
 /* Lines of print on paper, and the grains of the sushi's rice. */
 .inkSoftLine {
   fill: none;

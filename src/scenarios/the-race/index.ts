@@ -45,6 +45,14 @@ const RACERS = {
   banana: 'Banana',
   icecream: 'Ice cream',
   sushi: 'Sushi',
+  cat: 'Cat',
+  octopus: 'Octopus',
+  penguin: 'Penguin',
+  pigeon: 'Pigeon',
+  ghost: 'Ghost',
+  mummy: 'Mummy',
+  yeti: 'Yeti',
+  gnome: 'Garden gnome',
 } as const;
 
 /** The creatures' tabs on the Line-up, after the rides', and each creature's tab. */
@@ -52,6 +60,10 @@ const GROUPS = ['Animals', 'Things on legs', 'Spooky', 'Space'] as const;
 const KINDS: Record<Creature, (typeof GROUPS)[number]> = {
   shark: 'Animals',
   dinosaur: 'Animals',
+  cat: 'Animals',
+  octopus: 'Animals',
+  penguin: 'Animals',
+  pigeon: 'Animals',
   mug: 'Things on legs',
   printer: 'Things on legs',
   sticky: 'Things on legs',
@@ -61,6 +73,10 @@ const KINDS: Record<Creature, (typeof GROUPS)[number]> = {
   zombie: 'Spooky',
   monster: 'Spooky',
   villain: 'Spooky',
+  ghost: 'Spooky',
+  mummy: 'Spooky',
+  yeti: 'Spooky',
+  gnome: 'Spooky',
   robot: 'Space',
   astronaut: 'Space',
   alien: 'Space',

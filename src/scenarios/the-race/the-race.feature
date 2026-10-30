@@ -163,14 +163,12 @@ Feature: The Race
         | sushi       | the fish on top        |
 
     # Step 4.
-    @pending
     Scenario: Four animals and four spooky creatures
       When the Line-up opens for The Race
       Then the group "Animals" also holds "Cat", "Octopus", "Penguin" and "Pigeon", after "Dinosaur"
       And the group "Spooky" also holds "Ghost", "Mummy", "Yeti" and "Garden gnome", after "Villain"
 
     # Step 4.
-    @pending
     Scenario Outline: Where a <creature> wears its colour, and its feet
       When someone races as a <creature> in tomato
       Then <where> is tomato
@@ -188,7 +186,6 @@ Feature: The Race
         | yeti     | its earmuffs                         | big bare feet, light blue           |
 
     # Step 4.
-    @pending
     Scenario: The gnome has the kit's face
       When someone races as the garden gnome
       Then its face and hands have the skin tone the kit hands out for the run
@@ -537,7 +534,6 @@ Feature: The Race
       And a shark balances it on its fin, and every other creature holds it over its head
 
     # Step 4.
-    @pending
     Scenario: A pigeon or a gnome wins
       When a pigeon or a garden gnome has crossed the line first
       Then the pigeon balances the trophy on its head, and the gnome on the tip of its hat
