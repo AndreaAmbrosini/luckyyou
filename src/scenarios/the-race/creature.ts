@@ -402,12 +402,6 @@ const at = ([x, y]: Point) => `${round(x)} ${round(y)}`;
 const oval = (x: number, y: number, rx: number, ry: number) =>
   `M${round(x - rx)} ${round(y)} a${round(rx)} ${round(ry)} 0 1 0 ${round(2 * rx)} 0 ` +
   `a${round(rx)} ${round(ry)} 0 1 0 ${round(-2 * rx)} 0 Z`;
-/** A rectangle with rounded corners, as a path. */
-const box = (x: number, y: number, w: number, h: number, r: number) =>
-  `M${x + r} ${y} H${x + w - r} Q${x + w} ${y} ${x + w} ${y + r} V${y + h - r} ` +
-  `Q${x + w} ${y + h} ${x + w - r} ${y + h} H${x + r} Q${x} ${y + h} ${x} ${y + h - r} ` +
-  `V${y + r} Q${x} ${y} ${x + r} ${y} Z`;
-
 /** The monster's fur: a jagged oval round (cx, cy), every other point pulled in. */
 function fur(cx: number, cy: number, rx: number, ry: number): string {
   const points: string[] = [];
@@ -448,12 +442,12 @@ const shine = (d: string, width = 5, opacity = 0.8): Shape => [
  */
 const BODIES: Record<Creature, readonly (Shape | Shaded)[]> = {
   zombie: [
-    ['rect', styles.mintSoft!, { x: 121, y: 84, width: 18, height: 14, 'stroke-width': 4 }],
+    ['rect', styles.mintSoft!, { x: 122, y: 84, width: 18, height: 14, 'stroke-width': 4 }],
     {
       paint: styles.racer!,
       d:
-        'M100 100 Q100 92 112 91 H148 Q158 92 158 100 L160 148 L152 141 L144 149 L136 141 ' +
-        'L128 149 L120 141 L112 149 L104 141 L98 147 Z',
+        'M102 104 Q102 92 116 92 H146 Q160 92 160 104 L162 146 L154 140 L146 148 L138 141 ' +
+        'L130 148 L122 141 L114 148 L106 141 L100 146 Z',
       shadow: [10, -4],
       part: 'shirt',
       on: [
@@ -462,29 +456,30 @@ const BODIES: Record<Creature, readonly (Shape | Shaded)[]> = {
           styles.tomatoSoft!,
           {
             x: 136,
-            y: 114,
-            width: 13,
-            height: 13,
+            y: 112,
+            width: 14,
+            height: 14,
+            rx: 2,
             'stroke-width': 3,
-            transform: 'rotate(8 142 120)',
+            transform: 'rotate(8 143 119)',
           },
         ],
       ],
     },
-    ['circle', styles.mintSoft!, { cx: 100, cy: 62, r: 7, 'stroke-width': 4 }],
+    ['circle', styles.mintSoft!, { cx: 98, cy: 62, r: 7, 'stroke-width': 4 }],
     {
       paint: styles.mintSoft!,
-      d: 'M100 42 Q100 24 130 24 Q160 24 160 44 L160 76 Q160 96 130 96 Q100 96 100 76 Z',
+      d: 'M98 46 Q96 18 128 18 Q164 18 164 48 L163 76 Q162 98 130 98 Q100 98 99 76 Z',
       shadow: [9, -7],
     },
-    shine('M154 50 Q158 62 156 76', 4),
+    shine('M156 50 Q161 62 159 76', 4),
     [
       'path',
       styles.inkSoft!,
       {
         d:
-          'M100 40 L106 20 L116 30 L124 12 L134 26 L144 12 L150 28 L160 36 Q150 26 130 28 ' +
-          'Q110 28 100 40 Z',
+          'M97 44 Q94 22 110 16 L114 6 L122 16 L130 2 L138 16 L148 6 L151 20 Q165 26 165 46 ' +
+          'Q154 30 132 30 Q110 30 97 44 Z',
         'stroke-width': 4,
       },
     ],
@@ -497,35 +492,45 @@ const BODIES: Record<Creature, readonly (Shape | Shaded)[]> = {
   robot: [
     ['path', styles.line!, { d: 'M130 22 V9', 'stroke-width': 4 }],
     ['circle', styles.racer!, { cx: 130, cy: 7, r: 7, 'stroke-width': 4, 'data-part': 'antenna' }],
-    ['rect', styles.shark!, { x: 86, y: 44, width: 10, height: 22, rx: 3, 'stroke-width': 4 }],
-    ['rect', styles.shark!, { x: 164, y: 44, width: 10, height: 22, rx: 3, 'stroke-width': 4 }],
+    ['circle', styles.paperFill!, { cx: 127.5, cy: 4.5, r: 2 }],
+    ['rect', styles.shark!, { x: 84, y: 42, width: 12, height: 26, rx: 4, 'stroke-width': 4 }],
+    ['rect', styles.shark!, { x: 164, y: 42, width: 12, height: 26, rx: 4, 'stroke-width': 4 }],
     ['rect', styles.shark!, { x: 122, y: 84, width: 16, height: 12, 'stroke-width': 3 }],
     {
       paint: styles.racer!,
-      d: box(102, 94, 56, 54, 8),
+      d: 'M110 94 H150 Q160 94 160 104 V138 Q160 148 150 148 H110 Q100 148 100 138 V104 Q100 94 110 94 Z',
       shadow: [8, -6],
       part: 'body',
       on: [
-        ['circle', styles.paper!, { cx: 118, cy: 112, r: 7, 'stroke-width': 3 }],
-        ['path', styles.line!, { d: 'M118 112 L122 107 M112 136 H148', 'stroke-width': 3 }],
+        ['circle', styles.paper!, { cx: 118, cy: 113, r: 7, 'stroke-width': 3 }],
+        ['path', styles.line!, { d: 'M118 113 L122 108', 'stroke-width': 3 }],
         ['circle', styles.tomato!, { cx: 141, cy: 109, r: 4, 'stroke-width': 2.5 }],
         ['circle', styles.sun!, { cx: 150, cy: 120, r: 4, 'stroke-width': 2.5 }],
+        ['path', styles.line!, { d: 'M112 134 H148 M112 140 H148', 'stroke-width': 3 }],
       ],
     },
-    { paint: styles.shark!, d: box(94, 22, 72, 66, 12), shadow: [9, -7] },
-    shine('M154 27 Q162 28 163 38', 4),
+    {
+      paint: styles.shark!,
+      d: 'M106 20 H154 Q168 20 168 34 V74 Q168 88 154 88 H106 Q92 88 92 74 V34 Q92 20 106 20 Z',
+      shadow: [9, -7],
+    },
+    shine('M154 25 Q164 26 165 37', 4),
     [
       'rect',
       styles.ink!,
-      { x: 102, y: 32, width: 56, height: 46, rx: 8, 'stroke-width': 3, 'data-part': 'screen' },
+      { x: 101, y: 30, width: 58, height: 48, rx: 10, 'stroke-width': 3, 'data-part': 'screen' },
     ],
-    shine('M146 37 Q152 37 154 42', 2.5, 0.45),
+    shine('M146 35 Q152 35 154 40', 2.5, 0.45),
   ],
   shark: [
     [
       'path',
       styles.racer!,
-      { d: 'M60 74 L24 38 L38 76 L22 112 Z', 'stroke-width': 4, 'data-part': 'body' },
+      {
+        d: 'M60 74 Q40 54 24 36 Q34 58 38 76 Q32 96 22 114 Q44 98 60 92 Z',
+        'stroke-width': 4,
+        'data-part': 'body',
+      },
     ],
     [
       'path',
@@ -548,14 +553,19 @@ const BODIES: Record<Creature, readonly (Shape | Shaded)[]> = {
         [
           'path',
           styles.line!,
-          { d: 'M148 62 Q144 72 148 82 M158 60 Q154 70 158 80', 'stroke-width': 3 },
+          { d: 'M146 62 Q142 72 146 82 M156 60 Q152 70 156 80', 'stroke-width': 3 },
         ],
       ],
     },
     shine('M100 46 Q140 38 182 47'),
   ],
   astronaut: [
-    { paint: styles.racer!, d: box(80, 92, 26, 52, 6), shadow: [6, -4], part: 'backpack' },
+    {
+      paint: styles.racer!,
+      d: 'M85 90 H99 Q106 90 106 97 V139 Q106 146 99 146 H85 Q78 146 78 139 V97 Q78 90 85 90 Z',
+      shadow: [6, -4],
+      part: 'backpack',
+    },
     {
       paint: styles.paper!,
       d: 'M102 98 Q104 90 118 90 H142 Q156 90 158 98 L160 148 H100 Z',
@@ -572,8 +582,17 @@ const BODIES: Record<Creature, readonly (Shape | Shaded)[]> = {
       ],
     },
     ['rect', styles.shark!, { x: 106, y: 86, width: 48, height: 12, rx: 6, 'stroke-width': 3 }],
-    { paint: styles.glass!, d: oval(130, 56, 36, 36), shadow: [8, -7] },
-    { paint: styles.skin!, d: oval(130, 60, 24, 24), shadow: [5, -5], part: 'skin' },
+    {
+      paint: styles.glass!,
+      d: 'M94 56 A36 36 0 1 0 166 56 A36 36 0 1 0 94 56 Z',
+      shadow: [8, -7],
+    },
+    {
+      paint: styles.skin!,
+      d: 'M106 60 A24 24 0 1 0 154 60 A24 24 0 1 0 106 60 Z',
+      shadow: [5, -5],
+      part: 'skin',
+    },
     shine('M146 27 Q161 33 165 50', 6),
   ],
   monster: [
@@ -585,6 +604,7 @@ const BODIES: Record<Creature, readonly (Shape | Shaded)[]> = {
         'stroke-width': 4,
       },
     ],
+    ['path', styles.line!, { d: 'M100 22 L108 21 M160 22 L152 21', 'stroke-width': 2.5 }],
     {
       paint: styles.racer!,
       d: fur(130, 96, 50, 68),
@@ -619,7 +639,12 @@ const BODIES: Record<Creature, readonly (Shape | Shaded)[]> = {
         'data-part': 'collar',
       },
     ],
-    { paint: styles.skin!, d: oval(130, 56, 28, 28), shadow: [6, -6], part: 'skin' },
+    {
+      paint: styles.skin!,
+      d: 'M102 56 A28 28 0 1 0 158 56 A28 28 0 1 0 102 56 Z',
+      shadow: [6, -6],
+      part: 'skin',
+    },
     [
       'path',
       styles.inkSoft!,
@@ -645,14 +670,24 @@ const BODIES: Record<Creature, readonly (Shape | Shaded)[]> = {
     ['path', styles.line!, { d: 'M114 32 L102 8 M146 32 L158 8', 'stroke-width': 4 }],
     ['circle', styles.sun!, { cx: 102, cy: 7, r: 6, 'stroke-width': 3 }],
     ['circle', styles.sun!, { cx: 158, cy: 7, r: 6, 'stroke-width': 3 }],
+    ['circle', styles.paperFill!, { cx: 100, cy: 5, r: 1.8 }],
+    ['circle', styles.paperFill!, { cx: 156, cy: 5, r: 1.8 }],
     ['rect', styles.racer!, { x: 124, y: 82, width: 12, height: 14, 'stroke-width': 3 }],
     {
       paint: styles.glass!,
       d: 'M108 98 Q110 92 120 92 H140 Q150 92 152 98 L156 148 H104 Z',
       shadow: [8, -4],
-      on: [['circle', styles.sun!, { cx: 130, cy: 114, r: 8, 'stroke-width': 3 }]],
+      on: [
+        ['circle', styles.sun!, { cx: 130, cy: 114, r: 8, 'stroke-width': 3 }],
+        ['circle', styles.paperFill!, { cx: 127.5, cy: 111.5, r: 2 }],
+      ],
     },
-    { paint: styles.racer!, d: oval(130, 56, 42, 32), shadow: [9, -7], part: 'head' },
+    {
+      paint: styles.racer!,
+      d: 'M88 56 A42 32 0 1 0 172 56 A42 32 0 1 0 88 56 Z',
+      shadow: [9, -7],
+      part: 'head',
+    },
     shine('M150 30 Q164 36 168 50'),
   ],
   dinosaur: [
