@@ -24,6 +24,8 @@ import { boxAt, bubbleOffsets, faceAt, lane, tagAt, tagBox, tagSize, type Lane }
 import {
   isCreature,
   group,
+  RACER,
+  THINGS,
   photoCard,
   PHOTO,
   RACER_COLOURS,
@@ -77,6 +79,12 @@ const BURSTS: Record<Kind, string> = {
   villain: 'takes a shortcut',
   alien: 'gets beamed ahead',
   dinosaur: 'stomps ahead',
+  mug: 'has a caffeine rush',
+  printer: 'prints at full speed',
+  sticky: 'catches a draft',
+  banana: 'slips on its own peel',
+  icecream: 'gets a sugar rush',
+  sushi: 'rides the conveyor belt',
 };
 const STOPS: Record<Kind, string> = {
   snail: 'stops for a snack',
@@ -95,6 +103,18 @@ const STOPS: Record<Kind, string> = {
   villain: 'gets tangled in its cape',
   alien: 'stops to ask the way',
   dinosaur: "can't reach its snack",
+  mug: 'needs a refill',
+  printer: 'has a paper jam',
+  sticky: 'sticks to the floor',
+  banana: 'does the splits',
+  icecream: 'starts to melt',
+  sushi: 'gets too much wasabi',
+};
+/** What the commentator calls a racer, where it isn't its kind's name. */
+const CALLED: Partial<Record<Kind, string>> = {
+  mug: 'coffee mug',
+  sticky: 'sticky note',
+  icecream: 'ice cream',
 };
 
 /** What each track does to someone in its own burst and stop. */
@@ -122,6 +142,12 @@ const GAITS: Record<Kind, { px: number; seconds: number }> = {
   villain: { px: 3, seconds: 0.3 },
   alien: { px: 3, seconds: 0.28 },
   dinosaur: { px: 6, seconds: 0.44 },
+  mug: { px: 4, seconds: 0.34 },
+  printer: { px: 3, seconds: 0.3 },
+  sticky: { px: 5, seconds: 0.3 },
+  banana: { px: 4, seconds: 0.36 },
+  icecream: { px: 4, seconds: 0.38 },
+  sushi: { px: 3, seconds: 0.28 },
 };
 
 /** `look` drawn: a rider on its mount, or a creature. */
@@ -219,6 +245,38 @@ const HICCUPS = { at: [0.2, 0.7, 1.2], px: 16, seconds: 0.3 };
 const CAPE = { seconds: 1.2, turns: 1 };
 /** The alien's question mark pops up this long into its stop. */
 const ASK = 0.2;
+/** Steam puffs out of a thing's top, rising this far over a burst, and over and over in a stop. */
+const JET = { rise: 24, loop: 0.6 };
+/** A mug tips forward this far from `from` s into its stop, to peer inside, empty of steam, until "Phew!". */
+const REFILL = { degrees: 26, from: 0.15 };
+/** Paper flies back this far behind a printer over its burst. */
+const PAPER = { to: [-60, 12] };
+/** A jammed printer's red light blinks this many times a second, from `from` s into its stop. */
+const BLINK = { rate: 3, from: 0.2 };
+/** A sticky note flutters this far either way, this many times a second, in its burst. */
+const FLUTTER = { degrees: 8, rate: 4 };
+/** A stuck sticky note tugs back this far, this many times, from `from` s into its stop. */
+const TUG = { degrees: -12, count: 3, from: 0.2 };
+/** A banana skids on its peel, tilted back this far at most. */
+const SKID = -10;
+/**
+ * A banana slides into the splits from `from` s into its stop over `into` s,
+ * each leg swung this far from its hip and the banana this far lower, and
+ * springs back up this high after "Phew!".
+ */
+const SPLITS = { degrees: 62, down: 20, from: 0.1, into: 0.3, spring: 14 };
+/** Sprinkles fly back this far off the scoop over a burst. */
+const SPRINKLE = { to: [-56, -16] };
+/**
+ * An ice cream melts: its drips hang from the scoop at y `top`, growing to
+ * `long` times their length by `peak` s into its stop and back by "Phew!";
+ * its puddle spreads at (x, y) as they grow.
+ */
+const MELT = { top: 88, long: 2, peak: 0.9, puddle: [168, 189] };
+/** A conveyor belt slides in from this far behind over `slide` s of a burst. */
+const BELT = { from: -220, slide: 0.3 };
+/** Wasabi drops from this far above onto the sushi's fish at (x, y) over `fall` s; then its eyes water. */
+const WASABI = { from: -70, at: [150, 34], fall: 0.3 };
 
 /** What each element was last given, so a frame writes only what changed: jsdom parses each style. */
 const written = new WeakMap<Element, Map<string, string>>();
@@ -279,7 +337,7 @@ export function eventCaption(event: RaceEvent, kind: Kind, course: Course = 'fie
     return `${event.subject} ${TRACK_EVENTS[course][event.kind]}!`;
   }
   const did = event.kind === 'burst' ? BURSTS[kind] : STOPS[kind];
-  return `${event.subject}'s ${kind} ${did}!`;
+  return `${event.subject}'s ${CALLED[kind] ?? kind} ${did}!`;
 }
 
 /**
@@ -385,9 +443,11 @@ export async function playTheRace(show: Show): Promise<void> {
     drawn.el.style.transformOrigin =
       look.mount === 'duck'
         ? TIP.origin
-        : isCreature(look.mount)
-          ? `${drawn.faceX}px 0`
-          : SPIN.origin;
+        : THINGS.includes(look.mount as Creature)
+          ? `${drawn.faceX}px ${RACER.feet}px`
+          : isCreature(look.mount)
+            ? `${drawn.faceX}px 0`
+            : SPIN.origin;
     const tag = tags.appendChild(nameTag(name, tagSize(at.k)));
     tag.classList.add(styles.tag!);
     tag.dataset.person = name;
@@ -695,10 +755,14 @@ export async function playTheRace(show: Show): Promise<void> {
   /** Where `name`'s nose is along the track, not on the stage, at show second `t`. */
   const alongAt = (name: string, t: number) => noseAt(plan, name, t) + cameraAt(plan, t);
 
-  /** What a creature does: its arms flail in front, and what its stop brings; `since` is how far into a stop. */
+  /**
+   * What a creature does: its arms flail in front, and what its burst and
+   * its stop bring; `since` is how far into a stop. Returns how far a thing
+   * on legs tilts from its feet.
+   */
   const act = (rider: Rider, t: number, since: number) => {
     const { creature: drawn, at } = rider;
-    if (!drawn) return;
+    if (!drawn) return 0;
     const kind = drawn.look.mount;
     const spec = CREATURE_SPEC[kind];
     const still = show.reducedMotion;
@@ -775,9 +839,142 @@ export async function playTheRace(show: Show): Promise<void> {
       drawn.setStretch(reaching);
       if (reaching) shown.push('snack');
     }
+    const tilt = THINGS.includes(kind) ? thing(rider, t, since, shown, (lift) => (hop = lift)) : 0;
     write(drawn.el, '--hop', hop ? `${(-hop).toFixed(1)}px` : '0px');
     write(drawn.el, '@data-hop', hop.toFixed(1));
     write(drawn.el, '@data-props', shown.join(' '));
+    return tilt;
+  };
+
+  /**
+   * What a thing on legs does in its burst and its stop, noting the props it
+   * shows in `shown` and lifting it with `lift`; `since` is how far into a
+   * stop. Returns how far it tilts from its feet.
+   */
+  const thing = (
+    rider: Rider,
+    t: number,
+    since: number,
+    shown: string[],
+    lift: (px: number) => void,
+  ) => {
+    const drawn = rider.creature!;
+    const { props } = drawn;
+    const kind = drawn.look.mount;
+    const spec = CREATURE_SPEC[kind];
+    const still = show.reducedMotion;
+    const burst = burstOf(rider.name, t);
+    const done = burst ? burst.since / burst.seconds : 0;
+    const until = (from: number, to: number) => since >= from && since < to;
+    /** Shows `prop` while `on`, noting it. */
+    const showing = (prop: keyof typeof props, on: boolean) => {
+      showPart(props[prop]!, on);
+      if (on) shown.push(prop);
+      return on;
+    };
+    /** Puts steam over its top, `rise` up. */
+    const steam = (prop: 'jets' | 'steam', rise: number) => {
+      const [x, y] = spec.hat;
+      write(props[prop]!, '@transform', `translate(${x} ${(y - 6 - rise).toFixed(1)})`);
+    };
+    let tilt = 0;
+    if (kind === 'mug') {
+      if (showing('jets', !!burst)) steam('jets', still ? 0 : JET.rise * done);
+      drawn.setBend(until(REFILL.from, STOP.phew) ? REFILL.degrees : 0);
+      // Empty: no steam.
+      const empty = until(0, STOP.phew);
+      for (const wisp of drawn.wisps) showPart(wisp, !empty);
+      write(drawn.el, '@data-empty', String(empty));
+    }
+    if (kind === 'printer') {
+      if (showing('stream', !!burst)) move(props.stream!, [0, 0], PAPER.to, still ? 0 : done);
+      showing('jam', until(0, STOP.phew));
+      const off =
+        !still &&
+        until(BLINK.from, STOP.phew) &&
+        Math.floor(2 * BLINK.rate * (since - BLINK.from)) % 2 === 1;
+      write(drawn.light!, '@class', off ? styles.inkSoft! : styles.tomato!);
+      write(drawn.el, '@data-light', off ? 'off' : 'on');
+    }
+    if (kind === 'sticky') {
+      showing('wind', !!burst);
+      if (burst && !still) {
+        tilt = FLUTTER.degrees * Math.sin(2 * Math.PI * FLUTTER.rate * burst.since);
+      }
+      const stuck = showing('patch', until(0, STOP.phew));
+      const tugs = (TUG.count * (since - TUG.from)) / (STOP.phew - TUG.from);
+      const tug = !until(TUG.from, STOP.phew)
+        ? 0
+        : still
+          ? TUG.degrees
+          : TUG.degrees * Math.abs(Math.sin(Math.PI * tugs));
+      drawn.setBend(stuck ? Math.round(tug * 10) / 10 : 0);
+    }
+    if (kind === 'banana') {
+      if (showing('skid', !!burst) && !still) tilt = SKID * Math.sin(Math.PI * done);
+      const splitting = until(SPLITS.from, STOP.phew);
+      const k = !splitting ? 0 : still ? 1 : Math.min(1, (since - SPLITS.from) / SPLITS.into);
+      drawn.shoes.forEach((shoe, i) => {
+        const [x, y] = spec.hips[i]!;
+        const degrees = (i ? -SPLITS.degrees : SPLITS.degrees) * k;
+        write(
+          shoe.parentNode as SVGGElement,
+          '@transform',
+          k ? `rotate(${degrees.toFixed(1)} ${x} ${y})` : '',
+        );
+      });
+      write(drawn.el, '@data-splits', (SPLITS.degrees * k).toFixed(1));
+      if (k) lift(-SPLITS.down * k);
+      if (until(STOP.phew, STOP.off) && !still) {
+        lift(SPLITS.spring * Math.sin((Math.PI * (since - STOP.phew)) / (STOP.off - STOP.phew)));
+      }
+    }
+    if (kind === 'icecream') {
+      if (showing('sprinkles', !!burst)) {
+        move(props.sprinkles!, [0, 0], SPRINKLE.to, still ? 0 : done);
+      }
+      const melting = until(0, STOP.phew);
+      // How long the drips hang, 0 to 1: up to the peak, then firming up by "Phew!".
+      const melt = !melting
+        ? 0
+        : since < MELT.peak
+          ? since / MELT.peak
+          : (STOP.phew - since) / (STOP.phew - MELT.peak);
+      if (showing('drips', melting && !still)) {
+        const k = 0.4 + (MELT.long - 0.4) * melt;
+        write(
+          props.drips!,
+          '@transform',
+          `translate(0 ${(MELT.top * (1 - k)).toFixed(1)}) scale(1 ${k.toFixed(2)})`,
+        );
+      }
+      write(drawn.el, '@data-drip', (still ? 0 : melt).toFixed(2));
+      if (showing('puddle', melting)) {
+        const [x, y] = MELT.puddle;
+        const k = still ? 1 : 0.3 + 0.7 * melt;
+        write(props.puddle!, '@transform', `translate(${x} ${y}) scale(${k.toFixed(2)} 1)`);
+      }
+    }
+    if (kind === 'sushi') {
+      if (showing('belt', !!burst)) {
+        const slid = still ? 1 : Math.min(1, burst!.since / BELT.slide);
+        write(props.belt!, '@transform', `translate(${(BELT.from * (1 - slid)).toFixed(1)} 0)`);
+      }
+      if (showing('wasabi', until(0, STOP.phew))) {
+        const fallen = still ? 1 : Math.min(1, since / WASABI.fall);
+        const [x, y] = WASABI.at;
+        write(
+          props.wasabi!,
+          '@transform',
+          `translate(${x} ${(y + WASABI.from * (1 - fallen)).toFixed(1)})`,
+        );
+      }
+      showing('tears', until(WASABI.fall, STOP.phew));
+      if (showing('steam', until(WASABI.fall, STOP.phew))) {
+        steam('steam', still ? 0 : JET.rise * (((since - WASABI.fall) / JET.loop) % 1));
+      }
+    }
+    return tilt;
   };
 
   /** How fast `name`'s nose moves along the track at show second `t`. */
@@ -927,13 +1124,14 @@ export async function playTheRace(show: Show): Promise<void> {
 
       // What a stop does to each mount, unless the track stopped it.
       const since = stop?.cause === 'racer' ? t - stop.at : -1;
-      const skid = undergo(rider, t, ownSince(rider.name, t));
+      // A skid or a float from the track's own event, and how a thing on legs tilts.
+      const sway = undergo(rider, t, ownSince(rider.name, t)) + act(rider, t, since);
       rider.ridden?.setLeaf(look.mount === 'snail' && since >= 0.2);
       const tip =
         look.mount === 'duck' && since >= 0 && since < TIP.seconds && !show.reducedMotion
           ? TIP.degrees * Math.sin((Math.PI * since) / TIP.seconds)
           : 0;
-      const tilt = tip || skid ? `${(tip + skid).toFixed(1)}deg` : '';
+      const tilt = tip || sway ? `${(tip + sway).toFixed(1)}deg` : '';
       write(drawn.el, 'rotate', tilt);
       write(drawn.el, '@data-rotate', tilt);
       const turn = look.mount === 'chair' ? SPIN : look.mount === 'villain' ? CAPE : null;
@@ -945,7 +1143,6 @@ export async function playTheRace(show: Show): Promise<void> {
       write(drawn.el, 'scale', turned);
       write(drawn.el, '@data-scale', turned);
       ride(rider, t, moving, since);
-      act(rider, t, since);
 
       // Speed lines behind whoever is racing along.
       const racing = moving && !show.reducedMotion && speedOf(rider.name, t) > SPEEDY;

@@ -137,21 +137,18 @@ Feature: The Race
         | dinosaur  | big bare feet, tomato                      |
 
     # Step 3.
-    @pending
     Scenario: Six things on legs
       When the Line-up opens for The Race
       Then the group "Things on legs" holds "Coffee mug", "Printer", "Sticky note", "Banana", "Ice cream" and "Sushi"
       And the tabs read "Rides", "Animals", "Things on legs", "Spooky" and "Space", in that order
 
     # Step 3.
-    @pending
     Scenario: A thing on legs runs like the others
       When someone races as a coffee mug, a printer, a sticky note, a banana, an ice cream or a sushi
       Then it runs on dark legs in white sneakers striped in its colour, and its arms end in white gloves
       And its face is on the thing itself
 
     # Step 3.
-    @pending
     Scenario Outline: Where a <thing> wears its colour
       When someone races as a <thing> in tomato
       Then <where> is tomato
@@ -416,7 +413,6 @@ Feature: The Race
         | dinosaur  | Dario  | can't reach its snack    | it stretches its tiny arms for a leaf just out of reach |
 
     # Step 3.
-    @pending
     Scenario Outline: A <thing> bursts ahead
       When someone's <thing> bursts ahead
       Then the caption is "<name>'s <thing> <burst>!"
@@ -432,7 +428,6 @@ Feature: The Race
         | sushi       | Giulia | rides the conveyor belt | a conveyor belt slides in under it and carries it |
 
     # Step 3.
-    @pending
     Scenario Outline: A <thing> stops
       When someone's <thing> stops
       Then the caption is "<name>'s <thing> <stop>!"
@@ -627,7 +622,6 @@ Feature: The Race
       Then the monster doesn't hop with its hiccups, and the villain doesn't turn in its cape
 
     # Step 3.
-    @pending
     Scenario: With reduced motion, the things on legs keep still too
       Given reduced motion is on
       When the show runs

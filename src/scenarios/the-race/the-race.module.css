@@ -147,6 +147,20 @@
   stroke-linejoin: round;
 }
 
+/* The printer's green light. */
+.mint {
+  fill: var(--color-mint);
+  stroke: var(--color-ink);
+}
+
+/* Lines of print on paper, and the grains of the sushi's rice. */
+.inkSoftLine {
+  fill: none;
+  stroke: var(--color-ink-soft);
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
 /* A creature's leg or arm, over a thicker ink line, in a paint that comes in as --paint. */
 .limb {
   fill: none;
