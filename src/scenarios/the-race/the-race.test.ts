@@ -47,6 +47,29 @@ import {
 
 const ENDINGS: readonly Ending[] = ['photo', 'brake', 'surge'];
 
+/** The six things on legs, in the Line-up's order. */
+const THING_KINDS: Creature[] = ['mug', 'printer', 'sticky', 'banana', 'icecream', 'sushi'];
+
+/** The box round every point of a path drawn in absolute M, L, H, V, Q and Z. */
+function bounds(d: string) {
+  const xs: number[] = [];
+  const ys: number[] = [];
+  for (const [, command, args] of d.matchAll(/([A-Za-z])([^A-Za-z]*)/g)) {
+    const values = (args!.match(/-?[\d.]+/g) ?? []).map(Number);
+    if (command === 'H') xs.push(...values);
+    else if (command === 'V') ys.push(...values);
+    else if ('MLQ'.includes(command!)) {
+      values.forEach((value, i) => (i % 2 ? ys : xs).push(value));
+    } else expect(command).toBe('Z');
+  }
+  return {
+    left: Math.min(...xs),
+    right: Math.max(...xs),
+    top: Math.min(...ys),
+    bottom: Math.max(...ys),
+  };
+}
+
 /** Names up to 15 characters: the last is as long as the layout plans for. */
 const TEAM = ['Anna', 'Ben', 'Carla', 'Dario', 'Elena', 'Fabio', 'Giulia', 'Annamaria Rossi'];
 
@@ -660,12 +683,9 @@ describeSpec(await loadFeature('./the-race.feature'), ({ Rule }) => {
         expect(first.label).toBe(label);
         // Still `mount`, so stored looks keep their ride.
         expect(first.name).toBe('mount');
-        expect([...new Set(first.choices.map((choice) => choice.group))]).toEqual([
-          'Rides',
-          'Animals',
-          'Spooky',
-          'Space',
-        ]);
+        // In groups, each a tab: "Six things on legs" says their order.
+        for (const choice of first.choices) expect(choice.group, choice.name).toBeTruthy();
+        expect(new Set(first.choices.map((choice) => choice.group)).size).toBeGreaterThan(1);
       });
       And('the group "Rides" holds {any}', (_, held: string) => holds('Rides', held));
       And('the group "Animals" holds {any}', (_, held: string) => holds('Animals', held));
@@ -1053,42 +1073,74 @@ describeSpec(await loadFeature('./the-race.feature'), ({ Rule }) => {
       villain: { creature: 'villain', parts: ['cape', 'collar'] },
       alien: { creature: 'alien', parts: ['head', 'arms', 'legs'] },
       dinosaur: { creature: 'dinosaur', parts: ['body'] },
+      'coffee mug': { creature: 'mug', parts: ['mug', 'handle'] },
+      printer: { creature: 'printer', parts: ['cover', 'tray'] },
+      'sticky note': { creature: 'sticky', parts: ['note'] },
+      banana: { creature: 'banana', parts: ['peel'] },
+      'ice cream': { creature: 'icecream', parts: ['scoop'] },
+      sushi: { creature: 'sushi', parts: ['fish'] },
     };
-    let allTomato: Promise<Map<string, SVGSVGElement>> | undefined;
+    /** The six things on legs, as the feature names them. */
+    const THINGS = ['coffee mug', 'printer', 'sticky note', 'banana', 'ice cream', 'sushi'];
+    /** Each set of creatures in tomato in one race, as the show first draws them. */
+    const inTomato = new Map<string, Promise<Map<string, SVGSVGElement>>>();
+    const tomato = (names: readonly string[]) => {
+      const key = names.join();
+      if (!inTomato.has(key)) {
+        inTomato.set(
+          key,
+          firstDrawn(
+            new Map(
+              names.map((name) => {
+                const mount = WEARS[name]!.creature;
+                return [mount, { mount, colour: 'tomato', extra: 'scarf' }];
+              }),
+            ),
+          ),
+        );
+      }
+      return inTomato.get(key)!;
+    };
+    /** Checks that each part `name` wears its colour in is tomato. */
+    const wearsTomato = (svg: SVGSVGElement, name: string) => {
+      expect(svg.style.getPropertyValue('--racer')).toBe('var(--color-tomato)');
+      for (const part of WEARS[name]!.parts) {
+        const shapes =
+          part === 'arms'
+            ? [...svg.querySelectorAll<SVGElement>('[data-part$="-arm"] > :nth-child(2)')]
+            : [...svg.querySelectorAll<SVGElement>(`[data-part="${part}"]`)].filter(
+                (shape) => shape.tagName !== 'g',
+              );
+        expect(shapes.length, part).toBeGreaterThan(0);
+        for (const shape of shapes) {
+          const painted =
+            shape.getAttribute('class') === styles.racer ||
+            shape.style.getPropertyValue('--paint') === 'var(--racer)';
+          expect(painted, `${name} ${part}`).toBe(true);
+        }
+      }
+    };
 
     RuleScenarioOutline(
       'Where a <creature> wears its colour',
       ({ When, Then }, { creature: kind }) => {
         let svg: SVGSVGElement;
         When('someone races as a <creature> in tomato', async () => {
-          // All eight in one race, as the show first draws them.
-          allTomato ??= firstDrawn(
-            new Map(
-              CREATURES.map((each) => [each, { mount: each, colour: 'tomato', extra: 'scarf' }]),
-            ),
-          );
-          svg = (await allTomato).get(WEARS[kind]!.creature)!;
+          // All eight in one race.
+          const eight = Object.keys(WEARS).filter((name) => !THINGS.includes(name));
+          svg = (await tomato(eight)).get(WEARS[kind]!.creature)!;
         });
-        Then('<where> is tomato', () => {
-          expect(svg.style.getPropertyValue('--racer')).toBe('var(--color-tomato)');
-          for (const part of WEARS[kind]!.parts) {
-            const shapes =
-              part === 'arms'
-                ? [...svg.querySelectorAll<SVGElement>('[data-part$="-arm"] > :nth-child(2)')]
-                : [...svg.querySelectorAll<SVGElement>(`[data-part="${part}"]`)].filter(
-                    (shape) => shape.tagName !== 'g',
-                  );
-            expect(shapes.length, part).toBeGreaterThan(0);
-            for (const shape of shapes) {
-              const painted =
-                shape.getAttribute('class') === styles.racer ||
-                shape.style.getPropertyValue('--paint') === 'var(--racer)';
-              expect(painted, `${kind} ${part}`).toBe(true);
-            }
-          }
-        });
+        Then('<where> is tomato', () => wearsTomato(svg, kind));
       },
     );
+
+    RuleScenarioOutline('Where a <thing> wears its colour', ({ When, Then }, { thing }) => {
+      let svg: SVGSVGElement;
+      When('someone races as a <thing> in tomato', async () => {
+        svg = (await tomato(THINGS)).get(WEARS[thing]!.creature)!;
+      });
+      Then('<where> is tomato', () => wearsTomato(svg, thing));
+    });
 
     RuleScenario("The astronaut and the villain have the kit's faces", ({ When, Then }) => {
       const looks = new Map<string, ChosenLook>([
@@ -1177,7 +1229,8 @@ describeSpec(await loadFeature('./the-race.feature'), ({ Rule }) => {
               expect(Number(highlight.getAttribute('opacity'))).toBeLessThanOrEqual(0.8);
               const line = points(highlight.getAttribute('d')!);
               expect(Math.max(...line.map(([x]) => x)), kind).toBeGreaterThan((h1[0] + h2[0]) / 2);
-              expect(Math.max(...line.map(([, y]) => y)), kind).toBeLessThan(h1[1] - 40);
+              const middle = line.reduce((sum, [, y]) => sum + y, 0) / line.length;
+              expect(middle, kind).toBeLessThan(h1[1] - 40);
             }
           }
           expect(highlighted).toBeGreaterThan(CREATURES.length / 2);
@@ -1251,6 +1304,13 @@ describeSpec(await loadFeature('./the-race.feature'), ({ Rule }) => {
             villain: [130, 172],
             alien: [130, 176],
             dinosaur: [162, 220],
+            // The things on legs, from the canvas.
+            mug: [139, 170],
+            printer: [131, 180],
+            sticky: [131, 170],
+            banana: [134, 186],
+            icecream: [131, 172],
+            sushi: [141, 192],
           });
           for (const { el, look } of all) {
             expect(el.getAttribute('viewBox')).toBe(`0 0 ${RACER.width} ${RACER.height}`);
@@ -1418,6 +1478,74 @@ describeSpec(await loadFeature('./the-race.feature'), ({ Rule }) => {
         });
       },
     );
+
+    RuleScenario('Six things on legs', ({ When, Then, And }) => {
+      const choices = theRace.lineUp!.options[0]!.choices;
+      const listed = (text: string) => [...text.matchAll(/"([^"]+)"/g)].map(([, x]) => x);
+      When('the Line-up opens for The Race', () => {
+        expect(theRace.lineUp!.options[0]!.label).toBe('Racer');
+      });
+      Then('the group "Things on legs" holds {any}', (_, held: string) => {
+        const things = choices.filter((choice) => choice.group === 'Things on legs');
+        expect(things.map((choice) => choice.label)).toEqual(listed(held));
+        expect(things.map((choice) => choice.name)).toEqual(THING_KINDS);
+      });
+      And('the tabs read {any}, in that order', (_, tabs: string) => {
+        expect([...new Set(choices.map((choice) => choice.group))]).toEqual(listed(tabs));
+      });
+    });
+
+    RuleScenario('A thing on legs runs like the others', ({ When, Then, And }) => {
+      let all: ReturnType<typeof modern>[];
+      When(
+        'someone races as a coffee mug, a printer, a sticky note, a banana, an ice cream or a sushi',
+        () => {
+          all = THING_KINDS.map((kind) => modern(kind));
+        },
+      );
+      Then(
+        'it runs on dark legs in white sneakers striped in its colour, and its arms end in white gloves',
+        () => {
+          for (const { el, look, shoes } of all) {
+            const kind = look.mount;
+            for (const leg of el.querySelectorAll<SVGElement>('path[data-part="legs"]')) {
+              expect(leg.style.getPropertyValue('--paint'), kind).toBe('var(--color-ink-soft)');
+            }
+            for (const shoe of shoes) {
+              expect(shoe.dataset.foot, kind).toBe('sneaker');
+              expect(shoe.querySelector('[data-part="shoe"]')!.getAttribute('class')).toBe(
+                styles.paper,
+              );
+              expect(shoe.querySelector('[data-part="stripe"]')!.getAttribute('class')).toBe(
+                styles.racerLine,
+              );
+            }
+            for (const which of ['back', 'front']) {
+              const holder = el.querySelector(`[data-part="${which}-arm"]`)!;
+              for (const part of ['hand', 'thumb']) {
+                const glove = holder.querySelector(`[data-part="${part}"]`);
+                expect(visible(glove, el), `${kind} ${part}`).toBe(true);
+                expect(glove!.getAttribute('class')).toBe(styles.paper);
+              }
+            }
+          }
+        },
+      );
+      And('its face is on the thing itself', () => {
+        for (const { el, look } of all) {
+          // No head: every eye on a main part of its body.
+          const parts = [...el.querySelectorAll('[data-part="own"] [data-part="shade"]')].map(
+            (shade) => bounds(shade.getAttribute('d')!),
+          );
+          for (const [x, y] of CREATURE_SPEC[look.mount].eyes) {
+            const on = parts.some(
+              (box) => x > box.left && x < box.right && y > box.top && y < box.bottom,
+            );
+            expect(on, `${look.mount} eye at ${x} ${y}`).toBe(true);
+          }
+        }
+      });
+    });
   });
 
   Rule('A track drawn at random', ({ RuleScenario, RuleScenarioOutline }) => {

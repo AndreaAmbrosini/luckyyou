@@ -13,7 +13,20 @@ import styles from './the-race.module.css';
 export type Mount =
   'snail' | 'duck' | 'chair' | 'caterpillar' | 'hopper' | 'ostrich' | 'rocket' | 'sandwich';
 export type Creature =
-  'zombie' | 'robot' | 'shark' | 'astronaut' | 'monster' | 'villain' | 'alien' | 'dinosaur';
+  | 'zombie'
+  | 'robot'
+  | 'shark'
+  | 'astronaut'
+  | 'monster'
+  | 'villain'
+  | 'alien'
+  | 'dinosaur'
+  | 'mug'
+  | 'printer'
+  | 'sticky'
+  | 'banana'
+  | 'icecream'
+  | 'sushi';
 export type RacerColour = 'tomato' | 'sun' | 'mint' | 'grape' | 'pink' | 'orange' | 'sea' | 'shark';
 export type Extra = 'googly' | 'tophat' | 'number' | 'scarf' | 'cape' | 'bowtie';
 /** `hold`, the reins or the backrest; `pull`, leaning back on them; `wave`; `party`, arms up. */
@@ -38,6 +51,12 @@ export const CREATURES: readonly Creature[] = [
   'villain',
   'alien',
   'dinosaur',
+  'mug',
+  'printer',
+  'sticky',
+  'banana',
+  'icecream',
+  'sushi',
 ];
 export const RACER_COLOURS: readonly RacerColour[] = [
   'tomato',

@@ -82,6 +82,30 @@ interface Spec {
   readonly reach: number;
 }
 
+/**
+ * A thing on legs: ink-soft legs and arms 7 wide, white gloves, white
+ * sneakers striped in its colour, its lids in its colour unless given, its
+ * arms reaching over its head.
+ */
+const thing = (
+  spec: Omit<
+    Spec,
+    'legW' | 'legs' | 'foot' | 'shoes' | 'armW' | 'arms' | 'hands' | 'lid' | 'reach'
+  > &
+    Partial<Pick<Spec, 'legW' | 'armW' | 'lid'>>,
+): Spec => ({
+  legW: 7,
+  legs: 'ink-soft',
+  foot: 'sneaker',
+  shoes: 'paper',
+  armW: 7,
+  arms: 'ink-soft',
+  hands: 'paper',
+  lid: 'colour',
+  reach: 1,
+  ...spec,
+});
+
 export const CREATURE_SPEC: Readonly<Record<Creature, Spec>> = {
   zombie: {
     face: 130,
@@ -370,6 +394,160 @@ export const CREATURE_SPEC: Readonly<Record<Creature, Spec>> = {
     cup: [164, -36],
     reach: 0.45,
   },
+  // Things on legs: dark noodle limbs, white gloves, white sneakers.
+  mug: thing({
+    face: 139,
+    nose: 170,
+    hips: [
+      [122, 148],
+      [142, 149],
+    ],
+    shoulders: [
+      [104, 98],
+      [166, 98],
+    ],
+    eyes: [
+      [124, 60, 12],
+      [154, 60, 12],
+    ],
+    mouth: [140, 90, 22],
+    sweat: [
+      [88, 44],
+      [182, 44],
+    ],
+    neck: [134, 112],
+    chest: [150, 126],
+    hat: [134, 14],
+    cup: [134, -46],
+  }),
+  printer: thing({
+    face: 131,
+    nose: 180,
+    hips: [
+      [116, 138],
+      [148, 138],
+    ],
+    shoulders: [
+      [86, 96],
+      [178, 96],
+    ],
+    eyes: [
+      [116, 64, 10],
+      [146, 64, 10],
+    ],
+    lid: 'paper',
+    mouth: [131, 82, 20],
+    sweat: [
+      [74, 40],
+      [190, 40],
+    ],
+    neck: [131, 116],
+    chest: [102, 114],
+    hat: [130, 30],
+    cup: [130, -44],
+  }),
+  sticky: thing({
+    face: 131,
+    nose: 170,
+    hips: [
+      [118, 104],
+      [142, 104],
+    ],
+    legW: 6,
+    shoulders: [
+      [92, 70],
+      [168, 70],
+    ],
+    armW: 6,
+    eyes: [
+      [115, 54, 10],
+      [146, 54, 10],
+    ],
+    mouth: [131, 76, 22],
+    sweat: [
+      [78, 28],
+      [182, 28],
+    ],
+    neck: [130, 98],
+    chest: [104, 90],
+    hat: [130, 22],
+    cup: [130, -40],
+  }),
+  banana: thing({
+    face: 134,
+    nose: 186,
+    hips: [
+      [122, 150],
+      [140, 150],
+    ],
+    shoulders: [
+      [98, 96],
+      [164, 94],
+    ],
+    eyes: [
+      [121, 66, 10],
+      [147, 64, 10],
+    ],
+    mouth: [136, 88, 22],
+    sweat: [
+      [86, 46],
+      [178, 44],
+    ],
+    neck: [132, 114],
+    chest: [126, 130],
+    hat: [140, 6],
+    cup: [140, -50],
+  }),
+  icecream: thing({
+    face: 131,
+    nose: 172,
+    hips: [
+      [125, 150],
+      [137, 150],
+    ],
+    shoulders: [
+      [94, 80],
+      [168, 80],
+    ],
+    eyes: [
+      [117, 56, 10],
+      [145, 56, 10],
+    ],
+    mouth: [131, 78, 20],
+    sweat: [
+      [80, 36],
+      [182, 36],
+    ],
+    neck: [131, 100],
+    chest: [131, 122],
+    hat: [128, 10],
+    cup: [130, -46],
+  }),
+  sushi: thing({
+    face: 141,
+    nose: 192,
+    hips: [
+      [116, 146],
+      [148, 146],
+    ],
+    shoulders: [
+      [90, 104],
+      [173, 104],
+    ],
+    eyes: [
+      [128, 56, 9],
+      [153, 55, 9],
+    ],
+    mouth: [141, 71, 18],
+    sweat: [
+      [80, 30],
+      [196, 34],
+    ],
+    neck: [140, 92],
+    chest: [148, 120],
+    hat: [140, 38],
+    cup: [136, -30],
+  }),
 };
 
 /** A paint as a fill class, and as a line's colour. */
@@ -435,6 +613,27 @@ const shine = (d: string, width = 5, opacity = 0.8): Shape => [
   styles.stripe!,
   { d, 'stroke-width': width, opacity, 'data-part': 'highlight' },
 ];
+
+/** A line `width` wide over an ink one `ink` wide: in `className`, or in the colour token `colour`. */
+const inkUnder = (
+  d: string,
+  ink: number,
+  width: number,
+  className: string,
+  colour?: string,
+): Shape[] => [
+  ['path', styles.line!, { d, 'stroke-width': ink }],
+  [
+    'path',
+    className,
+    { d, 'stroke-width': width, ...(colour && { style: `--paint: var(--color-${colour})` }) },
+  ],
+];
+
+/** The ice cream's scoop, its lower edge dripping. */
+const SCOOP =
+  'M94 70 Q90 30 130 24 Q172 28 168 68 Q172 84 162 96 Q156 108 150 96 Q144 104 138 98 ' +
+  'Q130 110 122 98 Q114 106 108 96 Q98 102 96 90 Q86 82 94 70 Z';
 
 /**
  * Each creature's body and head, back to front. The parts in its colour are
@@ -729,6 +928,179 @@ const BODIES: Record<Creature, readonly (Shape | Shaded)[]> = {
       on: [['circle', styles.inkFill!, { cx: 208, cy: 36, r: 2.5 }]],
     },
     shine('M162 26 Q196 24 210 37'),
+  ],
+  mug: [
+    ...inkUnder(
+      'M118 8 Q110 0 118 -8 Q126 -16 118 -24 M138 6 Q130 -2 138 -10 Q146 -18 138 -26',
+      11,
+      5,
+      styles.stripe!,
+    ),
+    ['path', styles.line!, { d: 'M102 46 Q68 46 68 80 Q68 112 102 112', 'stroke-width': 20 }],
+    [
+      'path',
+      styles.limb!,
+      {
+        d: 'M102 46 Q68 46 68 80 Q68 112 102 112',
+        'stroke-width': 12,
+        style: '--paint: var(--racer)',
+        'data-part': 'handle',
+      },
+    ],
+    {
+      paint: styles.racer!,
+      d: 'M98 24 Q98 16 106 16 H162 Q170 16 170 24 L166 136 Q165 150 150 150 H116 Q102 150 101 136 Z',
+      shadow: [12, -3],
+      part: 'mug',
+      on: [
+        ['path', styles.paper!, { d: 'M100.5 118 H166.6 L166.2 130 H100.8 Z', 'stroke-width': 3 }],
+      ],
+    },
+    shine('M158 34 Q160 74 157 106', 6),
+    [
+      'ellipse',
+      styles.racer!,
+      { cx: 134, cy: 20, rx: 36, ry: 8, 'stroke-width': 4, 'data-part': 'mug' },
+    ],
+    ['ellipse', styles.inkSoft!, { cx: 134, cy: 21, rx: 29, ry: 5, 'stroke-width': 3 }],
+  ],
+  printer: [
+    ['path', styles.paper!, { d: 'M106 32 L110 0 L154 4 L150 32 Z', 'stroke-width': 3 }],
+    ['path', styles.inkSoftLine!, { d: 'M118 10 H144 M117 18 H140', 'stroke-width': 3 }],
+    {
+      paint: styles.paper!,
+      d: 'M96 28 H168 Q180 28 180 40 V120 Q180 132 168 132 H96 Q84 132 84 120 V40 Q84 28 96 28 Z',
+      shadow: [10, -6],
+      on: [
+        [
+          'path',
+          styles.racer!,
+          {
+            d: 'M84 50 V40 Q84 28 96 28 H168 Q180 28 180 40 V50 Z',
+            'stroke-width': 4,
+            'data-part': 'cover',
+          },
+        ],
+        ['rect', styles.inkFill!, { x: 98, y: 100, width: 68, height: 9, rx: 4.5 }],
+        ['circle', styles.mint!, { cx: 168, cy: 68, r: 4, 'stroke-width': 2.5 }],
+        [
+          'circle',
+          styles.tomato!,
+          { cx: 168, cy: 82, r: 4, 'stroke-width': 2.5, 'data-part': 'light' },
+        ],
+      ],
+    },
+    shine('M158 32 Q170 32 174 40', 4),
+    [
+      'path',
+      styles.paper!,
+      { d: 'M106 104 H158 L162 122 Q150 128 138 122 Q124 116 110 122 Z', 'stroke-width': 3 },
+    ],
+    ['path', styles.inkSoftLine!, { d: 'M116 111 H150', 'stroke-width': 2.5 }],
+    [
+      'rect',
+      styles.racer!,
+      { x: 92, y: 126, width: 80, height: 12, rx: 4, 'stroke-width': 3, 'data-part': 'tray' },
+    ],
+  ],
+  sticky: [
+    {
+      paint: styles.racer!,
+      d: 'M90 20 H170 V84 L150 104 H90 Z',
+      shadow: [8, -6],
+      part: 'note',
+      // Its sticky strip, a touch darker.
+      on: [['rect', styles.inkFill!, { x: 90, y: 20, width: 80, height: 12, opacity: 0.1 }]],
+    },
+    ['path', styles.paper!, { d: 'M170 84 L150 104 L153 87 Z', 'stroke-width': 3 }],
+    shine('M163 38 Q165 54 163 70', 4),
+  ],
+  banana: [
+    ['path', styles.paper!, { d: 'M126 32 Q124 4 140 2 Q156 4 154 32 Z', 'stroke-width': 4 }],
+    {
+      paint: styles.racer!,
+      d: 'M118 148 Q90 112 98 72 Q104 42 122 30 H158 Q168 58 164 94 Q160 128 140 148 Z',
+      shadow: [9, -5],
+      part: 'peel',
+      on: [['path', styles.line!, { d: 'M108 74 Q104 108 122 140', 'stroke-width': 3 }]],
+    },
+    [
+      'path',
+      styles.racer!,
+      {
+        d: 'M124 30 Q104 26 94 50 Q110 40 132 42 Z M156 30 Q178 26 186 50 Q168 40 148 42 Z',
+        'stroke-width': 4,
+        'data-part': 'peel',
+      },
+    ],
+    [
+      'path',
+      styles.inkSoft!,
+      { d: 'M120 146 Q129 154 138 146 L136 154 Q129 160 122 154 Z', 'stroke-width': 3 },
+    ],
+    shine('M161 84 Q162 102 155 122'),
+  ],
+  icecream: [
+    {
+      paint: styles.orange!,
+      d: 'M100 92 H162 L134 152 Q131 158 128 152 Z',
+      shadow: [6, -4],
+      on: [
+        [
+          'path',
+          styles.line!,
+          {
+            d: 'M116 98 L140 122 M134 98 L150 114 M146 98 L120 124 M128 98 L112 114',
+            'stroke-width': 2.5,
+          },
+        ],
+      ],
+    },
+    {
+      paint: styles.racer!,
+      d: SCOOP,
+      shadow: [8, -7],
+      part: 'scoop',
+    },
+    ...inkUnder('M104 46 L109 41', 7.5, 3.5, styles.limb!, 'sun'),
+    ...inkUnder('M116 33 L122 32', 7.5, 3.5, styles.limb!, 'mint'),
+    ...inkUnder('M99 64 L101 58', 7.5, 3.5, styles.limb!, 'grape'),
+    shine('M148 30 Q162 36 166 52'),
+    ['path', styles.line!, { d: 'M130 12 Q134 0 146 -6', 'stroke-width': 3 }],
+    ['circle', styles.tomato!, { cx: 128, cy: 18, r: 9, 'stroke-width': 3 }],
+    ['circle', styles.paperFill!, { cx: 125, cy: 15, r: 2.5 }],
+  ],
+  sushi: [
+    {
+      paint: styles.paper!,
+      d: 'M88 86 Q86 70 102 70 H160 Q176 70 174 86 L172 134 Q172 146 158 146 H104 Q90 146 90 134 Z',
+      shadow: [8, -5],
+      on: [
+        [
+          'path',
+          styles.inkSoftLine!,
+          {
+            d: 'M120 118 l6 3 M128 134 l7 -2 M150 128 l6 3 M160 110 l5 4 M134 100 l6 -2 M146 116 l6 2',
+            'stroke-width': 3,
+          },
+        ],
+      ],
+    },
+    {
+      paint: styles.racer!,
+      d: 'M80 74 Q78 40 112 36 Q150 30 182 46 Q194 54 186 68 Q178 80 160 78 Q130 74 104 84 Q84 90 80 74 Z',
+      shadow: [6, -6],
+      part: 'fish',
+      on: [
+        [
+          'path',
+          styles.stripe!,
+          { d: 'M168 46 Q164 58 170 72 M179 52 Q176 62 180 70', 'stroke-width': 3.5 },
+        ],
+      ],
+    },
+    // The nori band.
+    ['rect', styles.inkSoft!, { x: 96, y: 38, width: 16, height: 108, 'stroke-width': 3 }],
   ],
 };
 

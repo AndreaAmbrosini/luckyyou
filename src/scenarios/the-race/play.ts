@@ -77,6 +77,12 @@ const BURSTS: Record<Kind, string> = {
   villain: 'takes a shortcut',
   alien: 'gets beamed ahead',
   dinosaur: 'stomps ahead',
+  mug: 'has a caffeine rush',
+  printer: 'prints at full speed',
+  sticky: 'catches a draft',
+  banana: 'slips on its own peel',
+  icecream: 'gets a sugar rush',
+  sushi: 'rides the conveyor belt',
 };
 const STOPS: Record<Kind, string> = {
   snail: 'stops for a snack',
@@ -95,6 +101,18 @@ const STOPS: Record<Kind, string> = {
   villain: 'gets tangled in its cape',
   alien: 'stops to ask the way',
   dinosaur: "can't reach its snack",
+  mug: 'needs a refill',
+  printer: 'has a paper jam',
+  sticky: 'sticks to the floor',
+  banana: 'does the splits',
+  icecream: 'starts to melt',
+  sushi: 'gets too much wasabi',
+};
+/** What the commentator calls a racer, where it isn't its kind's name. */
+const CALLED: Partial<Record<Kind, string>> = {
+  mug: 'coffee mug',
+  sticky: 'sticky note',
+  icecream: 'ice cream',
 };
 
 /** What each track does to someone in its own burst and stop. */
@@ -122,6 +140,12 @@ const GAITS: Record<Kind, { px: number; seconds: number }> = {
   villain: { px: 3, seconds: 0.3 },
   alien: { px: 3, seconds: 0.28 },
   dinosaur: { px: 6, seconds: 0.44 },
+  mug: { px: 4, seconds: 0.34 },
+  printer: { px: 3, seconds: 0.3 },
+  sticky: { px: 5, seconds: 0.3 },
+  banana: { px: 4, seconds: 0.36 },
+  icecream: { px: 4, seconds: 0.38 },
+  sushi: { px: 3, seconds: 0.28 },
 };
 
 /** `look` drawn: a rider on its mount, or a creature. */
@@ -279,7 +303,7 @@ export function eventCaption(event: RaceEvent, kind: Kind, course: Course = 'fie
     return `${event.subject} ${TRACK_EVENTS[course][event.kind]}!`;
   }
   const did = event.kind === 'burst' ? BURSTS[kind] : STOPS[kind];
-  return `${event.subject}'s ${kind} ${did}!`;
+  return `${event.subject}'s ${CALLED[kind] ?? kind} ${did}!`;
 }
 
 /**

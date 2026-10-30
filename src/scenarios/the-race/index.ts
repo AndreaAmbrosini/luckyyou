@@ -39,12 +39,25 @@ const RACERS = {
   villain: 'Villain',
   alien: 'Alien',
   dinosaur: 'Dinosaur',
+  mug: 'Coffee mug',
+  printer: 'Printer',
+  sticky: 'Sticky note',
+  banana: 'Banana',
+  icecream: 'Ice cream',
+  sushi: 'Sushi',
 } as const;
 
-/** Each creature's tab on the Line-up, after the rides'. */
-const KINDS: Record<Creature, 'Animals' | 'Spooky' | 'Space'> = {
+/** The creatures' tabs on the Line-up, after the rides', and each creature's tab. */
+const GROUPS = ['Animals', 'Things on legs', 'Spooky', 'Space'] as const;
+const KINDS: Record<Creature, (typeof GROUPS)[number]> = {
   shark: 'Animals',
   dinosaur: 'Animals',
+  mug: 'Things on legs',
+  printer: 'Things on legs',
+  sticky: 'Things on legs',
+  banana: 'Things on legs',
+  icecream: 'Things on legs',
+  sushi: 'Things on legs',
   zombie: 'Spooky',
   monster: 'Spooky',
   villain: 'Spooky',
@@ -94,7 +107,7 @@ const lineUp: LineUp = {
       drawn: true,
       choices: [
         ...MOUNTS.map((mount) => ({ name: mount, label: RACERS[mount], group: 'Rides' })),
-        ...(['Animals', 'Spooky', 'Space'] as const).flatMap((group) =>
+        ...GROUPS.flatMap((group) =>
           CREATURES.filter((kind) => KINDS[kind] === group).map((kind) => ({
             name: kind,
             label: RACERS[kind],

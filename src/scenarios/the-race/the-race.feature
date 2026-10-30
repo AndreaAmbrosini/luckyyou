@@ -137,21 +137,18 @@ Feature: The Race
         | dinosaur  | big bare feet, tomato                      |
 
     # Step 3.
-    @pending
     Scenario: Six things on legs
       When the Line-up opens for The Race
       Then the group "Things on legs" holds "Coffee mug", "Printer", "Sticky note", "Banana", "Ice cream" and "Sushi"
       And the tabs read "Rides", "Animals", "Things on legs", "Spooky" and "Space", in that order
 
     # Step 3.
-    @pending
     Scenario: A thing on legs runs like the others
       When someone races as a coffee mug, a printer, a sticky note, a banana, an ice cream or a sushi
       Then it runs on dark legs in white sneakers striped in its colour, and its arms end in white gloves
       And its face is on the thing itself
 
     # Step 3.
-    @pending
     Scenario Outline: Where a <thing> wears its colour
       When someone races as a <thing> in tomato
       Then <where> is tomato
