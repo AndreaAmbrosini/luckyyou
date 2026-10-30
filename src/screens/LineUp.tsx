@@ -55,8 +55,27 @@ export function LineUp({ lineUp, names, looks, onLooksChange, onBack, onStart }:
     setOpen({});
   }
 
+  /** The options drawn as the chosen person, or the others. */
+  const optionsWhere = (drawn: boolean) =>
+    lineUp.options
+      .filter((option) => Boolean(option.drawn) === drawn)
+      .map((option) => (
+        <Option
+          key={option.name}
+          id={`${id}-${option.name}`}
+          option={option}
+          lineUp={lineUp}
+          look={look}
+          name={name}
+          place={chosen + 1}
+          open={open[option.name]}
+          onOpen={(group) => setOpen({ ...open, [option.name]: group })}
+          onChange={change}
+        />
+      ));
+
   return (
-    <main className={layout.main}>
+    <main className={`${layout.main} ${styles.main}`}>
       <div className={layout.titleRow}>
         <div className={layout.group}>
           <Button onClick={onBack}>
@@ -96,38 +115,29 @@ export function LineUp({ lineUp, names, looks, onLooksChange, onBack, onStart }:
           ))}
         </ul>
 
-        <section className={styles.panel} aria-labelledby={`${id}-name`}>
-          <div className={styles.who}>
-            <Drawing
-              className={styles.big}
-              lineUp={lineUp}
-              look={look}
-              name={name}
-              place={chosen + 1}
-            />
-            <div className={styles.whoText}>
-              <h2 id={`${id}-name`} className={styles.chosenName} dir="auto">
-                {name}
-              </h2>
-              <Button variant="quiet" className={styles.surprise} onClick={surprise}>
-                Surprise me
-              </Button>
+        {/* Under the row: the options drawn as them, each in a sheet of its own, then their card. */}
+        <section className={styles.look} aria-labelledby={`${id}-name`}>
+          {optionsWhere(true)}
+          <div className={styles.card}>
+            <div className={styles.who}>
+              <Drawing
+                className={styles.big}
+                lineUp={lineUp}
+                look={look}
+                name={name}
+                place={chosen + 1}
+              />
+              <div className={styles.whoText}>
+                <h2 id={`${id}-name`} className={styles.chosenName} dir="auto">
+                  {name}
+                </h2>
+                <Button variant="quiet" className={styles.surprise} onClick={surprise}>
+                  Surprise me
+                </Button>
+              </div>
             </div>
+            {optionsWhere(false)}
           </div>
-          {lineUp.options.map((option) => (
-            <Option
-              key={option.name}
-              id={`${id}-${option.name}`}
-              option={option}
-              lineUp={lineUp}
-              look={look}
-              name={name}
-              place={chosen + 1}
-              open={open[option.name]}
-              onOpen={(group) => setOpen({ ...open, [option.name]: group })}
-              onChange={change}
-            />
-          ))}
         </section>
       </div>
 
@@ -260,12 +270,12 @@ function Option({ id, option, lineUp, look, name, place, open, onOpen, onChange 
   });
 
   return (
-    <div className={styles.option} role="group" aria-labelledby={id}>
-      <h3 id={id} className={styles.optionName}>
-        {option.label}
-      </h3>
-      {shown ? (
-        <>
+    <div className={option.drawn ? styles.sheet : styles.option} role="group" aria-labelledby={id}>
+      <div className={styles.optionHead}>
+        <h3 className={styles.optionName}>
+          <span id={id}>{option.label}</span>: <span className={styles.mine}>{mine?.label}</span>
+        </h3>
+        {shown && (
           <div className={styles.tabs} role="tablist" aria-labelledby={id}>
             {groups.map(({ label }, index) => (
               <button
@@ -284,15 +294,17 @@ function Option({ id, option, lineUp, look, name, place, open, onOpen, onChange 
               </button>
             ))}
           </div>
-          <div
-            id={`${id}-panel`}
-            className={option.drawn ? styles.drawnChoices : styles.choices}
-            role="tabpanel"
-            aria-labelledby={`${id}-tab-${groups.indexOf(shown)}`}
-          >
-            {choices}
-          </div>
-        </>
+        )}
+      </div>
+      {shown ? (
+        <div
+          id={`${id}-panel`}
+          className={option.drawn ? styles.drawnChoices : styles.choices}
+          role="tabpanel"
+          aria-labelledby={`${id}-tab-${groups.indexOf(shown)}`}
+        >
+          {choices}
+        </div>
       ) : (
         <div className={option.drawn ? styles.drawnChoices : styles.choices}>{choices}</div>
       )}

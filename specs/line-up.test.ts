@@ -60,10 +60,18 @@ async function openLineUp(names: readonly string[], scenario: FakeScenario) {
 const tileList = () => screen.getByRole('list', { name: "Today's people" });
 const tiles = () => within(tileList()).getAllByRole('button');
 const tile = (name: string) => within(tileList()).getByRole('button', { name });
-/** The panel beside the tiles, for whoever is chosen. */
+/** The chosen one's look, under the tiles. */
 const panel = (name: string) => screen.getByRole('region', { name });
 const group = (name: string, label: string) =>
   within(panel(name)).getByRole('group', { name: label });
+/** The text of the element an element's aria-labelledby names. */
+const accessibleLabel = (element: Element) =>
+  document.getElementById(element.getAttribute('aria-labelledby')!)!.textContent;
+/** Hat Show with each hat drawn as the person in it. */
+const drawnHats = () => {
+  const [hat, colour] = fakeLineUp().options as [LineUpOption, LineUpOption];
+  return fakeLineUp({ options: [{ ...hat, drawn: true }, colour] });
+};
 const startButton = () => screen.getByRole('button', { name: 'Start the hats' });
 
 /** The look a drawing in `element` shows, read back from its `lookText`. */
@@ -259,45 +267,73 @@ describeSpec(await loadFeature('./line-up.feature'), ({ Rule }) => {
   });
 
   Rule('Changing a look', ({ RuleScenario }) => {
-    RuleScenario('Choosing whose look to change', ({ Given, When, Then, And }) => {
-      Given("a show's Line-up is open", () => openLineUp(['Anna', 'Ben', 'Carla'], hatShow()));
-      When("I click Ben's tile", () => currentUser().click(tile('Ben')));
-      Then("Ben's tile is marked as chosen, in sun, and pressed", () => {
-        expect(tile('Ben')).toHaveAttribute('aria-pressed', 'true');
-        expect(getComputedStyle(tile('Ben')).backgroundColor).toBe('var(--color-sun)');
-        expect(tile('Anna')).toHaveAttribute('aria-pressed', 'false');
-        expect(getComputedStyle(tile('Anna')).backgroundColor).toBe('var(--color-paper)');
-      });
-      And(
-        "beside the tiles, Ben is drawn bigger, with his name and each of the show's options",
-        () => {
-          const beside = panel('Ben');
-          expect(within(beside).getByRole('heading', { level: 2 })).toHaveTextContent('Ben');
-          expect(lookOf(beside)).toEqual(lookOf(tile('Ben')));
-          const box = (element: HTMLElement) =>
-            getComputedStyle(element.querySelector('[data-look]')!.parentElement!);
-          expect(parseFloat(box(beside).width)).toBeGreaterThan(
-            parseFloat(box(tile('Ben')).maxWidth),
-          );
-          const options = within(beside)
-            .getAllByRole('group')
-            .map((each) => within(each).getByRole('heading').textContent);
-          expect(options).toEqual(fakeLineUp().options.map((option) => option.label));
-        },
-      );
-    });
+    RuleScenario(
+      "Today's people in a row, the chosen one under it",
+      ({ Given, When, Then, And }) => {
+        const team = TEAM.slice(0, 8);
+        Given("a show's Line-up is open with {int} people", (_, count: number) =>
+          openLineUp(team.slice(0, count), fakeScenario({ name: 'Hat Show', lineUp: drawnHats() })),
+        );
+        When("I click Ben's tile", () => currentUser().click(tile('Ben')));
+        Then(
+          "today's people sit in one row of tiles, in today's order, Ben's marked as chosen, in sun, and pressed",
+          () => {
+            expect(team).toContain('Ben');
+            expect(tiles().map((each) => each.textContent)).toEqual(team);
+            expect(getComputedStyle(tileList()).gridAutoFlow).toBe('column');
+            for (const each of tiles()) {
+              const ben = each === tile('Ben');
+              expect(each).toHaveAttribute('aria-pressed', String(ben));
+              expect(getComputedStyle(each).backgroundColor).toBe(
+                ben ? 'var(--color-sun)' : 'var(--color-paper)',
+              );
+            }
+          },
+        );
+        And(
+          "under the row, Ben is drawn bigger with his name, {string} and the show's options",
+          () => {
+            const look = panel('Ben');
+            expect(tileList().compareDocumentPosition(look)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
+            expect(within(look).getByRole('heading', { level: 2 })).toHaveTextContent('Ben');
+            const box = (element: Element) => getComputedStyle(element.parentElement!);
+            const big = within(look)
+              .getByRole('heading', { level: 2 })
+              .closest('div')!.parentElement!;
+            expect(lookOf(big)).toEqual(lookOf(tile('Ben')));
+            expect(parseFloat(box(big.querySelector('[data-look]')!).width)).toBeGreaterThan(
+              parseFloat(box(tile('Ben').querySelector('[data-look]')!).maxWidth),
+            );
+            expect(within(look).getByRole('button', { name: 'Surprise me' })).toBeInTheDocument();
+            expect(
+              within(look)
+                .getAllByRole('group')
+                .map((each) => accessibleLabel(each)),
+            ).toEqual(fakeLineUp().options.map((option) => option.label));
+          },
+        );
+        And('an option that shows him in each choice has a sheet of its own beside him', () => {
+          const card = within(panel('Ben')).getByRole('heading', { level: 2 }).closest('div')!
+            .parentElement!.parentElement!;
+          expect(card).toContainElement(group('Ben', 'Colour'));
+          expect(card).not.toContainElement(group('Ben', 'Hat'));
+          expect(getComputedStyle(group('Ben', 'Hat')).borderRadius).toBe('var(--radius-card)');
+        });
+      },
+    );
 
-    RuleScenario('The chosen one of each option is marked', ({ When, Then, And }) => {
+    RuleScenario('The chosen one of each option is marked and named', ({ When, Then, And }) => {
+      const lineUp = drawnHats();
       let look: ChosenLook;
-      When("Ben's look is shown beside the tiles", async () => {
-        await openLineUp(['Anna', 'Ben'], hatShow());
+      When("Ben's look is shown", async () => {
+        await openLineUp(['Anna', 'Ben'], fakeScenario({ name: 'Hat Show', lineUp }));
         await currentUser().click(tile('Ben'));
         look = lookOf(tile('Ben'));
       });
       Then(
-        'each option is a row of choices, with the one he has marked by a check mark as well as by colour',
+        'in each option, the choice he has is marked by a check mark as well as by colour',
         () => {
-          for (const option of fakeLineUp().options) {
+          for (const option of lineUp.options) {
             const mine = option.choices.find((choice) => choice.name === look[option.name])!;
             const on = pressed('Ben', option.label);
             expect(on).toHaveLength(1);
@@ -311,6 +347,14 @@ describeSpec(await loadFeature('./line-up.feature'), ({ Rule }) => {
           );
         },
       );
+      And("each option's heading names his choice, as in {string}", () => {
+        for (const option of lineUp.options) {
+          const mine = option.choices.find((choice) => choice.name === look[option.name])!;
+          expect(
+            within(group('Ben', option.label)).getByRole('heading', { level: 3 }),
+          ).toHaveTextContent(`${option.label}: ${mine.label}`);
+        }
+      });
       And(
         'a colour option shows its choices as round swatches, each named for screen readers',
         () => {
@@ -332,7 +376,7 @@ describeSpec(await loadFeature('./line-up.feature'), ({ Rule }) => {
 
     RuleScenario('A choice changes the look at once', ({ Given, When, Then }) => {
       let chosen: ChosenLook;
-      Given("Ben's look is shown beside the tiles", async () => {
+      Given("Ben's look is shown", async () => {
         await openLineUp(['Anna', 'Ben'], hatShow());
         await currentUser().click(tile('Ben'));
       });
@@ -344,7 +388,7 @@ describeSpec(await loadFeature('./line-up.feature'), ({ Rule }) => {
         );
         chosen = { ...before, colour: colour.name };
       });
-      Then('Ben is drawn with it beside the tiles and on his tile', () => {
+      Then('Ben is drawn with it, bigger and on his tile', () => {
         expect(lookOf(panel('Ben'))).toEqual(chosen);
         expect(lookOf(tile('Ben'))).toEqual(chosen);
       });
@@ -352,7 +396,7 @@ describeSpec(await loadFeature('./line-up.feature'), ({ Rule }) => {
 
     RuleScenario('Surprise me', ({ Given, When, Then }) => {
       let before: ChosenLook;
-      Given("Ben's look is shown beside the tiles", async () => {
+      Given("Ben's look is shown", async () => {
         await openLineUp(['Anna', 'Ben'], hatShow());
         await currentUser().click(tile('Ben'));
         before = lookOf(tile('Ben'));
