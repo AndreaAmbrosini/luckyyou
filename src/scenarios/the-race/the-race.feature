@@ -73,8 +73,6 @@ Feature: The Race
       And Ben wears a bow tie at the collar
       And each is in sun, or in tomato on a sun shirt, as the scarf is
 
-    # Step 2.
-    @pending
     Scenario: Each creature looks as chosen
       Given Femi chose the zombie in pink with "Number", and Giulia the shark with feet in sea with the top hat
       When the show runs
@@ -82,8 +80,6 @@ Feature: The Race
       And Giulia races as a sea-coloured shark on two legs in sneakers, wearing a top hat
       And neither has a rider or a mount
 
-    # Step 2.
-    @pending
     Scenario Outline: Where a <creature> wears its colour
       When someone races as a <creature> in tomato
       Then <where> is tomato
@@ -99,8 +95,6 @@ Feature: The Race
         | alien     | its head, arms and legs              |
         | dinosaur  | its body                             |
 
-    # Step 2.
-    @pending
     Scenario: The astronaut and the villain have the kit's faces
       When someone races as the astronaut or the villain
       Then its face has the skin tone the kit hands out for the run

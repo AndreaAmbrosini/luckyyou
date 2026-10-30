@@ -5,7 +5,7 @@
 // before the line is slow, and the unlucky person crosses first.
 
 import { defineScenario, handOutLooks, type LineUp } from '../../scenario-kit';
-import { EXTRAS, MOUNTS, RACER_COLOURS, racer, type RacerLook } from './parts';
+import { EXTRAS, MOUNTS, RACER_COLOURS, racer, type RideLook } from './parts';
 import { playTheRace } from './play';
 
 const LABELS = {
@@ -70,7 +70,7 @@ const lineUp: LineUp = {
     },
   ],
   draw: (look, { name, place }) =>
-    racer(look as unknown as RacerLook, { face: faceOf(name), number: place }).el,
+    racer(look as unknown as RideLook, { face: faceOf(name), number: place }).el,
 };
 
 export default defineScenario({

@@ -9,7 +9,7 @@ import {
   SPEC,
   track,
   type Mount,
-  type RacerLook,
+  type RideLook,
 } from './parts';
 
 const FACE: Look = { skin: 2, accessory: 'cap', colour: 'grape', ring: 'mint' };
@@ -24,7 +24,7 @@ const shown = (root: Element, selector: string) => {
   return true;
 };
 
-const drawn = (look: Partial<RacerLook> = {}, number = 3) =>
+const drawn = (look: Partial<RideLook> = {}, number = 3) =>
   racer({ mount: 'duck', colour: 'sun', extra: 'scarf', ...look }, { face: FACE, number });
 
 describe('a racer', () => {
@@ -60,7 +60,7 @@ describe('a racer', () => {
   });
 
   it('wears the cape behind the rider, and the scarf and the bow tie in front', () => {
-    const layers = (extra: RacerLook['extra']) =>
+    const layers = (extra: RideLook['extra']) =>
       [...drawn({ extra }).el.querySelector('[data-part="lean"]')!.children].map(
         (child) => (child as SVGElement).dataset.part ?? 'head',
       );
@@ -87,7 +87,7 @@ describe('a racer', () => {
   });
 
   it('has googly eyes instead of its own, one per eye', () => {
-    const count = (mount: Mount, extra: RacerLook['extra']) =>
+    const count = (mount: Mount, extra: RideLook['extra']) =>
       drawn({ mount, extra }).el.querySelectorAll('[data-part="mount"] circle').length;
     for (const mount of MOUNTS) {
       const googly = drawn({ mount, extra: 'googly' }).el.querySelectorAll(

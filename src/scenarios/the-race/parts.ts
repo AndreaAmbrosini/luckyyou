@@ -1,5 +1,6 @@
 // The Race's drawings, from the Design canvas: the racer on each mount, with
-// its extra, the rider's mood and pose, and the trophy; the sports-field
+// its extra, the rider's mood and pose, and the trophy (a creature, racing on
+// its own feet, is in creature.ts); the sports-field
 // track with its bunting, rail, signs and lines; and the photo-finish card.
 // Every colour comes from a class in the-race.module.css; the racer's colour
 // comes in as --racer, and the contrast for the hat band, the scarf, the
@@ -10,6 +11,8 @@ import styles from './the-race.module.css';
 
 export type Mount =
   'snail' | 'duck' | 'chair' | 'caterpillar' | 'hopper' | 'ostrich' | 'rocket' | 'sandwich';
+export type Creature =
+  'zombie' | 'robot' | 'shark' | 'astronaut' | 'monster' | 'villain' | 'alien' | 'dinosaur';
 export type RacerColour = 'tomato' | 'sun' | 'mint' | 'grape' | 'pink' | 'orange' | 'sea' | 'shark';
 export type Extra = 'googly' | 'tophat' | 'number' | 'scarf' | 'cape' | 'bowtie';
 /** `hold`, the reins or the backrest; `pull`, leaning back on them; `wave`; `party`, arms up. */
@@ -25,6 +28,16 @@ export const MOUNTS: readonly Mount[] = [
   'rocket',
   'sandwich',
 ];
+export const CREATURES: readonly Creature[] = [
+  'zombie',
+  'robot',
+  'shark',
+  'astronaut',
+  'monster',
+  'villain',
+  'alien',
+  'dinosaur',
+];
 export const RACER_COLOURS: readonly RacerColour[] = [
   'tomato',
   'sun',
@@ -37,12 +50,24 @@ export const RACER_COLOURS: readonly RacerColour[] = [
 ];
 export const EXTRAS: readonly Extra[] = ['googly', 'tophat', 'number', 'scarf', 'cape', 'bowtie'];
 
-/** What the Line-up chooses for one racer. */
+/**
+ * What the Line-up chooses for one racer: a mount to ride or a creature to
+ * race as, both under the key `mount`, so looks stored before creatures fit.
+ */
 export interface RacerLook {
-  readonly mount: Mount;
+  readonly mount: Kind;
   readonly colour: RacerColour;
   readonly extra: Extra;
 }
+
+/** A look on a mount. */
+export type RideLook = RacerLook & { readonly mount: Mount };
+
+/** What someone races as: a mount, or a creature. */
+export type Kind = Mount | Creature;
+
+export const isCreature = (kind: Kind): kind is Creature =>
+  (CREATURES as readonly string[]).includes(kind);
 
 /** A racer's drawing: 240 by 200, facing right, the mount's feet at y 190. */
 export const RACER = { width: 240, height: 200, feet: 190 } as const;
@@ -156,11 +181,15 @@ export const SPEC: Readonly<
 /** The rider's head holder: 72 px, its foot 81 px down, where it leans from. */
 export const RIDER = { size: 72, foot: 81, lean: -12 } as const;
 
-type Shape = readonly [tag: string, className: string, attributes: Record<string, string | number>];
+export type Shape = readonly [
+  tag: string,
+  className: string,
+  attributes: Record<string, string | number>,
+];
 
 const SVG = 'http://www.w3.org/2000/svg';
 
-function draw(parent: Element, shapes: readonly Shape[]): SVGElement[] {
+export function draw(parent: Element, shapes: readonly Shape[]): SVGElement[] {
   return shapes.map(([tag, className, attributes]) => {
     const shape = parent.appendChild(document.createElementNS(SVG, tag)) as SVGElement;
     shape.setAttribute('class', className);
@@ -179,7 +208,7 @@ export function drawing(width: number, height: number, shapes: readonly Shape[] 
   return svg;
 }
 
-function group(parent: Element, name: string, shapes: readonly Shape[] = []): SVGGElement {
+export function group(parent: Element, name: string, shapes: readonly Shape[] = []): SVGGElement {
   const g = parent.appendChild(document.createElementNS(SVG, 'g'));
   g.dataset.part = name;
   draw(g, shapes);
@@ -429,7 +458,8 @@ const BOW_TIE: readonly Shape[] = [
   ['circle', styles.band!, { cx: 50, cy: 80, r: 5, 'stroke-width': 3 }],
 ];
 
-const TROPHY: readonly Shape[] = [
+/** The trophy, on its 72 by 60 grid. */
+export const TROPHY: readonly Shape[] = [
   [
     'path',
     styles.line!,
@@ -440,19 +470,27 @@ const TROPHY: readonly Shape[] = [
   ['rect', styles.board!, { x: 20, y: 47, width: 32, height: 10, rx: 3, 'stroke-width': 3 }],
 ];
 
-export interface Racer {
-  /** 240 by 200 on its grid; size it with width and height. */
+/** A racer, a rider on a mount or a creature, as the race moves it. */
+export interface Runner {
+  /** 240 by 200 on its grid, facing right, its feet at y 190; size it with width and height. */
   readonly el: SVGSVGElement;
+  readonly look: RacerLook;
+  /** Its nose's x, and the middle of its face's 72 px box, on its grid. */
+  readonly nose: number;
+  readonly faceX: number;
+  setMood(mood: Mood): void;
+  setPose(pose: Pose): void;
+  setSweat(on: boolean): void;
+  setTrophy(on: boolean): void;
+}
+
+export interface Racer extends Runner {
   readonly face: Head;
   /** The mount, without its rider, to wobble or spin. */
   readonly mount: SVGGElement;
   /** The rider's holder, leaning back when pulling. */
   readonly rider: SVGGElement;
-  readonly look: RacerLook;
-  setMood(mood: Mood): void;
-  setPose(pose: Pose): void;
-  setSweat(on: boolean): void;
-  setTrophy(on: boolean): void;
+  readonly look: RideLook;
   /** Shows or hides the lettuce leaf a snail nibbles at its mouth. */
   setLeaf(on: boolean): void;
   /** The mount's props, hidden until shown, to place and show. */
@@ -465,7 +503,7 @@ export interface Racer {
  * shirt in the racer's colour, holding on in `pose`.
  */
 export function racer(
-  look: RacerLook,
+  look: RideLook,
   {
     face: faceLook,
     number,
@@ -633,6 +671,8 @@ export function racer(
     mount,
     rider,
     look,
+    nose: spec.nose,
+    faceX: sx,
     setMood(next) {
       current = { ...current, mood: next };
       face.setMood(next);
@@ -845,7 +885,7 @@ export const PHOTO = {
  * and the verdict under the picture. `nose` is each nose's x in the window.
  */
 export function photoCard(
-  pair: readonly { name: string; racer: Racer; nose: number }[],
+  pair: readonly { name: string; racer: Runner; nose: number }[],
   verdict: string,
 ): HTMLElement {
   const card = document.createElement('div');
@@ -862,8 +902,7 @@ export function photoCard(
   ]);
   const k = PHOTO.scale;
   const placed = pair.map(({ name, racer: drawn, nose }, i) => {
-    const spec = SPEC[drawn.look.mount];
-    const left = nose - spec.nose * k;
+    const left = nose - drawn.nose * k;
     const holder = view.appendChild(document.createElement('div'));
     holder.className = styles.holder!;
     holder.dataset.person = name;
@@ -871,7 +910,7 @@ export function photoCard(
     holder.style.scale = String(k);
     holder.append(drawn.el);
     // Beside the face, just short of it, as on the track.
-    const face = left + (spec.saddle[0] - RIDER.size / 2) * k;
+    const face = left + (drawn.faceX - RIDER.size / 2) * k;
     // Inside the window, as on the canvas, even where the back head is cut off.
     return { name, right: face - 2, middle: Math.max(PHOTO.tagTop, PHOTO.grounds[i]! - 129 * k) };
   });

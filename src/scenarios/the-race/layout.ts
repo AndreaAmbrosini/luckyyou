@@ -3,14 +3,15 @@
 // people get bigger lanes.
 
 import { speechBox, STAGE, stagePx, type Box } from '../../scenario-kit';
-import { RACER, RIDER, SPEC, type Mount } from './parts';
+import { CREATURE_SPEC } from './creature';
+import { isCreature, RACER, RIDER, SPEC, type Kind } from './parts';
 
 /** The track's top and bottom on the stage, and the tallest a lane gets. */
 export const TRACK = { top: 216, bottom: 712, pitch: 160 } as const;
 
 export interface Lane {
   readonly index: number;
-  /** Where the mount's feet are. */
+  /** Where the racer's feet are. */
   readonly ground: number;
   /** The racer's drawing scale. */
   readonly k: number;
@@ -36,19 +37,31 @@ export function lane(index: number, count: number): Lane {
   };
 }
 
+/**
+ * A racer's nose and the middle of its face on its grid: a rider's face is
+ * over the saddle, a creature's where the canvas puts it.
+ */
+const geometry = (kind: Kind) =>
+  isCreature(kind) ? CREATURE_SPEC[kind] : { nose: SPEC[kind].nose, face: SPEC[kind].saddle[0] };
+
+/**
+ * The top of every face's box on the grid: a rider's head, 72 px, stands on
+ * a saddle at y 110 on every mount, and a creature's face gets the same box.
+ */
+const FACE_TOP = 110 - RIDER.foot;
+
 /** The racer drawing's top left when its nose is at `nose`. */
-export const boxAt = (mount: Mount, at: Lane, nose: number) => ({
-  left: nose - SPEC[mount].nose * at.k,
+export const boxAt = (kind: Kind, at: Lane, nose: number) => ({
+  left: nose - geometry(kind).nose * at.k,
   top: at.ground - RACER.feet * at.k,
 });
 
-/** The rider's face on the stage, its box's left, right, top and bottom. */
-export function faceAt(mount: Mount, at: Lane, nose: number) {
-  const box = boxAt(mount, at, nose);
-  const [sx, sy] = SPEC[mount].saddle;
+/** The racer's face on the stage, its box's left, right, top and bottom. */
+export function faceAt(kind: Kind, at: Lane, nose: number) {
+  const box = boxAt(kind, at, nose);
   const size = RIDER.size * at.k;
-  const left = box.left + (sx - RIDER.size / 2) * at.k;
-  const top = box.top + (sy - RIDER.foot) * at.k;
+  const left = box.left + (geometry(kind).face - RIDER.size / 2) * at.k;
+  const top = box.top + FACE_TOP * at.k;
   return { left, right: left + size, top, bottom: top + size };
 }
 
@@ -66,9 +79,9 @@ const overlap = (one: Box, two: Box) =>
  * borders. A name too long for one line shrinks first, down to
  * `--size-stage-tag-min`, and only then takes two lines.
  */
-export function tagBox(name: string, mount: Mount, at: Lane, nose: number): Box {
+export function tagBox(name: string, kind: Kind, at: Lane, nose: number): Box {
   const { size, maxWidth } = tagSize(at.k);
-  const { right, middle } = tagAt(mount, at, nose);
+  const { right, middle } = tagAt(kind, at, nose);
   // Read once: looking a token up parses tokens.css.
   tokens ??= { line: stagePx('--line'), least: stagePx('--size-stage-tag-min') };
   const ems = [...name].length * 0.6 + 0.6;
@@ -159,9 +172,9 @@ export const TAG_GAP = 2;
  * Where a name tag's right edge and middle go: beside the face, behind it,
  * level with it, ending just short of it so it never covers the face.
  */
-export function tagAt(mount: Mount, at: Lane, nose: number) {
+export function tagAt(kind: Kind, at: Lane, nose: number) {
   return {
-    right: faceAt(mount, at, nose).left - TAG_GAP,
+    right: faceAt(kind, at, nose).left - TAG_GAP,
     middle: at.ground - 129 * at.k,
   };
 }

@@ -123,6 +123,38 @@
   stroke-linejoin: round;
 }
 
+/* A creature's own colours. */
+.tomato {
+  fill: var(--color-tomato);
+  stroke: var(--color-ink);
+}
+
+.tomatoSoft {
+  fill: var(--color-tomato-soft);
+  stroke: var(--color-ink);
+  stroke-linejoin: round;
+}
+
+.mintSoft {
+  fill: var(--color-mint-soft);
+  stroke: var(--color-ink);
+  stroke-linejoin: round;
+}
+
+.inkSoft {
+  fill: var(--color-ink-soft);
+  stroke: var(--color-ink);
+  stroke-linejoin: round;
+}
+
+/* A creature's leg or arm, over a thicker ink line, in a paint that comes in as --paint. */
+.limb {
+  fill: none;
+  stroke: var(--paint);
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
 /* The rider's hands, in their skin tone. */
 .skin {
   fill: var(--skin);

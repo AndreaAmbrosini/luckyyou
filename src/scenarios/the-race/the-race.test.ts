@@ -7,7 +7,18 @@ import { describeSpec, runShow, type ShowRecord } from '../../scenario-kit/testi
 import theRace from './index';
 import { eventCaption } from './play';
 import { faceAt, lane, tagBox } from './layout';
-import { MOUNTS, RACER_COLOURS, racer, RIDER, SPEC, type Mount } from './parts';
+import { CREATURE_SPEC } from './creature';
+import {
+  CREATURES,
+  MOUNTS,
+  RACER_COLOURS,
+  racer,
+  RIDER,
+  SPEC,
+  type Creature,
+  type Mount,
+} from './parts';
+import styles from './the-race.module.css';
 import {
   BURST,
   CAMERA,
@@ -354,7 +365,7 @@ describeSpec(await loadFeature('./the-race.feature'), ({ Rule }) => {
     });
   });
 
-  Rule('Its line-up', ({ RuleScenario }) => {
+  Rule('Its line-up', ({ RuleScenario, RuleScenarioOutline }) => {
     RuleScenario('Eight rides, eight colours, six extras', ({ When, Then, And }) => {
       const lineUp = theRace.lineUp!;
       const option = (label: string) => lineUp.options.find((each) => each.label === label)!;
@@ -650,6 +661,135 @@ describeSpec(await loadFeature('./the-race.feature'), ({ Rule }) => {
           for (const shape of drawn.get(name)!.querySelectorAll(`[data-part="${part}"] > *`)) {
             expect(shape.getAttribute('class')).toBe(scarf.getAttribute('class'));
           }
+        }
+      });
+    });
+
+    RuleScenario('Each creature looks as chosen', ({ Given, When, Then, And }) => {
+      const looks = new Map<string, ChosenLook>();
+      let drawn: Map<string, SVGSVGElement>;
+      Given(
+        'Femi chose the zombie in pink with "Number", and Giulia the shark with feet in sea with the top hat',
+        () => {
+          looks.set('Femi', { mount: 'zombie', colour: 'pink', extra: 'number' });
+          looks.set('Giulia', { mount: 'shark', colour: 'sea', extra: 'tophat' });
+          looks.set('Carla', { mount: 'snail', colour: 'mint', extra: 'scarf' });
+        },
+      );
+      When('the show runs', async () => {
+        drawn = await firstDrawn(looks);
+      });
+      Then(
+        'Femi races as a zombie in a pink shirt, arms out in front, with a paper roundel on its chest',
+        () => {
+          const femi = drawn.get('Femi')!;
+          expect(femi.dataset).toMatchObject({ part: 'creature', mount: 'zombie' });
+          expect(femi.style.getPropertyValue('--racer')).toBe('var(--color-pink)');
+          expect(femi.querySelector('[data-part="shirt"]')!.getAttribute('class')).toBe(
+            styles.racer,
+          );
+          // Both arms reach forward of the front shoulder, level with the shoulders.
+          const [x, y] = CREATURE_SPEC.zombie.shoulders[1];
+          for (const which of ['back', 'front']) {
+            const [hx, hy] = ends(femi.querySelector(`[data-part="${which}-arm"] path`))
+              .split(' ')
+              .map(Number);
+            expect(hx).toBeGreaterThan(x);
+            expect(Math.abs(hy! - y)).toBeLessThan(10);
+          }
+          const roundel = femi.querySelector('[data-part="number"]')!;
+          expect(roundel.textContent).toBe('1');
+          const [cx, cy] = CREATURE_SPEC.zombie.chest;
+          expect(roundel.querySelector('circle')!.getAttribute('cx')).toBe(String(cx));
+          expect(roundel.querySelector('circle')!.getAttribute('cy')).toBe(String(cy));
+        },
+      );
+      And('Giulia races as a sea-coloured shark on two legs in sneakers, wearing a top hat', () => {
+        const giulia = drawn.get('Giulia')!;
+        expect(giulia.dataset).toMatchObject({ part: 'creature', mount: 'shark' });
+        expect(giulia.style.getPropertyValue('--racer')).toBe('var(--color-sea)');
+        const legs = giulia.querySelector('path[data-part="legs"]')!.getAttribute('d')!;
+        expect(legs.match(/M/g)).toHaveLength(2);
+        const shoes = giulia.querySelectorAll('[data-part="shoe"]');
+        expect(shoes).toHaveLength(2);
+        for (const shoe of shoes) expect(shoe.getAttribute('class')).toBe(styles.racer);
+        expect(giulia.querySelector('[data-part="tophat"]')).not.toBeNull();
+      });
+      And('neither has a rider or a mount', () => {
+        for (const name of ['Femi', 'Giulia']) {
+          const svg = drawn.get(name)!;
+          expect(svg.querySelector('[data-part="rider"], [data-part="mount"]')).toBeNull();
+        }
+      });
+    });
+
+    /** Where each creature wears its colour: the parts of it so named. */
+    const WEARS: Record<string, { creature: Creature; parts: string[] }> = {
+      zombie: { creature: 'zombie', parts: ['shirt'] },
+      robot: { creature: 'robot', parts: ['body', 'antenna'] },
+      shark: { creature: 'shark', parts: ['body'] },
+      astronaut: { creature: 'astronaut', parts: ['backpack', 'panel'] },
+      monster: { creature: 'monster', parts: ['fur'] },
+      villain: { creature: 'villain', parts: ['cape', 'collar'] },
+      alien: { creature: 'alien', parts: ['head', 'arms', 'legs'] },
+      dinosaur: { creature: 'dinosaur', parts: ['body'] },
+    };
+    let allTomato: Promise<Map<string, SVGSVGElement>> | undefined;
+
+    RuleScenarioOutline(
+      'Where a <creature> wears its colour',
+      ({ When, Then }, { creature: kind }) => {
+        let svg: SVGSVGElement;
+        When('someone races as a <creature> in tomato', async () => {
+          // All eight in one race, as the show first draws them.
+          allTomato ??= firstDrawn(
+            new Map(
+              CREATURES.map((each) => [each, { mount: each, colour: 'tomato', extra: 'scarf' }]),
+            ),
+          );
+          svg = (await allTomato).get(WEARS[kind]!.creature)!;
+        });
+        Then('<where> is tomato', () => {
+          expect(svg.style.getPropertyValue('--racer')).toBe('var(--color-tomato)');
+          for (const part of WEARS[kind]!.parts) {
+            const shapes =
+              part === 'arms'
+                ? [...svg.querySelectorAll<SVGElement>('[data-part$="-arm"] > :nth-child(2)')]
+                : [...svg.querySelectorAll<SVGElement>(`[data-part="${part}"]`)].filter(
+                    (shape) => shape.tagName !== 'g',
+                  );
+            expect(shapes.length, part).toBeGreaterThan(0);
+            for (const shape of shapes) {
+              const painted =
+                shape.getAttribute('class') === styles.racer ||
+                shape.style.getPropertyValue('--paint') === 'var(--racer)';
+              expect(painted, `${kind} ${part}`).toBe(true);
+            }
+          }
+        });
+      },
+    );
+
+    RuleScenario("The astronaut and the villain have the kit's faces", ({ When, Then }) => {
+      const looks = new Map<string, ChosenLook>([
+        ['Anna', { mount: 'astronaut', colour: 'sea', extra: 'scarf' }],
+        ['Ben', { mount: 'villain', colour: 'grape', extra: 'number' }],
+        ['Carla', { mount: 'duck', colour: 'sun', extra: 'scarf' }],
+      ]);
+      let drawn: Map<string, SVGSVGElement>;
+      When('someone races as the astronaut or the villain', async () => {
+        drawn = await firstDrawn(looks);
+      });
+      Then('its face has the skin tone the kit hands out for the run', () => {
+        const random = createRandom(4);
+        planShow([...looks.keys()], 'Carla', random);
+        const faces = handOutLooks([...looks.keys()], random);
+        for (const name of ['Anna', 'Ben']) {
+          const svg = drawn.get(name)!;
+          expect(svg.style.getPropertyValue('--skin')).toBe(
+            `var(--color-skin-${faces.get(name)!.skin})`,
+          );
+          expect(svg.querySelector('[data-part="skin"]')!.getAttribute('class')).toBe(styles.skin);
         }
       });
     });
