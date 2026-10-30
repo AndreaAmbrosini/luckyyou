@@ -737,7 +737,7 @@ function sign(text: string, colour: 'paper' | 'sun'): HTMLElement {
   const post = holder.appendChild(document.createElement('div'));
   post.className = styles.post!;
   const board = holder.appendChild(document.createElement('p'));
-  board.className = colour === 'sun' ? `${styles.board} ${styles.sunBoard}` : styles.board!;
+  board.className = colour === 'sun' ? `${styles.signBoard} ${styles.sunBoard}` : styles.signBoard!;
   board.textContent = text;
   return holder;
 }

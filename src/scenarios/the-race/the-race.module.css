@@ -274,7 +274,7 @@
   background-color: var(--color-paper);
 }
 
-.board {
+.signBoard {
   position: absolute;
   top: 100px;
   left: 0;

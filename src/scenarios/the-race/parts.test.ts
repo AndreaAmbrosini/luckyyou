@@ -175,6 +175,14 @@ describe('the track', () => {
     expect(at('posts')).toBe('translate(-140.0 0)');
   });
 
+  it('styles its signs apart from the drawings, which keep their own sizes', () => {
+    const { el } = track({ lanes, start: 426, finish: 6000 });
+    const board = el.querySelector('[data-part="sign"] p')!;
+    const skateboard = drawn({ mount: 'duck' }).el.querySelector('[data-part="mount"] rect')!;
+    expect(board.classList).not.toContain(skateboard.getAttribute('class'));
+    expect(getComputedStyle(skateboard).width).not.toBe('max-content');
+  });
+
   it('counts down to the finish with signs that pass by', () => {
     const field = track({ lanes, start: 426, finish: 6000 });
     const signs = () =>
