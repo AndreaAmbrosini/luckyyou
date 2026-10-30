@@ -7,15 +7,18 @@ import { describeSpec, runShow, type ShowRecord } from '../../scenario-kit/testi
 import theRace from './index';
 import { eventCaption } from './play';
 import { faceAt, lane, tagBox } from './layout';
-import { CREATURE_SPEC } from './creature';
+import { creature, CREATURE_SPEC } from './creature';
 import {
   CREATURES,
+  EXTRAS,
+  isCreature,
   MOUNTS,
   RACER_COLOURS,
   racer,
   RIDER,
   SPEC,
   type Creature,
+  type Kind,
   type Mount,
 } from './parts';
 import styles from './the-race.module.css';
@@ -65,6 +68,12 @@ interface Drawn {
   readonly flame: number | 'out' | null;
   /** The props it shows, as "egg smoke steam pickle". */
   readonly props: string;
+  /** A creature's arms' swing, its blank screen, its bend, its stretch and its flag's x. */
+  readonly flail: number;
+  readonly blank: boolean;
+  readonly bend: number;
+  readonly stretch: boolean;
+  readonly flag: number | null;
 }
 
 /** What the stage showed in one frame. */
@@ -101,8 +110,8 @@ interface Watched {
   readonly looks: ReadonlyMap<string, ChosenLook>;
 }
 
-/** Everyone in a show on `mount`, in the colours in turn, with a racing number. */
-const allOn = (team: readonly string[], mount: Mount) =>
+/** Everyone in a show on `mount`, or as it, in the colours in turn, with a racing number. */
+const allOn = (team: readonly string[], mount: Kind) =>
   new Map<string, ChosenLook>(
     team.map((name, i) => [name, { mount, colour: RACER_COLOURS[i % 6]!, extra: 'number' }]),
   );
@@ -193,6 +202,11 @@ async function watch(
                 ? 'out'
                 : Number(svg.dataset.flame),
           props: svg.dataset.props ?? '',
+          flail: Number(svg.dataset.flail ?? 0),
+          blank: svg.dataset.blank === 'true',
+          bend: Number(svg.dataset.bend ?? 0),
+          stretch: svg.dataset.stretch === 'true',
+          flag: svg.dataset.flag ? Number(svg.dataset.flag) : null,
         };
       }
       const says = found.bubbles
@@ -232,6 +246,9 @@ async function watch(
   const plan = planShow(team, unlucky, createRandom(seed));
   return { record, frames, plan, team, unlucky, looks: dealt };
 }
+
+/** What `name` races as in `watched`. */
+const kindOf = (watched: Watched, name: string) => watched.looks.get(name)!.mount as Kind;
 
 /** The captions shown, in order. */
 const captions = (watched: Watched) => watched.record.captions.map((each) => each.text);
@@ -278,7 +295,7 @@ const shared = (() => {
      * Five people on `mount`, so the first event is a burst and the second
      * that burster's stop; whoever bursts is called `name`.
      */
-    mount: (mount: Mount, name: string, reducedMotion = false) =>
+    mount: (mount: Kind, name: string, reducedMotion = false) =>
       once(`mount ${mount} ${reducedMotion}`, () => {
         const team = ['Kofi', 'Luca', 'Mia', 'Nora', 'Omar'];
         const seed = 7;
@@ -304,6 +321,36 @@ const shared = (() => {
         looks.set('Ben', { mount: 'snail', colour: 'tomato', extra: 'number' });
         looks.set('Carla', { mount: 'duck', colour: 'sun', extra: 'scarf' });
         return watch(team, { unlucky: 'Anna', seed, looks, reducedMotion });
+      }),
+    /**
+     * `count` people with a 15-character name, unlucky, riders and creatures
+     * taking turns, each with another extra.
+     */
+    mixed: (count: number) =>
+      once(`mixed ${count}`, () => {
+        const team = [...names(count - 1), 'Annamaria Rossi'];
+        const looks = new Map<string, ChosenLook>(
+          team.map((name, i) => [
+            name,
+            {
+              mount: (i % 2 ? CREATURES : MOUNTS)[(Math.floor(i / 2) + count) % 8]!,
+              colour: RACER_COLOURS[i % 8]!,
+              extra: EXTRAS[i % EXTRAS.length]!,
+            },
+          ]),
+        );
+        return watch(team, { seed: 3, looks });
+      }),
+    /** Four people, Dario last and unlucky, as the dinosaur; the others a shark, a robot and a duck. */
+    dinosaurWins: () =>
+      once('dinosaur wins', () => {
+        const looks = new Map<string, ChosenLook>([
+          ['Anna', { mount: 'duck', colour: 'sun', extra: 'scarf' }],
+          ['Ben', { mount: 'robot', colour: 'grape', extra: 'number' }],
+          ['Carla', { mount: 'shark', colour: 'sea', extra: 'tophat' }],
+          ['Dario', { mount: 'dinosaur', colour: 'mint', extra: 'bowtie' }],
+        ]);
+        return watch([...looks.keys()], { unlucky: 'Dario', seed: 2, looks });
       }),
     /** `count` people with a 15-character name, unlucky, on mounts in turn, in capes. */
     long: (count: number) =>
@@ -366,58 +413,70 @@ describeSpec(await loadFeature('./the-race.feature'), ({ Rule }) => {
   });
 
   Rule('Its line-up', ({ RuleScenario, RuleScenarioOutline }) => {
-    RuleScenario('Eight rides, eight colours, six extras', ({ When, Then, And }) => {
+    RuleScenario('Rides and creatures, in one Racer option', ({ When, Then, And }) => {
       const lineUp = theRace.lineUp!;
       const option = (label: string) => lineUp.options.find((each) => each.label === label)!;
-      const labels = (label: string) => option(label).choices.map((choice) => choice.label);
+      const listed = (text: string) => [...text.matchAll(/"([^"]+)"/g)].map(([, x]) => x);
       let drawings: Element[] = [];
       When('the Line-up opens for The Race', () => {
+        expect(lineUp.heading).toBe('Line up the racers');
+        expect(lineUp.start).toBe('Start the race');
         drawings = names(3).map((name, index) =>
           lineUp.draw(
-            { mount: 'chair', colour: 'mint', extra: 'number' },
+            { mount: 'robot', colour: 'mint', extra: 'number' },
             { name, place: index + 1 },
           ),
         );
       });
-      Then(
-        'its heading is {string} and its button {string}',
-        (_, heading: string, start: string) => {
-          expect(lineUp.heading).toBe(heading);
-          expect(lineUp.start).toBe(start);
-        },
-      );
-      And('"Rides" offers {any}', (_, offered: string) => {
-        expect(labels('Rides')).toEqual([...offered.matchAll(/"([^"]+)"/g)].map(([, x]) => x));
+      Then('its first option is {string}, its choices in two groups', (_, label: string) => {
+        const first = lineUp.options[0]!;
+        expect(first.label).toBe(label);
+        // Still `mount`, so stored looks keep their ride.
+        expect(first.name).toBe('mount');
+        expect([...new Set(first.choices.map((choice) => choice.group))]).toEqual([
+          'Rides',
+          'Creatures',
+        ]);
+      });
+      And('the group "Rides" holds {any}', (_, held: string) => {
+        const group = 'Rides';
+        const choices = option('Racer').choices.filter((choice) => choice.group === group);
+        expect(choices.map((choice) => choice.label)).toEqual(listed(held));
+      });
+      And('the group "Creatures" holds {any}', (_, held: string) => {
+        const group = 'Creatures';
+        const choices = option('Racer').choices.filter((choice) => choice.group === group);
+        expect(choices.map((choice) => choice.label)).toEqual(listed(held));
+        expect(choices.map((choice) => choice.name)).toEqual(CREATURES);
       });
       And(
-        '"Colour" offers tomato, sun, mint, grape, pink, orange, sea and shark, as swatches, shark read out as {string}',
-        (_, grey: string) => {
-          const choices = option('Colour').choices;
-          expect(choices.map((choice) => choice.name)).toEqual([
-            'tomato',
-            'sun',
-            'mint',
-            'grape',
-            'pink',
-            'orange',
-            'sea',
-            'shark',
+        '"Colour" and "Extra" offer the same choices as in step 1, for riders and creatures alike',
+        () => {
+          expect(lineUp.options.map((each) => each.name)).toEqual(['mount', 'colour', 'extra']);
+          const colours = option('Colour').choices;
+          expect(colours.map((choice) => choice.name)).toEqual([...RACER_COLOURS]);
+          for (const choice of colours) expect(choice.swatch).toBe(choice.name);
+          expect(colours.find((choice) => choice.name === 'shark')!.label).toBe('Grey');
+          expect(option('Extra').choices.map((choice) => choice.label)).toEqual([
+            'Googly eyes',
+            'Top hat',
+            'Number',
+            'Scarf',
+            'Cape',
+            'Bow tie',
           ]);
-          for (const choice of choices) expect(choice.swatch).toBe(choice.name);
-          expect(choices.find((choice) => choice.name === 'shark')!.label).toBe(grey);
         },
       );
-      And('"Extra" offers {any}', (_, offered: string) => {
-        expect(labels('Extra')).toEqual([...offered.matchAll(/"([^"]+)"/g)].map(([, x]) => x));
-      });
-      And('each tile and the preview draw the racer as the show does, calm', () => {
+      And('each tile and the preview draw a creature as the show does, calm', () => {
         drawings.forEach((drawing, index) => {
           const el = drawing as SVGSVGElement;
-          expect(el.dataset.part).toBe('racer');
-          expect(el.dataset.mount).toBe('chair');
-          expect(el.dataset.colour).toBe('mint');
-          expect(el.dataset.mood).toBe('calm');
-          expect(el.dataset.pose).toBe('hold');
+          expect(el.dataset).toMatchObject({
+            part: 'creature',
+            mount: 'robot',
+            colour: 'mint',
+            mood: 'calm',
+            pose: 'hold',
+          });
           expect(el.querySelector('text')!.textContent).toBe(String(index + 1));
         });
       });
@@ -892,7 +951,7 @@ describeSpec(await loadFeature('./the-race.feature'), ({ Rule }) => {
   });
 
   Rule('Winning is losing', ({ RuleScenario }) => {
-    RuleScenario('The leader is scared, the rest relieved', ({ Given, When, Then, And }) => {
+    RuleScenario('The leader is scared, rider or creature', ({ Given, When, Then, And }) => {
       let watched: Watched;
       /** Frames while the race is on, with nobody stopped. */
       const racing = () =>
@@ -903,23 +962,47 @@ describeSpec(await loadFeature('./the-race.feature'), ({ Rule }) => {
             Object.values(frame.racers).every((racer) => !racer.stopped),
         );
       const front = (frame: Frame) => Math.max(...Object.values(frame.racers).map((r) => r.nose));
-      Given('{int} people', () => undefined);
-      When('the show runs', async () => {
-        watched = await shared.eight();
+      /** Who is in front in each racing frame, and whether they are a creature. */
+      const leaders = () =>
+        racing().map((frame) => {
+          const [name, racer] = Object.entries(frame.racers).find(
+            ([, each]) => each.nose === front(frame),
+          )!;
+          return { time: frame.time, racer, creature: isCreature(kindOf(watched, name)) };
+        });
+      Given('{int} people, four riders and four creatures', (_, count: number) => {
+        expect(count).toBe(8);
       });
-      Then(
-        'whoever is in front looks scared, sweats, leans back and pulls on the reins, or holds on tight on the chair',
+      When('the show runs', async () => {
+        watched = await shared.mixed(8);
+        const kinds = [...watched.looks.values()].map((look) => isCreature(look.mount as Kind));
+        expect(kinds.filter(Boolean)).toHaveLength(4);
+      });
+      Then('whoever is in front looks scared and sweats', () => {
+        for (const { time, racer } of leaders()) {
+          expect(racer.mood, `${time}`).toBe('scared');
+          expect(racer.sweat).toBe(true);
+        }
+      });
+      And(
+        'a rider in front leans back and pulls on the reins, or holds on tight on the chair',
         () => {
-          for (const frame of racing()) {
-            const [, leader] = Object.entries(frame.racers).find(
-              ([, racer]) => racer.nose === front(frame),
-            )!;
-            expect(leader.mood, `${frame.time}`).toBe('scared');
-            expect(leader.sweat).toBe(true);
-            expect(leader.pose).toBe('pull');
-          }
+          const riders = leaders().filter((leader) => !leader.creature);
+          expect(riders.length).toBeGreaterThan(0);
+          for (const { racer } of riders) expect(racer.pose).toBe('pull');
         },
       );
+      And('a creature in front leans back and flails its arms, while its legs keep running', () => {
+        const creatures = leaders().filter((leader) => leader.creature);
+        expect(creatures.length).toBeGreaterThan(0);
+        for (const { racer } of creatures) {
+          expect(racer.pose).toBe('pull');
+          expect(racer.gait).not.toBe('off');
+        }
+        // Swinging both ways.
+        const flails = new Set(creatures.map(({ racer }) => Math.sign(racer.flail)));
+        expect(flails.has(-1) && flails.has(1)).toBe(true);
+      });
       And("whoever is within a mount's length behind them looks worried", () => {
         for (const frame of racing()) {
           for (const racer of Object.values(frame.racers)) {
@@ -934,6 +1017,7 @@ describeSpec(await loadFeature('./the-race.feature'), ({ Rule }) => {
           for (const racer of Object.values(frame.racers)) {
             if (front(frame) - racer.nose <= LENGTH) continue;
             expect(racer.mood, `${frame.time}`).toBe('happy');
+            expect(racer.flail).toBe(0);
             if (racer.pose === 'wave') waving++;
           }
         }
@@ -1214,6 +1298,128 @@ describeSpec(await loadFeature('./the-race.feature'), ({ Rule }) => {
         if (ride === 'rocket') expect(off.racer.flame).not.toBe('out');
       });
     });
+
+    RuleScenarioOutline(
+      'A <creature> bursts ahead',
+      ({ When, Then, And }, { creature: kind, name, burst }) => {
+        let watched: Watched;
+        When("someone's <creature> bursts ahead", async () => {
+          watched = await shared.mount(kind as Creature, name);
+        });
+        Then(`the caption is "<name>'s <creature> <burst>!"`, () => {
+          expect(captions(watched)).toContain(`${name}'s ${kind} ${burst}!`);
+          expect(watched.plan.events[0]).toMatchObject({ kind: 'burst', subject: name });
+        });
+        And('it shoots into the lead, shouting "Nooo!"', () => {
+          const { at } = watched.plan.events[0]!;
+          expect(leaderAt(watched.plan, at)).not.toBe(name);
+          expect(leaderAt(watched.plan, at + 0.9)).toBe(name);
+          const shouting = watched.frames.filter((frame) => saying(frame, name, 'Nooo!'));
+          expect(shouting[0]!.time).toBeGreaterThanOrEqual(at);
+          expect(shouting[0]!.time).toBeLessThan(at + 0.5);
+          expect(shouting.length * STEP).toBeGreaterThanOrEqual(1);
+        });
+      },
+    );
+
+    RuleScenarioOutline(
+      'A <creature> stops',
+      ({ When, Then, And }, { creature: kind, name, stop }) => {
+        let watched: Watched;
+        /** The stopped creature, frame by frame from the stop to the next event. */
+        const during = () => {
+          const { at } = watched.plan.events[1]!;
+          return watched.frames
+            .filter((frame) => frame.time >= at && frame.time < at + spacing(5))
+            .map((frame) => ({ ...frame, racer: frame.racers[name]!, since: frame.time - at }));
+        };
+        When("someone's <creature> stops", async () => {
+          watched = await shared.mount(kind as Creature, name);
+        });
+        Then(`the caption is "<name>'s <creature> <stop>!"`, () => {
+          expect(captions(watched)).toContain(`${name}'s ${kind} ${stop}!`);
+          expect(watched.plan.events[1]).toMatchObject({ kind: 'stop', subject: name });
+        });
+        And('<what>, and it drops back while the camera goes on', () => {
+          const stopped = during().filter((frame) => frame.racer.stopped);
+          expect(stopped.length).toBeGreaterThan(10);
+          /** How long the stop shows `prop`, in seconds. */
+          const showing = (prop: string) =>
+            stopped.filter((frame) => frame.racer.props.split(' ').includes(prop)).length * STEP;
+          if (kind === 'zombie') {
+            expect(showing('lostShoe')).toBeGreaterThanOrEqual(1);
+            expect(Math.max(...stopped.map((frame) => frame.racer.hop))).toBeGreaterThan(8);
+          }
+          if (kind === 'robot') {
+            expect(stopped[0]!.racer.blank).toBe(true);
+            expect(stopped.at(-1)!.racer.blank).toBe(false);
+          }
+          if (kind === 'shark') {
+            expect(stopped.filter((frame) => frame.racer.bend > 20).length * STEP).toBeGreaterThan(
+              1,
+            );
+          }
+          if (kind === 'astronaut') {
+            expect(showing('flag')).toBeGreaterThanOrEqual(1);
+            // Planted: it stays where it went in while the astronaut drops back.
+            const planted = stopped.filter((frame) => frame.racer.flag !== null);
+            const along = planted.map((frame) => {
+              const k = lane(watched.team.indexOf(name), watched.team.length).k;
+              const left = frame.racer.nose - CREATURE_SPEC.astronaut.nose * k;
+              return left + frame.racer.flag! * k + frame.camera;
+            });
+            expect(Math.max(...along) - Math.min(...along)).toBeLessThan(2);
+          }
+          if (kind === 'monster') {
+            const hics = stopped.filter((frame) => saying(frame, name, 'Hic!'));
+            expect(hics.length * STEP).toBeGreaterThanOrEqual(1);
+            expect(hics.some((frame) => frame.racer.hop > 8)).toBe(true);
+            expect(
+              stopped
+                .filter((frame) => !saying(frame, name, 'Hic!'))
+                .every((f) => f.racer.hop === 0),
+            ).toBe(true);
+          }
+          if (kind === 'villain') {
+            expect(showing('wrap')).toBeGreaterThanOrEqual(1);
+            const flips = stopped
+              .map((frame) => Math.sign(parseFloat(frame.racer.scale || '1')))
+              .filter((sign) => sign !== 0)
+              .filter((sign, i, all) => i > 0 && sign !== all[i - 1]);
+            // Once round: facing back, then forward again.
+            expect(flips).toHaveLength(2);
+          }
+          if (kind === 'alien') expect(showing('question')).toBeGreaterThanOrEqual(1);
+          if (kind === 'dinosaur') {
+            expect(showing('snack')).toBeGreaterThanOrEqual(1);
+            const reaching = stopped.filter((frame) => frame.racer.props.includes('snack'));
+            expect(reaching.every((frame) => frame.racer.stretch)).toBe(true);
+          }
+          const first = stopped[0]!;
+          const last = stopped.at(-1)!;
+          expect(last.racer.nose).toBeLessThan(first.racer.nose - 200);
+          expect(last.camera).toBeGreaterThan(first.camera + 300);
+        });
+        And('it waves, says "Phew!", and sets off again further back', () => {
+          const frames = during();
+          const waving = frames.filter(
+            ({ racer }) =>
+              racer.stopped && racer.pose === 'wave' && !racer.stretch && racer.bend === 0,
+          );
+          expect(waving.length).toBeGreaterThan(0);
+          const phew = frames.filter((frame) => saying(frame, name, 'Phew!'));
+          expect(phew.length * STEP).toBeGreaterThanOrEqual(1);
+          const off = frames.find((frame) => frame.since > STOP.off + 0.1)!;
+          expect(off.racer.stopped).toBe(false);
+          expect(off.racer.gait).toBe('on');
+          expect(off.racer.props).toBe('');
+          const { at } = watched.plan.events[1]!;
+          expect(orderAt(watched.plan, at + STOP.off).indexOf(name)).toBeGreaterThan(
+            orderAt(watched.plan, at - 0.01).indexOf(name),
+          );
+        });
+      },
+    );
   });
 
   Rule('The final stretch, and a slow last moment', ({ RuleScenario }) => {
@@ -1418,10 +1624,8 @@ describeSpec(await loadFeature('./the-race.feature'), ({ Rule }) => {
         (_, shout: string) => {
           const { slow, finish } = watched.plan.times;
           const surge = { kind: 'burst', subject: 'Anna', at: slow } as const;
-          const said = (['snail', 'duck', 'chair', 'caterpillar'] as const).map((mount) =>
-            eventCaption(surge, mount),
-          );
-          const shown = watched.record.captions.find((each) => said.includes(each.text))!;
+          const said = eventCaption(surge, kindOf(watched, 'Anna'));
+          const shown = watched.record.captions.find((each) => each.text === said)!;
           expect(shown.from).toBeCloseTo(slow, 1);
           expect(between(watched, slow + 0.2, finish).every((f) => saying(f, 'Anna', shout))).toBe(
             true,
@@ -1470,6 +1674,69 @@ describeSpec(await loadFeature('./the-race.feature'), ({ Rule }) => {
           expect(racer.mood === 'party' || (racer.mood === 'happy' && racer.pose === 'wave')).toBe(
             true,
           );
+        }
+      });
+    });
+
+    RuleScenario('A creature wins', ({ Given, When, Then, And }) => {
+      let watched: Watched;
+      Given('the unlucky person is {string}, racing as the dinosaur', async (_, name: string) => {
+        watched = await shared.dinosaurWins();
+        expect(watched.unlucky).toBe(name);
+        expect(watched.looks.get(name)!.mount).toBe('dinosaur');
+      });
+      When('Dario has crossed the line', () => {
+        expect(crossingOf(watched.plan, 'Dario')!).toBeLessThanOrEqual(watched.plan.times.finish);
+      });
+      Then('the caption is {string}, with a fanfare and confetti', (_, caption: string) => {
+        const { win } = watched.plan.times;
+        expect(watched.record.captions.at(-1)).toMatchObject({ text: caption });
+        expect(watched.record.captions.at(-1)!.from).toBeCloseTo(win, 1);
+        expect(between(watched, win + 0.5, Infinity).every((f) => f.confetti > 20)).toBe(true);
+      });
+      And(
+        'the dinosaur balances the trophy on its head, waving its tiny arms, in the party mood',
+        () => {
+          const after = between(watched, watched.plan.times.win + STEP, Infinity);
+          for (const frame of after) {
+            expect(frame.racers.Dario).toMatchObject({
+              trophy: true,
+              mood: 'party',
+              pose: 'party',
+            });
+          }
+          expect(new Set(after.map((frame) => Math.sign(frame.racers.Dario!.flail)))).toEqual(
+            new Set([-1, 0, 1]),
+          );
+          // The trophy's base sits on the top of its head, at y 22.
+          const [, top] = CREATURE_SPEC.dinosaur.cup;
+          expect(Math.abs(top + 57 - 22)).toBeLessThanOrEqual(4);
+        },
+      );
+      And('a shark balances it on its fin, and every other creature holds it over its head', () => {
+        const face = handOutLooks(['Dario'], createRandom(1)).get('Dario')!;
+        for (const kind of CREATURES) {
+          const one = creature({ mount: kind, colour: 'sun', extra: 'scarf' }, { face, number: 1 });
+          one.setMood('party');
+          one.setPose('party');
+          one.setTrophy(true);
+          const [x, y] = CREATURE_SPEC[kind].cup;
+          if (kind === 'shark') {
+            // Its base on the fin, which rises from (104, 46) to its tip at (92, 2).
+            expect(x).toBeGreaterThan(92);
+            expect(x).toBeLessThan(138);
+            expect(y + 57).toBeGreaterThan(2);
+            expect(y + 57).toBeLessThan(46);
+          } else if (kind !== 'dinosaur') {
+            const hands = [...one.el.querySelectorAll('[data-part$="-arm"] circle')].map((hand) => [
+              Number(hand.getAttribute('cx')),
+              Number(hand.getAttribute('cy')),
+            ]);
+            expect(hands, kind).toEqual([
+              [x - 24, y + 26],
+              [x + 24, y + 26],
+            ]);
+          }
         }
       });
     });
@@ -1666,6 +1933,82 @@ describeSpec(await loadFeature('./the-race.feature'), ({ Rule }) => {
         }
       });
     });
+
+    RuleScenario('Riders and creatures side by side', ({ When, Then, And }) => {
+      let runs: Watched[];
+      const KINDS: readonly Kind[] = [...MOUNTS, ...CREATURES];
+      /** Each racer's face and tag in each frame. */
+      const boxes = (watched: Watched, frame: Frame) =>
+        watched.team.map((name, i) => {
+          const at = lane(i, watched.team.length);
+          const kind = kindOf(watched, name);
+          const nose = frame.racers[name]!.nose;
+          return { name, face: faceAt(kind, at, nose), tag: tagBox(name, kind, at, nose) };
+        });
+      When(
+        'the show runs at 8 and at 2 people, riders and creatures mixed, a 15-character name among them',
+        async () => {
+          runs = await Promise.all([8, 2].map((count) => shared.mixed(count)));
+          for (const watched of runs) {
+            expect(watched.team).toContain('Annamaria Rossi');
+            const kinds = watched.team.map((name) => isCreature(kindOf(watched, name)));
+            expect(new Set(kinds)).toEqual(new Set([true, false]));
+          }
+        },
+      );
+      Then("every face, a rider's or a creature's, sits at the same height in its lane", () => {
+        for (const count of [2, 4, 8]) {
+          for (let i = 0; i < count; i++) {
+            const tops = KINDS.map((kind) => faceAt(kind, lane(i, count), 900).top);
+            expect(new Set(tops).size).toBe(1);
+          }
+        }
+      });
+      And("at 8 people, every creature's face is {int} pixels or more across", (_, px: number) => {
+        for (let i = 0; i < 8; i++) {
+          for (const kind of CREATURES) {
+            const face = faceAt(kind, lane(i, 8), 900);
+            expect(face.right - face.left).toBeGreaterThanOrEqual(px);
+            // The box is round the creature's own face: its eyes are in it.
+            const k = lane(i, 8).k;
+            const left = 900 - CREATURE_SPEC[kind].nose * k;
+            for (const [x] of CREATURE_SPEC[kind].eyes) {
+              expect(left + x * k).toBeGreaterThan(face.left);
+              expect(left + x * k).toBeLessThan(face.right);
+            }
+          }
+        }
+      });
+      And(
+        "each name tag sits beside its racer's face, behind it, level with it, and moves with it",
+        () => {
+          for (const watched of runs) {
+            for (const frame of watched.frames) {
+              for (const { face, tag } of boxes(watched, frame)) {
+                expect(tag.right).toBeLessThanOrEqual(face.left);
+                expect(face.left - tag.right).toBeLessThan(6);
+                const middle = (tag.top + tag.bottom) / 2;
+                expect(middle).toBeGreaterThan(face.top);
+                expect(middle).toBeLessThan(face.bottom);
+              }
+            }
+          }
+        },
+      );
+      And('no name tag is ever over another, or over a face', () => {
+        for (const watched of runs) {
+          for (const frame of watched.frames) {
+            const drawn = boxes(watched, frame);
+            for (const one of drawn) {
+              for (const other of drawn) {
+                if (one !== other) expect(overlap(one.tag, other.tag), `${frame.time}`).toBe(false);
+                expect(overlap(one.tag, other.face), `${one.name}, ${other.name}`).toBe(false);
+              }
+            }
+          }
+        }
+      });
+    });
   });
 
   Rule('Reduced motion keeps the story', ({ RuleScenario }) => {
@@ -1732,6 +2075,31 @@ describeSpec(await loadFeature('./the-race.feature'), ({ Rule }) => {
           }
           // The stop still happens.
           expect(hoppers.frames.some((frame) => frame.racers.Anna!.stopped)).toBe(true);
+        },
+      );
+    });
+
+    RuleScenario('With reduced motion, the creatures keep still too', ({ Given, When, Then }) => {
+      let monsters: Watched;
+      let villains: Watched;
+      Given('reduced motion is on', () => undefined);
+      When('the show runs', async () => {
+        monsters = await shared.mount('monster', 'Marco', true);
+        villains = await shared.mount('villain', 'Hana', true);
+      });
+      Then(
+        "the monster doesn't hop with its hiccups, and the villain doesn't turn in its cape",
+        () => {
+          for (const frame of [...monsters.frames, ...villains.frames]) {
+            for (const racer of Object.values(frame.racers)) {
+              expect(racer.hop).toBe(0);
+              expect(racer.scale).toBe('');
+              expect(racer.flail).toBe(0);
+            }
+          }
+          // The hiccups and the cape still come.
+          expect(monsters.frames.some((frame) => saying(frame, 'Marco', 'Hic!'))).toBe(true);
+          expect(villains.frames.some((frame) => frame.racers.Hana!.props === 'wrap')).toBe(true);
         },
       );
     });

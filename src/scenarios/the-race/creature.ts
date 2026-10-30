@@ -613,12 +613,79 @@ const round = (n: number) => Math.round(n * 10) / 10;
 const path = (points: readonly Point[]) =>
   points.map(([x, y], i) => `${i ? 'L' : 'M'}${round(x)} ${round(y)}`).join(' ');
 
+/** What a creature's stop brings out, each hidden until then. */
+export type CreatureProp = 'lostShoe' | 'flag' | 'wrap' | 'question' | 'snack';
+
+/** A pole planted in the ground at (0, 0), its flag in the creature's colour. */
+const FLAG: readonly Shape[] = [
+  ['path', styles.line!, { d: 'M0 0 V-58', 'stroke-width': 4 }],
+  ['path', styles.racer!, { d: 'M0 -58 L32 -49 L0 -40 Z', 'stroke-width': 3 }],
+];
+
+/** A paper sticker with a question mark, over the alien's head. */
+const QUESTION: readonly Shape[] = [
+  ['circle', styles.paper!, { cx: 130, cy: -18, r: 18, 'stroke-width': 4 }],
+  [
+    'path',
+    styles.line!,
+    { d: 'M123 -24 Q123 -32 130 -32 Q137 -32 137 -25 Q137 -20 130 -17 V-12', 'stroke-width': 4 },
+  ],
+  ['circle', styles.inkFill!, { cx: 130, cy: -4, r: 2.5 }],
+];
+
+/** The villain's cape, wrapped round it. */
+const WRAP: readonly Shape[] = [
+  [
+    'path',
+    styles.racer!,
+    { d: 'M98 98 Q130 82 162 98 L160 142 Q130 154 100 142 Z', 'stroke-width': 4 },
+  ],
+  [
+    'path',
+    styles.line!,
+    { d: 'M108 104 Q130 96 152 106 M106 124 Q130 116 156 124', 'stroke-width': 3 },
+  ],
+];
+
+/** A leaf on a stick, just in front of the dinosaur's tiny arms. */
+const SNACK: readonly Shape[] = [
+  ['path', styles.line!, { d: 'M222 186 V112', 'stroke-width': 4 }],
+  ['path', styles.grass!, { d: 'M202 112 Q210 92 240 96 Q236 124 202 112 Z', 'stroke-width': 3 }],
+  ['path', styles.line!, { d: 'M206 111 Q222 104 236 99', 'stroke-width': 2.5 }],
+];
+
+const PROPS: Partial<Record<Creature, Partial<Record<CreatureProp, (spec: Spec) => Shape[]>>>> = {
+  zombie: {
+    lostShoe: (spec) => [
+      [
+        'ellipse',
+        FILLS[spec.shoes],
+        { cx: 0, cy: 0, rx: Math.max(11, spec.legW), ry: 7, 'stroke-width': 3 },
+      ],
+    ],
+  },
+  astronaut: { flag: () => [...FLAG] },
+  villain: { wrap: () => [...WRAP] },
+  alien: { question: () => [...QUESTION] },
+  dinosaur: { snack: () => [...SNACK] },
+};
+
 export interface CreatureRunner extends Runner {
   readonly look: RacerLook & { readonly mount: Creature };
   /** Everything above the legs, leaning back when scared. */
   readonly body: SVGGElement;
   /** Its eyes, brows and mouth, to blank. */
   readonly face: SVGGElement;
+  /** Its back and front arm, each to turn about its shoulder. */
+  readonly arms: readonly [SVGGElement, SVGGElement];
+  /** Its back and front shoe. */
+  readonly shoes: readonly [SVGElement, SVGElement];
+  /** What its stop brings out, hidden until shown. */
+  readonly props: Readonly<Partial<Record<CreatureProp, SVGGElement>>>;
+  /** Stretches both arms forward, for what's out of reach. */
+  setStretch(on: boolean): void;
+  /** Bends forward from its hips by `degrees`, unless it leans back scared. */
+  setBend(degrees: number): void;
 }
 
 /**
@@ -713,7 +780,7 @@ export function creature(
     line.style.setProperty('--paint', LINES[spec.arms]);
     show(line, !spec.fins);
     show(hand, !spec.fins);
-    return { ink, line, hand };
+    return { holder, ink, line, hand };
   };
   const arms = [arm('back-arm')];
   group(body, 'own', BODIES[kind]);
@@ -802,7 +869,15 @@ export function creature(
   trophy.setAttribute('height', '60');
   body.append(trophy);
 
-  let current = { mood, pose, sweat: false, trophy: false };
+  // What a stop brings out: on the ground, or over the creature as it leans.
+  const props: Partial<Record<CreatureProp, SVGGElement>> = {};
+  for (const [name, shapes] of Object.entries(PROPS[kind] ?? {})) {
+    const prop = group(name === 'question' || name === 'wrap' ? body : el, name, shapes(spec));
+    show(prop, false);
+    props[name as CreatureProp] = prop;
+  }
+
+  let current = { mood, pose, sweat: false, trophy: false, stretch: false, bend: 0 };
 
   /** Draws the face, the arms and the lean for the current mood, pose, sweat and trophy. */
   const update = () => {
@@ -818,6 +893,7 @@ export function creature(
           ? [s, [s[0] + 8 * side, s[1] - 34], [spec.cup[0] + 24 * side, spec.cup[1] + 26]]
           : [s, [s[0] + 10 * side * k, s[1] - 30 * k], [s[0] + 16 * side * k, s[1] - 58 * k]];
       }
+      if (current.stretch) return [s, [s[0] + 14, s[1] - 3], [s[0] + 26, s[1] - 6]];
       if (current.pose === 'pull') {
         return isFront
           ? [s, [s[0] + 20 * k, s[1] - 22 * k], [s[0] + 24 * k, s[1] - 52 * k]]
@@ -970,12 +1046,15 @@ export function creature(
     );
     show(sweat, sweating);
 
-    body.setAttribute('transform', `rotate(${current.pose === 'pull' ? LEAN : 0} ${hipX} ${hipY})`);
+    const lean = current.pose === 'pull' ? LEAN : current.bend;
+    body.setAttribute('transform', `rotate(${lean} ${hipX} ${hipY})`);
     show(trophy, current.trophy);
     el.dataset.mood = current.mood;
     el.dataset.pose = current.pose;
     el.dataset.sweat = String(sweating);
     el.dataset.trophy = String(current.trophy);
+    el.dataset.stretch = String(current.stretch);
+    el.dataset.bend = String(current.bend);
   };
 
   update();
@@ -986,6 +1065,19 @@ export function creature(
     faceX: spec.face,
     body,
     face,
+    arms: [arms[0]!.holder, arms[1]!.holder],
+    shoes: [feet.children[2] as SVGElement, feet.children[3] as SVGElement],
+    props,
+    setStretch(on) {
+      if (on === current.stretch) return;
+      current = { ...current, stretch: on };
+      update();
+    },
+    setBend(degrees) {
+      if (degrees === current.bend) return;
+      current = { ...current, bend: degrees };
+      update();
+    },
     setMood(next) {
       current = { ...current, mood: next };
       update();
