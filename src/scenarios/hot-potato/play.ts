@@ -40,7 +40,6 @@ import {
   ring,
   seated,
   SITTING,
-  sittingHead,
   throwPath,
   type Box,
   type Path,
@@ -403,16 +402,13 @@ export async function playHotPotato(show: Show): Promise<void> {
       refresh();
     });
     change(person.face.el, { scale: SITTING.scale, y: SITTING.drop * person.spot.size }, time, SIT);
-    // Clear of the names too where the ring has room.
+    // Beside their head, clear of the names too where the ring has room.
     const potatoThen = inHands(catcher, time);
-    say(
-      time,
-      'Phew!',
-      sittingHead(person.spot),
-      [potatoThen, ...namesBut(name, time), nameBox(standAt(name, time))],
-      'paper',
-      [potatoThen],
-    );
+    const face = headBox(spotAt(name, time));
+    const tag = nameBox(standAt(name, time));
+    const names = [...namesBut(name, time), tag];
+    const phew = besideHead('Phew!', face, tag, names, [potatoThen]);
+    say(time, 'Phew!', face, [potatoThen, ...names], 'paper', [potatoThen], phew ?? undefined);
   }
 
   // The crawl: the last three grow where they stand, tags and all, the

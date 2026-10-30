@@ -880,6 +880,26 @@ describeSpec(await loadFeature('./hot-potato.feature'), ({ Rule }) => {
         },
       );
     });
+
+    RuleScenario('"Phew!" beside them, wherever they sit', ({ When, Then }) => {
+      let runs: Run[];
+      When('the show runs at 3, at 6 and at 12 people', () => {
+        runs = lab.filter((run) => run.plan.ring.length >= 3);
+      });
+      Then('each "Phew!" is within 60 pixels of the head of whoever says it', () => {
+        let seen = 0;
+        for (const run of runs) {
+          for (const { name, at } of run.plan.sits) {
+            const phew = phewAt(run, at);
+            expect(phew, `${run.label}: ${name}`).toBeDefined();
+            seen++;
+            const head = sittingHead(standing(run, name, at));
+            expect(apart(phew!.box, head), `${run.label}: ${name}`).toBeLessThanOrEqual(60);
+          }
+        }
+        expect(seen).toBeGreaterThan(0);
+      });
+    });
   });
 
   Rule('The crawl', ({ RuleScenario }) => {

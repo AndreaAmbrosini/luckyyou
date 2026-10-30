@@ -91,6 +91,10 @@ Feature: Hot Potato
       And the two who share the last three with them are at least 5 different people across the runs
       And the unlucky person is the second of the three in some runs, and the third in others
 
+    Scenario: "Phew!" beside them, wherever they sit
+      When the show runs at 3, at 6 and at 12 people
+      Then each "Phew!" is within 60 pixels of the head of whoever says it
+
   Rule: The crawl
 
     Scenario: From the first of the three to the second
