@@ -459,6 +459,69 @@ const BOW_TIE: readonly Shape[] = [
   ['circle', styles.band!, { cx: 50, cy: 80, r: 5, 'stroke-width': 3 }],
 ];
 
+/**
+ * What a track's own events bring, from the canvas or in its style: the
+ * office's coffee machine, on the stage from its left edge, standing on the
+ * floor in front of the partitions, below the caption; the paper cup, on its 40 by 44 grid; the wet-floor sign, standing on
+ * its middle at (0, 0); the seaweed that wraps round a racer, on its 160 by
+ * 120 grid; and the current's swirls behind a racer, on the racer's grid.
+ */
+export const TRACK_PROPS: Readonly<
+  Record<'machine' | 'cup' | 'wetFloor' | 'seaweed' | 'swirls', readonly Shape[]>
+> = {
+  machine: [
+    ['rect', styles.tomato!, { x: 0, y: 118, width: 70, height: 96, rx: 8, 'stroke-width': 4 }],
+    ['rect', styles.glass!, { x: 12, y: 130, width: 46, height: 28, rx: 4, 'stroke-width': 3 }],
+    ['rect', styles.paper!, { x: 24, y: 186, width: 22, height: 20, 'stroke-width': 3 }],
+  ],
+  cup: [
+    ['path', styles.paper!, { d: 'M4 10 H32 L28 42 H8 Z', 'stroke-width': 4 }],
+    ['path', styles.line!, { d: 'M32 16 Q42 18 38 28 Q36 32 30 32', 'stroke-width': 4 }],
+    ['path', styles.line!, { d: 'M12 6 Q8 0 14 -6 M22 6 Q18 0 24 -6', 'stroke-width': 3 }],
+  ],
+  wetFloor: [
+    ['path', styles.sun!, { d: 'M-26 0 L-10 -64 H10 L26 0 Z', 'stroke-width': 4 }],
+    ['path', styles.line!, { d: 'M0 -50 V-28', 'stroke-width': 6 }],
+    ['circle', styles.inkFill!, { cx: 0, cy: -16, r: 4 }],
+  ],
+  seaweed: [
+    [
+      'path',
+      styles.leaf!,
+      {
+        d: 'M0 40 Q30 20 60 46 T120 44 T160 30 L156 46 Q130 60 118 58 T58 62 T4 56 Z',
+        'stroke-width': 4,
+      },
+    ],
+    [
+      'path',
+      styles.leaf!,
+      {
+        d: 'M30 120 Q20 90 40 70 Q50 92 44 120 Z M110 120 Q104 86 124 64 Q134 90 126 120 Z',
+        'stroke-width': 4,
+      },
+    ],
+  ],
+  swirls: [
+    [
+      'path',
+      styles.line!,
+      {
+        d: 'M70 150 q-30 -24 -50 0 q-10 16 8 18 q14 0 10 -12 M96 108 q-26 -20 -44 0 q-8 14 6 15 q12 0 8 -10',
+        'stroke-width': 10,
+      },
+    ],
+    [
+      'path',
+      styles.swirl!,
+      {
+        d: 'M70 150 q-30 -24 -50 0 q-10 16 8 18 q14 0 10 -12 M96 108 q-26 -20 -44 0 q-8 14 6 15 q12 0 8 -10',
+        'stroke-width': 5,
+      },
+    ],
+  ],
+};
+
 /** The trophy, on its 72 by 60 grid. */
 export const TROPHY: readonly Shape[] = [
   [

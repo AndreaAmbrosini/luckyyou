@@ -429,3 +429,21 @@
 .dust {
   fill: var(--color-shark);
 }
+
+/* A current's swirl, over a thicker ink line. */
+.swirl {
+  fill: none;
+  stroke: var(--color-glass);
+  stroke-linecap: round;
+}
+
+/* A racer's shadow on the Moon while it floats or hops, placed by its top left. */
+.shadow {
+  position: absolute;
+  top: 0;
+  left: 0;
+  height: 14px;
+  border-radius: var(--radius-pill);
+  background-color: var(--color-ink-soft);
+  opacity: 0.6;
+}
