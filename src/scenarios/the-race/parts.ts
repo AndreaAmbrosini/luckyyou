@@ -58,6 +58,15 @@ export const CREATURES: readonly Creature[] = [
   'icecream',
   'sushi',
 ];
+/** The creatures that are things on legs, which tilt from their feet. */
+export const THINGS: readonly Creature[] = [
+  'mug',
+  'printer',
+  'sticky',
+  'banana',
+  'icecream',
+  'sushi',
+];
 export const RACER_COLOURS: readonly RacerColour[] = [
   'tomato',
   'sun',

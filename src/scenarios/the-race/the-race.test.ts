@@ -47,8 +47,16 @@ import {
 
 const ENDINGS: readonly Ending[] = ['photo', 'brake', 'surge'];
 
-/** The six things on legs, in the Line-up's order. */
-const THING_KINDS: Creature[] = ['mug', 'printer', 'sticky', 'banana', 'icecream', 'sushi'];
+/** The six things on legs, as the feature names them, in the Line-up's order. */
+const THING_NAMES: Readonly<Record<string, Creature>> = {
+  'coffee mug': 'mug',
+  printer: 'printer',
+  'sticky note': 'sticky',
+  banana: 'banana',
+  'ice cream': 'icecream',
+  sushi: 'sushi',
+};
+const THING_KINDS = Object.values(THING_NAMES);
 
 /** The box round every point of a path drawn in absolute M, L, H, V, Q and Z. */
 function bounds(d: string) {
@@ -107,6 +115,12 @@ interface Drawn {
   readonly lift: number;
   /** The track's props it shows, as "cup seaweed swirls". */
   readonly track: string;
+  /** The printer's light, on or off; how far the ice cream drips, 0 to 1; how far the banana's legs split. */
+  readonly light: string;
+  readonly drip: number;
+  /** Whether the mug is empty, its steam gone. */
+  readonly empty: boolean;
+  readonly splits: number;
 }
 
 /** What the stage showed in one frame. */
@@ -245,6 +259,10 @@ async function watch(
           flag: svg.dataset.flag ? Number(svg.dataset.flag) : null,
           lift: Number(svg.dataset.lift ?? 0),
           track: svg.dataset.track ?? '',
+          light: svg.dataset.light ?? '',
+          drip: Number(svg.dataset.drip ?? 0),
+          empty: svg.dataset.empty === 'true',
+          splits: Number(svg.dataset.splits ?? 0),
         };
       }
       const says = found.bubbles
@@ -350,6 +368,37 @@ const shared = (() => {
         const plan = planShow(team, team.at(-1)!, createRandom(seed));
         team[team.indexOf(plan.events[0]!.subject)] = name;
         return watch(team, { seed, looks: allOn(team, mount), reducedMotion });
+      }),
+    /**
+     * Two people, both a `thing`, until its stop is over: the first event
+     * is a burst and the second that burster's stop; whoever bursts is
+     * called `name`.
+     */
+    thing: (thing: Creature, name: string, reducedMotion = false) =>
+      once(`thing ${thing} ${reducedMotion}`, async () => {
+        const team = ['Kofi', 'Luca'];
+        let seed = 7;
+        while (planShow(team, team.at(-1)!, createRandom(seed)).course !== 'field') seed++;
+        const plan = planShow(team, team.at(-1)!, createRandom(seed));
+        team[team.indexOf(plan.events[0]!.subject)] = name;
+        // Until "Phew!" is down, which is up for 1.1 s.
+        const { at } = plan.events[1]!;
+        const cancelAt = at + STOP.phew + 1.2;
+        // The stop's caption is still up when the run stops, so the record has no end for it.
+        let up = '';
+        const watched = await watch(team, {
+          seed,
+          looks: allOn(team, thing),
+          cancelAt,
+          reducedMotion,
+          onStage: (time) => {
+            if (time >= at + 0.5 && !up) {
+              up = document.querySelector('[data-kit="caption"]')!.textContent ?? '';
+            }
+          },
+        });
+        const captions = [...watched.record.captions, { text: up, from: at, to: cancelAt }];
+        return { ...watched, record: { ...watched.record, captions } };
       }),
     /**
      * Six people, Anna unlucky: Ben's snail and Carla's duck burst, Carla's
@@ -1081,7 +1130,7 @@ describeSpec(await loadFeature('./the-race.feature'), ({ Rule }) => {
       sushi: { creature: 'sushi', parts: ['fish'] },
     };
     /** The six things on legs, as the feature names them. */
-    const THINGS = ['coffee mug', 'printer', 'sticky note', 'banana', 'ice cream', 'sushi'];
+    const THINGS = Object.keys(THING_NAMES);
     /** Each set of creatures in tomato in one race, as the show first draws them. */
     const inTomato = new Map<string, Promise<Map<string, SVGSVGElement>>>();
     const tomato = (names: readonly string[]) => {
@@ -2457,6 +2506,146 @@ describeSpec(await loadFeature('./the-race.feature'), ({ Rule }) => {
         });
       },
     );
+
+    RuleScenarioOutline('A <thing> bursts ahead', ({ When, Then, And }, { thing, name, burst }) => {
+      let watched: Watched;
+      When("someone's <thing> bursts ahead", async () => {
+        watched = await shared.thing(THING_NAMES[thing]!, name);
+      });
+      Then(`the caption is "<name>'s <thing> <burst>!"`, () => {
+        expect(captions(watched)).toContain(`${name}'s ${thing} ${burst}!`);
+        expect(watched.plan.events[0]).toMatchObject({ kind: 'burst', subject: name });
+      });
+      And('<what>, and it shoots into the lead, shouting "Nooo!"', () => {
+        const { at } = watched.plan.events[0]!;
+        const during = between(watched, at, at + BURST.seconds).map((frame) => frame.racers[name]!);
+        /** How long the burst shows `prop`, in seconds. */
+        const showing = (prop: string) =>
+          during.filter((racer) => racer.props.split(' ').includes(prop)).length * STEP;
+        const props: Partial<Record<Creature, string>> = {
+          mug: 'jets',
+          printer: 'stream',
+          sticky: 'wind',
+          banana: 'skid',
+          icecream: 'sprinkles',
+          sushi: 'belt',
+        };
+        const prop = props[THING_NAMES[thing]!]!;
+        expect(showing(prop), prop).toBeGreaterThanOrEqual(BURST.seconds - 2 * STEP);
+        const tilts = during.map((racer) => parseFloat(racer.rotate || '0'));
+        // A sticky note flutters both ways; a banana skids, tilted back.
+        if (thing === 'sticky note') {
+          expect(Math.max(...tilts)).toBeGreaterThan(4);
+          expect(Math.min(...tilts)).toBeLessThan(-4);
+        }
+        if (thing === 'banana') expect(Math.min(...tilts)).toBeLessThan(-6);
+        // Gone once the burst is over.
+        const after = between(watched, at + BURST.seconds + 0.1, at + BURST.seconds + 0.5);
+        for (const frame of after) expect(frame.racers[name]!.props).not.toContain(prop);
+        expect(leaderAt(watched.plan, at)).not.toBe(name);
+        expect(leaderAt(watched.plan, at + 0.9)).toBe(name);
+        const shouting = watched.frames.filter((frame) => saying(frame, name, 'Nooo!'));
+        expect(shouting[0]!.time).toBeGreaterThanOrEqual(at);
+        expect(shouting[0]!.time).toBeLessThan(at + 0.5);
+        expect(shouting.length * STEP).toBeGreaterThanOrEqual(1);
+      });
+    });
+
+    RuleScenarioOutline('A <thing> stops', ({ When, Then, And }, { thing, name, stop }) => {
+      let watched: Watched;
+      /** The stopped thing, frame by frame from the stop to the end of the run. */
+      const during = () => {
+        const { at } = watched.plan.events[1]!;
+        return watched.frames
+          .filter((frame) => frame.time >= at)
+          .map((frame) => ({ ...frame, racer: frame.racers[name]!, since: frame.time - at }));
+      };
+      When("someone's <thing> stops", async () => {
+        watched = await shared.thing(THING_NAMES[thing]!, name);
+      });
+      Then(`the caption is "<name>'s <thing> <stop>!"`, () => {
+        expect(captions(watched)).toContain(`${name}'s ${thing} ${stop}!`);
+        expect(watched.plan.events[1]).toMatchObject({ kind: 'stop', subject: name });
+      });
+      And('<what>, and it drops back while the camera goes on', () => {
+        const stopped = during().filter((frame) => frame.racer.stopped);
+        expect(stopped.length).toBeGreaterThan(10);
+        const before = stopped.filter((frame) => frame.since < STOP.phew);
+        /** How long the stop shows `prop`, in seconds. */
+        const showing = (prop: string) =>
+          stopped.filter((frame) => frame.racer.props.split(' ').includes(prop)).length * STEP;
+        /** How long the stop is as `test` says, in seconds. */
+        const lasting = (test: (frame: (typeof stopped)[number]) => boolean) =>
+          stopped.filter(test).length * STEP;
+        switch (THING_NAMES[thing]) {
+          case 'mug':
+            // Tipped forward to peer inside, and no steam: it's empty.
+            expect(lasting((frame) => frame.racer.bend > 20)).toBeGreaterThanOrEqual(1);
+            expect(before.every((frame) => frame.racer.empty)).toBe(true);
+            break;
+          case 'printer': {
+            expect(showing('jam')).toBeGreaterThanOrEqual(1);
+            const lights = new Set(before.map((frame) => frame.racer.light));
+            expect(lights).toEqual(new Set(['on', 'off']));
+            expect(stopped.at(-1)!.racer.light).toBe('on');
+            break;
+          }
+          case 'sticky':
+            // One foot stuck on the patch, tugging back at it.
+            expect(showing('patch')).toBeGreaterThanOrEqual(1);
+            expect(Math.min(...before.map((frame) => frame.racer.bend))).toBeLessThan(-8);
+            break;
+          case 'banana': {
+            expect(lasting((frame) => frame.racer.splits > 50)).toBeGreaterThanOrEqual(1);
+            expect(Math.min(...before.map((frame) => frame.racer.hop))).toBeLessThan(-15);
+            // Back up, with a spring.
+            const up = stopped.filter((frame) => frame.since >= STOP.phew);
+            expect(up.every((frame) => frame.racer.splits === 0)).toBe(true);
+            expect(Math.max(...up.map((frame) => frame.racer.hop))).toBeGreaterThan(8);
+            break;
+          }
+          case 'icecream': {
+            expect(showing('drips')).toBeGreaterThanOrEqual(1);
+            expect(showing('puddle')).toBeGreaterThanOrEqual(1);
+            // It droops, then firms up again.
+            const drips = before.map((frame) => frame.racer.drip);
+            const peak = drips.indexOf(Math.max(...drips));
+            expect(drips[peak]).toBeGreaterThan(0.8);
+            expect(drips.at(-1)!).toBeLessThan(drips[peak]! - 0.5);
+            break;
+          }
+          case 'sushi':
+            expect(showing('wasabi')).toBeGreaterThanOrEqual(1);
+            expect(showing('tears')).toBeGreaterThanOrEqual(1);
+            expect(showing('steam')).toBeGreaterThanOrEqual(1);
+            break;
+          default:
+            throw new Error(`No stop for a ${thing}`);
+        }
+        const first = stopped[0]!;
+        const last = stopped.at(-1)!;
+        expect(last.racer.nose).toBeLessThan(first.racer.nose - 200);
+        expect(last.camera).toBeGreaterThan(first.camera + 300);
+      });
+      And('it waves, says "Phew!", and sets off again further back', () => {
+        const frames = during();
+        const waving = frames.filter(
+          ({ racer }) => racer.stopped && racer.pose === 'wave' && racer.bend === 0,
+        );
+        expect(waving.length).toBeGreaterThan(0);
+        const phew = frames.filter((frame) => saying(frame, name, 'Phew!'));
+        expect(phew.length * STEP).toBeGreaterThanOrEqual(1);
+        const off = frames.find((frame) => frame.since > STOP.off + 0.1)!;
+        expect(off.racer.stopped).toBe(false);
+        expect(off.racer.gait).toBe('on');
+        expect(off.racer.props).toBe('');
+        expect([off.racer.bend, off.racer.splits, off.racer.drip]).toEqual([0, 0, 0]);
+        const { at } = watched.plan.events[1]!;
+        expect(orderAt(watched.plan, at + STOP.off).indexOf(name)).toBeGreaterThan(
+          orderAt(watched.plan, at - 0.01).indexOf(name),
+        );
+      });
+    });
   });
 
   Rule('The final stretch, and a slow last moment', ({ RuleScenario }) => {
@@ -3148,6 +3337,40 @@ describeSpec(await loadFeature('./the-race.feature'), ({ Rule }) => {
         },
       );
     });
+
+    RuleScenario(
+      'With reduced motion, the things on legs keep still too',
+      ({ Given, When, Then }) => {
+        const watched: Record<string, Watched> = {};
+        Given('reduced motion is on', () => undefined);
+        When('the show runs', async () => {
+          for (const [name, thing] of [
+            ['Carla', 'printer'],
+            ['Dario', 'sticky'],
+            ['Femi', 'icecream'],
+          ] as const) {
+            watched[name] = await shared.thing(thing, name, true);
+          }
+        });
+        Then(
+          "the printer's light doesn't blink, the sticky note doesn't flutter and the ice cream doesn't drip",
+          () => {
+            const seen = (name: string) =>
+              watched[name]!.frames.map((frame) => frame.racers[name]!);
+            const props = (name: string) =>
+              new Set(seen(name).flatMap((racer) => racer.props.split(' ')));
+            for (const racer of seen('Carla')) expect(racer.light).toBe('on');
+            for (const racer of seen('Dario')) expect(racer.rotate).toBe('');
+            for (const racer of seen('Femi')) expect(racer.drip).toBe(0);
+            // Each still happens: the jam, the wind, the puddle without drips.
+            expect(props('Carla')).toContain('jam');
+            expect(props('Dario')).toContain('wind');
+            expect(props('Femi')).toContain('puddle');
+            expect(props('Femi')).not.toContain('drips');
+          },
+        );
+      },
+    );
   });
 
   Rule('The beats keep every show inside the limit', ({ RuleScenario }) => {

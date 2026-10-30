@@ -413,7 +413,6 @@ Feature: The Race
         | dinosaur  | Dario  | can't reach its snack    | it stretches its tiny arms for a leaf just out of reach |
 
     # Step 3.
-    @pending
     Scenario Outline: A <thing> bursts ahead
       When someone's <thing> bursts ahead
       Then the caption is "<name>'s <thing> <burst>!"
@@ -429,7 +428,6 @@ Feature: The Race
         | sushi       | Giulia | rides the conveyor belt | a conveyor belt slides in under it and carries it |
 
     # Step 3.
-    @pending
     Scenario Outline: A <thing> stops
       When someone's <thing> stops
       Then the caption is "<name>'s <thing> <stop>!"
@@ -624,7 +622,6 @@ Feature: The Race
       Then the monster doesn't hop with its hiccups, and the villain doesn't turn in its cape
 
     # Step 3.
-    @pending
     Scenario: With reduced motion, the things on legs keep still too
       Given reduced motion is on
       When the show runs

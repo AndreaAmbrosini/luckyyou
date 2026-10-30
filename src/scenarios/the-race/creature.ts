@@ -930,12 +930,17 @@ const BODIES: Record<Creature, readonly (Shape | Shaded)[]> = {
     shine('M162 26 Q196 24 210 37'),
   ],
   mug: [
+    // Wisps of steam, while it isn't empty.
     ...inkUnder(
       'M118 8 Q110 0 118 -8 Q126 -16 118 -24 M138 6 Q130 -2 138 -10 Q146 -18 138 -26',
       11,
       5,
       styles.stripe!,
-    ),
+    ).map(([tag, className, attributes]): Shape => [
+      tag,
+      className,
+      { ...attributes, 'data-part': 'wisps' },
+    ]),
     ['path', styles.line!, { d: 'M102 46 Q68 46 68 80 Q68 112 102 112', 'stroke-width': 20 }],
     [
       'path',
@@ -1203,8 +1208,192 @@ export const FEET: Record<
 /** How far a creature leans back when scared, about its hips. */
 export const LEAN = -10;
 
-/** What a creature's stop brings out, each hidden until then. */
-export type CreatureProp = 'lostShoe' | 'flag' | 'wrap' | 'question' | 'snack';
+/** What a creature's burst or stop brings out, each hidden until then. */
+export type CreatureProp =
+  | 'lostShoe'
+  | 'flag'
+  | 'wrap'
+  | 'question'
+  | 'snack'
+  | 'jets'
+  | 'stream'
+  | 'jam'
+  | 'wind'
+  | 'patch'
+  | 'skid'
+  | 'sprinkles'
+  | 'drips'
+  | 'puddle'
+  | 'belt'
+  | 'wasabi'
+  | 'tears'
+  | 'steam';
+
+/**
+ * Where a prop goes: on the ground, behind everything; under the body,
+ * leaning with it; in front, leaning with it; or, by default, over it all.
+ */
+const LAYERS: Partial<Record<CreatureProp, 'ground' | 'under' | 'front'>> = {
+  question: 'front',
+  wrap: 'front',
+  jets: 'front',
+  jam: 'front',
+  wasabi: 'front',
+  tears: 'front',
+  steam: 'front',
+  drips: 'under',
+  stream: 'ground',
+  wind: 'ground',
+  patch: 'ground',
+  skid: 'ground',
+  puddle: 'ground',
+  belt: 'ground',
+};
+
+/** Two puffs of steam shooting up from (0, 0). */
+const PUFF =
+  'M-16 0 Q-26 0 -24 -10 Q-26 -22 -12 -22 Q-8 -32 4 -28 Q16 -32 18 -20 Q28 -16 22 -6 ' +
+  'Q22 0 12 0 Z';
+const JETS: readonly Shape[] = [
+  ['path', styles.line!, { d: 'M-14 4 V-4 M2 2 V-10 M16 4 V-4', 'stroke-width': 3 }],
+  ['path', styles.paper!, { d: PUFF, 'stroke-width': 3, transform: 'translate(-14 -10)' }],
+  [
+    'path',
+    styles.paper!,
+    { d: PUFF, 'stroke-width': 3, transform: 'translate(16 -30) scale(0.8)' },
+  ],
+];
+
+/** A sheet of printed paper, turned and placed by `transform`. */
+const sheet = (transform: string): Shape[] => [
+  ['path', styles.paper!, { d: 'M-14 -18 L14 -20 L16 18 L-12 20 Z', 'stroke-width': 3, transform }],
+  [
+    'path',
+    styles.inkSoftLine!,
+    { d: 'M-7 -8 H8 M-6 0 H8 M-6 8 H4', 'stroke-width': 2.5, transform },
+  ],
+];
+
+/** Paper flying out behind the printer. */
+const STREAM: readonly Shape[] = [
+  ...sheet('translate(18 52) rotate(-8) scale(0.9)'),
+  ...sheet('translate(40 88) rotate(14)'),
+  ...sheet('translate(70 38) rotate(-20)'),
+];
+
+/** A crumpled sheet stuck in the printer's slot. */
+const JAM: readonly Shape[] = [
+  [
+    'path',
+    styles.paper!,
+    {
+      d: 'M118 104 L126 88 L136 96 L146 84 L154 98 L166 90 L164 106 L172 114 L156 118 L146 112 L134 120 L124 112 Z',
+      'stroke-width': 3,
+    },
+  ],
+  [
+    'path',
+    styles.line!,
+    { d: 'M128 100 L136 108 M146 94 L150 106 M158 100 L162 110', 'stroke-width': 2.5 },
+  ],
+];
+
+/** Wind lines behind the sticky note. */
+const WIND: readonly Shape[] = [
+  [
+    'path',
+    styles.line!,
+    {
+      d: 'M70 36 H34 Q20 36 22 26 Q26 16 36 22 M84 66 H22 M72 94 H38 Q24 94 26 106 Q30 114 38 108',
+      'stroke-width': 4,
+    },
+  ],
+];
+
+/** A sticky smear in the note's colour, under its front foot. */
+const PATCH: readonly Shape[] = [
+  ['ellipse', styles.racer!, { cx: 158, cy: 189, rx: 26, ry: 5, 'stroke-width': 3 }],
+  [
+    'path',
+    styles.line!,
+    { d: 'M150 186 Q148 178 152 172 M166 186 Q168 180 164 174', 'stroke-width': 2.5 },
+  ],
+];
+
+/** A banana peel flat on the ground, under the banana's feet. */
+const SKID: readonly Shape[] = [
+  [
+    'path',
+    styles.racer!,
+    {
+      d: 'M96 190 Q104 176 120 184 Q130 172 146 182 Q160 174 172 184 Q186 180 192 190 Q144 198 96 190 Z',
+      'stroke-width': 3,
+    },
+  ],
+  ['path', styles.line!, { d: 'M110 188 Q144 192 180 188', 'stroke-width': 2.5 }],
+];
+
+/** Sprinkles flying off the scoop, in the kit's colours. */
+const SPRINKLES: readonly Shape[] = (
+  [
+    ['M86 40 L92 34', 'sun'],
+    ['M104 18 L111 16', 'mint'],
+    ['M80 62 L82 55', 'grape'],
+    ['M124 8 L130 10', 'pink'],
+    ['M70 30 L76 28', 'tomato'],
+    ['M96 4 L100 -2', 'sea'],
+  ] as const
+).flatMap(([d, colour]) => inkUnder(d, 7.5, 3.5, styles.limb!, colour));
+
+/** Drips hanging off the scoop's sides, outside the cone. */
+const DRIPS: readonly Shape[] = [
+  [
+    'path',
+    styles.racer!,
+    {
+      d: 'M86 88 Q82 108 93 114 Q104 108 100 88 Z M156 94 Q152 114 163 120 Q174 114 168 94 Z',
+      'stroke-width': 3,
+    },
+  ],
+];
+
+/** A puddle in the scoop's colour, centred on (0, 0). */
+const PUDDLE: readonly Shape[] = [
+  ['ellipse', styles.racer!, { cx: 0, cy: 0, rx: 30, ry: 6, 'stroke-width': 3 }],
+  ['path', styles.stripe!, { d: 'M8 -2 H18', 'stroke-width': 2.5 }],
+];
+
+/** A conveyor belt under the sushi's feet, its rollers showing. */
+const BELT: readonly Shape[] = [
+  ['rect', styles.shark!, { x: 8, y: 184, width: 224, height: 14, rx: 7, 'stroke-width': 3 }],
+  ...[26, 66, 106, 146, 186, 214].map((cx): Shape => [
+    'circle',
+    styles.inkSoft!,
+    { cx, cy: 191, r: 4, 'stroke-width': 2 },
+  ]),
+];
+
+/** A dab of wasabi, centred on (0, 0). */
+const WASABI: readonly Shape[] = [
+  [
+    'path',
+    styles.mint!,
+    { d: 'M-13 2 Q-16 -8 -6 -10 Q-2 -19 7 -12 Q16 -10 12 2 Z', 'stroke-width': 3 },
+  ],
+  ['circle', styles.paperFill!, { cx: 4, cy: -9, r: 2 }],
+];
+
+/** A tear at the outer corner of each of the sushi's eyes. */
+const TEARS: readonly Shape[] = [
+  [
+    'path',
+    styles.glass!,
+    {
+      d: 'M117 62 Q123 70 117 74 Q111 70 117 62 Z M164 61 Q170 69 164 73 Q158 69 164 61 Z',
+      'stroke-width': 2.5,
+    },
+  ],
+];
 
 /** A pole planted in the ground at (0, 0), its flag in the creature's colour. */
 const FLAG: readonly Shape[] = [
@@ -1269,6 +1458,17 @@ const PROPS: Partial<Record<Creature, Partial<Record<CreatureProp, (spec: Spec) 
   villain: { wrap: () => [...WRAP] },
   alien: { question: () => [...QUESTION] },
   dinosaur: { snack: () => [...SNACK] },
+  mug: { jets: () => [...JETS] },
+  printer: { stream: () => [...STREAM], jam: () => [...JAM] },
+  sticky: { wind: () => [...WIND], patch: () => [...PATCH] },
+  banana: { skid: () => [...SKID] },
+  icecream: { sprinkles: () => [...SPRINKLES], drips: () => [...DRIPS], puddle: () => [...PUDDLE] },
+  sushi: {
+    belt: () => [...BELT],
+    wasabi: () => [...WASABI],
+    tears: () => [...TEARS],
+    steam: () => [...JETS],
+  },
 };
 
 export interface CreatureRunner extends Runner {
@@ -1281,8 +1481,12 @@ export interface CreatureRunner extends Runner {
   readonly arms: readonly [SVGGElement, SVGGElement];
   /** Its back and front foot. */
   readonly shoes: readonly [SVGGElement, SVGGElement];
-  /** What its stop brings out, hidden until shown. */
+  /** What its burst or stop brings out, hidden until shown. */
   readonly props: Readonly<Partial<Record<CreatureProp, SVGGElement>>>;
+  /** The printer's red light, to blink. */
+  readonly light: SVGElement | null;
+  /** The mug's wisps of steam, to hide while it's empty. */
+  readonly wisps: readonly SVGElement[];
   /** Stretches both arms forward, for what's out of reach. */
   setStretch(on: boolean): void;
   /** Bends forward from its hips by `degrees`, unless it leans back scared. */
@@ -1398,7 +1602,8 @@ export function creature(
   };
 
   const backFoot = leg('back-leg', h1, true);
-  const arms = [arm(lean('behind'), 'back-arm')];
+  const behind = lean('behind');
+  const arms = [arm(behind, 'back-arm')];
   const body = lean('lean');
 
   // The body: each main part shaded, its shadow clipped to the part less
@@ -1529,10 +1734,16 @@ export function creature(
   trophy.setAttribute('height', '60');
   front.append(trophy);
 
-  // What a stop brings out: on the ground, or over the creature as it leans.
+  // What a burst or a stop brings out: on the ground, or with the creature as it leans.
   const props: Partial<Record<CreatureProp, SVGGElement>> = {};
   for (const [name, shapes] of Object.entries(PROPS[kind] ?? {})) {
-    const prop = group(name === 'question' || name === 'wrap' ? front : el, name, shapes(spec));
+    const layer = LAYERS[name as CreatureProp];
+    const prop = group(
+      layer === 'front' ? front : layer === 'under' ? behind : el,
+      name,
+      shapes(spec),
+    );
+    if (layer === 'ground') el.insertBefore(prop, defs.nextSibling);
     show(prop, false);
     props[name as CreatureProp] = prop;
   }
@@ -1873,6 +2084,8 @@ export function creature(
     arms: [arms[0]!.holder, arms[1]!.holder],
     shoes: [backFoot, frontFoot],
     props,
+    light: own.querySelector<SVGElement>('[data-part="light"]'),
+    wisps: [...own.querySelectorAll<SVGElement>('[data-part="wisps"]')],
     setStretch(on) {
       if (on === current.stretch) return;
       current = { ...current, stretch: on };
