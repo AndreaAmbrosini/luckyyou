@@ -1876,7 +1876,21 @@ export type CreatureProp =
   | 'belt'
   | 'wasabi'
   | 'tears'
-  | 'steam';
+  | 'steam'
+  | 'laser'
+  | 'box'
+  | 'knot'
+  | 'ice'
+  | 'fish'
+  | 'chip'
+  | 'chest'
+  | 'fright'
+  | 'hem'
+  | 'plinth'
+  | 'trail'
+  | 'unwrap'
+  | 'skis'
+  | 'snow';
 
 /**
  * Where a prop goes: on the ground, behind everything; under the body,
@@ -1890,6 +1904,11 @@ const LAYERS: Partial<Record<CreatureProp, 'ground' | 'under' | 'front'>> = {
   wasabi: 'front',
   tears: 'front',
   steam: 'front',
+  box: 'front',
+  knot: 'front',
+  chest: 'front',
+  fright: 'front',
+  hem: 'under',
   drips: 'under',
   stream: 'ground',
   wind: 'ground',
@@ -1897,6 +1916,14 @@ const LAYERS: Partial<Record<CreatureProp, 'ground' | 'under' | 'front'>> = {
   skid: 'ground',
   puddle: 'ground',
   belt: 'ground',
+  laser: 'ground',
+  ice: 'ground',
+  chip: 'ground',
+  plinth: 'ground',
+  trail: 'ground',
+  unwrap: 'ground',
+  skis: 'ground',
+  snow: 'ground',
 };
 
 /** Two puffs of steam shooting up from (0, 0). */
@@ -2082,6 +2109,163 @@ const SNACK: readonly Shape[] = [
   ['path', styles.line!, { d: 'M206 111 Q222 104 236 99', 'stroke-width': 2.5 }],
 ];
 
+/** A red laser dot, centred on (0, 0), zipping along with lines behind it. */
+const LASER: readonly Shape[] = [
+  ['path', styles.line!, { d: 'M-34 -3 H-16 M-28 4 H-14', 'stroke-width': 3 }],
+  ['circle', styles.tomato!, { cx: 0, cy: 0, r: 6, 'stroke-width': 2.5 }],
+  ['circle', styles.paperFill!, { cx: -2, cy: -2, r: 1.8 }],
+];
+
+/** A cardboard box round the cat's legs, its flaps open. */
+const BOX: readonly Shape[] = [
+  ['path', styles.orange!, { d: 'M96 124 L84 104 L120 100 L124 124 Z', 'stroke-width': 3 }],
+  ['path', styles.orange!, { d: 'M94 124 H170 L166 190 H98 Z', 'stroke-width': 4 }],
+  ['path', styles.orange!, { d: 'M170 124 L190 106 L184 130 Z', 'stroke-width': 3 }],
+  [
+    'path',
+    styles.line!,
+    { d: 'M96 138 H168 M132 150 V176 M125 157 L132 150 L139 157', 'stroke-width': 3 },
+  ],
+];
+
+/** The octopus's legs in a knot, below its mantle. */
+const KNOT_PATH =
+  'M100 100 Q82 142 116 150 Q152 160 150 128 Q146 104 124 118 Q102 134 128 162 ' +
+  'Q148 180 164 152 Q178 126 160 100';
+const KNOT: readonly Shape[] = [
+  ['path', styles.line!, { d: KNOT_PATH, 'stroke-width': 17 }],
+  ['path', styles.limb!, { d: KNOT_PATH, 'stroke-width': 10, style: '--paint: var(--racer)' }],
+  ...(
+    [
+      [112, 140],
+      [140, 126],
+      [130, 156],
+    ] as const
+  ).map(([cx, cy]): Shape => ['circle', styles.tomatoSoft!, { cx, cy, r: 2.8, 'stroke-width': 2 }]),
+];
+
+/** A strip of ice the penguin slides along on its belly. */
+const ICE: readonly Shape[] = [
+  [
+    'path',
+    styles.glass!,
+    {
+      d: 'M44 186 Q180 180 324 186 Q332 192 322 195 Q180 199 40 195 Q34 190 44 186 Z',
+      'stroke-width': 3,
+    },
+  ],
+  ['path', styles.stripe!, { d: 'M180 188 H214 M232 189 H246', 'stroke-width': 2.5 }],
+];
+
+/** A fish, centred on (0, 0), facing right. */
+const FISH: readonly Shape[] = [
+  ['path', styles.seaBlue!, { d: 'M-14 0 L-25 -9 L-22 0 L-25 9 Z', 'stroke-width': 3 }],
+  [
+    'path',
+    styles.seaBlue!,
+    { d: 'M-15 0 Q-4 -11 10 -7 Q18 -4 21 0 Q18 4 10 7 Q-4 11 -15 0 Z', 'stroke-width': 3 },
+  ],
+  ['path', styles.stripe!, { d: 'M0 -4 Q6 -5 10 -3', 'stroke-width': 2 }],
+  ['circle', styles.inkFill!, { cx: 13, cy: -1.5, r: 1.8 }],
+];
+
+/** Two chips on the ground, centred on (0, 0). */
+const CHIP: readonly Shape[] = [
+  ['path', styles.sun!, { d: 'M-17 -2 L13 -9 L15 -3 L-15 4 Z', 'stroke-width': 3 }],
+  ['path', styles.sun!, { d: 'M-6 1 L18 3 L17 9 L-7 7 Z', 'stroke-width': 3 }],
+];
+
+/** The pigeon's chest, puffed up in its colour, with a sheen. */
+const CHEST: readonly Shape[] = [
+  ['ellipse', styles.racer!, { cx: 144, cy: 104, rx: 34, ry: 31, 'stroke-width': 4 }],
+  ['path', styles.stripe!, { d: 'M152 84 Q166 90 170 104', 'stroke-width': 3, opacity: 0.6 }],
+];
+
+/** Startle lines either side of the ghost's head. */
+const FRIGHT: readonly Shape[] = [
+  [
+    'path',
+    styles.line!,
+    {
+      d: 'M78 30 L64 22 M78 46 L60 46 M86 14 L78 2 M182 30 L196 22 M182 46 L200 46 M174 14 L182 2',
+      'stroke-width': 4,
+    },
+  ],
+];
+
+/** A fold of the ghost's sheet, caught under its front foot. */
+const HEM: readonly Shape[] = [
+  [
+    'path',
+    styles.paper!,
+    { d: 'M148 146 Q158 168 166 188 L190 188 Q178 166 174 146 Z', 'stroke-width': 3 },
+  ],
+];
+
+/** A stone plinth the gnome stands on, its top at the feet's line and 20 deep. */
+const PLINTH: readonly Shape[] = [
+  ['rect', styles.shark!, { x: 98, y: 194, width: 76, height: 16, 'stroke-width': 4 }],
+  ['rect', styles.shark!, { x: 90, y: 188, width: 92, height: 8, rx: 2, 'stroke-width': 3 }],
+  ['path', styles.line!, { d: 'M120 198 L126 204 L124 210', 'stroke-width': 2.5 }],
+];
+
+/** A bandage unrolling behind the mummy, from its waist. */
+const TRAIL: readonly Shape[] = [
+  [
+    'path',
+    styles.paper!,
+    {
+      d:
+        'M112 160 Q60 150 20 174 Q-30 196 -110 180 L-112 190 Q-30 206 22 186 ' +
+        'Q62 162 110 172 Z',
+      'stroke-width': 3,
+    },
+  ],
+  [
+    'path',
+    styles.line!,
+    { d: 'M70 160 L68 170 M10 184 L12 194 M-60 188 L-58 198', 'stroke-width': 2.5 },
+  ],
+];
+
+/** A bandage come loose from the mummy's waist, along the ground ahead. */
+const UNWRAP: readonly Shape[] = [
+  [
+    'path',
+    styles.paper!,
+    {
+      d: 'M150 118 Q190 136 196 184 L300 182 L300 194 L186 196 Q180 148 146 130 Z',
+      'stroke-width': 3,
+    },
+  ],
+  [
+    'path',
+    styles.line!,
+    { d: 'M176 150 L186 146 M230 184 L230 195 M270 183 L270 194', 'stroke-width': 2.5 },
+  ],
+];
+
+/** A ski in the yeti's colour, its tip curled up in front. */
+const SKI = 'M36 188 H214 Q228 188 230 176 Q236 174 236 182 Q232 196 212 196 H36 Q30 192 36 188 Z';
+const SKIS: readonly Shape[] = [
+  ['path', styles.racer!, { d: SKI, 'stroke-width': 3, transform: 'translate(-18 -5)' }],
+  ['path', styles.racer!, { d: SKI, 'stroke-width': 3 }],
+];
+
+/** A patch of snow behind the yeti, where it lies down. */
+const SNOW: readonly Shape[] = [
+  [
+    'path',
+    styles.paper!,
+    {
+      d: 'M-74 190 Q-64 174 0 178 Q70 170 152 180 Q180 184 176 193 Q100 202 -62 199 Q-80 197 -74 190 Z',
+      'stroke-width': 3,
+    },
+  ],
+  ['path', styles.glass!, { d: 'M-30 186 Q0 182 30 186 Q0 190 -30 186 Z', 'stroke-width': 2 }],
+  ['path', styles.glass!, { d: 'M80 184 Q104 181 126 185 Q104 188 80 184 Z', 'stroke-width': 2 }],
+];
+
 /** The paints of a creature's feet, as `FEET` takes them. */
 const footPaints = (spec: Spec) => ({
   shoe: FILLS[spec.shoes],
@@ -2118,6 +2302,14 @@ const PROPS: Partial<Record<Creature, Partial<Record<CreatureProp, (spec: Spec) 
     tears: () => [...TEARS],
     steam: () => [...JETS],
   },
+  cat: { laser: () => [...LASER], box: () => [...BOX] },
+  octopus: { knot: () => [...KNOT] },
+  penguin: { ice: () => [...ICE], fish: () => [...FISH] },
+  pigeon: { chip: () => [...CHIP], chest: () => [...CHEST] },
+  ghost: { fright: () => [...FRIGHT], hem: () => [...HEM] },
+  gnome: { plinth: () => [...PLINTH] },
+  mummy: { trail: () => [...TRAIL], unwrap: () => [...UNWRAP] },
+  yeti: { skis: () => [...SKIS], snow: () => [...SNOW] },
 };
 
 export interface CreatureRunner extends Runner {
@@ -2136,6 +2328,8 @@ export interface CreatureRunner extends Runner {
   readonly light: SVGElement | null;
   /** The mug's wisps of steam, to hide while it's empty. */
   readonly wisps: readonly SVGElement[];
+  /** The octopus's hanging tentacles, each its parts, back to front, to whirl or hide. */
+  readonly tentacles: readonly (readonly SVGElement[])[];
   /** Stretches both arms forward, for what's out of reach. */
   setStretch(on: boolean): void;
   /** Bends forward from its hips by `degrees`, unless it leans back scared. */
@@ -2740,6 +2934,10 @@ export function creature(
     props,
     light: own.querySelector<SVGElement>('[data-part="light"]'),
     wisps: [...own.querySelectorAll<SVGElement>('[data-part="wisps"]')],
+    tentacles:
+      kind === 'octopus'
+        ? TENTACLES.map((_, i) => [...own.querySelectorAll<SVGElement>(`[data-tentacle="${i}"]`)])
+        : [],
     setStretch(on) {
       if (on === current.stretch) return;
       current = { ...current, stretch: on };

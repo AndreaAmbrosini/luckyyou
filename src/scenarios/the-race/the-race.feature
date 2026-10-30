@@ -9,13 +9,6 @@ Feature: The Race
   finish, past a rival who brakes, or in a surge from behind. The contract in
   specs/scenarios.feature applies as well.
 
-  # More creatures, in four build steps, in this order: 1. the Line-up shows
-  # racers as pictures, by kind in tabs (with specs/line-up.feature); 2. every
-  # creature redrawn as a modern cartoon; 3. six things on legs; 4. four
-  # animals and four spooky creatures. Each pending scenario says its step.
-  # Scenarios marked "Old design" describe the race before a step; the build
-  # deletes each one, with its steps, when the scenario that replaces it passes.
-
   Rule: Its card
 
     Scenario: The picker shows The Race
@@ -96,7 +89,6 @@ Feature: The Race
       When someone races as the astronaut or the villain
       Then its face has the skin tone the kit hands out for the run
 
-    # Step 2.
     Scenario: Creatures are modern cartoons
       When someone races as any creature
       Then each main part of its body has a flat shadow on its lower left, ink at 18%, and most have a white highlight on the upper right
@@ -105,7 +97,6 @@ Feature: The Race
       And it sprints: its front foot planted, its back foot kicked up behind
       And it fills the same box as before, its feet on the same line and its face at the same height
 
-    # Step 2.
     Scenario Outline: A <creature>'s face when it is <mood>
       When a <creature> is <mood>
       Then <face>
@@ -120,7 +111,6 @@ Feature: The Race
         | monster  | calm    | it grins with a row of pointy teeth                                      |
         | robot    | calm    | its eyes and mouth glow light blue on its dark screen, and it has no brows |
 
-    # Step 2.
     Scenario Outline: A <creature> runs in <feet>
       When someone races as a <creature> in tomato
       Then it runs in <feet>
@@ -136,19 +126,16 @@ Feature: The Race
         | alien     | glass sneakers with a tomato stripe        |
         | dinosaur  | big bare feet, tomato                      |
 
-    # Step 3.
     Scenario: Six things on legs
       When the Line-up opens for The Race
       Then the group "Things on legs" holds "Coffee mug", "Printer", "Sticky note", "Banana", "Ice cream" and "Sushi"
       And the tabs read "Rides", "Animals", "Things on legs", "Spooky" and "Space", in that order
 
-    # Step 3.
     Scenario: A thing on legs runs like the others
       When someone races as a coffee mug, a printer, a sticky note, a banana, an ice cream or a sushi
       Then it runs on dark legs in white sneakers striped in its colour, and its arms end in white gloves
       And its face is on the thing itself
 
-    # Step 3.
     Scenario Outline: Where a <thing> wears its colour
       When someone races as a <thing> in tomato
       Then <where> is tomato
@@ -162,13 +149,11 @@ Feature: The Race
         | ice cream   | its scoop              |
         | sushi       | the fish on top        |
 
-    # Step 4.
     Scenario: Four animals and four spooky creatures
       When the Line-up opens for The Race
       Then the group "Animals" also holds "Cat", "Octopus", "Penguin" and "Pigeon", after "Dinosaur"
       And the group "Spooky" also holds "Ghost", "Mummy", "Yeti" and "Garden gnome", after "Villain"
 
-    # Step 4.
     Scenario Outline: Where a <creature> wears its colour, and its feet
       When someone races as a <creature> in tomato
       Then <where> is tomato
@@ -185,7 +170,6 @@ Feature: The Race
         | mummy    | its sweatband and its sneakers       | tomato sneakers with a sun stripe   |
         | yeti     | its earmuffs                         | big bare feet, light blue           |
 
-    # Step 4.
     Scenario: The gnome has the kit's face
       When someone races as the garden gnome
       Then its face and hands have the skin tone the kit hands out for the run
@@ -409,7 +393,6 @@ Feature: The Race
         | alien     | Elena  | stops to ask the way     | a question mark pops up over its head                   |
         | dinosaur  | Dario  | can't reach its snack    | it stretches its tiny arms for a leaf just out of reach |
 
-    # Step 3.
     Scenario Outline: A <thing> bursts ahead
       When someone's <thing> bursts ahead
       Then the caption is "<name>'s <thing> <burst>!"
@@ -424,7 +407,6 @@ Feature: The Race
         | ice cream   | Femi   | gets a sugar rush       | sprinkles fly off its scoop                       |
         | sushi       | Giulia | rides the conveyor belt | a conveyor belt slides in under it and carries it |
 
-    # Step 3.
     Scenario Outline: A <thing> stops
       When someone's <thing> stops
       Then the caption is "<name>'s <thing> <stop>!"
@@ -440,8 +422,6 @@ Feature: The Race
         | ice cream   | Femi   | starts to melt       | its scoop droops into a puddle, then firms up again          |
         | sushi       | Giulia | gets too much wasabi | a green dab lands on it, its eyes water and steam puffs out of its top |
 
-    # Step 4.
-    @pending
     Scenario Outline: A new <creature> bursts ahead
       When someone's <creature> bursts ahead
       Then the caption is "<name>'s <creature> <burst>!"
@@ -458,8 +438,6 @@ Feature: The Race
         | mummy    | Ben   | unrolls downhill    | it spins along, a bandage unrolling behind it       |
         | yeti     | Carla | skis ahead          | skis appear under its feet and it glides            |
 
-    # Step 4.
-    @pending
     Scenario Outline: A new <creature> stops
       When someone's <creature> stops
       Then the caption is "<name>'s <creature> <stop>!"
@@ -533,7 +511,6 @@ Feature: The Race
       And the dinosaur balances the trophy on its head, waving its tiny arms, in the party mood
       And a shark balances it on its fin, and every other creature holds it over its head
 
-    # Step 4.
     Scenario: A pigeon or a gnome wins
       When a pigeon or a garden gnome has crossed the line first
       Then the pigeon balances the trophy on its head, and the gnome on the tip of its hat
@@ -617,14 +594,11 @@ Feature: The Race
       When the show runs
       Then the monster doesn't hop with its hiccups, and the villain doesn't turn in its cape
 
-    # Step 3.
     Scenario: With reduced motion, the things on legs keep still too
       Given reduced motion is on
       When the show runs
       Then the printer's light doesn't blink, the sticky note doesn't flutter and the ice cream doesn't drip
 
-    # Step 4.
-    @pending
     Scenario: With reduced motion, the new animals and spooky creatures keep still too
       Given reduced motion is on
       When the show runs

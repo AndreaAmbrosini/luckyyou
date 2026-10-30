@@ -133,6 +133,10 @@ interface Drawn {
   /** Whether the mug is empty, its steam gone. */
   readonly empty: boolean;
   readonly splits: number;
+  /** How far the octopus's tentacles whirl, and the yeti's arms sweep, in degrees; whether its legs show. */
+  readonly whirl: number;
+  readonly sweep: number;
+  readonly legs: boolean;
 }
 
 /** What the stage showed in one frame. */
@@ -275,6 +279,9 @@ async function watch(
           drip: Number(svg.dataset.drip ?? 0),
           empty: svg.dataset.empty === 'true',
           splits: Number(svg.dataset.splits ?? 0),
+          whirl: Number(svg.dataset.whirl ?? 0),
+          sweep: Number(svg.dataset.sweep ?? 0),
+          legs: svg.querySelector('[data-part="front-leg"]')?.getAttribute('display') !== 'none',
         };
       }
       const says = found.bubbles
@@ -2767,6 +2774,216 @@ describeSpec(await loadFeature('./the-race.feature'), ({ Rule }) => {
         );
       });
     });
+
+    RuleScenarioOutline(
+      'A new <creature> bursts ahead',
+      ({ When, Then, And }, { creature: called, name, burst }) => {
+        const kind = NEW_NAMES[called]!;
+        let watched: Watched;
+        When("someone's <creature> bursts ahead", async () => {
+          watched = await shared.thing(kind, name);
+        });
+        Then(`the caption is "<name>'s <creature> <burst>!"`, () => {
+          expect(captions(watched)).toContain(`${name}'s ${called} ${burst}!`);
+          expect(watched.plan.events[0]).toMatchObject({ kind: 'burst', subject: name });
+        });
+        And('<what>, and it shoots into the lead, shouting "Nooo!"', () => {
+          const { at } = watched.plan.events[0]!;
+          const during = between(watched, at, at + BURST.seconds).map(
+            (frame) => frame.racers[name]!,
+          );
+          /** How long the burst shows `prop`, in seconds. */
+          const showing = (prop: string) =>
+            during.filter((racer) => racer.props.split(' ').includes(prop)).length * STEP;
+          const most = (values: number[]) => Math.max(...values);
+          const least = (values: number[]) => Math.min(...values);
+          const tilts = during.map((racer) => parseFloat(racer.rotate || '0'));
+          const props: Partial<Record<Creature, string>> = {
+            cat: 'laser',
+            penguin: 'ice',
+            pigeon: 'chip',
+            ghost: 'fright',
+            mummy: 'trail',
+            yeti: 'skis',
+          };
+          const prop = props[kind];
+          if (prop) expect(showing(prop), prop).toBeGreaterThanOrEqual(BURST.seconds - 2 * STEP);
+          switch (kind) {
+            case 'cat':
+              // It crouches after the dot.
+              expect(most(during.map((racer) => racer.bend))).toBeGreaterThan(8);
+              break;
+            case 'octopus':
+              expect(most(during.map((racer) => racer.whirl))).toBeGreaterThan(15);
+              break;
+            case 'penguin':
+              // Down on its belly, then up again.
+              expect(most(tilts)).toBeGreaterThan(60);
+              expect(tilts.at(-1)!).toBeLessThan(most(tilts));
+              break;
+            case 'pigeon':
+              // Its head bobs, back and forth.
+              expect(most(tilts)).toBeGreaterThan(3);
+              expect(least(tilts)).toBeLessThan(-3);
+              break;
+            case 'ghost':
+              // It jumps, and its sheet flaps.
+              expect(most(during.map((racer) => racer.hop))).toBeGreaterThan(20);
+              expect(most(tilts)).toBeGreaterThan(3);
+              expect(least(tilts)).toBeLessThan(-3);
+              break;
+            case 'gnome':
+              // Bent low, in long, low steps.
+              expect(least(during.map((racer) => racer.bend))).toBeGreaterThan(10);
+              expect(most(during.map((racer) => racer.hop))).toBeGreaterThan(4);
+              expect(most(during.map((racer) => racer.hop))).toBeLessThan(10);
+              break;
+            case 'mummy':
+              // Spinning along.
+              expect(most(tilts) - least(tilts)).toBeGreaterThan(300);
+              break;
+            case 'yeti':
+              expect(least(during.map((racer) => racer.bend))).toBeGreaterThan(5);
+              break;
+            default:
+              throw new Error(`No burst for a ${called}`);
+          }
+          // Gone once the burst is over.
+          const after = between(watched, at + BURST.seconds + 0.1, at + BURST.seconds + 0.5);
+          for (const frame of after) {
+            const racer = frame.racers[name]!;
+            if (prop) expect(racer.props).not.toContain(prop);
+            expect([racer.rotate, racer.whirl, racer.bend]).toEqual(['', 0, 0]);
+          }
+          expect(leaderAt(watched.plan, at)).not.toBe(name);
+          expect(leaderAt(watched.plan, at + 0.9)).toBe(name);
+          const shouting = watched.frames.filter((frame) => saying(frame, name, 'Nooo!'));
+          expect(shouting[0]!.time).toBeGreaterThanOrEqual(at);
+          expect(shouting[0]!.time).toBeLessThan(at + 0.5);
+          expect(shouting.length * STEP).toBeGreaterThanOrEqual(1);
+        });
+      },
+    );
+
+    RuleScenarioOutline(
+      'A new <creature> stops',
+      ({ When, Then, And }, { creature: called, name, stop }) => {
+        const kind = NEW_NAMES[called]!;
+        let watched: Watched;
+        /** The stopped creature, frame by frame from the stop to the end of the run. */
+        const during = () => {
+          const { at } = watched.plan.events[1]!;
+          return watched.frames
+            .filter((frame) => frame.time >= at)
+            .map((frame) => ({ ...frame, racer: frame.racers[name]!, since: frame.time - at }));
+        };
+        When("someone's <creature> stops", async () => {
+          watched = await shared.thing(kind, name);
+        });
+        Then(`the caption is "<name>'s <creature> <stop>!"`, () => {
+          expect(captions(watched)).toContain(`${name}'s ${called} ${stop}!`);
+          expect(watched.plan.events[1]).toMatchObject({ kind: 'stop', subject: name });
+        });
+        And('<what>, and it drops back while the camera goes on', () => {
+          const stopped = during().filter((frame) => frame.racer.stopped);
+          expect(stopped.length).toBeGreaterThan(10);
+          const before = stopped.filter((frame) => frame.since < STOP.phew);
+          /** How long the stop shows `prop`, in seconds. */
+          const showing = (prop: string) =>
+            stopped.filter((frame) => frame.racer.props.split(' ').includes(prop)).length * STEP;
+          /** How long the stop is as `test` says, in seconds. */
+          const lasting = (test: (frame: (typeof stopped)[number]) => boolean) =>
+            stopped.filter(test).length * STEP;
+          const tilts = before.map((frame) => parseFloat(frame.racer.rotate || '0'));
+          switch (kind) {
+            case 'cat':
+              // Sitting in the box, its legs out of sight.
+              expect(showing('box')).toBeGreaterThanOrEqual(1);
+              expect(lasting((frame) => !frame.racer.legs)).toBeGreaterThanOrEqual(1);
+              break;
+            case 'octopus': {
+              const knotted = stopped.filter((frame) => frame.racer.props.includes('knot'));
+              expect(knotted.length * STEP).toBeGreaterThanOrEqual(0.8);
+              expect(knotted.every((frame) => !frame.racer.legs)).toBe(true);
+              // Then it whirls them free.
+              const free = before.filter((frame) => frame.since > knotted.at(-1)!.since);
+              expect(Math.max(...free.map((frame) => frame.racer.whirl))).toBeGreaterThan(15);
+              break;
+            }
+            case 'penguin':
+              // The fish falls, and it bends down for it.
+              expect(showing('fish')).toBeGreaterThanOrEqual(1);
+              expect(lasting((frame) => frame.racer.bend > 20)).toBeGreaterThanOrEqual(0.6);
+              break;
+            case 'pigeon':
+              expect(showing('chest')).toBeGreaterThanOrEqual(1);
+              expect(Math.max(...tilts)).toBeGreaterThan(3);
+              expect(Math.min(...tilts)).toBeLessThan(-3);
+              break;
+            case 'ghost':
+              // Down on its front, and up again by "Phew!".
+              expect(showing('hem')).toBeGreaterThanOrEqual(1);
+              expect(
+                lasting((frame) => parseFloat(frame.racer.rotate || '0') > 45),
+              ).toBeGreaterThanOrEqual(0.6);
+              expect(tilts.at(-1)!).toBeLessThan(15);
+              break;
+            case 'gnome': {
+              // Up on a plinth, stock-still.
+              const statue = stopped.filter((frame) => frame.racer.props.includes('plinth'));
+              expect(statue.length * STEP).toBeGreaterThanOrEqual(1);
+              for (const { racer } of statue) {
+                expect(racer.hop).toBeGreaterThan(15);
+                expect([racer.rotate, racer.flail, racer.gait]).toEqual(['', 0, 'off']);
+              }
+              expect(new Set(statue.map((frame) => frame.racer.hop)).size).toBe(1);
+              break;
+            }
+            case 'mummy':
+              // The bandage comes off, then it turns to wind it back on.
+              expect(showing('unwrap')).toBeGreaterThanOrEqual(1);
+              expect(Math.max(...tilts)).toBeGreaterThan(180);
+              break;
+            case 'yeti':
+              // On its back in the snow, sweeping its arms and legs.
+              expect(showing('snow')).toBeGreaterThanOrEqual(1);
+              expect(Math.min(...tilts)).toBeLessThan(-80);
+              expect(Math.max(...before.map((frame) => frame.racer.sweep))).toBeGreaterThan(20);
+              expect(tilts.at(-1)!).toBeGreaterThan(Math.min(...tilts));
+              break;
+            default:
+              throw new Error(`No stop for a ${called}`);
+          }
+          const first = stopped[0]!;
+          const last = stopped.at(-1)!;
+          expect(last.racer.nose).toBeLessThan(first.racer.nose - 200);
+          expect(last.camera).toBeGreaterThan(first.camera + 300);
+        });
+        And('it waves, says "Phew!", and sets off again further back', () => {
+          const frames = during();
+          const waving = frames.filter(
+            ({ racer }) =>
+              racer.stopped && racer.pose === 'wave' && racer.bend === 0 && racer.rotate === '',
+          );
+          expect(waving.length).toBeGreaterThan(0);
+          const phew = frames.filter((frame) => saying(frame, name, 'Phew!'));
+          expect(phew.length * STEP).toBeGreaterThanOrEqual(1);
+          const off = frames.find((frame) => frame.since > STOP.off + 0.1)!;
+          expect(off.racer.stopped).toBe(false);
+          expect(off.racer.gait).toBe('on');
+          expect(off.racer.props).toBe('');
+          expect(off.racer.legs).toBe(true);
+          expect([off.racer.bend, off.racer.hop, off.racer.whirl, off.racer.sweep]).toEqual([
+            0, 0, 0, 0,
+          ]);
+          expect(off.racer.rotate).toBe('');
+          const { at } = watched.plan.events[1]!;
+          expect(orderAt(watched.plan, at + STOP.off).indexOf(name)).toBeGreaterThan(
+            orderAt(watched.plan, at - 0.01).indexOf(name),
+          );
+        });
+      },
+    );
   });
 
   Rule('The final stretch, and a slow last moment', ({ RuleScenario }) => {
@@ -3550,6 +3767,39 @@ describeSpec(await loadFeature('./the-race.feature'), ({ Rule }) => {
             expect(props('Dario')).toContain('wind');
             expect(props('Femi')).toContain('puddle');
             expect(props('Femi')).not.toContain('drips');
+          },
+        );
+      },
+    );
+
+    RuleScenario(
+      'With reduced motion, the new animals and spooky creatures keep still too',
+      ({ Given, When, Then }) => {
+        const watched: Record<string, Watched> = {};
+        Given('reduced motion is on', () => undefined);
+        When('the show runs', async () => {
+          for (const [name, kind] of [
+            ['Ivo', 'octopus'],
+            ['Priya', 'ghost'],
+            ['Carla', 'yeti'],
+          ] as const) {
+            watched[name] = await shared.thing(kind, name, true);
+          }
+        });
+        Then(
+          "the octopus's legs don't whirl, the ghost doesn't jump and the yeti doesn't sweep its arms",
+          () => {
+            const seen = (name: string) =>
+              watched[name]!.frames.map((frame) => frame.racers[name]!);
+            const props = (name: string) =>
+              new Set(seen(name).flatMap((racer) => racer.props.split(' ')));
+            for (const racer of seen('Ivo')) expect(racer.whirl).toBe(0);
+            for (const racer of seen('Priya')) expect([racer.hop, racer.rotate]).toEqual([0, '']);
+            for (const racer of seen('Carla')) expect([racer.sweep, racer.rotate]).toEqual([0, '']);
+            // Each still happens: the knot, the fright, the snow.
+            expect(props('Ivo')).toContain('knot');
+            expect(props('Priya')).toContain('fright');
+            expect(props('Carla')).toContain('snow');
           },
         );
       },
