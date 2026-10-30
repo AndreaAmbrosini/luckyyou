@@ -9,6 +9,13 @@ Feature: The Race
   finish, past a rival who brakes, or in a surge from behind. The contract in
   specs/scenarios.feature applies as well.
 
+  # More creatures, in four build steps, in this order: 1. the Line-up shows
+  # racers as pictures, by kind in tabs (with specs/line-up.feature); 2. every
+  # creature redrawn as a modern cartoon; 3. six things on legs; 4. four
+  # animals and four spooky creatures. Each pending scenario says its step.
+  # Scenarios marked "Old design" describe the race before a step; the build
+  # deletes each one, with its steps, when the scenario that replaces it passes.
+
   Rule: Its card
 
     Scenario: The picker shows The Race
@@ -20,6 +27,7 @@ Feature: The Race
 
   Rule: Its line-up
 
+    # Old design: replaced by "Racers as pictures, by kind" (step 1).
     Scenario: Rides and creatures, in one Racer option
       When the Line-up opens for The Race
       Then its first option is "Racer", its choices in two groups
@@ -27,6 +35,25 @@ Feature: The Race
       And the group "Creatures" holds "Zombie", "Robot", "Shark with feet", "Astronaut", "Monster", "Villain", "Alien" and "Dinosaur"
       And "Colour" and "Extra" offer the same choices as in step 1, for riders and creatures alike
       And each tile and the preview draw a creature as the show does, calm
+
+    # Step 1.
+    @pending
+    Scenario: Racers as pictures, by kind
+      When the Line-up opens for The Race
+      Then its first option is "Racer", its choices in groups, as tabs
+      And the group "Rides" holds "Snail", "Duck", "Office chair", "Caterpillar", "Space hopper", "Ostrich", "Rocket" and "Sandwich"
+      And the group "Animals" holds "Shark with feet" and "Dinosaur"
+      And the group "Spooky" holds "Zombie", "Monster" and "Villain"
+      And the group "Space" holds "Robot", "Astronaut" and "Alien"
+      And each racer is shown as the chosen person racing as it, in their colour and extra, calm, its name under it
+      And "Colour" offers the same swatches as before, and "Extra" a picture of each extra, each named for screen readers
+
+    # Step 1.
+    @pending
+    Scenario: The Line-up fits the window
+      Given 8 people, a 15-character name among them, in a 1280 by 800 window
+      When the Line-up opens for The Race
+      Then every person, the chosen one's look, the tabs, every racer in the open tab, every colour and extra, and both buttons are in view without scrolling
 
     Scenario: Each racer looks as chosen
       Given Anna chose the duck, sun and the scarf, and Ben the office chair, grape and googly eyes
@@ -81,6 +108,109 @@ Feature: The Race
     Scenario: The astronaut and the villain have the kit's faces
       When someone races as the astronaut or the villain
       Then its face has the skin tone the kit hands out for the run
+
+    # Step 2.
+    @pending
+    Scenario: Creatures are modern cartoons
+      When someone races as any creature
+      Then each main part of its body has a flat shadow on its lower left, ink at 18%, and most have a white highlight on the upper right
+      And each pupil has a white shine
+      And its arms bend at the elbow and end in gloves, paws, tentacle tips or fins
+      And it sprints: its front foot planted, its back foot kicked up behind
+      And it fills the same box as before, its feet on the same line and its face at the same height
+
+    # Step 2.
+    @pending
+    Scenario Outline: A <creature>'s face when it is <mood>
+      When a <creature> is <mood>
+      Then <face>
+
+      Examples:
+        | creature | mood    | face                                                                    |
+        | zombie   | calm    | its lids are half shut, one brow a little higher, and it smirks          |
+        | zombie   | worried | its lids droop towards the outside, its brows rise inside, its mouth wobbles |
+        | zombie   | scared  | its eyes open wide with tiny pupils and no lids, its mouth an open oval  |
+        | zombie   | happy   | its mouth is open, with teeth and a tongue                               |
+        | zombie   | party   | it wears dark shades and grins with its mouth open                       |
+        | monster  | calm    | it grins with a row of pointy teeth                                      |
+        | robot    | calm    | its eyes and mouth glow light blue on its dark screen, and it has no brows |
+
+    # Step 2.
+    @pending
+    Scenario Outline: A <creature> runs in <feet>
+      When someone races as a <creature> in tomato
+      Then it runs in <feet>
+
+      Examples:
+        | creature  | feet                                       |
+        | zombie    | ink-soft sneakers with a tomato stripe     |
+        | robot     | ink-soft boots                             |
+        | shark     | tomato sneakers with a sun stripe          |
+        | astronaut | grey boots                                 |
+        | monster   | big bare feet, tomato                      |
+        | villain   | ink boots                                  |
+        | alien     | glass sneakers with a tomato stripe        |
+        | dinosaur  | big bare feet, tomato                      |
+
+    # Step 3.
+    @pending
+    Scenario: Six things on legs
+      When the Line-up opens for The Race
+      Then the group "Things on legs" holds "Coffee mug", "Printer", "Sticky note", "Banana", "Ice cream" and "Sushi"
+      And the tabs read "Rides", "Animals", "Things on legs", "Spooky" and "Space", in that order
+
+    # Step 3.
+    @pending
+    Scenario: A thing on legs runs like the others
+      When someone races as a coffee mug, a printer, a sticky note, a banana, an ice cream or a sushi
+      Then it runs on dark legs in white sneakers striped in its colour, and its arms end in white gloves
+      And its face is on the thing itself
+
+    # Step 3.
+    @pending
+    Scenario Outline: Where a <thing> wears its colour
+      When someone races as a <thing> in tomato
+      Then <where> is tomato
+
+      Examples:
+        | thing       | where                  |
+        | coffee mug  | the mug and its handle |
+        | printer     | its lid and its tray   |
+        | sticky note | the note               |
+        | banana      | its peel               |
+        | ice cream   | its scoop              |
+        | sushi       | the fish on top        |
+
+    # Step 4.
+    @pending
+    Scenario: Four animals and four spooky creatures
+      When the Line-up opens for The Race
+      Then the group "Animals" also holds "Cat", "Octopus", "Penguin" and "Pigeon", after "Dinosaur"
+      And the group "Spooky" also holds "Ghost", "Mummy", "Yeti" and "Garden gnome", after "Villain"
+
+    # Step 4.
+    @pending
+    Scenario Outline: Where a <creature> wears its colour, and its feet
+      When someone races as a <creature> in tomato
+      Then <where> is tomato
+      And it runs on <feet>
+
+      Examples:
+        | creature | where                                | feet                                |
+        | cat      | its fur                              | white sneakers with a tomato stripe |
+        | octopus  | its body and tentacles               | two tentacles with curled tips      |
+        | penguin  | its back and flippers                | orange flat feet                    |
+        | pigeon   | its neck and wings                   | pink toes                           |
+        | ghost    | the dots on its sheet and its sneakers | tomato sneakers with a sun stripe |
+        | gnome    | its pointy hat                       | ink boots                           |
+        | mummy    | its sweatband and its sneakers       | tomato sneakers with a sun stripe   |
+        | yeti     | its earmuffs                         | big bare feet, light blue           |
+
+    # Step 4.
+    @pending
+    Scenario: The gnome has the kit's face
+      When someone races as the garden gnome
+      Then its face and hands have the skin tone the kit hands out for the run
 
   Rule: A track drawn at random
 
@@ -301,6 +431,76 @@ Feature: The Race
         | alien     | Elena  | stops to ask the way     | a question mark pops up over its head                   |
         | dinosaur  | Dario  | can't reach its snack    | it stretches its tiny arms for a leaf just out of reach |
 
+    # Step 3.
+    @pending
+    Scenario Outline: A <thing> bursts ahead
+      When someone's <thing> bursts ahead
+      Then the caption is "<name>'s <thing> <burst>!"
+      And <what>, and it shoots into the lead, shouting "Nooo!"
+
+      Examples:
+        | thing       | name   | burst                   | what                                              |
+        | coffee mug  | Ben    | has a caffeine rush     | jets of steam puff out of its top                 |
+        | printer     | Carla  | prints at full speed    | a stream of paper flies out behind it             |
+        | sticky note | Dario  | catches a draft         | it flutters along, wind lines behind it           |
+        | banana      | Elena  | slips on its own peel   | it skids along on a banana peel                   |
+        | ice cream   | Femi   | gets a sugar rush       | sprinkles fly off its scoop                       |
+        | sushi       | Giulia | rides the conveyor belt | a conveyor belt slides in under it and carries it |
+
+    # Step 3.
+    @pending
+    Scenario Outline: A <thing> stops
+      When someone's <thing> stops
+      Then the caption is "<name>'s <thing> <stop>!"
+      And <what>, and it drops back while the camera goes on
+      And it waves, says "Phew!", and sets off again further back
+
+      Examples:
+        | thing       | name   | stop                 | what                                                         |
+        | coffee mug  | Ben    | needs a refill       | it tips forward to peer inside, and it's empty               |
+        | printer     | Carla  | has a paper jam      | a crumpled sheet sticks out of it and its red light blinks   |
+        | sticky note | Dario  | sticks to the floor  | one foot sticks and it tugs it free                          |
+        | banana      | Elena  | does the splits      | it slides down into the splits, then springs back up         |
+        | ice cream   | Femi   | starts to melt       | its scoop droops into a puddle, then firms up again          |
+        | sushi       | Giulia | gets too much wasabi | a green dab lands on it, its eyes water and steam puffs out of its top |
+
+    # Step 4.
+    @pending
+    Scenario Outline: A new <creature> bursts ahead
+      When someone's <creature> bursts ahead
+      Then the caption is "<name>'s <creature> <burst>!"
+      And <what>, and it shoots into the lead, shouting "Nooo!"
+
+      Examples:
+        | creature | name  | burst               | what                                                |
+        | cat      | Hana  | chases a laser dot  | a red dot zips along the ground ahead of it         |
+        | octopus  | Ivo   | uses all eight legs | all its tentacles run at once                       |
+        | penguin  | Jonas | belly-slides        | it drops onto its belly and slides                  |
+        | pigeon   | Marco | spots a chip        | a chip lies ahead and it dashes for it, head bobbing |
+        | ghost    | Priya | gets spooked        | it jumps, its sheet flaps, and it bolts             |
+        | gnome    | Anna  | sneaks ahead        | it tiptoes along in long, quiet steps               |
+        | mummy    | Ben   | unrolls downhill    | it spins along, a bandage unrolling behind it       |
+        | yeti     | Carla | skis ahead          | skis appear under its feet and it glides            |
+
+    # Step 4.
+    @pending
+    Scenario Outline: A new <creature> stops
+      When someone's <creature> stops
+      Then the caption is "<name>'s <creature> <stop>!"
+      And <what>, and it drops back while the camera goes on
+      And it waves, says "Phew!", and sets off again further back
+
+      Examples:
+        | creature | name  | stop                    | what                                                      |
+        | cat      | Hana  | sits in a box           | a cardboard box appears and it sits in it                 |
+        | octopus  | Ivo   | ties its legs in a knot | its tentacles twist into a knot and it untangles them     |
+        | penguin  | Jonas | drops its fish          | a fish falls out and it stops to pick it up               |
+        | pigeon   | Marco | puffs up its chest      | it puffs up and struts on the spot                        |
+        | ghost    | Priya | trips on its sheet      | it stumbles on its hem and gets up                        |
+        | gnome    | Anna  | freezes like a statue   | it stops dead mid-step and stands perfectly still         |
+        | mummy    | Ben   | comes unwrapped         | a bandage unrolls and it winds it back on                 |
+        | yeti     | Carla | makes a snow angel      | it lies in a patch of snow and sweeps its arms and legs   |
+
   Rule: The final stretch, and a slow last moment
 
     Scenario: Full speed to the line
@@ -356,6 +556,13 @@ Feature: The Race
       Then the caption is "Dario wins!", with a fanfare and confetti
       And the dinosaur balances the trophy on its head, waving its tiny arms, in the party mood
       And a shark balances it on its fin, and every other creature holds it over its head
+
+    # Step 4.
+    @pending
+    Scenario: A pigeon or a gnome wins
+      When a pigeon or a garden gnome has crossed the line first
+      Then the pigeon balances the trophy on its head, and the gnome on the tip of its hat
+      And the penguin holds it up in its flippers, and every other new creature over its head
 
     Scenario: The name holds still at the end
       Given the unlucky person is "Anna"
@@ -434,3 +641,17 @@ Feature: The Race
       Given reduced motion is on
       When the show runs
       Then the monster doesn't hop with its hiccups, and the villain doesn't turn in its cape
+
+    # Step 3.
+    @pending
+    Scenario: With reduced motion, the things on legs keep still too
+      Given reduced motion is on
+      When the show runs
+      Then the printer's light doesn't blink, the sticky note doesn't flutter and the ice cream doesn't drip
+
+    # Step 4.
+    @pending
+    Scenario: With reduced motion, the new animals and spooky creatures keep still too
+      Given reduced motion is on
+      When the show runs
+      Then the octopus's legs don't whirl, the ghost doesn't jump and the yeti doesn't sweep its arms
