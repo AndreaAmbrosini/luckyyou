@@ -311,8 +311,7 @@
 }
 
 .inChoice {
-  width: 100%;
-  max-width: 7.5rem;
+  height: 5.5rem;
 }
 
 .choiceName {

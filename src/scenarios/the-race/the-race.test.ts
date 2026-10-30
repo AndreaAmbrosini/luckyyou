@@ -641,51 +641,59 @@ describeSpec(await loadFeature('./the-race.feature'), ({ Rule }) => {
   });
 
   Rule('Its line-up', ({ RuleScenario, RuleScenarioOutline }) => {
-    RuleScenario('Rides and creatures, in one Racer option', ({ When, Then, And }) => {
+    RuleScenario('Racers as pictures, by kind', ({ When, Then, And }) => {
       const lineUp = theRace.lineUp!;
       const option = (label: string) => lineUp.options.find((each) => each.label === label)!;
       const listed = (text: string) => [...text.matchAll(/"([^"]+)"/g)].map(([, x]) => x);
-      let drawings: Element[] = [];
+      const holds = (group: string, held: string) => {
+        const choices = option('Racer').choices.filter((choice) => choice.group === group);
+        expect(choices.map((choice) => choice.label)).toEqual(listed(held));
+      };
       When('the Line-up opens for The Race', () => {
         expect(lineUp.heading).toBe('Line up the racers');
         expect(lineUp.start).toBe('Start the race');
-        drawings = names(3).map((name, index) =>
-          lineUp.draw(
-            { mount: 'robot', colour: 'mint', extra: 'number' },
-            { name, place: index + 1 },
-          ),
-        );
       });
-      Then('its first option is {string}, its choices in two groups', (_, label: string) => {
+      Then('its first option is {string}, its choices in groups, as tabs', (_, label: string) => {
         const first = lineUp.options[0]!;
         expect(first.label).toBe(label);
         // Still `mount`, so stored looks keep their ride.
         expect(first.name).toBe('mount');
         expect([...new Set(first.choices.map((choice) => choice.group))]).toEqual([
           'Rides',
-          'Creatures',
+          'Animals',
+          'Spooky',
+          'Space',
         ]);
       });
-      And('the group "Rides" holds {any}', (_, held: string) => {
-        const group = 'Rides';
-        const choices = option('Racer').choices.filter((choice) => choice.group === group);
-        expect(choices.map((choice) => choice.label)).toEqual(listed(held));
-      });
-      And('the group "Creatures" holds {any}', (_, held: string) => {
-        const group = 'Creatures';
-        const choices = option('Racer').choices.filter((choice) => choice.group === group);
-        expect(choices.map((choice) => choice.label)).toEqual(listed(held));
-        expect(choices.map((choice) => choice.name)).toEqual(CREATURES);
-      });
+      And('the group "Rides" holds {any}', (_, held: string) => holds('Rides', held));
+      And('the group "Animals" holds {any}', (_, held: string) => holds('Animals', held));
+      And('the group "Spooky" holds {any}', (_, held: string) => holds('Spooky', held));
+      And('the group "Space" holds {any}', (_, held: string) => holds('Space', held));
       And(
-        '"Colour" and "Extra" offer the same choices as in step 1, for riders and creatures alike',
+        'each racer is shown as the chosen person racing as it, in their colour and extra, calm, its name under it',
+        () => {
+          const racer = option('Racer');
+          expect(racer.drawn).toBe(true);
+          for (const { name } of racer.choices) {
+            const drawn = lineUp.draw(
+              { mount: name, colour: 'mint', extra: 'number' },
+              { name: 'Anna', place: 3 },
+            ) as SVGSVGElement;
+            expect(drawn.dataset).toMatchObject({ mount: name, colour: 'mint', mood: 'calm' });
+            expect(drawn.querySelector('text')!.textContent).toBe('3');
+          }
+        },
+      );
+      And(
+        '"Colour" offers the same swatches as before, and "Extra" a picture of each extra, each named for screen readers',
         () => {
           expect(lineUp.options.map((each) => each.name)).toEqual(['mount', 'colour', 'extra']);
           const colours = option('Colour').choices;
           expect(colours.map((choice) => choice.name)).toEqual([...RACER_COLOURS]);
           for (const choice of colours) expect(choice.swatch).toBe(choice.name);
           expect(colours.find((choice) => choice.name === 'shark')!.label).toBe('Grey');
-          expect(option('Extra').choices.map((choice) => choice.label)).toEqual([
+          const extras = option('Extra').choices;
+          expect(extras.map((choice) => choice.label)).toEqual([
             'Googly eyes',
             'Top hat',
             'Number',
@@ -693,21 +701,44 @@ describeSpec(await loadFeature('./the-race.feature'), ({ Rule }) => {
             'Cape',
             'Bow tie',
           ]);
+          for (const choice of extras) {
+            const picture = choice.picture!();
+            expect(picture.querySelector(`[data-part="${choice.name}"]`)).not.toBeNull();
+            expect(picture.getAttribute('aria-hidden')).toBe('true');
+          }
         },
       );
-      And('each tile and the preview draw a creature as the show does, calm', () => {
-        drawings.forEach((drawing, index) => {
-          const el = drawing as SVGSVGElement;
-          expect(el.dataset).toMatchObject({
-            part: 'creature',
-            mount: 'robot',
-            colour: 'mint',
-            mood: 'calm',
-            pose: 'hold',
-          });
-          expect(el.querySelector('text')!.textContent).toBe(String(index + 1));
-        });
+    });
+
+    RuleScenario('The Line-up fits the window', ({ Given, When, Then }) => {
+      // jsdom has no layout: e2e/line-up.spec.ts measures this Line-up in a
+      // real 1280 by 800 window. Here: nothing it shows is more than one row holds.
+      const lineUp = theRace.lineUp!;
+      let people: string[] = [];
+      Given(
+        '{int} people, a 15-character name among them, in a 1280 by 800 window',
+        (_, count: number) => {
+          people = [...names(count - 1), 'Maria-Elena Ros'];
+          expect(people.at(-1)).toHaveLength(15);
+        },
+      );
+      When('the Line-up opens for The Race', () => {
+        expect(people.length).toBeLessThanOrEqual(theRace.people.max);
       });
+      Then(
+        "every person, the chosen one's look, the tabs, every racer in the open tab, every colour and extra, and both buttons are in view without scrolling",
+        () => {
+          const [racer, colour, extra] = lineUp.options;
+          const tabs = new Set(racer!.choices.map((choice) => choice.group));
+          // Two rows of four racers, eight swatches and six extras in one row each.
+          for (const tab of tabs) {
+            const inTab = racer!.choices.filter((choice) => choice.group === tab);
+            expect(inTab.length).toBeLessThanOrEqual(8);
+          }
+          expect(colour!.choices).toHaveLength(8);
+          expect(extra!.choices).toHaveLength(6);
+        },
+      );
     });
 
     /** Everyone with a look given, as the show first draws them, the last unlucky. */
