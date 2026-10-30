@@ -26,17 +26,21 @@ import {
   BURST,
   CAMERA,
   cameraAt,
+  COURSES,
   crossingOf,
   eventCount,
   leaderAt,
   LENGTH,
+  noseAt,
   lineAt,
   orderAt,
   planShow,
   spacing,
   STOP,
+  type Course,
   type Ending,
   type Plan,
+  type RaceEvent,
 } from './plan';
 
 const ENDINGS: readonly Ending[] = ['photo', 'brake', 'surge'];
@@ -74,6 +78,10 @@ interface Drawn {
   readonly bend: number;
   readonly stretch: boolean;
   readonly flag: number | null;
+  /** How high it floats or hops on the Moon, in stage px. */
+  readonly lift: number;
+  /** The track's props it shows, as "cup seaweed swirls". */
+  readonly track: string;
 }
 
 /** What the stage showed in one frame. */
@@ -154,12 +162,15 @@ async function watch(
     looks,
     cancelAt,
     reducedMotion = false,
+    onStage,
   }: {
     unlucky?: string;
     seed?: number;
     looks?: ReadonlyMap<string, ChosenLook>;
     cancelAt?: number;
     reducedMotion?: boolean;
+    /** Looks at the stage after each frame is read. */
+    onStage?: (time: number, scene: HTMLElement) => void;
   } = {},
 ): Promise<Watched> {
   const frames: Frame[] = [];
@@ -207,6 +218,8 @@ async function watch(
           bend: Number(svg.dataset.bend ?? 0),
           stretch: svg.dataset.stretch === 'true',
           flag: svg.dataset.flag ? Number(svg.dataset.flag) : null,
+          lift: Number(svg.dataset.lift ?? 0),
+          track: svg.dataset.track ?? '',
         };
       }
       const says = found.bubbles
@@ -241,6 +254,7 @@ async function watch(
         racers,
         says,
       });
+      onStage?.(time, scene);
     },
   });
   const plan = planShow(team, unlucky, createRandom(seed));
@@ -260,6 +274,13 @@ const shownAt = (watched: Watched, text: string) =>
   watched.record.captions.find((each) => each.text === text)?.from;
 const saying = (frame: Frame, person: string, text: string) =>
   frame.says.some((said) => said.person === person && said.text === text);
+
+/** `box` raised by `lift` stage px. */
+const raised = (box: Box, lift: number): Box => ({
+  ...box,
+  top: box.top - lift,
+  bottom: box.bottom - lift,
+});
 
 const overlap = (one: Box, two: Box) =>
   one.left < two.right && two.left < one.right && one.top < two.bottom && two.top < one.bottom;
@@ -298,7 +319,9 @@ const shared = (() => {
     mount: (mount: Kind, name: string, reducedMotion = false) =>
       once(`mount ${mount} ${reducedMotion}`, () => {
         const team = ['Kofi', 'Luca', 'Mia', 'Nora', 'Omar'];
-        const seed = 7;
+        // On the sports field, so both events are the racer's own.
+        let seed = 7;
+        while (planShow(team, team.at(-1)!, createRandom(seed)).course !== 'field') seed++;
         const plan = planShow(team, team.at(-1)!, createRandom(seed));
         team[team.indexOf(plan.events[0]!.subject)] = name;
         return watch(team, { seed, looks: allOn(team, mount), reducedMotion });
@@ -312,7 +335,9 @@ const shared = (() => {
         const team = ['Dario', 'Elena', 'Fabio', 'Giulia', 'Hana', 'Anna'];
         let seed = 1;
         const fits = (plan: Plan) =>
-          plan.ending === 'photo' && plan.events.every((event) => event.subject !== 'Anna');
+          plan.course === 'field' &&
+          plan.ending === 'photo' &&
+          plan.events.every((event) => event.subject !== 'Anna');
         while (!fits(planShow(team, 'Anna', createRandom(seed)))) seed++;
         const plan = planShow(team, 'Anna', createRandom(seed));
         team[team.indexOf(plan.events[0]!.subject)] = 'Ben';
@@ -372,6 +397,209 @@ function plans(team: readonly string[], unlucky: string, seeds = 20): Plan[] {
   return Array.from({ length: seeds }, (_, index) =>
     planShow(team, unlucky, createRandom(index + 1)),
   );
+}
+
+/** What the feature calls each track. */
+const COURSE_NAMES: Readonly<Record<string, Course>> = {
+  'the sports field': 'field',
+  'the office': 'office',
+  'under the sea': 'sea',
+  'the Moon': 'moon',
+};
+
+/** The first `runs` plans on `course`, and `fits` if given, from seed 1 on. */
+function plansOn(
+  team: readonly string[],
+  unlucky: string,
+  course: Course,
+  runs = 20,
+  fits: (plan: Plan) => boolean = () => true,
+): Plan[] {
+  const found: Plan[] = [];
+  for (let seed = 1; found.length < runs; seed++) {
+    const plan = planShow(team, unlucky, createRandom(seed));
+    if (plan.course === course && fits(plan)) found.push(plan);
+  }
+  return found;
+}
+
+/** A piece of text on the stage, and what carries it. */
+interface Sticker {
+  readonly text: string;
+  /** The sticker's own data attribute or part: what it is. */
+  readonly what: string;
+  readonly background: string;
+  readonly colour: string;
+  readonly border: string;
+}
+
+/** A run on one track, with what its stage showed beyond the frames. */
+interface OnTrack {
+  readonly watched: Watched;
+  readonly track: HTMLElement;
+  /** The track's sky, as its style gives it. */
+  readonly sky: string;
+  /** Every piece of text seen on a sticker, and any seen on none. */
+  readonly stickers: readonly Sticker[];
+  readonly loose: readonly string[];
+  /** The photo card, if it popped up. */
+  readonly photo: HTMLElement | null;
+  /** Each frame the coffee machine or the wet-floor sign was up, and where. */
+  readonly standing: readonly { time: number; part: string; x: number; y: number }[];
+  /** Each frame a shadow was on the ground. */
+  readonly shadows: readonly number[];
+}
+
+/** What may carry text: a sign, a name tag, a bubble, the caption or the photo card. */
+const KINDS = [
+  ['sign', '[data-part="sign"] p'],
+  ['tag', '[data-lines]'],
+  ['bubble', '[data-says]'],
+  ['caption', '[data-kit="caption"]'],
+  ['photo', '[data-part="photo"]'],
+] as const;
+const STICKERS = KINDS.map(([, selector]) => selector).join(', ');
+
+/**
+ * The borders the stylesheets give `el`, as written: jsdom can't split a
+ * `border` shorthand that holds a `var(--…)`.
+ */
+function borderOf(el: Element): string {
+  const rules = [...document.styleSheets].flatMap((sheet) => [...sheet.cssRules]);
+  return rules
+    .filter(
+      (rule): rule is CSSStyleRule => rule instanceof CSSStyleRule && el.matches(rule.selectorText),
+    )
+    .map(
+      (rule) =>
+        rule.style.getPropertyValue('border') || rule.style.getPropertyValue('border-color'),
+    )
+    .join(' ');
+}
+
+/** The texts already read on each element: a sticker keeps its look. */
+const readOn = new WeakMap<Element, Set<string>>();
+
+/** Notes every shown piece of text in `root` not yet read, on its sticker or loose. */
+function readText(root: Element, stickers: Sticker[], loose: string[]) {
+  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+  for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+    const text = node.textContent!.trim();
+    const el = node.parentElement!;
+    if (!text || readOn.get(el)?.has(text)) continue;
+    if (el.closest('[hidden], [display="none"]')) continue;
+    readOn.set(el, (readOn.get(el) ?? new Set()).add(text));
+    // A racing number is on its paper roundel, on the racer.
+    if (el.closest('svg text')) continue;
+    const sticker = el.closest<HTMLElement>(STICKERS);
+    if (!sticker) {
+      loose.push(text);
+      continue;
+    }
+    // The sticker's paper: the nearest box round the text with a background.
+    let paper: Element = el;
+    const clear = (box: Element) => getComputedStyle(box).backgroundColor === 'rgba(0, 0, 0, 0)';
+    while (paper !== sticker && clear(paper)) paper = paper.parentElement!;
+    const style = getComputedStyle(paper);
+    stickers.push({
+      text,
+      what: KINDS.find(([, selector]) => sticker.matches(selector))![0],
+      background: style.backgroundColor,
+      colour: getComputedStyle(el).color || style.color,
+      border: borderOf(paper),
+    });
+  }
+}
+
+/** Runs on each track, each run once, when first asked for. */
+const onTracks = new Map<string, Promise<OnTrack>>();
+
+/** A cup in hand from this far into the coffee-machine stop. */
+const OWN_CUP = 0.3;
+
+/** Who the track's own event happens to, as the feature names them. */
+const SUBJECTS: Readonly<Record<Course, string>> = {
+  field: 'Ben',
+  office: 'Ben',
+  sea: 'Marco',
+  moon: 'Anna',
+};
+
+/**
+ * Eight people on `course`, ending in a photo finish; off the sports field,
+ * the track's own event is a `kind`, and happens to the feature's racer for
+ * that track. The stage's props are read every frame; in a run with a stop,
+ * its text every second and as the photo pops up.
+ */
+function onTrack(course: Course, kind: 'burst' | 'stop' = 'stop'): Promise<OnTrack> {
+  const key = `${course} ${kind}`;
+  if (!onTracks.has(key)) {
+    const team = names(8);
+    const unlucky = team.at(-1)!;
+    let seed = 1;
+    const fits = (plan: Plan) =>
+      plan.course === course &&
+      plan.ending === 'photo' &&
+      (course === 'field' || plan.events.some((e) => e.cause === 'track' && e.kind === kind));
+    while (!fits(planShow(team, unlucky, createRandom(seed)))) seed++;
+    // Names are only labels to the plan: two swapped keep the same race.
+    const own = planShow(team, unlucky, createRandom(seed)).events.find(
+      (event) => event.cause === 'track',
+    );
+    if (own) {
+      const at = team.indexOf(own.subject);
+      const theirs = team.indexOf(SUBJECTS[course]);
+      if (theirs >= 0) team[theirs] = own.subject;
+      team[at] = SUBJECTS[course];
+    }
+    const standing: { time: number; part: string; x: number; y: number }[] = [];
+    const shadows: number[] = [];
+    const stickers: Sticker[] = [];
+    const loose: string[] = [];
+    let track: HTMLElement | undefined;
+    let sky = '';
+    let photo: HTMLElement | null = null;
+    let read = -1;
+    onTracks.set(
+      key,
+      watch(team, {
+        seed,
+        onStage: (time, scene) => {
+          if (!track) {
+            track = scene.querySelector<HTMLElement>('[data-part="track"]')!;
+            sky = getComputedStyle(track).backgroundColor;
+          }
+          const card = scene.querySelector<HTMLElement>('[data-part="photo"]');
+          const second = Math.floor(time + 1e-9);
+          if (kind === 'stop' && (second > read || (card && !card.hidden && !photo))) {
+            read = second;
+            readText(scene, stickers, loose);
+            const caption = document.querySelector('[data-kit="caption"]');
+            if (caption) readText(caption, stickers, loose);
+          }
+          if (card && !card.hidden) photo = card;
+          for (const part of ['machine', 'wet-floor']) {
+            const prop = scene.querySelector(`[data-part="${part}"]`);
+            if (!prop || prop.getAttribute('display') === 'none') continue;
+            const [, x, y] = prop.getAttribute('transform')!.match(/translate\((\S+) (\S+)\)/)!;
+            standing.push({ time, part, x: Number(x), y: Number(y) });
+          }
+          const shadow = scene.querySelector<HTMLElement>('[data-part="shadow"]');
+          if (shadow && !shadow.hidden) shadows.push(time);
+        },
+      }).then((watched) => ({
+        watched,
+        track: track!,
+        sky,
+        stickers,
+        loose,
+        photo,
+        standing,
+        shadows,
+      })),
+    );
+  }
+  return onTracks.get(key)!;
 }
 
 /** Show seconds from `from` to `to`, every frame. */
@@ -849,6 +1077,349 @@ describeSpec(await loadFeature('./the-race.feature'), ({ Rule }) => {
             `var(--color-skin-${faces.get(name)!.skin})`,
           );
           expect(svg.querySelector('[data-part="skin"]')!.getAttribute('class')).toBe(styles.skin);
+        }
+      });
+    });
+  });
+
+  Rule('A track drawn at random', ({ RuleScenario, RuleScenarioOutline }) => {
+    const team = names(8);
+    const unlucky = team.at(-1)!;
+    const own = (plan: Plan) => plan.events.filter((event) => event.cause === 'track');
+
+    RuleScenario('Each race draws its track', ({ Given, When, Then, And }) => {
+      let runs: Plan[];
+      Given('{int} people', () => undefined);
+      When('the show runs with {int} different random seeds', (_, seeds: number) => {
+        runs = plans(team, unlucky, seeds);
+      });
+      Then('each run is on the sports field, the office, under the sea or the Moon', () => {
+        for (const plan of runs) expect(COURSES).toContain(plan.course);
+      });
+      And('each of the four comes up in at least {int} runs', (_, least: number) => {
+        for (const course of COURSES) {
+          const on = runs.filter((plan) => plan.course === course);
+          expect(on.length, course).toBeGreaterThanOrEqual(least);
+        }
+      });
+    });
+
+    RuleScenarioOutline(
+      '<track> has a stop and a burst of its own',
+      ({ Given, When, Then, And }, { track }) => {
+        let runs: Plan[];
+        Given('8 people, on <track>', () => undefined);
+        When('the show runs with {int} different random seeds', (_, seeds: number) => {
+          runs = plansOn(team, unlucky, COURSE_NAMES[track]!, seeds);
+        });
+        Then(
+          `in every run, one event before "Final stretch!" is the track's own stop or burst`,
+          () => {
+            for (const plan of runs) {
+              expect(own(plan)).toHaveLength(1);
+              expect(own(plan)[0]!.at).toBeLessThan(plan.times.stretch);
+            }
+          },
+        );
+        And('both come up across the runs', () => {
+          const kinds = new Set(runs.flatMap((plan) => own(plan).map((event) => event.kind)));
+          expect(kinds).toEqual(new Set(['burst', 'stop']));
+        });
+      },
+    );
+
+    RuleScenarioOutline('What <track> looks like', ({ When, Then, And }, { track: name }) => {
+      const course = COURSE_NAMES[name]!;
+      let run: OnTrack;
+      When('the show runs on <track>', async () => {
+        run = await onTrack(course);
+      });
+      Then('the ground is <ground>, and paper name tags read clearly on it', () => {
+        const ground = run.track.querySelector('[data-part="ground"]')!;
+        const fill = {
+          field: styles.grass,
+          office: styles.carpet,
+          sea: styles.sun,
+          moon: styles.dust,
+        };
+        expect(ground.querySelector(`.${fill[course]}`)).not.toBeNull();
+        expect(!!ground.querySelector('[data-part="craters"]')).toBe(course === 'moon');
+        const tags = run.stickers.filter((sticker) => sticker.what === 'tag');
+        expect(tags.length).toBeGreaterThan(0);
+        for (const tag of tags) {
+          expect(tag.background).toBe('var(--color-paper)');
+          expect(tag.border).toContain('var(--color-ink)');
+        }
+      });
+      And('behind the track is <backdrop>', () => {
+        const skies = { field: 'sky', office: 'paper', sea: 'sea', moon: 'ink' };
+        expect(run.sky).toBe(`var(--color-${skies[course]})`);
+        const parts = {
+          field: ['flags', 'posts'],
+          office: ['wall', 'panels', 'plant'],
+          sea: ['surface', 'fish', 'seaweed', 'floats'],
+          moon: ['space'],
+        };
+        for (const part of parts[course]) {
+          expect(run.track.querySelector(`[data-part="${part}"]`), part).not.toBeNull();
+        }
+        expect(run.track.querySelectorAll(`.${styles.cloud}`)).toHaveLength(
+          course === 'field' ? 2 : 0,
+        );
+      });
+      And('the lanes are split by <lines>, and the distances are <signs>', () => {
+        const fills = {
+          field: styles.paperFill,
+          office: styles.sunFill,
+          sea: styles.orangeFill,
+          moon: styles.paperFill,
+        };
+        const lines = [...run.track.querySelectorAll('[data-part="lines"] path')];
+        expect(lines.length).toBeGreaterThan(0);
+        for (const line of lines) {
+          expect(line.getAttribute('class')).toBe(fills[course]);
+          // Dashes are short: 44 px each, with gaps between.
+          expect(line.getAttribute('d')!.includes('h44 ')).toBe(course === 'moon');
+        }
+        const signs = [...run.track.querySelectorAll('[data-part="sign"]')];
+        expect(signs).toHaveLength(5);
+        for (const sign of signs) {
+          expect(!!sign.querySelector(`.${styles.post}`)).toBe(course !== 'office');
+          expect(sign.querySelector('p')!.classList.contains(styles.note!)).toBe(
+            course === 'office',
+          );
+        }
+      });
+    });
+
+    RuleScenario('The photo shows the track', ({ Given, When, Then }) => {
+      let run: OnTrack;
+      Given('a photo finish on the Moon', async () => {
+        run = await onTrack('moon');
+      });
+      When('the photo pops up', () => {
+        expect(run.photo).not.toBeNull();
+      });
+      Then("it shows the Moon's ground and its finish line behind the two racers", () => {
+        const view = run.photo!.firstElementChild as HTMLElement;
+        expect(view.dataset.course).toBe('moon');
+        expect(view.classList).toContain(styles.moon);
+        const picture = view.querySelector(':scope > svg')!;
+        expect(picture.querySelector('rect')!.getAttribute('class')).toBe(styles.shark);
+        expect(picture.querySelector(`.${styles.inkFill}`)).not.toBeNull();
+        const racers = [...view.querySelectorAll('[data-person]')];
+        expect(racers).toHaveLength(2);
+        for (const racer of racers) {
+          expect(picture.compareDocumentPosition(racer) & Node.DOCUMENT_POSITION_FOLLOWING).toBe(
+            Node.DOCUMENT_POSITION_FOLLOWING,
+          );
+        }
+      });
+    });
+
+    RuleScenario('Every track reads over a screen share', ({ When, Then, And }) => {
+      const runs: OnTrack[] = [];
+      When('the show runs on each track at {int} people', async () => {
+        for (const course of COURSES) runs.push(await onTrack(course));
+      });
+      Then(
+        'every caption, sign and name tag is ink text on a paper or sun sticker with an ink outline',
+        () => {
+          for (const run of runs) {
+            const what = new Set(run.stickers.map((sticker) => sticker.what));
+            for (const each of ['caption', 'sign', 'tag', 'bubble']) expect(what).toContain(each);
+            for (const sticker of run.stickers) {
+              expect(['var(--color-paper)', 'var(--color-sun)'], sticker.text).toContain(
+                sticker.background,
+              );
+              expect(sticker.colour, sticker.text).toBe('var(--color-ink)');
+              expect(sticker.border, sticker.text).toContain('var(--color-ink)');
+            }
+          }
+        },
+      );
+      And("on the Moon's dark sky, nothing but those stickers carries text", () => {
+        const moon = runs.find((run) => run.watched.plan.course === 'moon')!;
+        expect(moon.sky).toBe('var(--color-ink)');
+        for (const run of runs) expect(run.loose, run.watched.plan.course).toEqual([]);
+      });
+    });
+
+    RuleScenarioOutline(
+      'On <track>, <caption>',
+      ({ When, Then, And }, { track: where, event: kind, caption }) => {
+        const course = COURSE_NAMES[where]!;
+        let run: OnTrack;
+        let event: RaceEvent;
+        /** The racer's frames from `from` to `to` s into the event. */
+        const during = (from: number, to: number) =>
+          between(run.watched, event.at + from, event.at + to).map((frame) => ({
+            ...frame,
+            racer: frame.racers[event.subject]!,
+          }));
+        /** Whether the racer is further back once off again than as the event started. */
+        const furtherBack = () => {
+          const { plan } = run.watched;
+          return (
+            orderAt(plan, event.at + STOP.off).indexOf(event.subject) >
+            orderAt(plan, event.at - 0.01).indexOf(event.subject)
+          );
+        };
+        const says = (text: string) =>
+          during(0, 3).some((frame) => saying(frame, event.subject, text));
+        const leads = () => leaderAt(run.watched.plan, event.at + BURST.seconds) === event.subject;
+        /** Each time, aloft or not, a name tag is over another or over a face. */
+        const tagsOver = () =>
+          during(0, 2).flatMap((frame) => {
+            const { team } = run.watched;
+            const drawn = team.map((name, i) => {
+              const at = lane(i, team.length);
+              const kind = kindOf(run.watched, name);
+              const { nose, lift } = frame.racers[name]!;
+              return {
+                name,
+                face: raised(faceAt(kind, at, nose), lift),
+                tag: raised(tagBox(name, kind, at, nose), lift),
+              };
+            });
+            return drawn.flatMap((one) =>
+              drawn
+                .filter(
+                  (other) =>
+                    (one !== other && overlap(one.tag, other.tag)) || overlap(one.tag, other.face),
+                )
+                .map((other) => `${frame.time.toFixed(1)}: ${one.name}'s tag on ${other.name}`),
+            );
+          });
+        When("someone's event is <track>'s own <event>", async () => {
+          run = await onTrack(course, kind as RaceEvent['kind']);
+          event = run.watched.plan.events.find((each) => each.cause === 'track')!;
+          expect(event.kind).toBe(kind);
+          expect(event.subject).toBe(SUBJECTS[course]);
+        });
+        Then('the caption is "<caption>"', () => {
+          const shown = run.watched.record.captions.find((each) => each.text === caption);
+          expect(shown!.from).toBeCloseTo(event.at, 0);
+        });
+        And('<what>', () => {
+          // Whatever the racer is, its own burst or stop doesn't happen.
+          for (const frame of during(0, STOP.off)) {
+            expect(frame.racer.props).toBe('');
+            expect(frame.racer.leaf).toBe(false);
+          }
+          const key = `${course} ${kind}`;
+          if (key === 'office stop') {
+            const nose = noseAt(run.watched.plan, event.subject, event.at + STOP.seconds);
+            const machine = run.standing.filter(
+              (each) => each.time >= event.at && each.time < event.at + STOP.off,
+            );
+            expect(machine.length).toBeGreaterThan(10);
+            expect(machine.every((each) => each.part === 'machine' && each.y === 0)).toBe(true);
+            const by = machine.find((each) => each.time >= event.at + STOP.seconds)!;
+            expect(by.x).toBeGreaterThan(nose - 400);
+            expect(by.x).toBeLessThan(nose);
+            const holding = during(OWN_CUP + 0.05, STOP.off - 0.05);
+            expect(holding.every((frame) => frame.racer.track === 'cup')).toBe(true);
+          }
+          if (key === 'office burst') {
+            const sign = run.standing.filter((each) => each.part === 'wet-floor');
+            const at = sign.find((each) => each.time >= event.at)!;
+            const index = run.watched.team.indexOf(event.subject);
+            expect(at.y).toBeCloseTo(lane(index, 8).ground, 0);
+            expect(at.x).toBeGreaterThan(noseAt(run.watched.plan, event.subject, event.at));
+            const tilts = during(0, BURST.seconds).map((f) => parseFloat(f.racer.rotate || '0'));
+            expect(Math.min(...tilts)).toBeLessThan(-5);
+          }
+          if (key === 'sea stop') {
+            const wrapped = during(0.05, STOP.phew - 0.05);
+            expect(wrapped.every((frame) => frame.racer.track === 'seaweed')).toBe(true);
+            const free = during(STOP.phew + 0.05, STOP.off);
+            expect(free.every((frame) => frame.racer.track === '')).toBe(true);
+          }
+          if (key === 'sea burst') {
+            const carried = during(0.05, BURST.seconds);
+            expect(carried.every((frame) => frame.racer.track === 'swirls')).toBe(true);
+          }
+          if (key === 'moon stop') {
+            const lifts = during(0, STOP.off + 0.3).map((frame) => frame.racer.lift);
+            expect(Math.max(...lifts)).toBeGreaterThan(5);
+            expect(lifts.at(-1)).toBe(0);
+            const up = during(0, STOP.off).filter((frame) => frame.racer.lift > 0);
+            expect(up.every((frame) => run.shadows.includes(frame.time))).toBe(true);
+            expect(tagsOver()).toEqual([]);
+          }
+          if (key === 'moon burst') {
+            const lifts = during(0, 2).map((frame) => frame.racer.lift);
+            expect(Math.max(...lifts)).toBeGreaterThan(5);
+            // One hop: up, then down, once, over more than a second.
+            const turns = lifts
+              .slice(1)
+              .map((lift, i) => Math.sign(lift - lifts[i]!))
+              .filter((sign, i, all) => sign !== 0 && sign !== all[i - 1]);
+            expect(turns).toEqual([1, -1]);
+            expect(lifts.filter((lift) => lift > 0).length * STEP).toBeGreaterThan(1);
+            expect(tagsOver()).toEqual([]);
+          }
+          if (kind === 'stop') {
+            expect(during(0.5, STOP.off).some((frame) => frame.racer.pose === 'wave')).toBe(true);
+            expect(says('Phew!')).toBe(true);
+            expect(furtherBack()).toBe(true);
+          } else {
+            expect(leads()).toBe(true);
+            expect(says('Nooo!')).toBe(true);
+          }
+        });
+      },
+    );
+
+    RuleScenario('The sports field keeps the events it has', ({ When, Then }) => {
+      let runs: Plan[];
+      When('the show runs on the sports field', () => {
+        runs = [2, 5, 8].flatMap((count) => plansOn(names(count), names(count).at(-1)!, 'field'));
+      });
+      Then("every event is a racer's own burst or stop", () => {
+        for (const plan of runs) expect(own(plan)).toEqual([]);
+      });
+    });
+
+    RuleScenarioOutline(
+      'On <track>, the unlucky person still crosses first',
+      ({ Given, When, Then }, { track }) => {
+        let runs: Plan[];
+        Given('8 people, on <track>', () => undefined);
+        When('the show runs with {int} different random seeds', (_, seeds: number) => {
+          runs = plansOn(team, unlucky, COURSE_NAMES[track]!, seeds);
+        });
+        Then("the first nose over the finish line is always the unlucky person's", () => {
+          for (const plan of runs) {
+            const crossing = crossingOf(plan, unlucky);
+            expect(crossing).not.toBeNull();
+            expect(crossing!).toBeLessThanOrEqual(plan.times.finish + 1e-9);
+            for (const name of team.filter((each) => each !== unlucky)) {
+              const theirs = crossingOf(plan, name);
+              if (theirs !== null) expect(theirs).toBeGreaterThan(crossing!);
+            }
+          }
+        });
+      },
+    );
+
+    RuleScenario('Every track keeps the show inside the limit', ({ When, Then }) => {
+      let runs: Plan[];
+      When('the show runs at 2, 5 and 8 people on each track, with each ending', () => {
+        runs = [2, 5, 8].flatMap((count) =>
+          COURSES.flatMap((course) =>
+            ENDINGS.flatMap((ending) =>
+              plansOn(names(count), names(count).at(-1)!, course, 1, (p) => p.ending === ending),
+            ),
+          ),
+        );
+      });
+      Then('each run lasts between {int} and {int} seconds', (_, least: number, most: number) => {
+        expect(runs).toHaveLength(36);
+        for (const plan of runs) {
+          expect(plan.times.end, `${plan.course} ${plan.ending}`).toBeGreaterThanOrEqual(least);
+          expect(plan.times.end, `${plan.course} ${plan.ending}`).toBeLessThanOrEqual(most);
         }
       });
     });
@@ -1623,7 +2194,7 @@ describeSpec(await loadFeature('./the-race.feature'), ({ Rule }) => {
         "the caption is Anna's mount bursting ahead, as in an event, and she shouts {string}",
         (_, shout: string) => {
           const { slow, finish } = watched.plan.times;
-          const surge = { kind: 'burst', subject: 'Anna', at: slow } as const;
+          const surge = { kind: 'burst', subject: 'Anna', cause: 'racer', at: slow } as const;
           const said = eventCaption(surge, kindOf(watched, 'Anna'));
           const shown = watched.record.captions.find((each) => each.text === said)!;
           expect(shown.from).toBeCloseTo(slow, 1);
@@ -1838,8 +2409,12 @@ describeSpec(await loadFeature('./the-race.feature'), ({ Rule }) => {
         watched.team.map((name, i) => {
           const at = lane(i, watched.team.length);
           const mount = (watched.looks.get(name)!.mount ?? 'snail') as Mount;
-          const nose = frame.racers[name]!.nose;
-          return { name, face: faceAt(mount, at, nose), tag: tagBox(name, mount, at, nose) };
+          const { nose, lift } = frame.racers[name]!;
+          return {
+            name,
+            face: raised(faceAt(mount, at, nose), lift),
+            tag: raised(tagBox(name, mount, at, nose), lift),
+          };
         });
       When('the show runs at 8, at 4 and at 2 people, a 15-character name among them', async () => {
         runs = await Promise.all([8, 4, 2].map((count) => shared.long(count)));
@@ -1942,8 +2517,12 @@ describeSpec(await loadFeature('./the-race.feature'), ({ Rule }) => {
         watched.team.map((name, i) => {
           const at = lane(i, watched.team.length);
           const kind = kindOf(watched, name);
-          const nose = frame.racers[name]!.nose;
-          return { name, face: faceAt(kind, at, nose), tag: tagBox(name, kind, at, nose) };
+          const { nose, lift } = frame.racers[name]!;
+          return {
+            name,
+            face: raised(faceAt(kind, at, nose), lift),
+            tag: raised(tagBox(name, kind, at, nose), lift),
+          };
         });
       When(
         'the show runs at 8 and at 2 people, riders and creatures mixed, a 15-character name among them',
@@ -2197,6 +2776,13 @@ describe('the plan', () => {
         }
       });
       expect(plan.events.at(-1)!.at + spacing(count), label).toBeCloseTo(plan.times.stretch);
+    }
+  });
+
+  it('has one event of the track’s own off the sports field, and none on it', () => {
+    for (const { label, plan } of all) {
+      const own = plan.events.filter((event) => event.cause === 'track');
+      expect(own, label).toHaveLength(plan.course === 'field' ? 0 : 1);
     }
   });
 

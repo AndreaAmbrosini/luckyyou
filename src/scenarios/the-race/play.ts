@@ -3,7 +3,8 @@
 // and what their mount or creature does follow from the show's time each
 // frame, so every frame follows from the plan alone. Gaits bob outside the
 // timeline, on the show's clock, so their endless repeats don't keep the show
-// going. The stage tells its story in data attributes too: the part of the
+// going. Off the sports field, one event is the track's own, and brings its
+// props instead of what the racer's mount or creature does. The stage tells its story in data attributes too: the part of the
 // race, the camera, whether it is slow, and each racer's nose, gait and stop.
 
 import { gsap } from 'gsap';
@@ -22,12 +23,14 @@ import { creature, CREATURE_SPEC, type CreatureRunner } from './creature';
 import { boxAt, bubbleOffsets, faceAt, lane, tagAt, tagBox, tagSize, type Lane } from './layout';
 import {
   isCreature,
+  group,
   photoCard,
   PHOTO,
   RACER_COLOURS,
   racer,
   show as showPart,
   track,
+  TRACK_PROPS,
   type Creature,
   type Kind,
   type Pose,
@@ -48,6 +51,7 @@ import {
   START,
   STOP,
   stopping,
+  type Course,
   type Plan,
   type RaceEvent,
 } from './plan';
@@ -93,6 +97,13 @@ const STOPS: Record<Kind, string> = {
   dinosaur: "can't reach its snack",
 };
 
+/** What each track does to someone in its own burst and stop. */
+const TRACK_EVENTS: Record<Exclude<Course, 'field'>, Record<RaceEvent['kind'], string>> = {
+  office: { burst: 'slides on a wet floor', stop: 'stops at the coffee machine' },
+  sea: { burst: 'catches a current', stop: 'gets tangled in seaweed' },
+  moon: { burst: 'does a moon bounce', stop: 'floats off the ground' },
+};
+
 /** Each mount's or creature's gait: how far it bobs, in stage pixels, and how often. */
 const GAITS: Record<Kind, { px: number; seconds: number }> = {
   snail: { px: 3, seconds: 1.1 },
@@ -118,6 +129,13 @@ function drawRacer(look: RacerLook, face: Look, number: number): Runner {
   return isCreature(look.mount)
     ? creature(look as RacerLook & { mount: Creature }, { face, number })
     : racer(look as RideLook, { face, number });
+}
+
+/** A track's prop drawn on a racer, hidden until its event shows it. */
+function propOn(el: SVGElement, prop: 'cup' | 'seaweed' | 'swirls'): SVGGElement {
+  const g = group(el, prop, TRACK_PROPS[prop]);
+  showPart(g, false);
+  return g;
 }
 
 /** A duck that hits a pebble tips up by `degrees` and back over `seconds`, about its back wheel. */
@@ -149,6 +167,25 @@ const LAY = { drop: 0.2, fall: 0.3, from: [30, 100], to: [10, 142], look: 0.5 };
 const STEAM = { rise: 30 };
 /** A pickle drops out `drop` s into a stop, over `fall` s, to the ground in front, and is picked up at "Phew!". */
 const DROP = { drop: 0.1, fall: 0.35, from: [184, 134], to: [222, 180] };
+/**
+ * A track's own burst shows for `burst` s, past the burst itself, so the
+ * moon bounce is one long hop; it skids `skid` degrees on a wet floor. A
+ * stop holds a cup from `cup` s in, by the face; seaweed wraps round until
+ * "Phew!", shaken for the last `shake` s; on the Moon a racer floats and
+ * hops over its shadow, up to `rise` stage px, as long as its face and tag
+ * stay `clear` px from every tag and face in the lanes behind, tilting up
+ * to `drift` degrees nose up.
+ */
+const OWN = { burst: 1.4, skid: -10, drift: -8, cup: 0.3, shake: 0.4, rise: 70, clear: 4 };
+/**
+ * Where the cup, the seaweed and the swirls sit on a racer's grid, and how
+ * big: the swirls over its back, clear of the tags and the lane in front.
+ */
+const HELD = { cup: [28, 52, 0.95], seaweed: [20, 70, 1.25], swirls: [-50, -150, 1.3] } as const;
+/** The coffee machine stands this far behind the face of whoever stops at it. */
+const MACHINE = 120;
+/** The wet-floor sign, this many times its racer's scale. */
+const WET_FLOOR = 1.3;
 /** A bubble pops in over this many seconds. */
 const POP = 0.25;
 /** Seconds between the moments a bubble is checked clear of the faces and tags round it. */
@@ -226,18 +263,29 @@ interface Rider {
   readonly flame: SVGElement[];
   readonly legs: SVGElement[];
   readonly head: SVGElement[];
+  /** What the track's own event brings to this racer: a cup, seaweed, swirls, a shadow. */
+  readonly own: {
+    cup?: SVGGElement;
+    seaweed?: SVGGElement;
+    swirls?: SVGGElement;
+    shadow?: HTMLElement;
+  };
   state: { mood: Mood; pose: Pose; sweat: boolean } | null;
 }
 
-/** The caption for an event, as the commentator says it. */
-export function eventCaption(event: RaceEvent, kind: Kind): string {
+/** The caption for an event, as the commentator says it: the track's own names only the racer. */
+export function eventCaption(event: RaceEvent, kind: Kind, course: Course = 'field'): string {
+  if (event.cause === 'track' && course !== 'field') {
+    return `${event.subject} ${TRACK_EVENTS[course][event.kind]}!`;
+  }
   const did = event.kind === 'burst' ? BURSTS[kind] : STOPS[kind];
   return `${event.subject}'s ${kind} ${did}!`;
 }
 
 /**
  * What gets said when: "Nooo!" in a burst and in a surge; "Zzz…" from a
- * dozing caterpillar and "Phew!" in a stop, and from the rival who brakes.
+ * dozing caterpillar, "Hic!" from a monster, and "Phew!" in any stop, and
+ * from the rival who brakes.
  */
 function sayings(plan: Plan, unlucky: string, mountOf: (name: string) => Kind): Saying[] {
   const { slow, finish, win } = plan.times;
@@ -250,11 +298,13 @@ function sayings(plan: Plan, unlucky: string, mountOf: (name: string) => Kind): 
   const events = plan.events.flatMap((event): Saying[] => {
     const { subject: name, at } = event;
     if (event.kind === 'burst') return [{ name, text: 'Nooo!', from: at + 0.1, to: at + 1.4 }];
+    // A track's stop brings no snoring or hiccups.
+    const kind = event.cause === 'racer' ? mountOf(name) : null;
     return [
-      ...(mountOf(name) === 'caterpillar'
+      ...(kind === 'caterpillar'
         ? [{ name, text: 'Zzz…', from: at + 0.3, to: at + STOP.phew - 0.1 }]
         : []),
-      ...(mountOf(name) === 'monster'
+      ...(kind === 'monster'
         ? HICCUPS.at.map((hic) => ({ name, text: 'Hic!', from: at + hic, to: at + hic + 0.4 }))
         : []),
       { name, text: 'Phew!', from: at + STOP.phew, to: at + STOP.phew + 1.1 },
@@ -272,12 +322,22 @@ export async function playTheRace(show: Show): Promise<void> {
 
   const scene = show.stage.appendChild(document.createElement('div'));
   scene.className = styles.scene!;
+  const { course } = plan;
+  const own = plan.events.find((event) => event.cause === 'track') ?? null;
   const field = track({
     lanes: show.names.map((_, index) => lane(index, count).top),
     start: START.line,
     finish: FINISH + cameraAt(plan, times.finish),
+    course: plan.course,
   });
   scene.append(field.el);
+  // What stands on the track for its own event: the coffee machine, the wet-floor sign.
+  const props = scene.appendChild(document.createElement('div'));
+  props.className = styles.layer!;
+  const stands = props.appendChild(document.createElementNS('http://www.w3.org/2000/svg', 'svg'));
+  stands.setAttribute('class', `${styles.full} ${styles.drawing}`);
+  stands.setAttribute('viewBox', '0 0 1280 720');
+  stands.setAttribute('aria-hidden', 'true');
   const trails = scene.appendChild(document.createElementNS('http://www.w3.org/2000/svg', 'svg'));
   trails.setAttribute('class', `${styles.full} ${styles.drawing}`);
   trails.setAttribute('viewBox', '0 0 1280 720');
@@ -342,10 +402,38 @@ export async function playTheRace(show: Show): Promise<void> {
     });
     gait.pause();
     // A hopper's bounces go on top of its gait.
-    drawn.el.style.setProperty('translate', '0 calc(var(--bob) + var(--hop, 0px))');
+    drawn.el.style.setProperty(
+      'translate',
+      '0 calc(var(--bob) + var(--hop, 0px) + var(--lift, 0px))',
+    );
     const parts = (part: string) => [
       ...drawn.el.querySelectorAll<SVGElement>(`[data-part="${part}"]`),
     ];
+    // What the track's own event brings, for whoever it happens to.
+    const mine: Rider['own'] = {};
+    if (own?.subject === name) {
+      const held = (prop: 'cup' | 'seaweed') => {
+        const [x, y, size] = HELD[prop];
+        const g = propOn(drawn.el, prop);
+        g.setAttribute(
+          'transform',
+          `translate(${prop === 'cup' ? drawn.faceX + x : x} ${y}) scale(${size})`,
+        );
+        return g;
+      };
+      if (course === 'office' && own.kind === 'stop') mine.cup = held('cup');
+      if (course === 'sea' && own.kind === 'stop') mine.seaweed = held('seaweed');
+      if (course === 'sea' && own.kind === 'burst') {
+        mine.swirls = propOn(drawn.el, 'swirls');
+        drawn.el.prepend(mine.swirls);
+      }
+      if (course === 'moon') {
+        mine.shadow = props.appendChild(document.createElement('div'));
+        mine.shadow.className = styles.shadow!;
+        mine.shadow.dataset.part = 'shadow';
+        mine.shadow.hidden = true;
+      }
+    }
     return {
       name,
       index,
@@ -361,10 +449,85 @@ export async function playTheRace(show: Show): Promise<void> {
       flame: parts('flame'),
       legs: parts('legs'),
       head: parts('bird-head'),
+      own: mine,
       state: null,
     };
   });
   const byName = new Map(riders.map((rider) => [rider.name, rider]));
+
+  // What the track's own event stands on the track, where along it: the
+  // coffee machine on the floor behind whoever stops there, or the
+  // wet-floor sign in the lane, just ahead of whoever slides on it.
+  const standing = (() => {
+    if (course !== 'office' || !own) return null;
+    const { look, at, holder } = byName.get(own.subject)!;
+    if (own.kind === 'stop') {
+      const when = own.at + STOP.seconds;
+      const face = faceAt(look.mount, at, noseAt(plan, own.subject, when));
+      return {
+        el: group(stands, 'machine', TRACK_PROPS.machine),
+        along: (face.left + face.right) / 2 - MACHINE + cameraAt(plan, when),
+        ground: 0,
+        k: 1,
+      };
+    }
+    // In its lane: over the racer that slides past it, under the lanes in front.
+    const lane = stands.cloneNode() as SVGSVGElement;
+    holder.after(lane);
+    return {
+      el: group(lane, 'wet-floor', TRACK_PROPS.wetFloor),
+      along: noseAt(plan, own.subject, own.at) + cameraAt(plan, own.at) + 30,
+      ground: at.ground,
+      k: at.k * WET_FLOOR,
+    };
+  })();
+
+  /** How far into the track's own event `name` is at show second `t`, or -1. */
+  const ownSince = (name: string, t: number) => {
+    if (own?.subject !== name || t < own.at) return -1;
+    return t < own.at + (own.kind === 'stop' ? STOP.off : OWN.burst) ? t - own.at : -1;
+  };
+
+  /** A racer's face and tag on the stage with its nose at `nose`. */
+  const facing = ({ name, look, at }: Rider, nose: number) => [
+    faceAt(look.mount, at, nose),
+    tagBox(name, look.mount, at, nose),
+  ];
+
+  // How high the Moon's own event lifts its racer at most: as high as it can
+  // while, at each moment of its rise and fall, nothing of it touches a tag,
+  // or a tag of it touches a face, behind it.
+  const rise = (() => {
+    if (course !== 'moon' || !own) return 0;
+    const subject = byName.get(own.subject)!;
+    const seconds = own.kind === 'stop' ? STOP.off : OWN.burst;
+    let most = OWN.rise;
+    for (let t = own.at; t <= own.at + seconds; t += SAMPLE / 2) {
+      const share = Math.sin((Math.PI * (t - own.at)) / seconds);
+      if (share < 0.05) continue;
+      const mine = facing(subject, noseAt(plan, subject.name, t));
+      for (const other of riders.filter((rider) => rider !== subject)) {
+        const theirs = facing(other, noseAt(plan, other.name, t));
+        mine.forEach((one, i) =>
+          theirs.forEach((two, j) => {
+            // Face by face is no tag over anything; a box wider by half a sample's travel.
+            const side = i + j > 0 && one.left - 20 < two.right && two.left < one.right + 20;
+            if (side && two.bottom <= one.top) {
+              most = Math.min(most, (one.top - two.bottom - OWN.clear) / share);
+            }
+          }),
+        );
+      }
+    }
+    return Math.max(0, most);
+  })();
+
+  /** How high `name` floats or hops on the Moon at show second `t`, in stage px. */
+  const liftOf = (name: string, t: number) => {
+    const since = ownSince(name, t);
+    if (course !== 'moon' || since < 0) return 0;
+    return rise * Math.sin((Math.PI * since) / (own!.kind === 'stop' ? STOP.off : OWN.burst));
+  };
 
   // The photo finish: the two side-on at the line, the unlucky nose over it.
   const photo =
@@ -383,6 +546,7 @@ export async function playTheRace(show: Show): Promise<void> {
                 return { name, racer: drawn, nose };
               }),
             `${show.unlucky}, by a nose!`,
+            plan.course,
           ),
         )
       : null;
@@ -394,18 +558,14 @@ export async function playTheRace(show: Show): Promise<void> {
     const speaker = byName.get(saying.name)!;
     const samples: { face: Box; tag: Box; avoid: Box[] }[] = [];
     for (let t = saying.from; t <= saying.to + SAMPLE; t += SAMPLE) {
-      const own = noseAt(plan, speaker.name, t);
-      samples.push({
-        face: faceAt(speaker.look.mount, speaker.at, own),
-        tag: tagBox(speaker.name, speaker.look.mount, speaker.at, own),
-        avoid: riders.flatMap((rider) => {
-          const nose = noseAt(plan, rider.name, t);
-          return [
-            faceAt(rider.look.mount, rider.at, nose),
-            tagBox(rider.name, rider.look.mount, rider.at, nose),
-          ];
-        }),
-      });
+      // Where each face and tag is, raised if it floats.
+      const placed = (rider: Rider) =>
+        facing(rider, noseAt(plan, rider.name, t)).map((box) => {
+          const lift = liftOf(rider.name, t);
+          return { ...box, top: box.top - lift, bottom: box.bottom - lift };
+        });
+      const [face, tag] = placed(speaker);
+      samples.push({ face: face!, tag: tag!, avoid: riders.flatMap(placed) });
     }
     const offsets = bubbleOffsets(saying.text, samples);
     const el = bubbles.appendChild(bubble(saying.text, { x: 0, y: 0 }));
@@ -422,6 +582,7 @@ export async function playTheRace(show: Show): Promise<void> {
     const event = plan.events.find(
       (each) =>
         each.kind === 'burst' &&
+        each.cause === 'racer' &&
         each.subject === name &&
         t >= each.at &&
         t < each.at + BURST.seconds,
@@ -657,9 +818,77 @@ export async function playTheRace(show: Show): Promise<void> {
     } as const;
   };
 
+  /** What the track's own event does to `rider`: its props, its skid; `since` is how far in. */
+  const undergo = (rider: Rider, t: number, since: number) => {
+    const { cup, seaweed, swirls, shadow } = rider.own;
+    const still = show.reducedMotion;
+    const shown: string[] = [];
+    if (cup) {
+      showPart(cup, since >= OWN.cup);
+      if (since >= OWN.cup) shown.push('cup');
+    }
+    if (seaweed) {
+      const wrapped = since >= 0 && since < STOP.phew;
+      showPart(seaweed, wrapped);
+      if (wrapped) shown.push('seaweed');
+      const shaking = wrapped && !still && since > STOP.phew - OWN.shake;
+      const [x, y, size] = HELD.seaweed;
+      const shake = shaking ? ` rotate(${(8 * Math.sin(40 * since)).toFixed(1)} 80 60)` : '';
+      write(seaweed, '@transform', `translate(${x} ${y}) scale(${size})${shake}`);
+    }
+    if (swirls) {
+      showPart(swirls, since >= 0);
+      if (since >= 0) shown.push('swirls');
+      const drift = since >= 0 && !still ? (-40 * since) / OWN.burst : 0;
+      const [x, y, size] = HELD.swirls;
+      write(swirls, '@transform', `translate(${(x + drift).toFixed(1)} ${y}) scale(${size})`);
+    }
+    const lift = liftOf(rider.name, t);
+    write(rider.drawn.el, '--lift', `${(-lift / rider.at.k).toFixed(1)}px`);
+    write(rider.drawn.el, '@data-lift', lift.toFixed(1));
+    if (shadow) {
+      reveal(shadow, lift > 0);
+      if (lift > 0) {
+        const box = boxAt(rider.look.mount, rider.at, noseAt(plan, rider.name, t));
+        write(
+          shadow,
+          'translate',
+          `${(box.left + 30 * rider.at.k).toFixed(1)}px ${(rider.at.ground - 8).toFixed(1)}px`,
+        );
+        write(shadow, 'width', `${(180 * rider.at.k).toFixed(1)}px`);
+      }
+    }
+    write(rider.drawn.el, '@data-track', shown.join(' '));
+    // A skid on the wet floor tilts the racer back as it shoots ahead; on
+    // the Moon it tilts nose up as it rises, however little room it has.
+    if (since < 0 || still) return 0;
+    if (course === 'office' && own?.kind === 'burst') {
+      return OWN.skid * Math.sin((Math.PI * since) / OWN.burst);
+    }
+    if (course === 'moon') {
+      return (
+        OWN.drift * Math.sin((Math.PI * since) / (own!.kind === 'stop' ? STOP.off : OWN.burst))
+      );
+    }
+    return 0;
+  };
+
   const place = (t: number) => {
     const camera = cameraAt(plan, t);
     field.set(camera);
+    if (standing) {
+      const x = standing.along - camera;
+      const near = x > -200 && x < 1480;
+      showPart(standing.el, near);
+      write(standing.el, '@data-x', near ? x.toFixed(1) : '');
+      if (near) {
+        write(
+          standing.el,
+          '@transform',
+          `translate(${x.toFixed(1)} ${standing.ground.toFixed(1)}) scale(${standing.k.toFixed(3)})`,
+        );
+      }
+    }
     write(scene, '@data-camera', camera.toFixed(1));
     const slow = t >= times.slow && t < times.finish;
     write(scene, '@data-slow', String(slow));
@@ -674,10 +903,11 @@ export async function playTheRace(show: Show): Promise<void> {
       write(holder, 'translate', `${box.left.toFixed(1)}px ${box.top.toFixed(1)}px`);
       write(holder, '@data-nose', nose.toFixed(1));
       const beside = tagAt(look.mount, at, nose);
+      const middle = beside.middle - liftOf(rider.name, t);
       write(
         tag,
         'translate',
-        `calc(${beside.right.toFixed(1)}px - 100%) calc(${beside.middle.toFixed(1)}px - 50%)`,
+        `calc(${beside.right.toFixed(1)}px - 100%) calc(${middle.toFixed(1)}px - 50%)`,
       );
 
       const next = feel(rider, t, leader, front);
@@ -695,14 +925,15 @@ export async function playTheRace(show: Show): Promise<void> {
       write(holder, '@data-gait', moving ? (slow ? 'slow' : 'on') : 'off');
       write(holder, '@data-stopped', String(!!stop));
 
-      // What a stop does to each mount.
-      const since = stop ? t - stop.at : -1;
+      // What a stop does to each mount, unless the track stopped it.
+      const since = stop?.cause === 'racer' ? t - stop.at : -1;
+      const skid = undergo(rider, t, ownSince(rider.name, t));
       rider.ridden?.setLeaf(look.mount === 'snail' && since >= 0.2);
       const tip =
         look.mount === 'duck' && since >= 0 && since < TIP.seconds && !show.reducedMotion
           ? TIP.degrees * Math.sin((Math.PI * since) / TIP.seconds)
           : 0;
-      const tilt = tip ? `${tip.toFixed(1)}deg` : '';
+      const tilt = tip || skid ? `${(tip + skid).toFixed(1)}deg` : '';
       write(drawn.el, 'rotate', tilt);
       write(drawn.el, '@data-rotate', tilt);
       const turn = look.mount === 'chair' ? SPIN : look.mount === 'villain' ? CAPE : null;
@@ -754,7 +985,7 @@ export async function playTheRace(show: Show): Promise<void> {
       const face = faceAt(look.mount, at, noseAt(plan, name, t));
       const offset = saying.offsets[Math.floor((t - saying.from) / SAMPLE + 1e-9)]!;
       const x = ((face.left + face.right) / 2 + offset.dx).toFixed(1);
-      const y = (face.top + offset.dy).toFixed(1);
+      const y = (face.top + offset.dy - liftOf(name, t)).toFixed(1);
       write(saying.el, 'left', `${x}px`);
       write(saying.el, 'top', `${y}px`);
       write(saying.el, '@data-x', x);
@@ -775,7 +1006,7 @@ export async function playTheRace(show: Show): Promise<void> {
   at(times.go, () => show.caption('Go!'));
   cue(times.go, 'pop');
   for (const event of plan.events) {
-    at(event.at, () => show.caption(eventCaption(event, lookOf(event.subject).mount)));
+    at(event.at, () => show.caption(eventCaption(event, lookOf(event.subject).mount, course)));
     cue(event.at, event.kind === 'burst' ? 'whoosh' : 'thunk');
   }
   at(times.stretch, () => show.caption('Final stretch!'));
@@ -789,7 +1020,7 @@ export async function playTheRace(show: Show): Promise<void> {
     cue(times.slow, 'creak');
     at(times.slow + 1, () => show.caption(`${show.unlucky} can't stop!`));
   } else {
-    const surge = { kind: 'burst', subject: show.unlucky, at: times.slow } as const;
+    const surge = { kind: 'burst', subject: show.unlucky, cause: 'racer', at: times.slow } as const;
     at(times.slow, () => show.caption(eventCaption(surge, lookOf(show.unlucky).mount)));
     cue(times.slow, 'whoosh');
   }

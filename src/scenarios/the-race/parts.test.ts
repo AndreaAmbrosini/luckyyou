@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { Look } from '../../scenario-kit';
+import { COURSES } from './plan';
+import styles from './the-race.module.css';
 import {
   EXTRAS,
   MOUNTS,
@@ -156,7 +158,7 @@ describe('the track', () => {
 
   it('has grass, a paper line between each lane, the rail and bunting', () => {
     const { el } = track({ lanes, start: 426, finish: 6000 });
-    const lines = el.querySelector('[data-part="ground"] path')!.getAttribute('d')!;
+    const lines = el.querySelector('[data-part="lines"] path')!.getAttribute('d')!;
     expect(lines.match(/M/g)).toHaveLength(2);
     expect(el.querySelectorAll('[data-part="flags"] path').length).toBeGreaterThan(20);
     expect(el.querySelectorAll('[data-part="sign"]')).toHaveLength(5);
@@ -196,6 +198,72 @@ describe('the track', () => {
   });
 });
 
+describe('the office, the sea and the Moon', () => {
+  const lanes = [216, 278, 340];
+  const at = (el: Element, part: string) =>
+    el.querySelector(`[data-part="${part}"]`)!.getAttribute('transform');
+
+  it('draws each track on its own sky, and marks which it is', () => {
+    for (const course of COURSES) {
+      const { el } = track({ lanes, start: 426, finish: 6000, course });
+      expect(el.dataset.course).toBe(course);
+      expect(el.classList).toContain(styles[course]);
+    }
+  });
+
+  it('moves the office’s wall at half the camera’s speed, and its partitions and carpet with it', () => {
+    const office = track({ lanes, start: 426, finish: 6000, course: 'office' });
+    office.set(5100);
+    expect(at(office.el, 'wall')).toBe('translate(-1110.0 0)');
+    expect(at(office.el, 'panels')).toBe('translate(-100.0 0)');
+    expect(at(office.el, 'seams')).toBe('translate(-140.0 0)');
+    expect(at(office.el, 'finish')).toBe('translate(900.0 0)');
+  });
+
+  it('moves the sea’s fish slowly, and its seaweed and floats with the camera', () => {
+    const sea = track({ lanes, start: 426, finish: 6000, course: 'sea' });
+    sea.set(5100);
+    expect(at(sea.el, 'fish')).toBe('translate(-1020.0 0)');
+    expect(at(sea.el, 'seaweed')).toBe('translate(0.0 0)');
+    expect(at(sea.el, 'floats')).toBe('translate(-60.0 0)');
+  });
+
+  it('moves the Moon’s dashes and craters with the camera, and its sky barely', () => {
+    const moon = track({ lanes, start: 426, finish: 6000, course: 'moon' });
+    moon.set(5100);
+    expect(at(moon.el, 'lines')).toBe('translate(-60.0 0)');
+    expect(at(moon.el, 'craters')).toBe('translate(-1260.0 0)');
+    expect(at(moon.el, 'space')).toBe('translate(-510.0 0)');
+  });
+
+  it('repeats each picture across the whole stage, wherever the camera is', () => {
+    const office = track({ lanes, start: 426, finish: 6000, course: 'office' });
+    const seams = office.el.querySelector('[data-part="seams"]')!;
+    const xs = [...seams.children].map((tile) =>
+      Number(tile.getAttribute('transform')!.match(/translate\((\S+) /)![1]),
+    );
+    expect(Math.min(...xs)).toBeLessThanOrEqual(-160);
+    expect(Math.max(...xs)).toBeGreaterThanOrEqual(1280);
+  });
+
+  it('sticks the office’s signs to its partitions, and stands the others on posts', () => {
+    for (const course of COURSES) {
+      const { el } = track({ lanes, start: 426, finish: 6000, course });
+      const signs = [...el.querySelectorAll('[data-part="sign"]')];
+      expect(signs.map((sign) => sign.textContent)).toEqual([
+        'Start',
+        '150 m',
+        '100 m',
+        '50 m',
+        'Finish',
+      ]);
+      for (const sign of signs) {
+        expect(!!sign.querySelector(`.${styles.post}`), course).toBe(course !== 'office');
+      }
+    }
+  });
+});
+
 describe('the photo-finish card', () => {
   it('shows the two side-on at the line, each named, and the verdict', () => {
     const card = photoCard(
@@ -212,5 +280,24 @@ describe('the photo-finish card', () => {
     expect(card.querySelector('p:last-child')!.textContent).toBe('Anna, by a nose!');
     const anna = card.querySelector<HTMLElement>('[data-person="Anna"]')!;
     expect(anna.style.translate).toBe(`${396 - SPEC.duck.nose * 1.4}px ${352 - 190 * 1.4}px`);
+  });
+
+  it('shows the track’s ground and sky behind the racers', () => {
+    const grounds = {
+      field: styles.grass,
+      office: styles.carpet,
+      sea: styles.sun,
+      moon: styles.shark,
+    };
+    for (const course of COURSES) {
+      const card = photoCard(
+        [{ name: 'Anna', racer: drawn({ mount: 'duck' }), nose: 396 }],
+        'Anna, by a nose!',
+        course,
+      );
+      const view = card.firstElementChild!;
+      expect(view.classList).toContain(styles[course]);
+      expect(view.querySelector('svg rect')!.getAttribute('class')).toBe(grounds[course]);
+    }
   });
 });

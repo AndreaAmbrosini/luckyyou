@@ -1,6 +1,6 @@
 // Everyone rides a mount or races as a creature, as the host chose on the
-// Line-up, a lane each, down a sports-field track, the camera following the
-// leaders. Winning is losing: the leader looks scared, pulling on the reins
+// Line-up, a lane each, on a track drawn at random (a sports field, the
+// office, under the sea or the Moon), the camera following the leaders. Winning is losing: the leader looks scared, pulling on the reins
 // or flailing its arms. One thing happens at a time
 // before the final stretch, which runs at full speed; only the last moment
 // before the line is slow, and the unlucky person crosses first.

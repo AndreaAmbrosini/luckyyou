@@ -9,12 +9,6 @@ Feature: The Race
   finish, past a rival who brakes, or in a surge from behind. The contract in
   specs/scenarios.feature applies as well.
 
-  # The Race grows in three build steps, in this order: 1. four new rides, two
-  # extras and two colours; 2. creatures; 3. tracks drawn at random. Each
-  # pending scenario says its step. Scenarios marked "Old design" describe the
-  # race before a step; the build deletes each one, with its steps, when the
-  # scenario that replaces it passes.
-
   Rule: Its card
 
     Scenario: The picker shows The Race
@@ -88,8 +82,6 @@ Feature: The Race
       When someone races as the astronaut or the villain
       Then its face has the skin tone the kit hands out for the run
 
-  # Step 3.
-  @pending
   Rule: A track drawn at random
 
     Scenario: Each race draws its track
