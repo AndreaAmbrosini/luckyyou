@@ -97,7 +97,6 @@ Feature: The Race
       Then each run is on the sports field, the office, under the sea or the Moon
       And each of the four comes up in at least 5 runs
 
-    @pending
     Scenario Outline: What <track> looks like
       When the show runs on <track>
       Then the ground is <ground>, and paper name tags read clearly on it
@@ -154,7 +153,6 @@ Feature: The Race
         | under the sea    |
         | the Moon         |
 
-    @pending
     Scenario: The photo shows the track
       Given a photo finish on the Moon
       When the photo pops up
@@ -164,7 +162,6 @@ Feature: The Race
       When the show runs at 2, 5 and 8 people on each track, with each ending
       Then each run lasts between 14 and 25 seconds
 
-    @pending
     Scenario: Every track reads over a screen share
       When the show runs on each track at 8 people
       Then every caption, sign and name tag is ink text on a paper or sun sticker with an ink outline

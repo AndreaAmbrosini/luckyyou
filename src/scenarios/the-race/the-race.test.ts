@@ -156,12 +156,15 @@ async function watch(
     looks,
     cancelAt,
     reducedMotion = false,
+    onStage,
   }: {
     unlucky?: string;
     seed?: number;
     looks?: ReadonlyMap<string, ChosenLook>;
     cancelAt?: number;
     reducedMotion?: boolean;
+    /** Looks at the stage after each frame is read. */
+    onStage?: (time: number, scene: HTMLElement) => void;
   } = {},
 ): Promise<Watched> {
   const frames: Frame[] = [];
@@ -243,6 +246,7 @@ async function watch(
         racers,
         says,
       });
+      onStage?.(time, scene);
     },
   });
   const plan = planShow(team, unlucky, createRandom(seed));
@@ -398,6 +402,135 @@ function plansOn(
     if (plan.course === course && fits(plan)) found.push(plan);
   }
   return found;
+}
+
+/** A piece of text on the stage, and what carries it. */
+interface Sticker {
+  readonly text: string;
+  /** The sticker's own data attribute or part: what it is. */
+  readonly what: string;
+  readonly background: string;
+  readonly colour: string;
+  readonly border: string;
+}
+
+/** A run on one track, with what its stage showed beyond the frames. */
+interface OnTrack {
+  readonly watched: Watched;
+  readonly track: HTMLElement;
+  /** The track's sky, as its style gives it. */
+  readonly sky: string;
+  /** Every piece of text seen on a sticker, and any seen on none. */
+  readonly stickers: readonly Sticker[];
+  readonly loose: readonly string[];
+  /** The photo card, if it popped up. */
+  readonly photo: HTMLElement | null;
+}
+
+/** What may carry text: a sign, a name tag, a bubble, the caption or the photo card. */
+const KINDS = [
+  ['sign', '[data-part="sign"] p'],
+  ['tag', '[data-lines]'],
+  ['bubble', '[data-says]'],
+  ['caption', '[data-kit="caption"]'],
+  ['photo', '[data-part="photo"]'],
+] as const;
+const STICKERS = KINDS.map(([, selector]) => selector).join(', ');
+
+/**
+ * The borders the stylesheets give `el`, as written: jsdom can't split a
+ * `border` shorthand that holds a `var(--…)`.
+ */
+function borderOf(el: Element): string {
+  const rules = [...document.styleSheets].flatMap((sheet) => [...sheet.cssRules]);
+  return rules
+    .filter(
+      (rule): rule is CSSStyleRule => rule instanceof CSSStyleRule && el.matches(rule.selectorText),
+    )
+    .map(
+      (rule) =>
+        rule.style.getPropertyValue('border') || rule.style.getPropertyValue('border-color'),
+    )
+    .join(' ');
+}
+
+/** Notes every shown piece of text in `root`, on its sticker or loose. */
+function readText(root: Element, stickers: Sticker[], loose: string[]) {
+  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+  for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+    const text = node.textContent!.trim();
+    const el = node.parentElement!;
+    if (!text || el.closest('[hidden], [display="none"]')) continue;
+    // A racing number is on its paper roundel, on the racer.
+    if (el.closest('svg text')) continue;
+    const sticker = el.closest<HTMLElement>(STICKERS);
+    if (!sticker) {
+      loose.push(text);
+      continue;
+    }
+    // The sticker's paper: the nearest box round the text with a background.
+    let paper: Element = el;
+    const clear = (box: Element) => getComputedStyle(box).backgroundColor === 'rgba(0, 0, 0, 0)';
+    while (paper !== sticker && clear(paper)) paper = paper.parentElement!;
+    const style = getComputedStyle(paper);
+    stickers.push({
+      text,
+      what: KINDS.find(([, selector]) => sticker.matches(selector))![0],
+      background: style.backgroundColor,
+      colour: getComputedStyle(el).color || style.color,
+      border: borderOf(paper),
+    });
+  }
+}
+
+/** Runs on each track, each run once, when first asked for. */
+const onTracks = new Map<string, Promise<OnTrack>>();
+
+/**
+ * Eight people on `course`, ending in a photo finish; off the sports field,
+ * the track's own event is a `kind`. The stage's text is read every second
+ * and while the photo is up.
+ */
+function onTrack(course: Course, kind: 'burst' | 'stop' = 'stop'): Promise<OnTrack> {
+  const key = `${course} ${kind}`;
+  if (!onTracks.has(key)) {
+    const team = names(8);
+    const unlucky = team.at(-1)!;
+    let seed = 1;
+    const fits = (plan: Plan) =>
+      plan.course === course &&
+      plan.ending === 'photo' &&
+      (course === 'field' || plan.events.some((e) => e.cause === 'track' && e.kind === kind));
+    while (!fits(planShow(team, unlucky, createRandom(seed)))) seed++;
+    const stickers: Sticker[] = [];
+    const loose: string[] = [];
+    let track: HTMLElement | undefined;
+    let sky = '';
+    let photo: HTMLElement | null = null;
+    let read = -1;
+    onTracks.set(
+      key,
+      watch(team, {
+        seed,
+        onStage: (time, scene) => {
+          if (!track) {
+            track = scene.querySelector<HTMLElement>('[data-part="track"]')!;
+            sky = getComputedStyle(track).backgroundColor;
+          }
+          const card = scene.querySelector<HTMLElement>('[data-part="photo"]');
+          const second = Math.floor(time + 1e-9);
+          if (second > read || (card && !card.hidden && !photo)) {
+            read = second;
+            readText(scene, stickers, loose);
+            const caption = document.querySelector('[data-kit="caption"]');
+            if (caption) readText(caption, stickers, loose);
+          }
+          if (card && !card.hidden) photo = card;
+        },
+      }).then((watched) => ({ watched, track: track!, sky, stickers, loose, photo })),
+    );
+  }
+  return onTracks.get(key)!;
 }
 
 /** Show seconds from `from` to `to`, every frame. */
@@ -925,6 +1058,123 @@ describeSpec(await loadFeature('./the-race.feature'), ({ Rule }) => {
         });
       },
     );
+
+    RuleScenarioOutline('What <track> looks like', ({ When, Then, And }, { track: name }) => {
+      const course = COURSE_NAMES[name]!;
+      let run: OnTrack;
+      When('the show runs on <track>', async () => {
+        run = await onTrack(course);
+      });
+      Then('the ground is <ground>, and paper name tags read clearly on it', () => {
+        const ground = run.track.querySelector('[data-part="ground"]')!;
+        const fill = {
+          field: styles.grass,
+          office: styles.carpet,
+          sea: styles.sun,
+          moon: styles.dust,
+        };
+        expect(ground.querySelector(`.${fill[course]}`)).not.toBeNull();
+        expect(!!ground.querySelector('[data-part="craters"]')).toBe(course === 'moon');
+        const tags = run.stickers.filter((sticker) => sticker.what === 'tag');
+        expect(tags.length).toBeGreaterThan(0);
+        for (const tag of tags) {
+          expect(tag.background).toBe('var(--color-paper)');
+          expect(tag.border).toContain('var(--color-ink)');
+        }
+      });
+      And('behind the track is <backdrop>', () => {
+        const skies = { field: 'sky', office: 'paper', sea: 'sea', moon: 'ink' };
+        expect(run.sky).toBe(`var(--color-${skies[course]})`);
+        const parts = {
+          field: ['flags', 'posts'],
+          office: ['wall', 'panels', 'plant'],
+          sea: ['surface', 'fish', 'seaweed', 'floats'],
+          moon: ['space'],
+        };
+        for (const part of parts[course]) {
+          expect(run.track.querySelector(`[data-part="${part}"]`), part).not.toBeNull();
+        }
+        expect(run.track.querySelectorAll(`.${styles.cloud}`)).toHaveLength(
+          course === 'field' ? 2 : 0,
+        );
+      });
+      And('the lanes are split by <lines>, and the distances are <signs>', () => {
+        const fills = {
+          field: styles.paperFill,
+          office: styles.sunFill,
+          sea: styles.orangeFill,
+          moon: styles.paperFill,
+        };
+        const lines = [...run.track.querySelectorAll('[data-part="lines"] path')];
+        expect(lines.length).toBeGreaterThan(0);
+        for (const line of lines) {
+          expect(line.getAttribute('class')).toBe(fills[course]);
+          // Dashes are short: 44 px each, with gaps between.
+          expect(line.getAttribute('d')!.includes('h44 ')).toBe(course === 'moon');
+        }
+        const signs = [...run.track.querySelectorAll('[data-part="sign"]')];
+        expect(signs).toHaveLength(5);
+        for (const sign of signs) {
+          expect(!!sign.querySelector(`.${styles.post}`)).toBe(course !== 'office');
+          expect(sign.querySelector('p')!.classList.contains(styles.note!)).toBe(
+            course === 'office',
+          );
+        }
+      });
+    });
+
+    RuleScenario('The photo shows the track', ({ Given, When, Then }) => {
+      let run: OnTrack;
+      Given('a photo finish on the Moon', async () => {
+        run = await onTrack('moon');
+      });
+      When('the photo pops up', () => {
+        expect(run.photo).not.toBeNull();
+      });
+      Then("it shows the Moon's ground and its finish line behind the two racers", () => {
+        const view = run.photo!.firstElementChild as HTMLElement;
+        expect(view.dataset.course).toBe('moon');
+        expect(view.classList).toContain(styles.moon);
+        const picture = view.querySelector(':scope > svg')!;
+        expect(picture.querySelector('rect')!.getAttribute('class')).toBe(styles.shark);
+        expect(picture.querySelector(`.${styles.inkFill}`)).not.toBeNull();
+        const racers = [...view.querySelectorAll('[data-person]')];
+        expect(racers).toHaveLength(2);
+        for (const racer of racers) {
+          expect(picture.compareDocumentPosition(racer) & Node.DOCUMENT_POSITION_FOLLOWING).toBe(
+            Node.DOCUMENT_POSITION_FOLLOWING,
+          );
+        }
+      });
+    });
+
+    RuleScenario('Every track reads over a screen share', ({ When, Then, And }) => {
+      const runs: OnTrack[] = [];
+      When('the show runs on each track at {int} people', async () => {
+        for (const course of COURSES) runs.push(await onTrack(course));
+      });
+      Then(
+        'every caption, sign and name tag is ink text on a paper or sun sticker with an ink outline',
+        () => {
+          for (const run of runs) {
+            const what = new Set(run.stickers.map((sticker) => sticker.what));
+            for (const each of ['caption', 'sign', 'tag', 'bubble']) expect(what).toContain(each);
+            for (const sticker of run.stickers) {
+              expect(['var(--color-paper)', 'var(--color-sun)'], sticker.text).toContain(
+                sticker.background,
+              );
+              expect(sticker.colour, sticker.text).toBe('var(--color-ink)');
+              expect(sticker.border, sticker.text).toContain('var(--color-ink)');
+            }
+          }
+        },
+      );
+      And("on the Moon's dark sky, nothing but those stickers carries text", () => {
+        const moon = runs.find((run) => run.watched.plan.course === 'moon')!;
+        expect(moon.sky).toBe('var(--color-ink)');
+        for (const run of runs) expect(run.loose, run.watched.plan.course).toEqual([]);
+      });
+    });
 
     RuleScenario('The sports field keeps the events it has', ({ When, Then }) => {
       let runs: Plan[];

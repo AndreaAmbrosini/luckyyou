@@ -1,12 +1,13 @@
 // The Race's drawings, from the Design canvas: the racer on each mount, with
 // its extra, the rider's mood and pose, and the trophy (a creature, racing on
-// its own feet, is in creature.ts); the sports-field
-// track with its bunting, rail, signs and lines; and the photo-finish card.
+// its own feet, is in creature.ts); the four tracks, each with its backdrop,
+// ground, signs and lines; and the photo-finish card.
 // Every colour comes from a class in the-race.module.css; the racer's colour
 // comes in as --racer, and the contrast for the hat band, the scarf, the
 // cape and the bow tie as --band.
 
 import { head, nameTag, type Head, type Look, type Mood } from '../../scenario-kit';
+import type { Course } from './plan';
 import styles from './the-race.module.css';
 
 export type Mount =
@@ -729,57 +730,213 @@ function chequer(x: number, y: number, rows: number, size: number): string {
   return squares.join(' ');
 }
 
-/** A sign on a post by the rail, saying `text`, its post at x 0 of its holder. */
-function sign(text: string, colour: 'paper' | 'sun'): HTMLElement {
+/** How a track's signs stand: on a post by the rail, or stuck to a partition. */
+type Stands = 'post' | 'note';
+
+/** A sign saying `text`, its post or its middle at x 0 of its holder. */
+function sign(text: string, colour: 'paper' | 'sun', stands: Stands): HTMLElement {
   const holder = document.createElement('div');
   holder.className = styles.sign!;
   holder.dataset.part = 'sign';
-  const post = holder.appendChild(document.createElement('div'));
-  post.className = styles.post!;
+  if (stands === 'post') {
+    const post = holder.appendChild(document.createElement('div'));
+    post.className = styles.post!;
+  }
   const board = holder.appendChild(document.createElement('p'));
-  board.className = colour === 'sun' ? `${styles.signBoard} ${styles.sunBoard}` : styles.signBoard!;
+  board.className = [
+    styles.signBoard,
+    colour === 'sun' && styles.sunBoard,
+    stands === 'note' && styles.note,
+  ]
+    .filter(Boolean)
+    .join(' ');
   board.textContent = text;
   return holder;
 }
 
-export interface Track {
-  /** Everything behind the racers. */
-  readonly el: HTMLElement;
-  /** Moves the rail's posts, the lines, signs, bunting and clouds for the camera at `camera` px. */
-  set(camera: number): void;
+/** A picture repeated every `period` px, passing at `parallax` times the camera's speed. */
+interface Strip {
+  readonly el: SVGGElement;
+  readonly period: number;
+  readonly parallax: number;
 }
 
-/**
- * The sports field, from the canvas: sky with two clouds, bunting, the rail
- * with its posts, grass with paper lines between the lanes, the Start line
- * at `start` and the chequered Finish at `finish`, in px along the track,
- * and distance signs counting down to it over a race of 200 m. `lanes` are
- * the lanes' tops, back to front.
- */
-export function track({
-  lanes,
-  start,
-  finish,
-}: {
-  lanes: readonly number[];
-  start: number;
-  finish: number;
-}): Track {
-  const el = document.createElement('div');
-  el.className = styles.layer!;
-  el.dataset.part = 'track';
+/** `shapes` repeated every `period` px, across the stage and a period either side. */
+function strip(
+  parent: Element,
+  name: string,
+  period: number,
+  parallax: number,
+  shapes: readonly Shape[],
+): Strip {
+  const el = group(parent, name);
+  for (let copy = -1; copy * period < 1280 + period; copy++) {
+    const tile = el.appendChild(document.createElementNS(SVG, 'g'));
+    tile.setAttribute('transform', `translate(${copy * period} 0)`);
+    draw(tile, shapes);
+  }
+  return { el, period, parallax };
+}
 
-  const clouds = [60, 900].map((x, i) => {
-    const cloud = el.appendChild(document.createElement('span'));
-    cloud.className = `${styles.cloud} ${i === 0 ? styles.cloudA : styles.cloudB}`;
-    return { cloud, x };
-  });
+/** The office: a wall with windows and a clock, partitions with a plant in front, grey carpet. */
+function office(back: SVGSVGElement, ground: SVGSVGElement): Strip[] {
+  const wall = strip(back, 'wall', 1440, 0.5, [
+    ['rect', styles.glass!, { x: 40, y: 20, width: 300, height: 120, rx: 6, 'stroke-width': 4 }],
+    ['path', styles.line!, { d: 'M190 20 V140 M40 80 H340', 'stroke-width': 4 }],
+    ['rect', styles.glass!, { x: 760, y: 20, width: 300, height: 120, rx: 6, 'stroke-width': 4 }],
+    ['path', styles.line!, { d: 'M910 20 V140 M760 80 H1060', 'stroke-width': 4 }],
+    ['circle', styles.paper!, { cx: 560, cy: 62, r: 34, 'stroke-width': 4 }],
+    ['path', styles.line!, { d: 'M560 62 V40 M560 62 L576 70', 'stroke-width': 4 }],
+  ]);
+  draw(ground, [
+    ['rect', styles.mintSoft!, { x: -10, y: 152, width: 1300, height: 64, 'stroke-width': 4 }],
+  ]);
+  const panels = strip(ground, 'panels', 200, 1, [
+    ['path', styles.line!, { d: 'M160 152 V216', 'stroke-width': 4 }],
+  ]);
+  draw(ground, [
+    ['rect', styles.carpet!, { x: -10, y: 214, width: 1300, height: 520, 'stroke-width': 4 }],
+  ]);
+  const seams = strip(ground, 'seams', 160, 1, [
+    ['path', styles.seam!, { d: 'M80 216 V720', 'stroke-width': 4 }],
+  ]);
+  const plant = strip(ground, 'plant', 1600, 1, [
+    [
+      'path',
+      styles.leaf!,
+      {
+        d: 'M1180 176 q-30 -40 -6 -66 q8 30 6 66 M1180 176 q30 -44 8 -70 q-10 34 -8 70 M1180 176 q-4 -50 0 -80',
+        'stroke-width': 4,
+      },
+    ],
+    ['path', styles.orange!, { d: 'M1158 176 h44 l-6 40 h-32 Z', 'stroke-width': 4 }],
+  ]);
+  return [wall, panels, seams, plant];
+}
 
+/** A bubble whose outer edge is `d` across, from its top left at (x, y). */
+const bubbleAt = (x: number, y: number, d: number): Shape => [
+  'circle',
+  styles.glass!,
+  { cx: x + d / 2, cy: y + d / 2, r: d / 2 - 1.5, 'stroke-width': 3 },
+];
+
+/** Under the sea: the surface, fish and bubbles, seaweed, sand and a rope of floats. */
+function sea(back: SVGSVGElement, ground: SVGSVGElement): Strip[] {
+  // The surface's wave drawn apart from the water above it, and that over a
+  // flat fill above the crests, so no tile shows a seam.
+  const wave = 'M170 22 Q130 40 90 22 Q50 4 10 22';
+  draw(back, [['rect', styles.skyFill!, { x: -10, y: -10, width: 1300, height: 20 }]]);
+  const surface = strip(back, 'surface', 160, 0.5, [
+    ['path', styles.skyFill!, { d: 'M10 -10 H170 V22 Q130 40 90 22 Q50 4 10 22 Z' }],
+    ['path', styles.line!, { d: wave, 'stroke-width': 4 }],
+  ]);
+  const water = strip(back, 'fish', 1500, 0.2, [
+    [
+      'path',
+      styles.orange!,
+      { d: 'M140 110 l40 -18 v36 Z M180 110 q30 -26 60 0 q-30 26 -60 0 Z', 'stroke-width': 4 },
+    ],
+    ['circle', styles.inkFill!, { cx: 226, cy: 106, r: 3.5 }],
+    [
+      'path',
+      styles.pink!,
+      { d: 'M980 70 l30 -14 v28 Z M1010 70 q24 -20 48 0 q-24 20 -48 0 Z', 'stroke-width': 4 },
+    ],
+    ['circle', styles.inkFill!, { cx: 1046, cy: 67, r: 3 }],
+    bubbleAt(360, 60, 22),
+    bubbleAt(384, 30, 14),
+    bubbleAt(640, 120, 18),
+    bubbleAt(820, 50, 26),
+    bubbleAt(846, 18, 12),
+  ]);
+  const weed = strip(ground, 'seaweed', 150, 1, [
+    [
+      'path',
+      styles.leaf!,
+      { d: 'M30 216 q-16 -40 4 -70 q16 -30 0 -60 q24 30 8 62 q-14 30 6 68 Z', 'stroke-width': 4 },
+    ],
+  ]);
+  draw(ground, [
+    ['rect', styles.sun!, { x: -10, y: 214, width: 1300, height: 520, 'stroke-width': 4 }],
+    ['path', styles.line!, { d: 'M-10 190 H1290', 'stroke-width': 4 }],
+  ]);
+  const floats = strip(ground, 'floats', 240, 1, [
+    ['circle', styles.tomato!, { cx: 33, cy: 190, r: 11, 'stroke-width': 4 }],
+    ['circle', styles.paper!, { cx: 153, cy: 190, r: 11, 'stroke-width': 4 }],
+  ]);
+  return [surface, water, weed, floats];
+}
+
+/** Four-pointed stars, 18 px across. */
+const STARS = [
+  [80, 40],
+  [160, 150],
+  [420, 30],
+  [520, 140],
+  [660, 70],
+  [760, 160],
+  [900, 30],
+  [980, 140],
+  [1240, 160],
+  [340, 170],
+]
+  .map(
+    ([x = 0, y = 0]) =>
+      `M${x} ${y - 9} L${x + 3} ${y - 3} L${x + 9} ${y} L${x + 3} ${y + 3} ` +
+      `L${x} ${y + 9} L${x - 3} ${y + 3} L${x - 9} ${y} L${x - 3} ${y - 3} Z`,
+  )
+  .join(' ');
+
+/** The Moon's craters: each one's middle and half its width; a third as tall as wide. */
+const CRATERS = [
+  [150, 300, 50],
+  [520, 420, 64],
+  [930, 330, 44],
+  [300, 600, 56],
+  [1100, 560, 70],
+  [700, 660, 40],
+]
+  .map(([x = 0, y = 0, r = 0]) => {
+    const ry = Math.round(r / 3);
+    return `M${x - r} ${y} a${r} ${ry} 0 1 0 ${2 * r} 0 a${r} ${ry} 0 1 0 ${-2 * r} 0 Z`;
+  })
+  .join(' ');
+
+/** The Moon: a dark sky with stars, the Earth and a ringed planet, grey dust with craters. */
+function moon(back: SVGSVGElement, ground: SVGSVGElement): Strip[] {
+  const space = strip(back, 'space', 1500, 0.1, [
+    ['circle', styles.earth!, { cx: 1120, cy: 70, r: 48, 'stroke-width': 4 }],
+    [
+      'path',
+      styles.leaf!,
+      {
+        d: 'M1088 52 q16 -14 30 0 q-6 16 -24 14 Z M1124 80 q18 -6 26 8 q-14 14 -28 4 Z',
+        'stroke-width': 3,
+      },
+    ],
+    ['circle', styles.planet!, { cx: 240, cy: 86, r: 26, 'stroke-width': 4 }],
+    ['ellipse', styles.ring!, { cx: 240, cy: 86, rx: 50, ry: 10, 'stroke-width': 5 }],
+    ['path', styles.sunFill!, { d: STARS }],
+  ]);
+  // The hills' edge drawn apart from the dust under it, and the dust over a
+  // flat fill below the dips, so no tile shows a seam.
+  const hills = 'M-10 214 Q170 176 350 214 Q530 252 710 214';
+  draw(ground, [['rect', styles.dust!, { x: -10, y: 240, width: 1300, height: 500 }]]);
+  const dust = strip(ground, 'dust', 720, 1, [
+    ['path', styles.dust!, { d: `${hills} V740 H-10 Z` }],
+    ['path', styles.line!, { d: hills, 'stroke-width': 4 }],
+  ]);
+  const craters = strip(ground, 'craters', 1280, 1, [
+    ['path', styles.inkSoft!, { d: CRATERS, 'stroke-width': 3 }],
+  ]);
+  return [space, dust, craters];
+}
+
+/** The field's sky, bunting, grass and rail. */
+function field(back: SVGSVGElement, ground: SVGSVGElement): Strip[] {
   // The bunting: one picture a dip wider than the stage, slid along.
-  const bunting = el.appendChild(drawing(1280, 720));
-  bunting.classList.add(styles.full!);
-  bunting.dataset.part = 'bunting';
-  const flags = group(bunting, 'flags');
+  const flags = group(back, 'flags');
   const string: string[] = [];
   for (let x = -BUNTING.flag; x <= 1280 + BUNTING.dip; x += 16) {
     string.push(`${string.length ? 'L' : 'M'}${x} ${stringY(x)}`);
@@ -796,27 +953,103 @@ export function track({
     ]);
     flag!.style.setProperty('--flag', `var(--color-${FLAGS[j % FLAGS.length]})`);
   }
+  draw(ground, [
+    ['rect', styles.grass!, { x: -10, y: 214, width: 1300, height: 520, 'stroke-width': 4 }],
+    ['rect', styles.paper!, { x: -10, y: 186, width: 1300, height: 16, 'stroke-width': 4 }],
+  ]);
+  const posts = strip(ground, 'posts', POST, 1, [
+    ['path', styles.paper!, { d: 'M0 180 h12 v36 h-12 Z', 'stroke-width': 4 }],
+  ]);
+  return [{ el: flags, period: BUNTING.dip, parallax: BUNTING.parallax }, posts];
+}
 
-  // The ground: the grass, the lines between lanes and the rail stay put.
+const BACKDROPS: Record<Course, (back: SVGSVGElement, ground: SVGSVGElement) => Strip[]> = {
+  field,
+  office,
+  sea,
+  moon,
+};
+
+/**
+ * How each track's lane lines look, whole or dashed, and its signs: how they
+ * stand, and the colour of the distances (Start and Finish take the other).
+ */
+const LOOKS: Record<
+  Course,
+  { lines: string; dashed: boolean; stands: Stands; distance: 'paper' | 'sun' }
+> = {
+  field: { lines: styles.paperFill!, dashed: false, stands: 'post', distance: 'sun' },
+  office: { lines: styles.sunFill!, dashed: false, stands: 'note', distance: 'sun' },
+  sea: { lines: styles.orangeFill!, dashed: false, stands: 'post', distance: 'paper' },
+  moon: { lines: styles.paperFill!, dashed: true, stands: 'post', distance: 'paper' },
+};
+
+/** Dashed lines: a dash this long every `every` px. */
+const DASH = { long: 44, every: 80 };
+
+export interface Track {
+  /** Everything behind the racers. */
+  readonly el: HTMLElement;
+  /** Moves what passes by, the lines, signs and backdrop, for the camera at `camera` px. */
+  set(camera: number): void;
+}
+
+/**
+ * Track `course`, from the canvas: the sports field (sky with two clouds,
+ * bunting, the rail with its posts, grass), the office, under the sea or the
+ * Moon. On each, lines between the lanes, the Start line at `start` and the
+ * chequered Finish at `finish`, in px along the track, and distance signs
+ * counting down to it over a race of 200 m. `lanes` are the lanes' tops,
+ * back to front.
+ */
+export function track({
+  lanes,
+  start,
+  finish,
+  course = 'field',
+}: {
+  lanes: readonly number[];
+  start: number;
+  finish: number;
+  course?: Course;
+}): Track {
+  const el = document.createElement('div');
+  el.className = `${styles.layer} ${styles[course]}`;
+  el.dataset.part = 'track';
+  el.dataset.course = course;
+  const look = LOOKS[course];
+
+  const clouds =
+    course === 'field'
+      ? [60, 900].map((x, i) => {
+          const cloud = el.appendChild(document.createElement('span'));
+          cloud.className = `${styles.cloud} ${i === 0 ? styles.cloudA : styles.cloudB}`;
+          return { cloud, x };
+        })
+      : [];
+
+  // The backdrop, then the ground in front of it.
+  const back = el.appendChild(drawing(1280, 720));
+  back.classList.add(styles.full!);
+  back.dataset.part = 'backdrop';
   const ground = el.appendChild(drawing(1280, 720));
   ground.classList.add(styles.full!);
   ground.dataset.part = 'ground';
-  const lines = lanes
-    .slice(1)
-    .map((top) => `M-10 ${top - 4} h1300 v8 h-1300 Z`)
-    .join(' ');
-  draw(ground, [
-    ['rect', styles.grass!, { x: -10, y: 214, width: 1300, height: 520, 'stroke-width': 4 }],
-    ['path', styles.paperFill!, { d: lines || 'M0 0' }],
-    ['rect', styles.paper!, { x: -10, y: 186, width: 1300, height: 16, 'stroke-width': 4 }],
-  ]);
+  const strips = BACKDROPS[course](back, ground);
 
-  // What passes by: the posts, the start and finish lines.
-  const postPath: string[] = [];
-  for (let x = 0; x < 1280 + POST; x += POST) postPath.push(`M${x} 180 h12 v36 h-12 Z`);
-  const posts = group(ground, 'posts', [
-    ['path', styles.paper!, { d: postPath.join(' '), 'stroke-width': 4 }],
-  ]);
+  // The lines between lanes: whole, or dashes that pass by.
+  const between = lanes.slice(1).map((top) => top - 4);
+  if (look.dashed) {
+    const dashes = between.map((y) => `M0 ${y} h${DASH.long} v8 h-${DASH.long} Z`).join(' ');
+    strips.push(
+      strip(ground, 'lines', DASH.every, 1, [['path', look.lines, { d: dashes || 'M0 0' }]]),
+    );
+  } else {
+    const lines = between.map((y) => `M-10 ${y} h1300 v8 h-1300 Z`).join(' ');
+    group(ground, 'lines', [['path', look.lines, { d: lines || 'M0 0' }]]);
+  }
+
+  // The start and finish lines.
   const startLine = group(ground, 'start', [
     ['rect', styles.paper!, { x: 0, y: 216, width: 16, height: 500, 'stroke-width': 4 }],
   ]);
@@ -826,15 +1059,16 @@ export function track({
   ]);
 
   const length = finish - start;
+  const ends: 'paper' | 'sun' = look.distance === 'sun' ? 'paper' : 'sun';
   const signs = [
-    { text: 'Start', at: start + 8, colour: 'paper' as const },
+    { text: 'Start', at: start + 8, colour: ends },
     ...[150, 100, 50].map((metres) => ({
       text: `${metres} m`,
       at: finish - (metres / 200) * length,
-      colour: 'sun' as const,
+      colour: look.distance,
     })),
-    { text: 'Finish', at: finish + 12, colour: 'paper' as const },
-  ].map((each) => ({ ...each, el: el.appendChild(sign(each.text, each.colour)) }));
+    { text: 'Finish', at: finish + 12, colour: ends },
+  ].map((each) => ({ ...each, el: el.appendChild(sign(each.text, each.colour, look.stands)) }));
 
   /** Shows `target` at `x` while it is anywhere near the stage. */
   const near = (x: number) => x > -300 && x < 1580;
@@ -850,9 +1084,10 @@ export function track({
         const at = wrap(x - camera * CLOUDS.parallax + 200, CLOUDS.wrap) - 200;
         cloud.style.translate = `${at.toFixed(1)}px 0`;
       }
-      const sway = -wrap(camera * BUNTING.parallax, BUNTING.dip);
-      flags.setAttribute('transform', `translate(${sway.toFixed(1)} 0)`);
-      posts.setAttribute('transform', `translate(${(-wrap(camera, POST)).toFixed(1)} 0)`);
+      for (const { el: passing, period, parallax } of strips) {
+        const by = -wrap(camera * parallax, period);
+        passing.setAttribute('transform', `translate(${by.toFixed(1)} 0)`);
+      }
       slide(startLine, start - camera);
       slide(finishLine, finish - camera);
       for (const each of signs) {
@@ -879,24 +1114,49 @@ export const PHOTO = {
   height: 360,
 } as const;
 
+/** The photo's ground on each track, from 150 px down, and what lies on it. */
+const PHOTO_GROUND: Record<Course, { ground: string; on: readonly Shape[] }> = {
+  field: { ground: styles.grass!, on: [] },
+  office: {
+    ground: styles.carpet!,
+    on: [['path', styles.seam!, { d: 'M120 152 V370 M280 152 V370', 'stroke-width': 4 }]],
+  },
+  sea: { ground: styles.sun!, on: [] },
+  moon: {
+    ground: styles.shark!,
+    on: [
+      [
+        'path',
+        styles.inkSoft!,
+        { d: 'M60 300 a50 17 0 1 0 100 0 a50 17 0 1 0 -100 0 Z', 'stroke-width': 3 },
+      ],
+    ],
+  },
+};
+
 /**
- * The photo-finish card, from the canvas: the two racers side-on at the line
+ * The photo-finish card, from the canvas, on the track's ground: the two
+ * racers side-on at the line
  * at 1.4 times, back lane first, each with their name tag beside their face,
  * and the verdict under the picture. `nose` is each nose's x in the window.
  */
 export function photoCard(
   pair: readonly { name: string; racer: Runner; nose: number }[],
   verdict: string,
+  course: Course = 'field',
 ): HTMLElement {
   const card = document.createElement('div');
   card.className = styles.photo!;
   card.dataset.part = 'photo';
   const view = card.appendChild(document.createElement('div'));
-  view.className = styles.photoWindow!;
+  view.className = `${styles.photoWindow} ${styles[course]}`;
+  view.dataset.course = course;
   const scene = view.appendChild(drawing(PHOTO.width, PHOTO.height));
   scene.classList.add(styles.full!);
+  const { ground, on } = PHOTO_GROUND[course];
   draw(scene, [
-    ['rect', styles.grass!, { x: -10, y: 150, width: 600, height: 220, 'stroke-width': 4 }],
+    ['rect', ground, { x: -10, y: 150, width: 600, height: 220, 'stroke-width': 4 }],
+    ...on,
     ['rect', styles.paper!, { x: PHOTO.line, y: -10, width: 24, height: 380, 'stroke-width': 4 }],
     ['path', styles.inkFill!, { d: chequer(PHOTO.line, -10, 32, 12) }],
   ]);

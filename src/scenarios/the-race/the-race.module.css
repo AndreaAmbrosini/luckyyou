@@ -360,3 +360,72 @@
   line-height: 1.1;
   text-align: center;
 }
+
+/* Each track's sky, behind the track and in the photo. */
+.field {
+  background-color: var(--color-sky);
+}
+
+.office {
+  background-color: var(--color-paper);
+}
+
+.sea {
+  background-color: var(--color-sea);
+}
+
+.moon {
+  background-color: var(--color-ink);
+}
+
+/* A sign as a sticky note on the office's partitions. */
+.note {
+  top: 148px;
+  border-radius: 4px;
+  rotate: -3deg;
+}
+
+.carpet {
+  fill: var(--color-shark);
+  stroke: var(--color-ink);
+}
+
+.seam {
+  fill: none;
+  stroke: var(--color-ink-soft);
+}
+
+/* The plant, the seaweed and the Earth's land. */
+.leaf {
+  fill: var(--color-mint);
+  stroke: var(--color-ink);
+  stroke-linejoin: round;
+}
+
+/* The light water at the sea's surface. */
+.skyFill {
+  fill: var(--color-sky);
+}
+
+.orangeFill {
+  fill: var(--color-orange);
+}
+
+.earth {
+  fill: var(--color-sea);
+  stroke: var(--color-paper);
+}
+
+.planet {
+  fill: var(--color-orange);
+  stroke: var(--color-paper);
+}
+
+.ring {
+  fill: none;
+  stroke: var(--color-sun);
+}
+
+.dust {
+  fill: var(--color-shark);
+}

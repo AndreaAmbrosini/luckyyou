@@ -276,6 +276,7 @@ export async function playTheRace(show: Show): Promise<void> {
     lanes: show.names.map((_, index) => lane(index, count).top),
     start: START.line,
     finish: FINISH + cameraAt(plan, times.finish),
+    course: plan.course,
   });
   scene.append(field.el);
   const trails = scene.appendChild(document.createElementNS('http://www.w3.org/2000/svg', 'svg'));
@@ -383,6 +384,7 @@ export async function playTheRace(show: Show): Promise<void> {
                 return { name, racer: drawn, nose };
               }),
             `${show.unlucky}, by a nose!`,
+            plan.course,
           ),
         )
       : null;
