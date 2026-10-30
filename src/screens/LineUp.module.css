@@ -140,6 +140,20 @@
   font-weight: 900;
 }
 
+/* A group of an option's choices, under a quieter label than the option's. */
+.choiceGroup {
+  display: flex;
+  flex-direction: column;
+  gap: 0.375rem;
+}
+
+.groupName {
+  margin: 0;
+  color: var(--color-ink-soft);
+  font-size: var(--size-small);
+  font-weight: 800;
+}
+
 .choices {
   display: flex;
   flex-wrap: wrap;

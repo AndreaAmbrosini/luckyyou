@@ -26,17 +26,6 @@ Feature: The Race
 
   Rule: Its line-up
 
-    # Old design: replaced by "Rides and creatures, in one Racer option" (step 2).
-    Scenario: Eight rides, eight colours, six extras
-      When the Line-up opens for The Race
-      Then its heading is "Line up the racers" and its button "Start the race"
-      And "Rides" offers "Snail", "Duck", "Office chair", "Caterpillar", "Space hopper", "Ostrich", "Rocket" and "Sandwich"
-      And "Colour" offers tomato, sun, mint, grape, pink, orange, sea and shark, as swatches, shark read out as "Grey"
-      And "Extra" offers "Googly eyes", "Top hat", "Number", "Scarf", "Cape" and "Bow tie"
-      And each tile and the preview draw the racer as the show does, calm
-
-    # Step 2.
-    @pending
     Scenario: Rides and creatures, in one Racer option
       When the Line-up opens for The Race
       Then its first option is "Racer", its choices in two groups
@@ -73,8 +62,6 @@ Feature: The Race
       And Ben wears a bow tie at the collar
       And each is in sun, or in tomato on a sun shirt, as the scarf is
 
-    # Step 2.
-    @pending
     Scenario: Each creature looks as chosen
       Given Femi chose the zombie in pink with "Number", and Giulia the shark with feet in sea with the top hat
       When the show runs
@@ -82,8 +69,6 @@ Feature: The Race
       And Giulia races as a sea-coloured shark on two legs in sneakers, wearing a top hat
       And neither has a rider or a mount
 
-    # Step 2.
-    @pending
     Scenario Outline: Where a <creature> wears its colour
       When someone races as a <creature> in tomato
       Then <where> is tomato
@@ -99,8 +84,6 @@ Feature: The Race
         | alien     | its head, arms and legs              |
         | dinosaur  | its body                             |
 
-    # Step 2.
-    @pending
     Scenario: The astronaut and the villain have the kit's faces
       When someone races as the astronaut or the villain
       Then its face has the skin tone the kit hands out for the run
@@ -214,16 +197,6 @@ Feature: The Race
 
   Rule: Winning is losing
 
-    # Old design: replaced by "The leader is scared, rider or creature" (step 2).
-    Scenario: The leader is scared, the rest relieved
-      Given 8 people
-      When the show runs
-      Then whoever is in front looks scared, sweats, leans back and pulls on the reins, or holds on tight on the chair
-      And whoever is within a mount's length behind them looks worried
-      And everyone further back looks happy, some of them waving
-
-    # Step 2.
-    @pending
     Scenario: The leader is scared, rider or creature
       Given 8 people, four riders and four creatures
       When the show runs
@@ -303,8 +276,6 @@ Feature: The Race
         | rocket   | Carla | runs out of fuel    | its flame goes out in a puff of smoke         |
         | sandwich | Dario | drops its pickle    | a pickle falls out and it stops to pick it up |
 
-    # Step 2.
-    @pending
     Scenario Outline: A <creature> bursts ahead
       When someone's <creature> bursts ahead
       Then the caption is "<name>'s <creature> <burst>!"
@@ -321,8 +292,6 @@ Feature: The Race
         | alien     | Elena  | gets beamed ahead  |
         | dinosaur  | Dario  | stomps ahead       |
 
-    # Step 2.
-    @pending
     Scenario Outline: A <creature> stops
       When someone's <creature> stops
       Then the caption is "<name>'s <creature> <stop>!"
@@ -389,8 +358,6 @@ Feature: The Race
       And Anna holds a trophy over her head, in the party mood
       And everyone else celebrates
 
-    # Step 2.
-    @pending
     Scenario: A creature wins
       Given the unlucky person is "Dario", racing as the dinosaur
       When Dario has crossed the line
@@ -451,8 +418,6 @@ Feature: The Race
       When the show runs at 8 people
       Then every racer is on stage from "On your marks…" to the end
 
-    # Step 2.
-    @pending
     Scenario: Riders and creatures side by side
       When the show runs at 8 and at 2 people, riders and creatures mixed, a 15-character name among them
       Then every face, a rider's or a creature's, sits at the same height in its lane
@@ -473,8 +438,6 @@ Feature: The Race
       When the show runs
       Then the rocket's flame doesn't flicker, and a hopper that stops doesn't bounce on the spot
 
-    # Step 2.
-    @pending
     Scenario: With reduced motion, the creatures keep still too
       Given reduced motion is on
       When the show runs

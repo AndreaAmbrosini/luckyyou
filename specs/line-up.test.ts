@@ -25,7 +25,12 @@ import {
   storeTicked,
   TEAM,
 } from './support/app';
-import { fakeLineUp, fakeScenario, type FakeScenario } from './support/fake-scenarios';
+import {
+  fakeLineUp,
+  fakeScenario,
+  groupedLineUp,
+  type FakeScenario,
+} from './support/fake-scenarios';
 import { describeSpec } from './support/spec';
 
 /** True when `look` has one of each option's choices, and nothing else. */
@@ -100,6 +105,12 @@ const PROBLEMS: Record<string, { lineUp: Partial<LineUp>; why: string }> = {
   'two options with the same name': {
     lineUp: { options: [HATS, { ...HATS, label: 'Another hat' }] },
     why: 'its line-up has two options named "hat"',
+  },
+  'a choice in a group without a label': {
+    lineUp: {
+      options: [{ ...HATS, choices: HATS.choices.map((choice) => ({ ...choice, group: ' ' })) }],
+    },
+    why: 'its line-up option "hat" has a group without a label',
   },
   'no way to draw a look': {
     lineUp: { draw: undefined as unknown as LineUp['draw'] },
@@ -338,6 +349,60 @@ describeSpec(await loadFeature('./line-up.feature'), ({ Rule }) => {
         expect(fits(fakeLineUp(), after)).toBe(true);
         expect(after).not.toEqual(before);
         expect(lookOf(panel('Ben'))).toEqual(after);
+      });
+    });
+
+    RuleScenario("An option's choices can come in groups", ({ Given, When, Then, And }) => {
+      const hat = groupedLineUp().options[0]!;
+      Given('a show whose first option has choices in two groups', () =>
+        openLineUp(['Anna', 'Ben'], fakeScenario({ name: 'Hat Show', lineUp: groupedLineUp() })),
+      );
+      When("Ben's look is shown beside the tiles", () => currentUser().click(tile('Ben')));
+      Then(
+        "that option's choices sit under each group's label, the groups in the order their first choices come",
+        () => {
+          const option = group('Ben', 'Hat');
+          const labels = within(option).getAllByText(/^(Hats|Helmets)$/);
+          expect(labels.map((label) => label.textContent)).toEqual(['Hats', 'Helmets']);
+          for (const label of labels) {
+            const under = within(label.parentElement!)
+              .getAllByRole('button')
+              .map((button) => button.textContent);
+            const named = hat.choices.filter((choice) => choice.group === label.textContent);
+            expect(under).toEqual(named.map((choice) => expect.stringContaining(choice.label)));
+            expect(getComputedStyle(label).color).toBe('var(--color-ink-soft)');
+          }
+        },
+      );
+      And(
+        "it is still one option: one choice marked, and the choices read out under the option's label",
+        () => {
+          const option = group('Ben', 'Hat');
+          expect(within(option).queryAllByRole('group')).toHaveLength(0);
+          expect(within(option).getAllByRole('button')).toHaveLength(hat.choices.length);
+          expect(pressed('Ben', 'Hat')).toHaveLength(1);
+          const mine = hat.choices.find((choice) => choice.name === lookOf(tile('Ben')).hat)!;
+          expect(pressed('Ben', 'Hat')[0]).toHaveAccessibleName(mine.label);
+        },
+      );
+    });
+
+    RuleScenario('Surprise me draws from every group', ({ Given, When, Then }) => {
+      const hat = groupedLineUp().options[0]!;
+      const groups = new Set<string | undefined>();
+      Given('a show whose first option has choices in two groups', () =>
+        openLineUp(['Anna', 'Ben'], fakeScenario({ name: 'Hat Show', lineUp: groupedLineUp() })),
+      );
+      When('I choose {string} for Ben, again and again', async (_, label: string) => {
+        await currentUser().click(tile('Ben'));
+        for (let time = 0; time < 30; time++) {
+          await choose(label);
+          const chosen = lookOf(tile('Ben')).hat;
+          groups.add(hat.choices.find((choice) => choice.name === chosen)!.group);
+        }
+      });
+      Then('choices from both groups come up', () => {
+        expect(groups).toEqual(new Set(['Hats', 'Helmets']));
       });
     });
 

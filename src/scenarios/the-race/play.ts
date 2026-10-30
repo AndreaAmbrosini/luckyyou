@@ -1,10 +1,10 @@
 // The director: builds the whole show as one timeline from the plan and plays
 // it on the show's clock. Where every racer is, how they feel, what they say
-// and what their mount does follow from the show's time each frame, so every
-// frame follows from the plan alone. Gaits bob outside the timeline, on the
-// show's clock, so their endless repeats don't keep the show going. The
-// stage tells its story in data attributes too: the part of the race, the
-// camera, whether it is slow, and each racer's nose, gait and stop.
+// and what their mount or creature does follow from the show's time each
+// frame, so every frame follows from the plan alone. Gaits bob outside the
+// timeline, on the show's clock, so their endless repeats don't keep the show
+// going. The stage tells its story in data attributes too: the part of the
+// race, the camera, whether it is slow, and each racer's nose, gait and stop.
 
 import { gsap } from 'gsap';
 import {
@@ -14,21 +14,27 @@ import {
   nameTag,
   type Box,
   type Cue,
+  type Look,
   type Mood,
   type Show,
 } from '../../scenario-kit';
+import { creature, CREATURE_SPEC, type CreatureRunner } from './creature';
 import { boxAt, bubbleOffsets, faceAt, lane, tagAt, tagBox, tagSize, type Lane } from './layout';
 import {
+  isCreature,
   photoCard,
   PHOTO,
   RACER_COLOURS,
   racer,
   show as showPart,
   track,
-  type Mount,
+  type Creature,
+  type Kind,
   type Pose,
   type Racer,
   type RacerLook,
+  type RideLook,
+  type Runner,
 } from './parts';
 import {
   BEATS,
@@ -49,8 +55,8 @@ import styles from './the-race.module.css';
 
 const FALLBACK: RacerLook = { mount: 'snail', colour: 'tomato', extra: 'number' };
 
-/** What each mount does when it bursts ahead, and when it stops. */
-const BURSTS: Record<Mount, string> = {
+/** What each mount or creature does when it bursts ahead, and when it stops. */
+const BURSTS: Record<Kind, string> = {
   snail: 'finds a turbo',
   duck: 'rolls downhill',
   chair: 'catches a gust',
@@ -59,8 +65,16 @@ const BURSTS: Record<Mount, string> = {
   ostrich: 'stretches its legs',
   rocket: 'fires its boosters',
   sandwich: 'gets extra spicy',
+  zombie: 'gets a second wind',
+  robot: 'switches to turbo',
+  shark: 'finds its sea legs',
+  astronaut: 'fires the jetpack',
+  monster: 'gets the zoomies',
+  villain: 'takes a shortcut',
+  alien: 'gets beamed ahead',
+  dinosaur: 'stomps ahead',
 };
-const STOPS: Record<Mount, string> = {
+const STOPS: Record<Kind, string> = {
   snail: 'stops for a snack',
   duck: 'hits a pebble',
   chair: 'spins round',
@@ -69,10 +83,18 @@ const STOPS: Record<Mount, string> = {
   ostrich: 'lays an egg',
   rocket: 'runs out of fuel',
   sandwich: 'drops its pickle',
+  zombie: 'loses a shoe',
+  robot: 'needs a reboot',
+  shark: 'stops to tie its laces',
+  astronaut: 'plants a flag',
+  monster: 'gets the hiccups',
+  villain: 'gets tangled in its cape',
+  alien: 'stops to ask the way',
+  dinosaur: "can't reach its snack",
 };
 
-/** Each mount's gait: how far it bobs, in stage pixels, and how often. */
-const GAITS: Record<Mount, { px: number; seconds: number }> = {
+/** Each mount's or creature's gait: how far it bobs, in stage pixels, and how often. */
+const GAITS: Record<Kind, { px: number; seconds: number }> = {
   snail: { px: 3, seconds: 1.1 },
   duck: { px: 4, seconds: 0.42 },
   chair: { px: 3, seconds: 0.3 },
@@ -81,7 +103,22 @@ const GAITS: Record<Mount, { px: number; seconds: number }> = {
   ostrich: { px: 5, seconds: 0.32 },
   rocket: { px: 2, seconds: 0.2 },
   sandwich: { px: 4, seconds: 0.36 },
+  zombie: { px: 3, seconds: 0.5 },
+  robot: { px: 2, seconds: 0.24 },
+  shark: { px: 4, seconds: 0.32 },
+  astronaut: { px: 6, seconds: 0.5 },
+  monster: { px: 5, seconds: 0.34 },
+  villain: { px: 3, seconds: 0.3 },
+  alien: { px: 3, seconds: 0.28 },
+  dinosaur: { px: 6, seconds: 0.44 },
 };
+
+/** `look` drawn: a rider on its mount, or a creature. */
+function drawRacer(look: RacerLook, face: Look, number: number): Runner {
+  return isCreature(look.mount)
+    ? creature(look as RacerLook & { mount: Creature }, { face, number })
+    : racer(look as RideLook, { face, number });
+}
 
 /** A duck that hits a pebble tips up by `degrees` and back over `seconds`, about its back wheel. */
 const TIP = { degrees: -24, seconds: 1, origin: '74px 183px' };
@@ -126,6 +163,25 @@ const PHOTO_AFTER = 0.3;
 const AHEAD = 16;
 /** Confetti at the win: how many pieces, falling at least this fast to where they settle. */
 const CONFETTI = { count: 26, fall: 520 };
+/** A creature in front flails its arms this far either way, once every so often; so does a short-armed winner. */
+const FLAIL = { degrees: 24, seconds: 0.36 };
+/**
+ * A zombie's front shoe flies back from its foot over `fly` s, and it hops
+ * back for it, this high and this many times, until "Phew!".
+ */
+const SHOE = { fly: 0.5, from: [176, 186], to: [40, 182], hop: 14, count: 3 };
+/** A robot's screen is blank for this long into its stop. */
+const REBOOT = 1.1;
+/** A shark bends this far over its sneaker, from `from` s into its stop until "Phew!". */
+const LACES = { degrees: 28, from: 0.2 };
+/** An astronaut plants its flag `at` s into its stop, by its front foot, and leaves it there. */
+const PLANT = { at: 0.3, foot: [200, 186] };
+/** A monster hiccups at these seconds into its stop, hopping this high for this long. */
+const HICCUPS = { at: [0.2, 0.7, 1.2], px: 16, seconds: 0.3 };
+/** A villain's cape wraps round it for `seconds`, while it turns round once to get free. */
+const CAPE = { seconds: 1.2, turns: 1 };
+/** The alien's question mark pops up this long into its stop. */
+const ASK = 0.2;
 
 /** What each element was last given, so a frame writes only what changed: jsdom parses each style. */
 const written = new WeakMap<Element, Map<string, string>>();
@@ -159,7 +215,10 @@ interface Rider {
   readonly look: RacerLook;
   readonly at: Lane;
   readonly holder: HTMLElement;
-  readonly drawn: Racer;
+  readonly drawn: Runner;
+  /** The same drawing, as a rider on a mount or as a creature. */
+  readonly ridden: Racer | null;
+  readonly creature: CreatureRunner | null;
   readonly tag: HTMLElement;
   readonly speed: SVGPathElement;
   readonly gait: gsap.core.Animation;
@@ -171,16 +230,16 @@ interface Rider {
 }
 
 /** The caption for an event, as the commentator says it. */
-export function eventCaption(event: RaceEvent, mount: Mount): string {
-  const did = event.kind === 'burst' ? BURSTS[mount] : STOPS[mount];
-  return `${event.subject}'s ${mount} ${did}!`;
+export function eventCaption(event: RaceEvent, kind: Kind): string {
+  const did = event.kind === 'burst' ? BURSTS[kind] : STOPS[kind];
+  return `${event.subject}'s ${kind} ${did}!`;
 }
 
 /**
  * What gets said when: "Nooo!" in a burst and in a surge; "Zzz…" from a
  * dozing caterpillar and "Phew!" in a stop, and from the rival who brakes.
  */
-function sayings(plan: Plan, unlucky: string, mountOf: (name: string) => Mount): Saying[] {
+function sayings(plan: Plan, unlucky: string, mountOf: (name: string) => Kind): Saying[] {
   const { slow, finish, win } = plan.times;
   const ending: Saying[] =
     plan.ending === 'brake'
@@ -194,6 +253,9 @@ function sayings(plan: Plan, unlucky: string, mountOf: (name: string) => Mount):
     return [
       ...(mountOf(name) === 'caterpillar'
         ? [{ name, text: 'Zzz…', from: at + 0.3, to: at + STOP.phew - 0.1 }]
+        : []),
+      ...(mountOf(name) === 'monster'
+        ? HICCUPS.at.map((hic) => ({ name, text: 'Hic!', from: at + hic, to: at + hic + 0.4 }))
         : []),
       { name, text: 'Phew!', from: at + STOP.phew, to: at + STOP.phew + 1.1 },
     ];
@@ -253,14 +315,19 @@ export async function playTheRace(show: Show): Promise<void> {
   const riders: Rider[] = show.names.map((name, index) => {
     const look = lookOf(name);
     const at = lane(index, count);
-    const drawn = racer(look, { face: faces.get(name)!, number: index + 1 });
+    const drawn = drawRacer(look, faces.get(name)!, index + 1);
     const holder = racers.appendChild(document.createElement('div'));
     holder.className = styles.holder!;
     holder.dataset.person = name;
     holder.style.scale = String(at.k);
     holder.append(drawn.el);
-    // Where a duck tips from, or a chair spins round.
-    drawn.el.style.transformOrigin = look.mount === 'duck' ? TIP.origin : SPIN.origin;
+    // Where a duck tips from, or a chair or a creature turns round.
+    drawn.el.style.transformOrigin =
+      look.mount === 'duck'
+        ? TIP.origin
+        : isCreature(look.mount)
+          ? `${drawn.faceX}px 0`
+          : SPIN.origin;
     const tag = tags.appendChild(nameTag(name, tagSize(at.k)));
     tag.classList.add(styles.tag!);
     tag.dataset.person = name;
@@ -286,6 +353,8 @@ export async function playTheRace(show: Show): Promise<void> {
       at,
       holder,
       drawn,
+      ridden: isCreature(look.mount) ? null : (drawn as Racer),
+      creature: isCreature(look.mount) ? (drawn as CreatureRunner) : null,
       tag,
       speed,
       gait,
@@ -306,7 +375,7 @@ export async function playTheRace(show: Show): Promise<void> {
               .map((name) => byName.get(name)!)
               .sort((one, two) => one.index - two.index)
               .map(({ name, look, index }) => {
-                const drawn = racer(look, { face: faces.get(name)!, number: index + 1 });
+                const drawn = drawRacer(look, faces.get(name)!, index + 1);
                 drawn.setMood('scared');
                 drawn.setPose('pull');
                 drawn.setSweat(true);
@@ -378,7 +447,8 @@ export async function playTheRace(show: Show): Promise<void> {
 
   /** What a new mount does in a burst and in a stop; `since` is how far into a stop. */
   const ride = (rider: Rider, t: number, moving: boolean, since: number) => {
-    const { look, drawn } = rider;
+    const { look, ridden: drawn } = rider;
+    if (!drawn) return;
     const { props } = drawn;
     const still = show.reducedMotion;
     const burst = burstOf(rider.name, t);
@@ -461,11 +531,98 @@ export async function playTheRace(show: Show): Promise<void> {
     write(drawn.el, '@data-props', shown.join(' '));
   };
 
+  /** Where `name`'s nose is along the track, not on the stage, at show second `t`. */
+  const alongAt = (name: string, t: number) => noseAt(plan, name, t) + cameraAt(plan, t);
+
+  /** What a creature does: its arms flail in front, and what its stop brings; `since` is how far into a stop. */
+  const act = (rider: Rider, t: number, since: number) => {
+    const { creature: drawn, at } = rider;
+    if (!drawn) return;
+    const kind = drawn.look.mount;
+    const spec = CREATURE_SPEC[kind];
+    const still = show.reducedMotion;
+    const stopped = since >= 0;
+    const shown: string[] = [];
+    const { pose } = rider.state!;
+    const flailing = pose === 'pull' || (pose === 'party' && spec.reach < 1);
+    const flail =
+      flailing && !still ? FLAIL.degrees * Math.sin((2 * Math.PI * t) / FLAIL.seconds) : 0;
+    drawn.arms.forEach((arm, i) => {
+      const [x, y] = spec.shoulders[i]!;
+      const degrees = (i ? flail : -flail).toFixed(1);
+      write(arm, '@transform', flail ? `rotate(${degrees} ${x} ${y})` : '');
+    });
+    write(drawn.el, '@data-flail', flail.toFixed(1));
+
+    let hop = 0;
+    const until = (from: number, to: number) => stopped && since >= from && since < to;
+    if (kind === 'zombie') {
+      const flying = until(0, STOP.phew);
+      const shoe = drawn.props.lostShoe!;
+      showPart(shoe, flying);
+      showPart(drawn.shoes[1], !flying);
+      if (flying) {
+        const done = still ? 1 : Math.min(1, since / SHOE.fly);
+        move(shoe, SHOE.from, SHOE.to, done, ` rotate(${still ? 0 : Math.round(-300 * done)})`);
+        shown.push('lostShoe');
+      }
+      if (until(SHOE.fly, STOP.phew) && !still) {
+        const hops = (SHOE.count * (since - SHOE.fly)) / (STOP.phew - SHOE.fly);
+        hop = SHOE.hop * Math.abs(Math.sin(Math.PI * hops));
+      }
+    }
+    if (kind === 'robot') {
+      const blank = until(0, REBOOT);
+      showPart(drawn.face, !blank);
+      write(drawn.el, '@data-blank', String(blank));
+    }
+    if (kind === 'shark') drawn.setBend(until(LACES.from, STOP.phew) ? LACES.degrees : 0);
+    if (kind === 'astronaut') {
+      const flag = drawn.props.flag!;
+      const planted = until(PLANT.at, STOP.off);
+      showPart(flag, planted);
+      if (!planted) write(drawn.el, '@data-flag', '');
+      if (planted) {
+        // Where it went in, along the track, from where the astronaut is now.
+        const back = alongAt(rider.name, t - since + PLANT.at) - alongAt(rider.name, t);
+        const x = PLANT.foot[0]! + back / at.k;
+        write(flag, '@transform', `translate(${x.toFixed(1)} ${PLANT.foot[1]})`);
+        write(drawn.el, '@data-flag', x.toFixed(1));
+        shown.push('flag');
+      }
+    }
+    if (kind === 'monster' && !still) {
+      for (const hic of HICCUPS.at) {
+        if (until(hic, hic + HICCUPS.seconds)) {
+          hop = HICCUPS.px * Math.sin((Math.PI * (since - hic)) / HICCUPS.seconds);
+        }
+      }
+    }
+    if (kind === 'villain') {
+      const wrapped = until(0, CAPE.seconds);
+      showPart(drawn.props.wrap!, wrapped);
+      if (wrapped) shown.push('wrap');
+    }
+    if (kind === 'alien') {
+      const asking = until(ASK, STOP.phew);
+      showPart(drawn.props.question!, asking);
+      if (asking) shown.push('question');
+    }
+    if (kind === 'dinosaur') {
+      const reaching = until(0, STOP.phew);
+      showPart(drawn.props.snack!, reaching);
+      drawn.setStretch(reaching);
+      if (reaching) shown.push('snack');
+    }
+    write(drawn.el, '--hop', hop ? `${(-hop).toFixed(1)}px` : '0px');
+    write(drawn.el, '@data-hop', hop.toFixed(1));
+    write(drawn.el, '@data-props', shown.join(' '));
+  };
+
   /** How fast `name`'s nose moves along the track at show second `t`. */
   const speedOf = (name: string, t: number) => {
     const dt = 1 / 60;
-    const along = (time: number) => noseAt(plan, name, time) + cameraAt(plan, time);
-    return (along(t + dt) - along(t - dt)) / (2 * dt);
+    return (alongAt(name, t + dt) - alongAt(name, t - dt)) / (2 * dt);
   };
 
   const feel = (rider: Rider, t: number, leader: string | null, front: number) => {
@@ -540,7 +697,7 @@ export async function playTheRace(show: Show): Promise<void> {
 
       // What a stop does to each mount.
       const since = stop ? t - stop.at : -1;
-      drawn.setLeaf(look.mount === 'snail' && since >= 0.2);
+      rider.ridden?.setLeaf(look.mount === 'snail' && since >= 0.2);
       const tip =
         look.mount === 'duck' && since >= 0 && since < TIP.seconds && !show.reducedMotion
           ? TIP.degrees * Math.sin((Math.PI * since) / TIP.seconds)
@@ -548,14 +705,16 @@ export async function playTheRace(show: Show): Promise<void> {
       const tilt = tip ? `${tip.toFixed(1)}deg` : '';
       write(drawn.el, 'rotate', tilt);
       write(drawn.el, '@data-rotate', tilt);
+      const turn = look.mount === 'chair' ? SPIN : look.mount === 'villain' ? CAPE : null;
       const spin =
-        look.mount === 'chair' && since >= 0 && since < SPIN.seconds && !show.reducedMotion
-          ? Math.cos((2 * Math.PI * SPIN.turns * since) / SPIN.seconds)
+        turn && since >= 0 && since < turn.seconds && !show.reducedMotion
+          ? Math.cos((2 * Math.PI * turn.turns * since) / turn.seconds)
           : 1;
       const turned = spin === 1 ? '' : `${spin.toFixed(2)} 1`;
       write(drawn.el, 'scale', turned);
       write(drawn.el, '@data-scale', turned);
       ride(rider, t, moving, since);
+      act(rider, t, since);
 
       // Speed lines behind whoever is racing along.
       const racing = moving && !show.reducedMotion && speedOf(rider.name, t) > SPEEDY;

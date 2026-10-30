@@ -87,3 +87,22 @@ export function fakeLineUp(options: Partial<LineUp> = {}): LineUp {
     ...options,
   };
 }
+
+/**
+ * A line-up whose first option, the hat, has its choices in two groups,
+ * "Hats" and "Helmets", that take turns, so the groups follow first choices.
+ */
+export function groupedLineUp(): LineUp {
+  const lineUp = fakeLineUp();
+  const hat = {
+    ...lineUp.options[0]!,
+    choices: [
+      { name: 'cap', label: 'Cap', group: 'Hats' },
+      { name: 'bike', label: 'Bike helmet', group: 'Helmets' },
+      { name: 'crown', label: 'Crown', group: 'Hats' },
+      { name: 'hard-hat', label: 'Hard hat', group: 'Helmets' },
+      { name: 'beanie', label: 'Beanie', group: 'Hats' },
+    ],
+  };
+  return { ...lineUp, options: [hat, ...lineUp.options.slice(1)] };
+}

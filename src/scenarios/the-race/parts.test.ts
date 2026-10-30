@@ -9,7 +9,7 @@ import {
   SPEC,
   track,
   type Mount,
-  type RacerLook,
+  type RideLook,
 } from './parts';
 
 const FACE: Look = { skin: 2, accessory: 'cap', colour: 'grape', ring: 'mint' };
@@ -24,7 +24,7 @@ const shown = (root: Element, selector: string) => {
   return true;
 };
 
-const drawn = (look: Partial<RacerLook> = {}, number = 3) =>
+const drawn = (look: Partial<RideLook> = {}, number = 3) =>
   racer({ mount: 'duck', colour: 'sun', extra: 'scarf', ...look }, { face: FACE, number });
 
 describe('a racer', () => {
@@ -60,7 +60,7 @@ describe('a racer', () => {
   });
 
   it('wears the cape behind the rider, and the scarf and the bow tie in front', () => {
-    const layers = (extra: RacerLook['extra']) =>
+    const layers = (extra: RideLook['extra']) =>
       [...drawn({ extra }).el.querySelector('[data-part="lean"]')!.children].map(
         (child) => (child as SVGElement).dataset.part ?? 'head',
       );
@@ -87,7 +87,7 @@ describe('a racer', () => {
   });
 
   it('has googly eyes instead of its own, one per eye', () => {
-    const count = (mount: Mount, extra: RacerLook['extra']) =>
+    const count = (mount: Mount, extra: RideLook['extra']) =>
       drawn({ mount, extra }).el.querySelectorAll('[data-part="mount"] circle').length;
     for (const mount of MOUNTS) {
       const googly = drawn({ mount, extra: 'googly' }).el.querySelectorAll(
@@ -173,6 +173,14 @@ describe('the track', () => {
     expect(at('finish')).toBe('translate(900.0 0)');
     expect(shown(field.el, '[data-part="start"]')).toBe(false);
     expect(at('posts')).toBe('translate(-140.0 0)');
+  });
+
+  it('styles its signs apart from the drawings, which keep their own sizes', () => {
+    const { el } = track({ lanes, start: 426, finish: 6000 });
+    const board = el.querySelector('[data-part="sign"] p')!;
+    const skateboard = drawn({ mount: 'duck' }).el.querySelector('[data-part="mount"] rect')!;
+    expect(board.classList).not.toContain(skateboard.getAttribute('class'));
+    expect(getComputedStyle(skateboard).width).not.toBe('max-content');
   });
 
   it('counts down to the finish with signs that pass by', () => {
