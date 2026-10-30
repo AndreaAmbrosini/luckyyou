@@ -47,7 +47,7 @@ export interface LineUpOption {
   /** The key in a look; unique in the line-up. */
   readonly name: string;
   readonly label: string;
-  /** At least two, with unique names. */
+  /** At least two, with unique names; they may come in groups. */
   readonly choices: readonly LineUpChoice[];
 }
 
@@ -58,6 +58,11 @@ export interface LineUpChoice {
   readonly label: string;
   /** A colour from tokens.css, as in `--color-<swatch>`: the choice shows as a round swatch. */
   readonly swatch?: string;
+  /**
+   * The label of the group it shows under, such as "Rides" (decision 0012).
+   * Groups come in the order their first choices do.
+   */
+  readonly group?: string;
 }
 
 /** One person's look: a choice's name for each option's name. */

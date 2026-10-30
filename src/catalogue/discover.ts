@@ -105,6 +105,9 @@ function lineUpProblems(lineUp: unknown): string[] {
       } else if (new Set(given.map((choice) => choice.name)).size < given.length) {
         problems.push(`its line-up option "${name}" has two choices with the same name`);
       }
+      if (given.some((choice) => choice.group !== undefined && !filled(choice.group))) {
+        problems.push(`its line-up option "${name}" has a group without a label`);
+      }
     }
   }
 

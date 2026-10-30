@@ -1,5 +1,5 @@
 import { useEffect, useId, useLayoutEffect, useRef, useState, type CSSProperties } from 'react';
-import type { ChosenLook, LineUp as LineUpOf } from '../scenario-kit/contract';
+import type { ChosenLook, LineUpChoice, LineUp as LineUpOf } from '../scenario-kit/contract';
 import { dealLooks, randomLook } from '../scenario-kit/line-up';
 import { Button } from '../ui/Button';
 import { ArrowLeftIcon, CheckIcon } from '../ui/icons';
@@ -105,36 +105,41 @@ export function LineUp({ lineUp, names, looks, onLooksChange, onBack, onStart }:
               <h3 id={`${id}-${option.name}`} className={styles.optionName}>
                 {option.label}
               </h3>
-              <div className={styles.choices}>
-                {option.choices.map((choice) => {
-                  const on = look[option.name] === choice.name;
-                  const pick = () => change({ ...look, [option.name]: choice.name });
-                  return choice.swatch ? (
-                    <button
-                      key={choice.name}
-                      type="button"
-                      className={styles.swatch}
-                      style={{ '--swatch': `var(--color-${choice.swatch})` } as CSSProperties}
-                      aria-label={choice.label}
-                      aria-pressed={on}
-                      onClick={pick}
-                    >
-                      {on && <CheckIcon size={22} />}
-                    </button>
-                  ) : (
-                    <button
-                      key={choice.name}
-                      type="button"
-                      className={styles.chip}
-                      aria-pressed={on}
-                      onClick={pick}
-                    >
-                      {on && <CheckIcon size={18} />}
-                      {choice.label}
-                    </button>
-                  );
-                })}
-              </div>
+              {groupsOf(option.choices).map(({ label, choices }) => (
+                <div key={label ?? ''} className={styles.choiceGroup}>
+                  {label !== undefined && <p className={styles.groupName}>{label}</p>}
+                  <div className={styles.choices}>
+                    {choices.map((choice) => {
+                      const on = look[option.name] === choice.name;
+                      const pick = () => change({ ...look, [option.name]: choice.name });
+                      return choice.swatch ? (
+                        <button
+                          key={choice.name}
+                          type="button"
+                          className={styles.swatch}
+                          style={{ '--swatch': `var(--color-${choice.swatch})` } as CSSProperties}
+                          aria-label={choice.label}
+                          aria-pressed={on}
+                          onClick={pick}
+                        >
+                          {on && <CheckIcon size={22} />}
+                        </button>
+                      ) : (
+                        <button
+                          key={choice.name}
+                          type="button"
+                          className={styles.chip}
+                          aria-pressed={on}
+                          onClick={pick}
+                        >
+                          {on && <CheckIcon size={18} />}
+                          {choice.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              ))}
             </div>
           ))}
         </section>
@@ -151,6 +156,19 @@ export function LineUp({ lineUp, names, looks, onLooksChange, onBack, onStart }:
       </footer>
     </main>
   );
+}
+
+/**
+ * An option's choices by group, the groups in the order their first choices
+ * come (decision 0012). Choices without a group make one group with no label.
+ */
+function groupsOf(choices: readonly LineUpChoice[]) {
+  const groups = new Map<string | undefined, LineUpChoice[]>();
+  for (const choice of choices) {
+    const group = groups.get(choice.group) ?? [];
+    groups.set(choice.group, [...group, choice]);
+  }
+  return [...groups].map(([label, inGroup]) => ({ label, choices: inGroup }));
 }
 
 const sameLook = (one: ChosenLook, two: ChosenLook) =>

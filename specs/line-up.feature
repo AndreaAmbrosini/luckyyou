@@ -66,15 +66,13 @@ Feature: The Line-up
       When I choose "Surprise me"
       Then Ben gets a look drawn at random from the show's choices
 
-    # Built with The Race's creatures (decision 0012).
-    @pending
+    # Decision 0012.
     Scenario: An option's choices can come in groups
       Given a show whose first option has choices in two groups
       When Ben's look is shown beside the tiles
       Then that option's choices sit under each group's label, the groups in the order their first choices come
       And it is still one option: one choice marked, and the choices read out under the option's label
 
-    @pending
     Scenario: Surprise me draws from every group
       Given a show whose first option has choices in two groups
       When I choose "Surprise me" for Ben, again and again
@@ -150,3 +148,4 @@ Feature: The Line-up
         | an option with fewer than 2 choices |
         | two options with the same name      |
         | no way to draw a look               |
+      | a choice in a group without a label |
