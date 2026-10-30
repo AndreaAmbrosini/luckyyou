@@ -1,9 +1,12 @@
 // A creature racing on its own feet, from the Design canvas's Creature: no
-// mount and no rider, its own face carrying the mood. Its legs run whatever
-// the mood; in front it leans back and flails its arms. The astronaut and the
-// villain have human faces in the kit's skin tone for the run. Every colour
-// comes from a class in the-race.module.css, the creature's colour as
-// --racer, the contrast for its extras as --band, and a limb's as --paint.
+// mount and no rider, its own face carrying the mood. A modern cartoon: lidded
+// eyes with shines, a flat shadow on each main part (the light comes from the
+// top right), curved limbs with gloves, shoes by kind, and a sprint. Its legs
+// run whatever the mood; in front it leans back and flails its arms. The
+// astronaut and the villain have human faces in the kit's skin tone for the
+// run. Every colour comes from a class in the-race.module.css, the creature's
+// colour as --racer, the contrast for its extras as --band, and a limb's as
+// --paint.
 
 import type { Look, Mood } from '../../scenario-kit';
 import {
@@ -26,32 +29,48 @@ type Point = readonly [x: number, y: number];
 /** What a limb or a shoe is painted: the creature's colour, the person's skin, or a token. */
 type Paint = 'colour' | 'skin' | 'ink' | 'ink-soft' | 'shark' | 'paper' | 'glass' | 'mint-soft';
 
+/** Sneakers, boots, big bare feet, flat paddles, bird's toes or a curled tentacle tip. */
+export type Foot = 'sneaker' | 'boot' | 'bare' | 'paddle' | 'toes' | 'tip';
+
 /** A creature, on the canvas's grid. */
 interface Spec {
   /** The middle of its face, where its name tag and bubbles go, and its nose. */
   readonly face: number;
   readonly nose: number;
-  /** Where its back and front legs start; each leg's width and paint, and its shoes'. */
+  /** Where its back and front legs start; each leg's width and paint. */
   readonly hips: readonly [Point, Point];
   readonly legW: number;
   readonly legs: Paint;
+  /** Its feet, their size (1 unless big), and the paint of its shoes and their soles. */
+  readonly foot: Foot;
+  readonly footK?: number;
   readonly shoes: Paint;
+  readonly sole?: Paint;
   /** Its back and front shoulders; each arm's width, and its paint and its hands'. */
   readonly shoulders: readonly [Point, Point];
   readonly armW: number;
   readonly arms: Paint;
   readonly hands: Paint;
-  /** Fins for arms. */
+  /** Hands with no thumb: paws or tentacle tips. */
+  readonly noThumb?: boolean;
+  /** Fins for arms, as leaves, this much longer. */
   readonly fins?: boolean;
-  /** A human face, with dots for eyes. */
+  readonly finK?: number;
+  /** A human face, with dark oval eyes. */
   readonly dots?: boolean;
+  /** A dark screen for a face, its eyes and mouth glowing, and no brows. */
+  readonly screen?: boolean;
+  readonly noBrows?: boolean;
   /** Arms out in front as it runs. */
   readonly zombieArms?: boolean;
-  /** One tooth, or a row of pointy teeth. */
+  /** One square tooth, or a row of pointy teeth. */
   readonly tooth?: boolean;
   readonly teeth?: boolean;
-  /** Each eye's x, y and radius; the mouth's x, y and width; where it sweats. */
+  /** Each eye's x, y and radius; the paint round them, for lids; its pupils' size. */
   readonly eyes: readonly (readonly [number, number, number])[];
+  readonly lid: Paint;
+  readonly pupil?: number;
+  /** The mouth's x, y and width; where it sweats. */
   readonly mouth: readonly [number, number, number];
   readonly sweat: readonly Point[];
   /** Where the scarf or the bow tie, the racing number and the top hat go. */
@@ -68,34 +87,37 @@ export const CREATURE_SPEC: Readonly<Record<Creature, Spec>> = {
     face: 130,
     nose: 206,
     hips: [
-      [116, 146],
+      [118, 146],
       [140, 146],
     ],
     legW: 12,
     legs: 'ink-soft',
-    shoes: 'ink',
+    foot: 'sneaker',
+    shoes: 'ink-soft',
     shoulders: [
       [108, 102],
-      [150, 102],
+      [152, 102],
     ],
-    armW: 9,
+    armW: 10,
     arms: 'mint-soft',
     hands: 'mint-soft',
     zombieArms: true,
     tooth: true,
     eyes: [
-      [118, 60, 10],
-      [143, 60, 7],
+      [118, 58, 12],
+      [148, 58, 9],
     ],
-    mouth: [130, 82, 22],
+    lid: 'mint-soft',
+    pupil: 0.3,
+    mouth: [132, 86, 22],
     sweat: [
-      [92, 44],
-      [166, 44],
+      [88, 40],
+      [172, 40],
     ],
-    neck: [130, 96],
+    neck: [130, 98],
     chest: [124, 124],
-    hat: [130, 26],
-    cup: [130, -24],
+    hat: [130, 22],
+    cup: [130, -30],
     reach: 1,
   },
   robot: {
@@ -107,26 +129,31 @@ export const CREATURE_SPEC: Readonly<Record<Creature, Spec>> = {
     ],
     legW: 11,
     legs: 'shark',
+    foot: 'boot',
     shoes: 'ink-soft',
+    sole: 'shark',
     shoulders: [
-      [104, 102],
-      [156, 102],
+      [102, 102],
+      [158, 102],
     ],
     armW: 9,
     arms: 'shark',
     hands: 'shark',
+    screen: true,
+    noBrows: true,
     eyes: [
-      [118, 52, 9],
-      [142, 52, 9],
+      [118, 48, 8],
+      [142, 48, 8],
     ],
-    mouth: [130, 68, 22],
+    lid: 'ink',
+    mouth: [130, 64, 16],
     sweat: [
-      [84, 30],
-      [176, 30],
+      [80, 30],
+      [180, 30],
     ],
-    neck: [130, 98],
+    neck: [130, 96],
     chest: [130, 128],
-    hat: [130, 22],
+    hat: [130, 20],
     cup: [130, -26],
     reach: 1,
   },
@@ -139,6 +166,7 @@ export const CREATURE_SPEC: Readonly<Record<Creature, Spec>> = {
     ],
     legW: 9,
     legs: 'skin',
+    foot: 'sneaker',
     shoes: 'colour',
     shoulders: [
       [134, 102],
@@ -150,17 +178,18 @@ export const CREATURE_SPEC: Readonly<Record<Creature, Spec>> = {
     fins: true,
     teeth: true,
     eyes: [
-      [178, 58, 9],
-      [200, 60, 8],
+      [176, 58, 9],
+      [198, 60, 8],
     ],
-    mouth: [198, 92, 32],
+    lid: 'colour',
+    mouth: [196, 92, 32],
     sweat: [
-      [164, 36],
-      [218, 40],
+      [162, 34],
+      [218, 38],
     ],
     neck: [170, 104],
     chest: [96, 76],
-    hat: [188, 42],
+    hat: [186, 42],
     cup: [108, -40],
     reach: 0,
   },
@@ -173,7 +202,9 @@ export const CREATURE_SPEC: Readonly<Record<Creature, Spec>> = {
     ],
     legW: 13,
     legs: 'paper',
+    foot: 'boot',
     shoes: 'shark',
+    sole: 'ink-soft',
     shoulders: [
       [104, 102],
       [156, 102],
@@ -183,13 +214,14 @@ export const CREATURE_SPEC: Readonly<Record<Creature, Spec>> = {
     hands: 'paper',
     dots: true,
     eyes: [
-      [121, 58, 4],
-      [139, 58, 4],
+      [121, 57, 4.5],
+      [139, 57, 4.5],
     ],
-    mouth: [130, 70, 14],
+    lid: 'skin',
+    mouth: [130, 71, 14],
     sweat: [
-      [112, 44],
-      [148, 44],
+      [112, 40],
+      [150, 40],
     ],
     neck: [130, 96],
     chest: [130, 126],
@@ -206,6 +238,8 @@ export const CREATURE_SPEC: Readonly<Record<Creature, Spec>> = {
     ],
     legW: 15,
     legs: 'colour',
+    foot: 'bare',
+    footK: 1.2,
     shoes: 'colour',
     shoulders: [
       [86, 104],
@@ -216,12 +250,13 @@ export const CREATURE_SPEC: Readonly<Record<Creature, Spec>> = {
     hands: 'colour',
     teeth: true,
     eyes: [[130, 58, 17]],
-    mouth: [130, 90, 40],
+    lid: 'colour',
+    mouth: [130, 92, 40],
     sweat: [
-      [84, 50],
-      [176, 50],
+      [82, 50],
+      [178, 50],
     ],
-    neck: [130, 110],
+    neck: [130, 112],
     chest: [104, 132],
     hat: [130, 30],
     cup: [130, -26],
@@ -236,7 +271,9 @@ export const CREATURE_SPEC: Readonly<Record<Creature, Spec>> = {
     ],
     legW: 11,
     legs: 'ink-soft',
+    foot: 'boot',
     shoes: 'ink',
+    sole: 'ink-soft',
     shoulders: [
       [106, 102],
       [154, 102],
@@ -246,13 +283,14 @@ export const CREATURE_SPEC: Readonly<Record<Creature, Spec>> = {
     hands: 'paper',
     dots: true,
     eyes: [
-      [119, 54, 4],
-      [141, 55, 4],
+      [119, 54, 4.5],
+      [141, 55, 4.5],
     ],
-    mouth: [130, 85, 12],
+    lid: 'skin',
+    mouth: [130, 86, 12],
     sweat: [
-      [98, 40],
-      [162, 40],
+      [96, 40],
+      [164, 40],
     ],
     neck: [130, 92],
     chest: [142, 126],
@@ -269,6 +307,7 @@ export const CREATURE_SPEC: Readonly<Record<Creature, Spec>> = {
     ],
     legW: 8,
     legs: 'colour',
+    foot: 'sneaker',
     shoes: 'glass',
     shoulders: [
       [108, 102],
@@ -282,10 +321,11 @@ export const CREATURE_SPEC: Readonly<Record<Creature, Spec>> = {
       [147, 56, 9],
       [130, 38, 7],
     ],
+    lid: 'colour',
     mouth: [130, 76, 14],
     sweat: [
-      [84, 50],
-      [176, 50],
+      [82, 50],
+      [178, 50],
     ],
     neck: [130, 94],
     chest: [130, 130],
@@ -302,6 +342,8 @@ export const CREATURE_SPEC: Readonly<Record<Creature, Spec>> = {
     ],
     legW: 16,
     legs: 'colour',
+    foot: 'bare',
+    footK: 1.2,
     shoes: 'colour',
     shoulders: [
       [150, 98],
@@ -310,14 +352,16 @@ export const CREATURE_SPEC: Readonly<Record<Creature, Spec>> = {
     armW: 7,
     arms: 'colour',
     hands: 'colour',
+    noThumb: true,
     teeth: true,
     eyes: [
       [150, 38, 8],
       [172, 36, 8],
     ],
+    lid: 'colour',
     mouth: [188, 62, 40],
     sweat: [
-      [136, 30],
+      [134, 28],
       [222, 30],
     ],
     neck: [150, 88],
@@ -350,6 +394,20 @@ const LINES: Record<Paint, string> = {
   'mint-soft': 'var(--color-mint-soft)',
 };
 
+const paint = (el: Element, p: Paint) => (el as SVGElement).style.setProperty('--paint', LINES[p]);
+
+const round = (n: number) => Math.round(n * 10) / 10;
+const at = ([x, y]: Point) => `${round(x)} ${round(y)}`;
+/** An ellipse as a path, from its left end round. */
+const oval = (x: number, y: number, rx: number, ry: number) =>
+  `M${round(x - rx)} ${round(y)} a${round(rx)} ${round(ry)} 0 1 0 ${round(2 * rx)} 0 ` +
+  `a${round(rx)} ${round(ry)} 0 1 0 ${round(-2 * rx)} 0 Z`;
+/** A rectangle with rounded corners, as a path. */
+const box = (x: number, y: number, w: number, h: number, r: number) =>
+  `M${x + r} ${y} H${x + w - r} Q${x + w} ${y} ${x + w} ${y + r} V${y + h - r} ` +
+  `Q${x + w} ${y + h} ${x + w - r} ${y + h} H${x + r} Q${x} ${y + h} ${x} ${y + h - r} ` +
+  `V${y + r} Q${x} ${y} ${x + r} ${y} Z`;
+
 /** The monster's fur: a jagged oval round (cx, cy), every other point pulled in. */
 function fur(cx: number, cy: number, rx: number, ry: number): string {
   const points: string[] = [];
@@ -364,37 +422,62 @@ function fur(cx: number, cy: number, rx: number, ry: number): string {
 }
 
 /**
+ * A main part of a body: filled with `paint`, then what's drawn on it, then
+ * its shadow (the part less itself moved by `shadow`, up and right, so the
+ * shadow falls on its lower left), then its outline. `part` names it for
+ * where the feature says its colour is.
+ */
+interface Shaded {
+  readonly paint: string;
+  readonly d: string;
+  readonly shadow: Point;
+  readonly on?: readonly Shape[];
+  readonly part?: string;
+}
+
+/** A white highlight on the upper right of a head or a body. */
+const shine = (d: string, width = 5, opacity = 0.8): Shape => [
+  'path',
+  styles.stripe!,
+  { d, 'stroke-width': width, opacity, 'data-part': 'highlight' },
+];
+
+/**
  * Each creature's body and head, back to front. The parts in its colour are
  * named for where they are, as the feature says.
  */
-const BODIES: Record<Creature, readonly Shape[]> = {
+const BODIES: Record<Creature, readonly (Shape | Shaded)[]> = {
   zombie: [
     ['rect', styles.mintSoft!, { x: 121, y: 84, width: 18, height: 14, 'stroke-width': 4 }],
-    [
-      'path',
-      styles.racer!,
-      {
-        d:
-          'M100 100 Q100 92 112 91 H148 Q158 92 158 100 L160 148 L152 141 L144 149 L136 141 ' +
-          'L128 149 L120 141 L112 149 L104 141 L98 147 Z',
-        'stroke-width': 4,
-        'data-part': 'shirt',
-      },
-    ],
-    [
-      'rect',
-      styles.tomatoSoft!,
-      { x: 136, y: 114, width: 13, height: 13, 'stroke-width': 3, transform: 'rotate(8 142 120)' },
-    ],
+    {
+      paint: styles.racer!,
+      d:
+        'M100 100 Q100 92 112 91 H148 Q158 92 158 100 L160 148 L152 141 L144 149 L136 141 ' +
+        'L128 149 L120 141 L112 149 L104 141 L98 147 Z',
+      shadow: [10, -4],
+      part: 'shirt',
+      on: [
+        [
+          'rect',
+          styles.tomatoSoft!,
+          {
+            x: 136,
+            y: 114,
+            width: 13,
+            height: 13,
+            'stroke-width': 3,
+            transform: 'rotate(8 142 120)',
+          },
+        ],
+      ],
+    },
     ['circle', styles.mintSoft!, { cx: 100, cy: 62, r: 7, 'stroke-width': 4 }],
-    [
-      'path',
-      styles.mintSoft!,
-      {
-        d: 'M100 42 Q100 24 130 24 Q160 24 160 44 L160 76 Q160 96 130 96 Q100 96 100 76 Z',
-        'stroke-width': 4,
-      },
-    ],
+    {
+      paint: styles.mintSoft!,
+      d: 'M100 42 Q100 24 130 24 Q160 24 160 44 L160 76 Q160 96 130 96 Q100 96 100 76 Z',
+      shadow: [9, -7],
+    },
+    shine('M154 50 Q158 62 156 76', 4),
     [
       'path',
       styles.inkSoft!,
@@ -408,7 +491,7 @@ const BODIES: Record<Creature, readonly Shape[]> = {
     [
       'path',
       styles.line!,
-      { d: 'M140 42 L156 46 M144 38 L142 47 M151 40 L149 49', 'stroke-width': 3 },
+      { d: 'M102 80 L114 85 M105 77 L104 86 M110 79 L109 88', 'stroke-width': 3 },
     ],
   ],
   robot: [
@@ -417,21 +500,26 @@ const BODIES: Record<Creature, readonly Shape[]> = {
     ['rect', styles.shark!, { x: 86, y: 44, width: 10, height: 22, rx: 3, 'stroke-width': 4 }],
     ['rect', styles.shark!, { x: 164, y: 44, width: 10, height: 22, rx: 3, 'stroke-width': 4 }],
     ['rect', styles.shark!, { x: 122, y: 84, width: 16, height: 12, 'stroke-width': 3 }],
+    {
+      paint: styles.racer!,
+      d: box(102, 94, 56, 54, 8),
+      shadow: [8, -6],
+      part: 'body',
+      on: [
+        ['circle', styles.paper!, { cx: 118, cy: 112, r: 7, 'stroke-width': 3 }],
+        ['path', styles.line!, { d: 'M118 112 L122 107 M112 136 H148', 'stroke-width': 3 }],
+        ['circle', styles.tomato!, { cx: 141, cy: 109, r: 4, 'stroke-width': 2.5 }],
+        ['circle', styles.sun!, { cx: 150, cy: 120, r: 4, 'stroke-width': 2.5 }],
+      ],
+    },
+    { paint: styles.shark!, d: box(94, 22, 72, 66, 12), shadow: [9, -7] },
+    shine('M154 27 Q162 28 163 38', 4),
     [
       'rect',
-      styles.racer!,
-      { x: 102, y: 94, width: 56, height: 54, rx: 8, 'stroke-width': 4, 'data-part': 'body' },
-    ],
-    ['circle', styles.paper!, { cx: 118, cy: 112, r: 7, 'stroke-width': 3 }],
-    ['path', styles.line!, { d: 'M118 112 L122 107 M112 136 H148', 'stroke-width': 3 }],
-    ['circle', styles.tomato!, { cx: 141, cy: 109, r: 4, 'stroke-width': 2.5 }],
-    ['circle', styles.sun!, { cx: 150, cy: 120, r: 4, 'stroke-width': 2.5 }],
-    ['rect', styles.shark!, { x: 94, y: 22, width: 72, height: 66, rx: 12, 'stroke-width': 4 }],
-    [
-      'rect',
-      styles.glass!,
+      styles.ink!,
       { x: 102, y: 32, width: 56, height: 46, rx: 8, 'stroke-width': 3, 'data-part': 'screen' },
     ],
+    shine('M146 37 Q152 37 154 42', 2.5, 0.45),
   ],
   shark: [
     [
@@ -444,51 +532,49 @@ const BODIES: Record<Creature, readonly Shape[]> = {
       styles.racer!,
       { d: 'M104 46 Q106 16 92 2 Q128 8 138 42 Z', 'stroke-width': 4, 'data-part': 'body' },
     ],
-    [
-      'path',
-      styles.racer!,
-      {
-        d:
-          'M52 78 Q60 42 120 38 Q184 36 212 58 Q230 72 228 84 Q210 108 150 116 Q92 120 62 106 ' +
-          'Q48 94 52 78 Z',
-        'stroke-width': 4,
-        'data-part': 'body',
-      },
-    ],
-    [
-      'path',
-      styles.paper!,
-      { d: 'M62 100 Q120 96 226 84 Q208 108 150 116 Q94 120 62 104 Z', 'stroke-width': 3 },
-    ],
-    [
-      'path',
-      styles.line!,
-      { d: 'M148 62 Q144 72 148 82 M158 60 Q154 70 158 80', 'stroke-width': 3 },
-    ],
+    {
+      paint: styles.racer!,
+      d:
+        'M52 78 Q60 42 120 38 Q184 36 212 58 Q230 72 228 84 Q210 108 150 116 Q92 120 62 106 ' +
+        'Q48 94 52 78 Z',
+      shadow: [8, -8],
+      part: 'body',
+      on: [
+        [
+          'path',
+          styles.paper!,
+          { d: 'M62 100 Q120 96 226 84 Q208 108 150 116 Q94 120 62 104 Z', 'stroke-width': 3 },
+        ],
+        [
+          'path',
+          styles.line!,
+          { d: 'M148 62 Q144 72 148 82 M158 60 Q154 70 158 80', 'stroke-width': 3 },
+        ],
+      ],
+    },
+    shine('M100 46 Q140 38 182 47'),
   ],
   astronaut: [
-    [
-      'rect',
-      styles.racer!,
-      { x: 80, y: 92, width: 26, height: 52, rx: 6, 'stroke-width': 4, 'data-part': 'backpack' },
-    ],
-    [
-      'path',
-      styles.paper!,
-      { d: 'M102 98 Q104 90 118 90 H142 Q156 90 158 98 L160 148 H100 Z', 'stroke-width': 4 },
-    ],
-    [
-      'rect',
-      styles.racer!,
-      { x: 116, y: 104, width: 28, height: 16, rx: 3, 'stroke-width': 3, 'data-part': 'panel' },
-    ],
-    ['circle', styles.paperFill!, { cx: 124, cy: 112, r: 3 }],
-    ['circle', styles.paperFill!, { cx: 136, cy: 112, r: 3 }],
-    ['rect', styles.shark!, { x: 100, y: 136, width: 60, height: 8, 'stroke-width': 3 }],
+    { paint: styles.racer!, d: box(80, 92, 26, 52, 6), shadow: [6, -4], part: 'backpack' },
+    {
+      paint: styles.paper!,
+      d: 'M102 98 Q104 90 118 90 H142 Q156 90 158 98 L160 148 H100 Z',
+      shadow: [8, -4],
+      on: [
+        [
+          'rect',
+          styles.racer!,
+          { x: 116, y: 104, width: 28, height: 16, rx: 3, 'stroke-width': 3, 'data-part': 'panel' },
+        ],
+        ['circle', styles.paperFill!, { cx: 124, cy: 112, r: 3 }],
+        ['circle', styles.paperFill!, { cx: 136, cy: 112, r: 3 }],
+        ['rect', styles.shark!, { x: 100, y: 136, width: 60, height: 8, 'stroke-width': 3 }],
+      ],
+    },
     ['rect', styles.shark!, { x: 106, y: 86, width: 48, height: 12, rx: 6, 'stroke-width': 3 }],
-    ['circle', styles.glass!, { cx: 130, cy: 56, r: 36, 'stroke-width': 4 }],
-    ['circle', styles.skin!, { cx: 130, cy: 60, r: 24, 'stroke-width': 3, 'data-part': 'skin' }],
-    ['path', styles.stripe!, { d: 'M102 46 Q108 28 126 22', 'stroke-width': 5 }],
+    { paint: styles.glass!, d: oval(130, 56, 36, 36), shadow: [8, -7] },
+    { paint: styles.skin!, d: oval(130, 60, 24, 24), shadow: [5, -5], part: 'skin' },
+    shine('M146 27 Q161 33 165 50', 6),
   ],
   monster: [
     [
@@ -499,21 +585,30 @@ const BODIES: Record<Creature, readonly Shape[]> = {
         'stroke-width': 4,
       },
     ],
-    ['path', styles.racer!, { d: fur(130, 96, 50, 68), 'stroke-width': 4, 'data-part': 'fur' }],
-    ['ellipse', styles.tomatoSoft!, { cx: 130, cy: 130, rx: 26, ry: 20, 'stroke-width': 3 }],
+    {
+      paint: styles.racer!,
+      d: fur(130, 96, 50, 68),
+      shadow: [9, -7],
+      part: 'fur',
+      on: [
+        ['ellipse', styles.tomatoSoft!, { cx: 130, cy: 130, rx: 26, ry: 20, 'stroke-width': 3 }],
+      ],
+    },
+    shine('M152 38 Q166 46 172 62'),
   ],
   villain: [
-    [
-      'path',
-      styles.racer!,
-      { d: 'M108 94 Q62 112 44 164 Q76 154 104 162 Z', 'stroke-width': 4, 'data-part': 'cape' },
-    ],
-    [
-      'path',
-      styles.inkSoft!,
-      { d: 'M104 98 Q106 90 118 90 H142 Q154 90 156 98 L156 148 H104 Z', 'stroke-width': 4 },
-    ],
-    ['path', styles.paper!, { d: 'M121 90 L130 112 L139 90 Z', 'stroke-width': 3 }],
+    {
+      paint: styles.racer!,
+      d: 'M108 94 Q62 112 44 164 Q76 154 104 162 Z',
+      shadow: [6, -6],
+      part: 'cape',
+    },
+    {
+      paint: styles.inkSoft!,
+      d: 'M104 98 Q106 90 118 90 H142 Q154 90 156 98 L156 148 H104 Z',
+      shadow: [8, -4],
+      on: [['path', styles.paper!, { d: 'M121 90 L130 112 L139 90 Z', 'stroke-width': 3 }]],
+    },
     ['rect', styles.skin!, { x: 122, y: 78, width: 16, height: 14, 'stroke-width': 3 }],
     [
       'path',
@@ -524,7 +619,7 @@ const BODIES: Record<Creature, readonly Shape[]> = {
         'data-part': 'collar',
       },
     ],
-    ['circle', styles.skin!, { cx: 130, cy: 56, r: 28, 'stroke-width': 4, 'data-part': 'skin' }],
+    { paint: styles.skin!, d: oval(130, 56, 28, 28), shadow: [6, -6], part: 'skin' },
     [
       'path',
       styles.inkSoft!,
@@ -533,6 +628,7 @@ const BODIES: Record<Creature, readonly Shape[]> = {
         'stroke-width': 4,
       },
     ],
+    shine('M140 30 Q150 31 154 38', 3, 0.6),
     [
       'path',
       styles.inkFill!,
@@ -550,24 +646,22 @@ const BODIES: Record<Creature, readonly Shape[]> = {
     ['circle', styles.sun!, { cx: 102, cy: 7, r: 6, 'stroke-width': 3 }],
     ['circle', styles.sun!, { cx: 158, cy: 7, r: 6, 'stroke-width': 3 }],
     ['rect', styles.racer!, { x: 124, y: 82, width: 12, height: 14, 'stroke-width': 3 }],
-    [
-      'path',
-      styles.glass!,
-      { d: 'M108 98 Q110 92 120 92 H140 Q150 92 152 98 L156 148 H104 Z', 'stroke-width': 4 },
-    ],
-    ['circle', styles.sun!, { cx: 130, cy: 114, r: 8, 'stroke-width': 3 }],
-    [
-      'ellipse',
-      styles.racer!,
-      { cx: 130, cy: 56, rx: 42, ry: 32, 'stroke-width': 4, 'data-part': 'head' },
-    ],
+    {
+      paint: styles.glass!,
+      d: 'M108 98 Q110 92 120 92 H140 Q150 92 152 98 L156 148 H104 Z',
+      shadow: [8, -4],
+      on: [['circle', styles.sun!, { cx: 130, cy: 114, r: 8, 'stroke-width': 3 }]],
+    },
+    { paint: styles.racer!, d: oval(130, 56, 42, 32), shadow: [9, -7], part: 'head' },
+    shine('M150 30 Q164 36 168 50'),
   ],
   dinosaur: [
-    [
-      'path',
-      styles.racer!,
-      { d: 'M98 118 Q52 128 12 170 Q60 152 106 144 Z', 'stroke-width': 4, 'data-part': 'body' },
-    ],
+    {
+      paint: styles.racer!,
+      d: 'M98 118 Q52 128 12 170 Q60 152 106 144 Z',
+      shadow: [6, -6],
+      part: 'body',
+    },
     [
       'path',
       styles.racer!,
@@ -577,41 +671,130 @@ const BODIES: Record<Creature, readonly Shape[]> = {
         'data-part': 'body',
       },
     ],
+    {
+      paint: styles.racer!,
+      d: 'M90 112 Q92 80 126 78 Q160 80 162 114 Q162 148 126 152 Q92 150 90 112 Z',
+      shadow: [8, -6],
+      part: 'body',
+      on: [
+        [
+          'path',
+          styles.tomatoSoft!,
+          { d: 'M120 90 Q148 96 152 126 Q144 146 124 148 Q136 120 120 90 Z', 'stroke-width': 3 },
+        ],
+      ],
+    },
+    {
+      paint: styles.racer!,
+      d:
+        'M118 54 Q118 22 160 22 Q206 22 216 46 Q220 62 208 70 L164 72 Q164 84 152 86 ' +
+        'Q128 88 122 74 Q118 66 118 54 Z',
+      shadow: [8, -7],
+      part: 'body',
+      on: [['circle', styles.inkFill!, { cx: 208, cy: 36, r: 2.5 }]],
+    },
+    shine('M162 26 Q196 24 210 37'),
+  ],
+};
+
+/**
+ * Each kind of foot, its ankle at (0, 0) and its sole 11 below, facing right:
+ * the shoe in `shoe`, its sole in `sole`, a stripe in `stripe`, or toes and
+ * tips as lines in `line`.
+ */
+export const FEET: Record<
+  Foot,
+  (paints: { shoe: string; sole: string; stripe: string; line: string }) => Shape[]
+> = {
+  sneaker: ({ shoe, sole, stripe }) => [
     [
       'path',
-      styles.racer!,
+      shoe,
       {
-        d: 'M90 112 Q92 80 126 78 Q160 80 162 114 Q162 148 126 152 Q92 150 90 112 Z',
-        'stroke-width': 4,
-        'data-part': 'body',
+        d: 'M-12 -12 Q-14 -2 -14 3 H22 Q27 3 25 -3 Q21 -9 8 -11 L4 -16 Q-6 -19 -12 -12 Z',
+        'stroke-width': 3.5,
+        'data-part': 'shoe',
       },
     ],
     [
       'path',
-      styles.tomatoSoft!,
-      { d: 'M120 90 Q148 96 152 126 Q144 146 124 148 Q136 120 120 90 Z', 'stroke-width': 3 },
+      sole,
+      { d: 'M-16 3 H24 Q29 3 28 7 Q27 11 22 11 H-13 Q-17 11 -16 3 Z', 'stroke-width': 3.5 },
+    ],
+    ['path', stripe, { d: 'M-8 -3 Q4 -1 14 -6', 'stroke-width': 4, 'data-part': 'stripe' }],
+    ['path', styles.line!, { d: 'M3 -13 L7 -8 M9 -12 L12 -8', 'stroke-width': 2.5 }],
+  ],
+  boot: ({ shoe, sole }) => [
+    [
+      'path',
+      shoe,
+      {
+        d: 'M-11 -22 H7 V-10 Q19 -9 23 -2 Q25 3 22 4 H-13 Q-14 -6 -11 -22 Z',
+        'stroke-width': 3.5,
+        'data-part': 'shoe',
+      },
     ],
     [
       'path',
-      styles.racer!,
+      sole,
+      { d: 'M-15 3 H24 Q28 3 27 7 Q26 11 21 11 H-12 Q-16 11 -15 3 Z', 'stroke-width': 3.5 },
+    ],
+    ['path', styles.line!, { d: 'M-11 -15 H7', 'stroke-width': 2.5 }],
+  ],
+  bare: ({ shoe }) => [
+    [
+      'path',
+      shoe,
       {
-        d:
-          'M118 54 Q118 22 160 22 Q206 22 216 46 Q220 62 208 70 L164 72 Q164 84 152 86 ' +
-          'Q128 88 122 74 Q118 66 118 54 Z',
-        'stroke-width': 4,
-        'data-part': 'body',
+        d: 'M-14 6 Q-16 -10 -2 -12 Q14 -12 22 -2 Q28 6 22 10 H-10 Q-15 10 -14 6 Z',
+        'stroke-width': 3.5,
+        'data-part': 'shoe',
       },
     ],
-    ['circle', styles.inkFill!, { cx: 208, cy: 36, r: 2.5 }],
+    ['path', styles.line!, { d: 'M13 3 Q15 7 14 10 M5 4 Q7 8 6 10', 'stroke-width': 2.5 }],
+  ],
+  paddle: ({ shoe }) => [
+    [
+      'path',
+      shoe,
+      {
+        d: 'M-8 -2 Q8 -6 26 4 Q30 10 22 11 Q12 13 -6 10 Q-12 5 -8 -2 Z',
+        'stroke-width': 3.5,
+        'data-part': 'shoe',
+      },
+    ],
+    ['path', styles.line!, { d: 'M10 4 L13 10 M18 5 L21 10', 'stroke-width': 2.5 }],
+  ],
+  toes: ({ line }) => [
+    ['path', styles.line!, { d: 'M0 0 L20 10 M0 0 L10 12 M0 0 L-10 10', 'stroke-width': 8 }],
+    [
+      'path',
+      styles.limb!,
+      {
+        d: 'M0 0 L20 10 M0 0 L10 12 M0 0 L-10 10',
+        'stroke-width': 4,
+        style: `--paint: ${line}`,
+        'data-part': 'shoe',
+      },
+    ],
+  ],
+  tip: ({ line }) => [
+    ['path', styles.line!, { d: 'M0 0 Q12 4 13 -4 Q13 -11 6 -9', 'stroke-width': 17 }],
+    [
+      'path',
+      styles.limb!,
+      {
+        d: 'M0 0 Q12 4 13 -4 Q13 -11 6 -9',
+        'stroke-width': 10,
+        style: `--paint: ${line}`,
+        'data-part': 'shoe',
+      },
+    ],
   ],
 };
 
 /** How far a creature leans back when scared, about its hips. */
 export const LEAN = -10;
-
-const round = (n: number) => Math.round(n * 10) / 10;
-const path = (points: readonly Point[]) =>
-  points.map(([x, y], i) => `${i ? 'L' : 'M'}${round(x)} ${round(y)}`).join(' ');
 
 /** What a creature's stop brings out, each hidden until then. */
 export type CreatureProp = 'lostShoe' | 'flag' | 'wrap' | 'question' | 'snack';
@@ -654,15 +837,26 @@ const SNACK: readonly Shape[] = [
   ['path', styles.line!, { d: 'M206 111 Q222 104 236 99', 'stroke-width': 2.5 }],
 ];
 
+/** The paints of a creature's feet, as `FEET` takes them. */
+const footPaints = (spec: Spec) => ({
+  shoe: FILLS[spec.shoes],
+  sole: FILLS[spec.sole ?? 'paper'],
+  stripe: spec.shoes === 'colour' ? styles.bandLine! : styles.racerLine!,
+  line: LINES[spec.shoes],
+});
+
 const PROPS: Partial<Record<Creature, Partial<Record<CreatureProp, (spec: Spec) => Shape[]>>>> = {
   zombie: {
-    lostShoe: (spec) => [
-      [
-        'ellipse',
-        FILLS[spec.shoes],
-        { cx: 0, cy: 0, rx: Math.max(11, spec.legW), ry: 7, 'stroke-width': 3 },
-      ],
-    ],
+    // Its front shoe, centred on (0, 0), to fly and spin.
+    lostShoe: (spec) =>
+      FEET[spec.foot](footPaints(spec)).map(([tag, className, attributes]) => [
+        tag,
+        className,
+        {
+          ...Object.fromEntries(Object.entries(attributes).filter(([key]) => key !== 'data-part')),
+          transform: 'translate(-5 -1)',
+        },
+      ]),
   },
   astronaut: { flag: () => [...FLAG] },
   villain: { wrap: () => [...WRAP] },
@@ -672,14 +866,14 @@ const PROPS: Partial<Record<Creature, Partial<Record<CreatureProp, (spec: Spec) 
 
 export interface CreatureRunner extends Runner {
   readonly look: RacerLook & { readonly mount: Creature };
-  /** Everything above the legs, leaning back when scared. */
+  /** Its body and face, leaning back when scared, as do its arms and extras. */
   readonly body: SVGGElement;
   /** Its eyes, brows and mouth, to blank. */
   readonly face: SVGGElement;
   /** Its back and front arm, each to turn about its shoulder. */
   readonly arms: readonly [SVGGElement, SVGGElement];
-  /** Its back and front shoe. */
-  readonly shoes: readonly [SVGElement, SVGElement];
+  /** Its back and front foot. */
+  readonly shoes: readonly [SVGGElement, SVGGElement];
   /** What its stop brings out, hidden until shown. */
   readonly props: Readonly<Partial<Record<CreatureProp, SVGGElement>>>;
   /** Stretches both arms forward, for what's out of reach. */
@@ -688,12 +882,21 @@ export interface CreatureRunner extends Runner {
   setBend(degrees: number): void;
 }
 
+const SVG = 'http://www.w3.org/2000/svg';
+
+/** Everything off the grid's edges, so a clip of it less a shape is the rest. */
+const OUTSIDE = 'M-200 -200 H440 V400 H-200 Z';
+
+/** How many creatures have been drawn, so each drawing's clip ids are its own. */
+let drawings = 0;
+
 /**
- * A creature racing as `look` chose, from the canvas's Creature: its legs and
- * shoes, then, leaning from its hips, the cape, its back arm, its body, its
- * face, its front arm, and the scarf, bow tie, number, top hat and trophy.
- * `face` is the kit's look for the run, for the astronaut's and the
- * villain's skin, and the shark's legs.
+ * A creature racing as `look` chose, from the canvas's Creature, back to
+ * front: the cape, its back leg and foot, its back arm, its body and face,
+ * its front leg and foot, its front arm, and the scarf, bow tie, number, top
+ * hat and trophy. Everything but the legs leans from its hips. `face` is the
+ * kit's look for the run, for the astronaut's and the villain's skin, and
+ * the shark's legs.
  */
 export function creature(
   look: RacerLook & { readonly mount: Creature },
@@ -714,44 +917,20 @@ export function creature(
   el.style.setProperty('--racer', `var(--color-${look.colour})`);
   el.style.setProperty('--band', `var(--color-${look.colour === 'sun' ? 'tomato' : 'sun'})`);
   el.style.setProperty('--skin', `var(--color-skin-${faceLook.skin})`);
+  const defs = el.appendChild(document.createElementNS(SVG, 'defs'));
+  const id = `creature-${++drawings}`;
 
-  // Legs keep running whatever the mood: the creature can't stop them.
-  const [h1, h2] = spec.hips;
-  const leg = ([x, y]: Point, back: boolean) => {
-    const length = 186 - y;
-    const knee: Point = back ? [x - 12, y + length * 0.5] : [x + 20, y + length * 0.45];
-    const foot: Point = back ? [x - 24, 182] : [x + 18, 182];
-    return { d: path([[x, y], knee, foot]), foot };
+  /** Everything that leans from the hips together. */
+  const leaning: SVGGElement[] = [];
+  const lean = (name: string, shapes: readonly Shape[] = []) => {
+    const g = group(el, name, shapes);
+    leaning.push(g);
+    return g;
   };
-  const back = leg(h1, true);
-  const front = leg(h2, false);
-  const legs = `${back.d} ${front.d}`;
-  const shoe = Math.max(11, spec.legW);
-  const feet = group(el, 'feet', [
-    ['path', styles.line!, { d: legs, 'stroke-width': spec.legW + 7 }],
-    ['path', styles.limb!, { d: legs, 'stroke-width': spec.legW }],
-    [
-      'ellipse',
-      FILLS[spec.shoes],
-      { cx: back.foot[0] + 6, cy: 186, rx: shoe, ry: 7, 'stroke-width': 3 },
-    ],
-    [
-      'ellipse',
-      FILLS[spec.shoes],
-      { cx: front.foot[0] + 8, cy: 186, rx: shoe, ry: 7, 'stroke-width': 3 },
-    ],
-  ]);
-  (feet.children[1] as SVGElement).style.setProperty('--paint', LINES[spec.legs]);
-  (feet.children[1] as SVGElement).dataset.part = 'legs';
-  for (const each of [...feet.children].slice(2)) (each as SVGElement).dataset.part = 'shoe';
-
-  const hipX = (h1[0] + h2[0]) / 2;
-  const hipY = (h1[1] + h2[1]) / 2;
-  const body = group(el, 'lean');
 
   const [nx, ny] = spec.neck;
   if (look.extra === 'cape') {
-    group(body, 'cape', [
+    lean('cape', [
       [
         'path',
         styles.band!,
@@ -765,47 +944,116 @@ export function creature(
     ]);
   }
 
-  /** An arm: an ink line under a painted one and a hand, or a fin. */
-  const arm = (name: string) => {
-    const holder = group(body, name);
-    const [ink, line, hand] = draw(holder, [
+  // Legs sprint whatever the mood, the creature can't stop them: the front
+  // foot planted on the line, the back one kicked up behind.
+  const k = spec.footK ?? 1;
+  const leg = (name: string, [x, y]: Point, back: boolean) => {
+    const length = 179 - y;
+    const w = Math.min(length, 42);
+    const [knee, ankle, turn]: [Point, Point, number] = back
+      ? [[x + 0.05 * w, y + 0.75 * length], [x - 0.62 * w, 179 - 0.42 * w], 62]
+      : [[x + 0.6 * w, y + 0.45 * length], [x + 0.25 * w, RACER.feet - 11 * k], 0];
+    const d = `M${at([x, y])} Q${at(knee)} ${at(ankle)}`;
+    const holder = group(el, name, [
+      ['path', styles.line!, { d, 'stroke-width': spec.legW + 7 }],
+      ['path', styles.limb!, { d, 'stroke-width': spec.legW, 'data-part': 'legs' }],
+    ]);
+    paint(holder.children[1]!, spec.legs);
+    const foot = group(holder, 'foot', FEET[spec.foot](footPaints(spec)));
+    foot.dataset.foot = spec.foot;
+    foot.setAttribute('transform', `translate(${at(ankle)}) rotate(${turn}) scale(${k})`);
+    return foot;
+  };
+  const [h1, h2] = spec.hips;
+  const hipX = (h1[0] + h2[0]) / 2;
+  const hipY = (h1[1] + h2[1]) / 2;
+
+  /** An arm: an ink line under a painted one, and a glove with its thumb; or a fin. */
+  const handR = Math.round(spec.armW * 0.7 + 4);
+  const thumbR = spec.noThumb || spec.fins ? 0 : Math.round(handR * 0.55);
+  const arm = (parent: Element, name: string) => {
+    const holder = group(parent, name);
+    const [ink, line, thumb, hand] = draw(holder, [
       [
         'path',
-        spec.fins ? styles.racer! : styles.line!,
-        { 'stroke-width': spec.fins ? 4 : spec.armW + 6 },
+        spec.fins ? FILLS[spec.arms] : styles.line!,
+        { 'stroke-width': spec.fins ? 4 : spec.armW + 7 },
       ],
       ['path', styles.limb!, { 'stroke-width': spec.armW }],
-      ['circle', FILLS[spec.hands], { r: Math.round(spec.armW * 0.75 + 2), 'stroke-width': 3 }],
-    ]) as [SVGElement, SVGElement, SVGElement];
-    line.style.setProperty('--paint', LINES[spec.arms]);
+      ['circle', FILLS[spec.hands], { r: thumbR, 'stroke-width': 3, 'data-part': 'thumb' }],
+      ['circle', FILLS[spec.hands], { r: handR, 'stroke-width': 3, 'data-part': 'hand' }],
+    ]) as [SVGElement, SVGElement, SVGElement, SVGElement];
+    paint(line, spec.arms);
     show(line, !spec.fins);
+    show(thumb, thumbR > 0);
     show(hand, !spec.fins);
-    return { holder, ink, line, hand };
+    return { holder, ink, line, thumb, hand };
   };
-  const arms = [arm('back-arm')];
-  group(body, 'own', BODIES[kind]);
 
-  // The face: eyes, pupils, brows, mouth and teeth, shades, and sweat.
+  const backFoot = leg('back-leg', h1, true);
+  const arms = [arm(lean('behind'), 'back-arm')];
+  const body = lean('lean');
+
+  // The body: each main part shaded, its shadow clipped to the part less
+  // itself moved up and right.
+  const own = group(body, 'own');
+  BODIES[kind].forEach((part, i) => {
+    if (!('shadow' in part)) {
+      draw(own, [part]);
+      return;
+    }
+    const clip = defs.appendChild(document.createElementNS(SVG, 'clipPath'));
+    clip.id = `${id}-${i}`;
+    const [dx, dy] = part.shadow;
+    draw(clip, [
+      [
+        'path',
+        '',
+        { d: `${OUTSIDE} ${part.d}`, 'clip-rule': 'evenodd', transform: `translate(${dx} ${dy})` },
+      ],
+    ]);
+    draw(own, [
+      [
+        'path',
+        part.paint,
+        { d: part.d, 'stroke-width': 0, ...(part.part && { 'data-part': part.part }) },
+      ],
+      ...(part.on ?? []),
+      ['path', styles.shade!, { d: part.d, 'clip-path': `url(#${clip.id})`, 'data-part': 'shade' }],
+      ['path', styles.line!, { d: part.d, 'stroke-width': 4 }],
+    ]);
+  });
+
+  // The face: each eye's white, pupil, shine and lid; the brows, the mouth,
+  // its tongue, teeth or fangs; shades with a glint; and sweat.
   const face = group(body, 'face');
-  const eyes = spec.eyes.map(() =>
-    draw(face, [
-      ['circle', styles.paper!, {}],
-      ['circle', styles.inkFill!, {}],
-    ]),
+  const eyes = spec.eyes.map(
+    () =>
+      draw(face, [
+        ['ellipse', styles.paper!, { 'data-part': 'eye' }],
+        ['ellipse', styles.inkFill!, { 'data-part': 'pupil' }],
+        ['circle', styles.paperFill!, { 'data-part': 'shine' }],
+        ['path', FILLS[spec.lid], { 'stroke-width': 3, 'data-part': 'lid' }],
+      ]) as [SVGElement, SVGElement, SVGElement, SVGElement],
   );
-  const [brows, mouth, teeth, shades, sweat] = draw(face, [
-    ['path', styles.line!, { 'stroke-width': 4 }],
-    ['path', styles.line!, { 'stroke-width': 4 }],
-    ['path', styles.paper!, { 'stroke-width': 2.5 }],
-    ['path', styles.ink!, { 'stroke-width': 3 }],
-    ['path', styles.glass!, { 'stroke-width': 3 }],
-  ]) as [SVGElement, SVGElement, SVGElement, SVGElement, SVGElement];
-  shades.dataset.part = 'shades';
-  sweat.dataset.part = 'sweat';
-  arms.push(arm('front-arm'));
+  const [brows, mouth, tongue, teeth, fangs, shades, bridge, glint, sweat] = draw(face, [
+    ['path', styles.line!, { 'stroke-width': 5, 'data-part': 'brows' }],
+    ['path', styles.line!, { 'stroke-width': 4, 'data-part': 'mouth' }],
+    ['path', styles.pinkFill!, { 'data-part': 'tongue' }],
+    ['path', styles.paperFill!, { 'data-part': 'teeth' }],
+    ['path', styles.paper!, { 'stroke-width': 2.5, 'data-part': 'fangs' }],
+    ['path', styles.ink!, { 'stroke-width': 3, 'data-part': 'shades' }],
+    ['path', styles.line!, { 'stroke-width': 4, 'data-part': 'bridge' }],
+    ['path', styles.stripe!, { 'stroke-width': 3, 'data-part': 'glint' }],
+    ['path', styles.glass!, { 'stroke-width': 3, 'data-part': 'sweat' }],
+  ]) as SVGElement[];
+
+  const frontFoot = leg('front-leg', h2, false);
+  const front = lean('front');
+  arms.push(arm(front, 'front-arm'));
 
   if (look.extra === 'scarf') {
-    group(body, 'scarf', [
+    group(front, 'scarf', [
       [
         'path',
         styles.band!,
@@ -817,6 +1065,11 @@ export function creature(
         },
       ],
       [
+        'path',
+        styles.line!,
+        { d: `M${nx - 64} ${ny + 18} l-7 3 M${nx - 62} ${ny + 24} l-7 3`, 'stroke-width': 3 },
+      ],
+      [
         'rect',
         styles.band!,
         { x: nx - 22, y: ny - 6, width: 44, height: 13, rx: 6.5, 'stroke-width': 4 },
@@ -824,27 +1077,26 @@ export function creature(
     ]);
   }
   if (look.extra === 'bowtie') {
-    group(body, 'bowtie', [
+    group(front, 'bowtie', [
       [
         'path',
         styles.band!,
         {
           d:
-            `M${nx} ${ny} L${nx - 13} ${ny - 8} V${ny + 8} Z ` +
-            `M${nx} ${ny} L${nx + 13} ${ny - 8} V${ny + 8} Z`,
+            `M${nx} ${ny} L${nx - 14} ${ny - 9} Q${nx - 16} ${ny} ${nx - 14} ${ny + 9} Z ` +
+            `M${nx} ${ny} L${nx + 14} ${ny - 9} Q${nx + 16} ${ny} ${nx + 14} ${ny + 9} Z`,
           'stroke-width': 3,
         },
       ],
+      ['circle', styles.band!, { cx: nx, cy: ny, r: 4.5, 'stroke-width': 3 }],
     ]);
   }
   if (look.extra === 'number') {
     const [x, y] = spec.chest;
-    const roundel = group(body, 'number', [
+    const roundel = group(front, 'number', [
       ['circle', styles.paper!, { cx: x, cy: y, r: 16, 'stroke-width': 3 }],
     ]);
-    const text = roundel.appendChild(
-      document.createElementNS('http://www.w3.org/2000/svg', 'text'),
-    );
+    const text = roundel.appendChild(document.createElementNS(SVG, 'text'));
     text.setAttribute('class', styles.number!);
     text.setAttribute('x', String(x));
     text.setAttribute('y', String(y));
@@ -852,9 +1104,10 @@ export function creature(
   }
   if (look.extra === 'tophat') {
     const [x, y] = spec.hat;
-    const hat = group(body, 'tophat', [
+    const hat = group(front, 'tophat', [
       ['rect', styles.inkFill!, { x: 7, y: 2, width: 22, height: 24, rx: 2 }],
       ['rect', styles.band!, { x: 7, y: 15, width: 22, height: 6, 'stroke-width': 2 }],
+      ['path', styles.stripe!, { d: 'M24 5 V13', 'stroke-width': 2, opacity: 0.6 }],
       ['rect', styles.inkFill!, { x: 1, y: 24, width: 34, height: 7, rx: 3.5 }],
     ]);
     hat.setAttribute('transform', `translate(${x - 23} ${y - 40}) scale(1.3)`);
@@ -867,187 +1120,332 @@ export function creature(
   trophy.setAttribute('y', String(spec.cup[1]));
   trophy.setAttribute('width', '72');
   trophy.setAttribute('height', '60');
-  body.append(trophy);
+  front.append(trophy);
 
   // What a stop brings out: on the ground, or over the creature as it leans.
   const props: Partial<Record<CreatureProp, SVGGElement>> = {};
   for (const [name, shapes] of Object.entries(PROPS[kind] ?? {})) {
-    const prop = group(name === 'question' || name === 'wrap' ? body : el, name, shapes(spec));
+    const prop = group(name === 'question' || name === 'wrap' ? front : el, name, shapes(spec));
     show(prop, false);
     props[name as CreatureProp] = prop;
   }
 
   let current = { mood, pose, sweat: false, trophy: false, stretch: false, bend: 0 };
 
+  /** Sets a path's `d`, showing it only when there is one. */
+  const trace = (el: Element, d: string) => {
+    el.setAttribute('d', d.trim() || 'M0 0');
+    show(el, d.trim() !== '');
+  };
+
   /** Draws the face, the arms and the lean for the current mood, pose, sweat and trophy. */
   const update = () => {
     const party = current.mood === 'party' || current.pose === 'party';
     const scared = current.mood === 'scared';
-    const k = spec.reach;
+    const googly = look.extra === 'googly';
+    const reach = spec.reach;
+    const kk = spec.fins ? Math.max(reach, 0.7) * (spec.finK ?? 1) : reach;
 
-    // Arms by pose. Scared: flailing, leaning back. A zombie runs arms out.
-    const reachOut = (s: Point, isFront: boolean): Point[] => {
-      const side = isFront ? 1 : -1;
+    // Arms pump as it runs, the front hand forward at chest height and the
+    // back one behind; scared, they flail; the zombie holds them out.
+    const elbowAndHand = ([x, y]: Point, isFront: boolean): [Point, Point] => {
+      const f = isFront ? 1 : -1;
       if (party) {
-        return current.trophy && k === 1
-          ? [s, [s[0] + 8 * side, s[1] - 34], [spec.cup[0] + 24 * side, spec.cup[1] + 26]]
-          : [s, [s[0] + 10 * side * k, s[1] - 30 * k], [s[0] + 16 * side * k, s[1] - 58 * k]];
+        if (current.trophy && reach === 1) {
+          return [
+            [x + 10 * f, y - 30],
+            [spec.cup[0] + 22 * f, spec.cup[1] + 30],
+          ];
+        }
+        const kp = spec.fins ? Math.max(reach, 0.5) : reach;
+        return [
+          [x + 14 * f * kp, y - 24 * kp],
+          [x + 22 * f * kp, y - 52 * kp],
+        ];
       }
-      if (current.stretch) return [s, [s[0] + 14, s[1] - 3], [s[0] + 26, s[1] - 6]];
+      if (current.stretch) {
+        return [
+          [x + 14, y - 3],
+          [x + 26, y - 6],
+        ];
+      }
       if (current.pose === 'pull') {
         return isFront
-          ? [s, [s[0] + 20 * k, s[1] - 22 * k], [s[0] + 24 * k, s[1] - 52 * k]]
-          : [s, [s[0] - 18 * k, s[1] - 22 * k], [s[0] - 30 * k, s[1] - 48 * k]];
+          ? [
+              [x + 26 * kk, y - 18 * kk],
+              [x + 20 * kk, y - 50 * kk],
+            ]
+          : [
+              [x - 24 * kk, y - 16 * kk],
+              [x - 34 * kk, y - 44 * kk],
+            ];
       }
       if (current.pose === 'wave' && isFront) {
-        return [s, [s[0] + 18 * k, s[1] - 18 * k], [s[0] + 12 * k, s[1] - 50 * k]];
+        return [
+          [x + 24 * kk, y - 10 * kk],
+          [x + 18 * kk, y - 46 * kk],
+        ];
       }
-      if (spec.zombieArms) return isFront ? [s, [s[0] + 56, s[1] - 2]] : [s, [s[0] + 68, s[1] + 4]];
+      if (spec.zombieArms) {
+        return isFront
+          ? [
+              [x + 30, y + 2],
+              [x + 58, y - 2],
+            ]
+          : [
+              [x + 36, y + 6],
+              [x + 68, y + 4],
+            ];
+      }
       return isFront
-        ? [s, [s[0] + 12 * k, s[1] + 20 * k], [s[0] + 28 * k, s[1] + 10 * k]]
-        : [s, [s[0] - 16 * k, s[1] + 16 * k], [s[0] - 28 * k, s[1] + 2 * k]];
+        ? [
+            [x - 2 * kk, y + 26 * kk],
+            [x + 20 * kk, y + 12 * kk],
+          ]
+        : [
+            [x - 22 * kk, y + 14 * kk],
+            [x - 30 * kk, y - 2 * kk],
+          ];
     };
     spec.shoulders.forEach((s, i) => {
-      const points = reachOut(s, i === 1);
-      const end = points.at(-1)!;
-      const { ink, line, hand } = arms[i]!;
+      const [elbow, hand] = elbowAndHand(s, i === 1);
+      const { ink, line, thumb, hand: glove } = arms[i]!;
       if (spec.fins) {
-        // A fin: a triangle from the shoulder to where a hand would be.
-        const mx = (s[0] + end[0]) / 2;
-        const my = (s[1] + end[1]) / 2;
+        // A fin: a leaf from the shoulder to where a hand would be.
+        const dx = hand[0] - s[0];
+        const dy = hand[1] - s[1];
+        const length = Math.hypot(dx, dy) || 1;
+        const [nx, ny] = [-dy / length, dx / length];
+        const w = Math.min(13, Math.max(8, length * 0.34));
+        const mid: Point = [(s[0] + hand[0]) / 2, (s[1] + hand[1]) / 2];
         ink.setAttribute(
           'd',
-          `M${s[0] - 9} ${s[1] - 4} Q${round(mx - 6)} ${round(my)} ${round(end[0])} ${round(end[1])} ` +
-            `Q${round(mx + 8)} ${round(my + 4)} ${s[0] + 9} ${s[1] + 6} Z`,
+          `M${at([s[0] + nx * 9, s[1] + ny * 9])} Q${at([mid[0] + nx * w, mid[1] + ny * w])} ` +
+            `${at(hand)} Q${at([mid[0] - nx * w, mid[1] - ny * w])} ${at([s[0] - nx * 9, s[1] - ny * 9])} Z`,
         );
-      } else {
-        ink.setAttribute('d', path(points));
-        line.setAttribute('d', path(points));
-        hand.setAttribute('cx', String(round(end[0])));
-        hand.setAttribute('cy', String(round(end[1])));
+        return;
       }
+      const d = `M${at(s)} Q${at(elbow)} ${at(hand)}`;
+      ink.setAttribute('d', d);
+      line.setAttribute('d', d);
+      glove.setAttribute('cx', String(round(hand[0])));
+      glove.setAttribute('cy', String(round(hand[1])));
+      thumb.setAttribute('cx', String(round(hand[0] - handR * 0.6)));
+      thumb.setAttribute('cy', String(round(hand[1] - handR * 0.75)));
     });
 
-    // The eyes: shut behind shades at a party; dots that widen when scared;
-    // wide with tiny pupils when scared; wobbly with googly eyes.
-    const googly = look.extra === 'googly' && !spec.dots;
-    spec.eyes.forEach(([x, y, r], i) => {
-      const [white, pupil] = eyes[i]! as [SVGElement, SVGElement];
-      let eye = { r, on: !party };
-      let dot = { x: x + r * 0.25, y: y + r * 0.1, r: r * 0.46, on: !party };
-      if (party) {
-        dot = { x, y, r: 1, on: false };
-      } else if (spec.dots) {
-        eye = { r: 7.5, on: scared };
-        dot = { x, y, r: scared ? 3 : r, on: true };
-      } else if (scared) {
-        eye = { r: r * 1.18, on: true };
-        dot = { x, y, r: r * 0.28, on: true };
-      } else if (googly) {
-        eye = { r: r * 1.1, on: true };
-        dot = { x: x + r * (i % 2 ? -0.3 : 0.38), y: y + r * 0.32, r: r * 0.58, on: true };
-      }
-      white.setAttribute('cx', String(x));
-      white.setAttribute('cy', String(y));
-      white.setAttribute('r', String(round(eye.r)));
-      white.setAttribute('stroke-width', googly ? '3.5' : '3');
-      show(white, eye.on);
-      pupil.setAttribute('cx', String(round(dot.x)));
-      pupil.setAttribute('cy', String(round(dot.y)));
-      pupil.setAttribute('r', String(round(dot.r)));
-      show(pupil, dot.on);
-    });
-
+    // Eyes: lidded when calm, sad lids when worried, wide open with tiny
+    // pupils when scared, and a shine on every pupil. A person's face has
+    // dark oval eyes; a robot's glow on its screen; googly eyes have no lids
+    // and wobble.
     const middle = spec.eyes.reduce((sum, [x]) => sum + x, 0) / spec.eyes.length;
+    spec.eyes.forEach(([x, y, size], i) => {
+      const [white, pupil, gleam, lid] = eyes[i]!;
+      const set = (shape: Element, values: Record<string, number>) => {
+        for (const [key, value] of Object.entries(values))
+          shape.setAttribute(key, String(round(value)));
+      };
+      if (spec.dots && !googly && !scared) {
+        white.setAttribute('class', styles.ink!);
+        set(white, { cx: x, cy: y, rx: size * 0.85, ry: size * 1.2, 'stroke-width': 3 });
+        show(pupil, false);
+        set(gleam, { cx: x - size * 0.25, cy: y - size * 0.45, r: 1.6 });
+        show(gleam, true);
+        trace(lid, '');
+        return;
+      }
+      const er = spec.dots ? 7.5 : size;
+      const grow = scared ? 1.15 : 1;
+      let rx = er * 0.9 * grow;
+      let ry = er * 1.12 * grow;
+      let px = x + er * 0.28;
+      let py = y + er * 0.14;
+      let prx = er * (spec.pupil ?? 0.5);
+      let pry = prx * 1.12;
+      if (googly) {
+        rx = er * 1.15;
+        ry = rx;
+        px = x + er * (i % 2 ? -0.3 : 0.38);
+        py = y + er * 0.32;
+        prx = er * 0.58;
+        pry = prx;
+      } else if (scared) {
+        px = x;
+        py = y;
+        prx = er * 0.26;
+        pry = prx;
+      }
+      white.setAttribute('class', spec.screen ? styles.glass! : styles.paper!);
+      set(white, { cx: x, cy: y, rx, ry, 'stroke-width': googly ? 3.5 : 3 });
+      set(pupil, { cx: px, cy: py, rx: prx, ry: pry });
+      set(gleam, { cx: px - prx * 0.3 - 1, cy: py - pry * 0.45, r: Math.max(2, er * 0.17) });
+      show(pupil, !spec.screen);
+      show(gleam, !spec.screen);
+      let d = '';
+      if (!scared && !googly && (!party || spec.screen)) {
+        const outerLeft = x < middle;
+        let yl = y - ry * 0.3;
+        let yr = yl;
+        if (current.mood === 'worried') {
+          const low = y - ry * 0.05;
+          const high = y - ry * 0.65;
+          yl = outerLeft ? low : high;
+          yr = outerLeft ? high : low;
+        } else if (current.mood === 'happy' || party) {
+          yl = y - ry * 0.55;
+          yr = yl;
+        }
+        const half = (yy: number) => rx * Math.sqrt(Math.max(0, 1 - ((yy - y) / ry) ** 2));
+        d = `M${at([x - half(yl), yl])} A${round(rx)} ${round(ry)} 0 0 1 ${at([x + half(yr), yr])} Z`;
+      }
+      trace(lid, d);
+    });
+
+    // Brows: calm, low and level, the front one cocked a little higher;
+    // worried, rising inside; scared, arched high; none at a party.
     let browPath = '';
-    if (current.mood === 'worried' || scared) {
-      for (const [x, y, r0] of spec.eyes.slice(0, 2)) {
-        const r = spec.dots ? 7 : r0;
+    if (!party && !spec.noBrows) {
+      for (const [x, y, size] of spec.eyes.slice(0, 2)) {
+        const er = spec.dots ? 6 : size;
+        const top = y - (spec.dots ? 9 : er * 1.12 * (scared ? 1.15 : 1));
+        const w = er * 0.95;
+        const inward = x < middle ? 1 : -1;
+        const arch = (lift: number, peak: number, end = lift) =>
+          `M${at([x - w, top - lift])} Q${at([x, top - peak])} ${at([x + w, top - end])} `;
         if (spec.eyes.length === 1) {
-          browPath += scared
-            ? `M${x - r} ${y - r - 8} Q${x} ${y - r - 20} ${x + r} ${y - r - 8}`
-            : `M${x - r} ${y - r - 2} L${x} ${y - r - 10} L${x + r} ${y - r - 2}`;
+          browPath = scared
+            ? arch(8, 20)
+            : current.mood === 'worried'
+              ? `M${at([x - w, top - 2])} L${at([x, top - 11])} L${at([x + w, top - 2])}`
+              : current.mood === 'happy'
+                ? arch(5, 14)
+                : arch(3, 8, 7);
         } else if (scared) {
-          browPath += `M${x - r} ${y - r - 6} Q${x} ${y - r - 14} ${x + r} ${y - r - 6} `;
+          browPath += arch(8, 18);
+        } else if (current.mood === 'worried') {
+          browPath += `M${at([x - inward * w, top - 2])} L${at([x + inward * w, top - 11])} `;
+        } else if (current.mood === 'happy') {
+          browPath += arch(5, 13);
         } else {
-          const inner = x < middle ? 1 : -1;
-          browPath += `M${x - inner * r} ${y - r - 2} L${x + inner * r} ${y - r - 9} `;
+          const lift = x < middle ? 0 : 4;
+          browPath += arch(2 + lift, 7 + lift, 3 + lift);
         }
       }
     }
-    brows.setAttribute('d', browPath.trim() || 'M0 0');
+    trace(brows, browPath);
 
+    // Mouths: a smirk when calm, a wobble when worried, open with teeth and
+    // a tongue when happy or scared, a wide grin at a party. Monsters,
+    // sharks and dinosaurs show a row of pointy teeth.
     const [mx, my, mw] = spec.mouth;
+    const fangRow = (y0: number, w: number) => {
+      const step = (w * 0.8) / 5;
+      let d = '';
+      for (let i = 0; i < 5; i++) {
+        d += `M${at([mx - w * 0.4 + i * step, y0])} l${round(step / 2)} ${round(step * 0.95)} l${round(step / 2)} ${round(-step * 0.95)} Z `;
+      }
+      return d;
+    };
     let mouthPath: string;
     let open = false;
+    let tonguePath = '';
+    let teethPath = '';
+    let fangPath = '';
     if (party || current.mood === 'happy') {
-      mouthPath = `M${mx - mw / 2} ${my - 2} Q${mx} ${round(my + mw * 0.75)} ${mx + mw / 2} ${my - 2} Z`;
+      const w = party ? mw * 1.15 : mw;
+      mouthPath = `M${at([mx - w / 2, my])} Q${at([mx, my + w * 0.95])} ${at([mx + w / 2, my])} Z`;
       open = true;
+      tonguePath = oval(mx + w * 0.05, my + w * 0.33, w * 0.2, w * 0.1);
+      if (spec.teeth) fangPath = fangRow(my + 1, w);
+      else {
+        teethPath =
+          `M${at([mx - w * 0.4, my + 1.5])} L${at([mx + w * 0.4, my + 1.5])} ` +
+          `L${at([mx + w * 0.34, my + w * 0.13])} L${at([mx - w * 0.34, my + w * 0.13])} Z`;
+      }
     } else if (scared) {
-      const rx = round(mw * 0.3);
-      const ry = round(mw * 0.4);
-      mouthPath =
-        `M${round(mx - rx)} ${round(my + ry / 2)} a${rx} ${ry} 0 1 0 ${2 * rx} 0 ` +
-        `a${rx} ${ry} 0 1 0 ${-2 * rx} 0 Z`;
+      const rx = mw * 0.3;
+      const ry = mw * 0.42;
+      const cy = my + mw * 0.18;
+      mouthPath = oval(mx, cy, rx, ry);
       open = true;
+      tonguePath = oval(mx, cy + ry * 0.48, rx * 0.6, ry * 0.3);
+      if (spec.teeth) {
+        const step = (rx * 1.4) / 3;
+        for (let i = 0; i < 3; i++) {
+          fangPath += `M${at([mx - rx * 0.7 + i * step, cy - ry * 0.72])} l${round(step / 2)} ${round(step)} l${round(step / 2)} ${round(-step)} Z `;
+        }
+      } else {
+        teethPath =
+          `M${at([mx - rx * 0.78, cy - ry * 0.6])} Q${at([mx, cy - ry * 0.95])} ${at([mx + rx * 0.78, cy - ry * 0.6])} ` +
+          `L${at([mx + rx * 0.72, cy - ry * 0.4])} Q${at([mx, cy - ry * 0.62])} ${at([mx - rx * 0.72, cy - ry * 0.4])} Z`;
+      }
     } else if (current.mood === 'worried') {
       mouthPath =
-        `M${mx - mw / 2} ${round(my + mw * 0.18)} Q${mx} ${round(my - mw * 0.2)} ` +
-        `${mx + mw / 2} ${round(my + mw * 0.18)}`;
+        `M${at([mx - mw / 2, my + 3])} Q${at([mx - mw / 4, my - 4])} ${at([mx, my + 2])} ` +
+        `Q${at([mx + mw / 4, my + 7])} ${at([mx + mw / 2, my])}`;
+      if (spec.tooth) fangPath = `M${at([mx - 4, my + 3])} h8 v8 h-8 Z`;
+    } else if (spec.teeth) {
+      // A toothy grin.
+      mouthPath = `M${at([mx - mw / 2, my])} Q${at([mx, my + mw * 0.32])} ${at([mx + mw / 2, my - mw * 0.06])}`;
+      fangPath = fangRow(my + mw * 0.1, mw);
     } else {
-      mouthPath = `M${mx - mw / 2} ${my} Q${mx} ${round(my + mw * 0.4)} ${mx + mw / 2} ${my}`;
+      // A sideways smirk, its front corner up.
+      mouthPath = `M${at([mx - mw / 2, my + 1])} Q${at([mx + mw * 0.05, my + mw * 0.3])} ${at([mx + mw / 2, my - mw * 0.15])}`;
+      if (spec.tooth) fangPath = `M${at([mx - 4, my + mw * 0.12])} h8 v9 h-8 Z`;
     }
-    mouth.setAttribute('d', mouthPath);
-    mouth.setAttribute('class', open ? styles.ink! : styles.line!);
+    if (spec.screen) {
+      tonguePath = '';
+      teethPath = '';
+      fangPath = '';
+    }
+    trace(mouth, mouthPath);
+    mouth.setAttribute(
+      'class',
+      spec.screen ? (open ? styles.glow! : styles.glassLine!) : open ? styles.ink! : styles.line!,
+    );
+    trace(tongue, tonguePath);
+    trace(teeth, teethPath);
+    trace(fangs, fangPath);
 
-    let teethPath = '';
-    if (spec.teeth && current.mood !== 'worried') {
-      // A row of pointy teeth along the top of the mouth.
-      const n = 5;
-      const w = (mw * 0.8) / n;
-      const top = scared
-        ? round(my - mw * 0.1)
-        : current.mood === 'calm'
-          ? round(my + mw * 0.12)
-          : my;
-      for (let i = 0; i < n; i++) {
-        const x = round(mx - mw * 0.4 + i * w);
-        teethPath += `M${x} ${top} l${round(w / 2)} ${round(w * 0.9)} l${round(w / 2)} ${round(-w * 0.9)} Z `;
-      }
-    }
-    if (spec.tooth && !party && current.mood !== 'happy' && !scared) {
-      teethPath = `M${mx + 2} ${round(my + mw * 0.15)} h7 v8 h-7 Z`;
-    }
-    teeth.setAttribute('d', teethPath.trim() || 'M0 0');
-
+    // Shades at a party, with a glint, bridged over the nose.
     let shadesPath = '';
-    if (party) {
-      for (const [x, y, r0] of spec.eyes.slice(0, 2)) {
-        const r = spec.dots ? 9 : r0 + 3;
-        shadesPath += `M${x - r} ${y - r * 0.7} h${2 * r} v${r} a${r} ${r * 0.7} 0 0 1 ${-2 * r} 0 Z `;
+    let glintPath = '';
+    let bridgePath = '';
+    if (party && !spec.screen) {
+      const ends: [number, number, number][] = [];
+      for (const [x, y, size] of spec.eyes.slice(0, 2)) {
+        const er = spec.dots ? 7.5 : size;
+        const w = spec.eyes.length === 1 ? er * 1.9 : er * 1.2;
+        shadesPath +=
+          `M${at([x - w, y - er * 0.7])} H${round(x + w)} L${at([x + w * 0.86, y + er * 0.5])} ` +
+          `Q${at([x, y + er * 0.95])} ${at([x - w * 0.86, y + er * 0.5])} Z `;
+        glintPath += `M${at([x - w * 0.45, y - er * 0.1])} L${at([x - w * 0.05, y - er * 0.5])} `;
+        ends.push([x - w, x + w, y - er * 0.45]);
       }
-      const [first, second] = spec.eyes;
-      shadesPath += second
-        ? `M${first![0]} ${first![1] - 4} H${second[0]}`
-        : `M${first![0] - 30} ${first![1] - 6} H${first![0] + 30}`;
+      const [one, two] = ends;
+      if (one && two) {
+        bridgePath = `M${at([one[1], one[2]])} Q${at([(one[1] + two[0]) / 2, one[2] - 6])} ${at([two[0], two[2]])}`;
+      }
     }
-    shades.setAttribute('d', shadesPath.trim() || 'M0 0');
-    show(shades, party);
+    trace(shades, shadesPath);
+    trace(glint, glintPath);
+    trace(bridge, bridgePath);
 
     const sweating = current.sweat || scared;
-    sweat.setAttribute(
-      'd',
-      spec.sweat
-        .map(
-          ([x, y]) =>
-            `M${x} ${y} Q${x + 7} ${y + 12} ${x} ${y + 16} Q${x - 7} ${y + 12} ${x} ${y} Z`,
-        )
-        .join(' '),
+    trace(
+      sweat,
+      sweating
+        ? spec.sweat
+            .map(
+              ([x, y]) =>
+                `M${x} ${y} Q${x + 8} ${y + 13} ${x} ${y + 18} Q${x - 8} ${y + 13} ${x} ${y} Z`,
+            )
+            .join(' ')
+        : '',
     );
-    show(sweat, sweating);
 
-    const lean = current.pose === 'pull' ? LEAN : current.bend;
-    body.setAttribute('transform', `rotate(${lean} ${hipX} ${hipY})`);
+    const tilt = current.pose === 'pull' ? LEAN : current.bend;
+    for (const g of leaning) g.setAttribute('transform', `rotate(${tilt} ${hipX} ${hipY})`);
     show(trophy, current.trophy);
     el.dataset.mood = current.mood;
     el.dataset.pose = current.pose;
@@ -1066,7 +1464,7 @@ export function creature(
     body,
     face,
     arms: [arms[0]!.holder, arms[1]!.holder],
-    shoes: [feet.children[2] as SVGElement, feet.children[3] as SVGElement],
+    shoes: [backFoot, frontFoot],
     props,
     setStretch(on) {
       if (on === current.stretch) return;
@@ -1079,18 +1477,22 @@ export function creature(
       update();
     },
     setMood(next) {
+      if (next === current.mood) return;
       current = { ...current, mood: next };
       update();
     },
     setPose(next) {
+      if (next === current.pose) return;
       current = { ...current, pose: next };
       update();
     },
     setSweat(on) {
+      if (on === current.sweat) return;
       current = { ...current, sweat: on };
       update();
     },
     setTrophy(on) {
+      if (on === current.trophy) return;
       current = { ...current, trophy: on };
       update();
     },
