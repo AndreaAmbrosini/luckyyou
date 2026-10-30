@@ -27,7 +27,10 @@ import {
   SIGN,
 } from './parts';
 import {
+  anchorBy,
   bubbleAt,
+  bubbleBy,
+  captionBox,
   dogFace,
   faceBox,
   FRONT,
@@ -41,7 +44,7 @@ import {
   type Spot,
   type TagSet,
 } from './layout';
-import { atRisk, BUBBLE, dogAt, moodAt, planShow, type Plan, type Saying } from './plan';
+import { atRisk, BUBBLE, captionAt, dogAt, moodAt, planShow, type Plan, type Saying } from './plan';
 import styles from './dont-wake-the-dog.module.css';
 
 /** The dog lifts its head, or lowers it, in this many seconds. */
@@ -177,7 +180,24 @@ export async function playDontWakeTheDog(show: Show): Promise<void> {
     return Math.round(1000 * (1 - ease.calm(Math.min(1, (t - span.to) / LIFTING)))) / 1000;
   };
 
+  // People's bubbles, moving with whoever says them.
+  const following: {
+    el: HTMLElement;
+    name: string;
+    offset: { dx: number; dy: number };
+    from: number;
+    to: number;
+  }[] = [];
+
   const draw = (t: number) => {
+    for (const bubble of following) {
+      if (t < bubble.from - 1e-9 || t > bubble.to + 1e-9) continue;
+      const { x, y } = anchorBy(faceBox(places.at(bubble.name, t).spot), bubble.offset);
+      const left = `${x.toFixed(1)}px`;
+      const top = `${y.toFixed(1)}px`;
+      if (bubble.el.style.left !== left) bubble.el.style.left = left;
+      if (bubble.el.style.top !== top) bubble.el.style.top = top;
+    }
     for (const person of people.values()) {
       const { spot, layer: drawnIn } = places.at(person.name, t);
       if (drawnIn !== person.layer) {
@@ -245,28 +265,52 @@ export async function playDontWakeTheDog(show: Show): Promise<void> {
   }
 
   // Bubbles: each beside whoever says it, clear of every face and name tag
-  // while it is up, and of every other bubble up with it.
-  const said: { box: Box; from: number; to: number }[] = [];
+  // while it is up, and of every other bubble up with it and the caption.
+  // A person's moves with them, and stays by them where the row is too full
+  // for that: over another bubble, about to go, else up against the caption.
+  const said: { boxAt: (t: number) => Box; from: number; to: number }[] = [];
   for (const saying of plan.says) {
     const until = saying.at + BUBBLE;
-    const avoid = [
-      ...inTheWay(plan, places, saying.at, until),
+    const firmAt = (t: number) => [
+      ...inTheWay(plan, places, t),
       dogFace(saying.at >= plan.woof - 1e-9),
       SIGN_BOX,
-      ...said
-        .filter((other) => other.from < until && saying.at < other.to)
-        .map((other) => other.box),
     ];
-    const anchor = bubbleAt(saying.text, preferFor(saying, places), avoid);
+    const othersAt = (t: number) =>
+      said.filter((other) => other.from <= t && t <= other.to).map((other) => other.boxAt(t));
+    const person = saying.by !== 'dog' && saying.by !== 'gate';
+    const offset = person
+      ? (byTheSpeaker(saying, places, (t) => [
+          ...firmAt(t),
+          ...othersAt(t),
+          ...captionsAt(plan, t),
+        ]) ??
+        byTheSpeaker(saying, places, (t) => [...firmAt(t), ...captionsAt(plan, t)]) ??
+        byTheSpeaker(saying, places, firmAt))
+      : null;
+    const faceAt = (t: number) => faceBox(places.at(saying.by, t).spot);
+    const fixed = offset
+      ? null
+      : bubbleAt(
+          saying.text,
+          preferFor(saying, places),
+          times(saying.at, until).flatMap((t) => [...firmAt(t), ...othersAt(t)]),
+        );
+    const anchorAt = (t: number) => (offset ? anchorBy(faceAt(t), offset) : fixed!);
     const el = bubbles.appendChild(
-      bubble(saying.text, anchor, {
+      bubble(saying.text, anchorAt(saying.at), {
         colour: saying.by === 'gate' || saying.text === 'Woof!' ? 'sun' : 'paper',
       }),
     );
     el.dataset.part = 'bubble';
     el.dataset.by = saying.by;
     el.style.visibility = 'hidden';
-    said.push({ box: boxOfBubble(saying.text, anchor), from: saying.at, to: until });
+    if (offset) following.push({ el, name: saying.by, offset, from: saying.at, to: until });
+    said.push({
+      boxAt: (t) => boxOfBubble(saying.text, anchorAt(t)),
+      from: saying.at,
+      to: until,
+    });
     timeline.set(el, { visibility: 'visible' }, saying.at);
     if (!show.reducedMotion) timeline.add(popIn(el.firstElementChild!), saying.at);
     timeline.set(el, { visibility: 'hidden' }, until);
@@ -308,26 +352,51 @@ const boxOfBubble = (text: string, anchor: { x: number; y: number }): Box => {
   };
 };
 
+/** The moments from `from` to `to`, SAMPLE apart, at which a bubble is checked clear. */
+function times(from: number, to: number): number[] {
+  const all: number[] = [];
+  for (let t = from; t <= to + 1e-9; t += SAMPLE) all.push(t);
+  return all;
+}
+
 /**
- * Every face and name tag from `from` to `to`, sampled as they move, with
- * MARGIN round each for how far they move between samples.
+ * Every face and name tag at `t`, with MARGIN round each for how far they
+ * move between samples.
  */
-function inTheWay(plan: Plan, places: Places, from: number, to: number): Box[] {
-  const boxes: Box[] = [];
+function inTheWay(plan: Plan, places: Places, t: number): Box[] {
   const padded = (box: Box): Box => ({
     left: box.left - MARGIN,
     right: box.right + MARGIN,
     top: box.top - MARGIN,
     bottom: box.bottom + MARGIN,
   });
-  for (let t = from; t <= to + 1e-9; t += SAMPLE) {
-    for (const name of plan.order) {
-      const tag = places.tag(name, t);
-      boxes.push(padded(faceBox(places.at(name, t).spot)));
-      if (!tag.hidden) boxes.push(padded(tag.box));
-    }
-  }
-  return boxes;
+  return plan.order.flatMap((name) => {
+    const tag = places.tag(name, t);
+    const face = padded(faceBox(places.at(name, t).spot));
+    return tag.hidden ? [face] : [face, padded(tag.box)];
+  });
+}
+
+/** The caption sticker's box at `t`. */
+function captionsAt(plan: Plan, t: number): Box[] {
+  const text = captionAt(plan, t);
+  return text === null ? [] : [captionBox(text)];
+}
+
+/**
+ * Where a person's bubble sits from them while it is up, as anchorBy's
+ * offset, clear of `avoidAt` each moment; null when nowhere by them is.
+ */
+function byTheSpeaker(saying: Saying, places: Places, avoidAt: (t: number) => Box[]) {
+  const speaker = times(saying.at, saying.at + BUBBLE).map((t) => {
+    const tag = places.tag(saying.by, t);
+    return {
+      face: faceBox(places.at(saying.by, t).spot),
+      tag: tag.hidden ? null : tag.box,
+      avoid: avoidAt(t),
+    };
+  });
+  return bubbleBy(saying.text, speaker);
 }
 
 /** Where a bubble would rather be: over its sayer's head, by the dog's nose, or by the gate. */

@@ -35,6 +35,7 @@ import {
   type Watched,
 } from './watching';
 import {
+  apart,
   BACK,
   BEHIND,
   BOB,
@@ -1284,6 +1285,31 @@ describeSpec(await loadFeature('./dont-wake-the-dog.feature'), ({ Rule }) => {
         }
         expect(seen).toBeGreaterThan(0);
       });
+      And(
+        "each person's speech bubble sits by them, touching their face or name tag, its tail no lower than the tag",
+        () => {
+          let seen = 0;
+          for (const { label, run, places } of runs) {
+            for (const frame of run.frames) {
+              for (const said of frame.bubbles) {
+                if (said.by === 'dog' || said.by === 'gate') continue;
+                seen++;
+                const at = `${label}: ${said.by}'s "${said.text}" at ${frame.time}`;
+                const box = speechBox(said.text, said);
+                const face = faceBox(places.at(said.by, frame.time).spot);
+                const tag = places.tag(said.by, frame.time);
+                const own = tag.hidden ? [face] : [face, tag.box];
+                // Touching: within the gap a bubble keeps from what it sits by.
+                expect(Math.min(...own.map((each) => apart(box, each))), at).toBeLessThanOrEqual(
+                  16,
+                );
+                expect(said.y, at).toBeLessThanOrEqual(Math.max(...own.map((each) => each.bottom)));
+              }
+            }
+          }
+          expect(seen).toBeGreaterThan(0);
+        },
+      );
       And("no one ever covers the dog's face", () => {
         for (const { label, run, places } of runs) {
           for (const frame of run.frames) {

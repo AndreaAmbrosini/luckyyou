@@ -643,6 +643,24 @@ export const CAPTION_BOTTOM = 116;
 const EDGE = 8;
 
 /**
+ * The caption sticker's box while it says `text`, as the kit sets it: one
+ * line centred at the top, padded 28 px inside its line, a tenth wider for
+ * its tilt; the whole top of the stage when it's wider than the kit's
+ * 1160 px and takes two lines.
+ */
+export function captionBox(text: string): Box {
+  const font = stagePx('--size-stage-caption');
+  const width = 1.1 * (0.62 * font * [...text].length + 2 * (28 + stagePx('--line-bold')));
+  const half = width > 1160 ? STAGE.width / 2 : width / 2;
+  return {
+    left: STAGE.width / 2 - half,
+    right: STAGE.width / 2 + half,
+    top: 0,
+    bottom: CAPTION_BOTTOM,
+  };
+}
+
+/**
  * Where to anchor a bubble saying `text`: the nearest place to `prefer`
  * whose box is on the stage, below the caption and clear of everything in
  * `avoid`; beside `prefer` as the kit places it when nowhere is.
@@ -670,3 +688,70 @@ export function bubbleAt(text: string, prefer: { x: number; y: number }, avoid: 
   };
   return speechAt(text, beside, avoid);
 }
+
+/** How far a bubble may sit from the face or name tag of whoever says it. */
+const BY_SPEAKER = 16;
+
+/** Where a bubble's tail goes, `offset` from the middle of the top of `face`. */
+export const anchorBy = (face: Box, offset: { dx: number; dy: number }) => ({
+  x: (face.left + face.right) / 2 + offset.dx,
+  y: face.top + offset.dy,
+});
+
+/**
+ * Where a bubble saying `text` sits from whoever says it, as an offset from
+ * their face for anchorBy, given their face and name tag (null while
+ * hidden) and what to keep clear of at each moment it is up. It moves with
+ * them: the nearest place to just over their head that stays within
+ * BY_SPEAKER of the face or tag, its tail no lower than the tag, so it
+ * never points at whoever is below them; on the stage and clear of `avoid`.
+ * Null when nowhere is.
+ */
+export function bubbleBy(
+  text: string,
+  speaker: readonly { face: Box; tag: Box | null; avoid: readonly Box[] }[],
+): { dx: number; dy: number } | null {
+  const { face, tag } = speaker[0]!;
+  const shape = speechBox(text, { x: 0, y: 0 });
+  const near = tag ? union([face, tag]) : face;
+  const middle = (face.left + face.right) / 2;
+  const candidates: { dx: number; dy: number; d: number }[] = [];
+  for (
+    let x = near.left - BY_SPEAKER - shape.right;
+    x <= near.right + BY_SPEAKER - shape.left;
+    x += 4
+  ) {
+    for (let y = face.top - BY_SPEAKER; y <= near.bottom; y += 4) {
+      candidates.push({
+        dx: x - middle,
+        dy: y - face.top,
+        d: Math.hypot(x - middle, y - face.top),
+      });
+    }
+  }
+  candidates.sort((one, two) => one.d - two.d);
+  const fits = (offset: { dx: number; dy: number }) =>
+    speaker.every((at) => {
+      const anchor = anchorBy(at.face, offset);
+      const box = speechBox(text, anchor);
+      const own = [at.face, ...(at.tag ? [at.tag] : [])];
+      return (
+        box.left >= EDGE &&
+        box.right <= STAGE.width - EDGE &&
+        box.top >= EDGE &&
+        box.bottom <= STAGE.height - EDGE &&
+        own.some((each) => apart(box, each) <= BY_SPEAKER) &&
+        anchor.y <= Math.max(...own.map((each) => each.bottom)) &&
+        !at.avoid.some((other) => overlap(box, other))
+      );
+    });
+  const found = candidates.find(fits);
+  return found ? { dx: found.dx, dy: found.dy } : null;
+}
+
+/** How far apart two boxes are: 0 when they touch or overlap. */
+export const apart = (one: Box, two: Box) =>
+  Math.hypot(
+    Math.max(0, one.left - two.right, two.left - one.right),
+    Math.max(0, one.top - two.bottom, two.top - one.bottom),
+  );
