@@ -4,7 +4,7 @@
 // unlucky person fits, so the potato and the names stay in view below the
 // caption.
 
-import { speechBox, STAGE } from '../../scenario-kit';
+import { leanRoom, speechBox, STAGE } from '../../scenario-kit';
 
 export interface Point {
   readonly x: number;
@@ -395,6 +395,73 @@ export const apart = (one: Box, two: Box) =>
     Math.max(0, one.left - two.right, two.left - one.right),
     Math.max(0, one.top - two.bottom, two.top - one.bottom),
   );
+
+/** How far above the top of a head a bubble's tail may end, and the step to look for room in. */
+const OVER = { rise: 24, step: 4 } as const;
+
+/**
+ * Where to anchor a bubble saying `text` over `head`, and how far it leans
+ * from its tail, so the tail, which points straight down, points at them:
+ * within the middle half of the head and up to OVER.rise above its top,
+ * the bubble on the stage and clear of everything in `keepOff` and the
+ * caption. Off everything in `avoid` where there's room; then as near the
+ * middle of the top of the head, and as upright, as it goes. Null when
+ * there's no room.
+ */
+export function overHead(
+  text: string,
+  head: Box,
+  avoid: readonly Box[],
+  keepOff: readonly Box[],
+): (Point & { lean: number }) | null {
+  const { rise, step } = OVER;
+  const { edge } = BESIDE;
+  const middle = (head.left + head.right) / 2;
+  const quarter = (head.right - head.left) / 4;
+  const room = leanRoom(text);
+  const firm = [...keepOff, CAPTION];
+  let best: (Point & { lean: number }) | null = null;
+  let least = Infinity;
+  for (const lean of across(room, step)) {
+    for (const x of across(quarter, step).map((dx) => middle + dx)) {
+      for (let y = head.top; y >= head.top - rise - 1e-9; y -= step) {
+        const box = speechBox(text, { x, y }, lean);
+        const onStage =
+          box.left >= edge &&
+          box.right <= STAGE.width - edge &&
+          box.top >= edge &&
+          box.bottom <= STAGE.height - edge;
+        if (!onStage || firm.some((each) => overlap(box, each))) continue;
+        const score =
+          Math.abs(x - middle) +
+          Math.abs(y - head.top) +
+          Math.abs(lean) / 4 +
+          (avoid.some((each) => overlap(box, each)) ? STAGE.width : 0);
+        if (score < least) {
+          least = score;
+          best = { x, y, lean };
+        }
+      }
+    }
+  }
+  return best;
+}
+
+/** From -`most` to `most`, about `step` apart, both ends and 0 among them. */
+function across(most: number, step: number): number[] {
+  const steps = Math.ceil(most / step);
+  return Array.from({ length: 2 * steps + 1 }, (_, k) => steps && ((k - steps) / steps) * most);
+}
+
+/**
+ * A bubble saying `text` anchored at `anchor`, its tail moved as near the
+ * middle of `head` as leanRoom lets it; the bubble itself stays put.
+ */
+export function tailToward(text: string, anchor: Point, head: Box): Point & { lean: number } {
+  const room = leanRoom(text);
+  const lean = Math.max(-room, Math.min(room, anchor.x - (head.left + head.right) / 2));
+  return { x: anchor.x - lean, y: anchor.y, lean };
+}
 
 /**
  * Where to anchor a bubble saying `text` beside `head`, whose name tag is

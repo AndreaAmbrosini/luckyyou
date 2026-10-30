@@ -3,11 +3,12 @@ import { gsap } from 'gsap';
 import { beforeAll, describe, expect, it } from 'vitest';
 import { describeSpec, runShow, type ShowRecord } from '../../scenario-kit/testing';
 import { createRandom } from '../../scenario-kit/random';
-import { speechBox } from '../../scenario-kit';
+import { leanRoom, speechBox } from '../../scenario-kit';
 import hotPotato from './index';
 import {
   apart,
   besideHead,
+  overHead,
   bezier,
   CAPTION,
   crowned,
@@ -174,6 +175,8 @@ interface Said {
   readonly text: string;
   readonly time: number;
   readonly box: Box;
+  /** Where its tail ends. */
+  readonly tail: Point;
   readonly potato: Box | null;
 }
 
@@ -392,10 +395,12 @@ async function watch(
           seen.add(bubble);
           const scale = Number(gsap.getProperty(potato, 'scale'));
           const anchor = { x: parseFloat(bubble.style.left), y: parseFloat(bubble.style.top) };
+          const lean = parseFloat(bubble.style.getPropertyValue('--lean')) || 0;
           bubbles.push({
             text: bubble.textContent!,
             time,
-            box: speechBox(bubble.textContent!, anchor),
+            box: speechBox(bubble.textContent!, anchor, lean),
+            tail: anchor,
             potato: potatoShown ? potatoBox(centre, scale) : null,
           });
         }
@@ -881,7 +886,7 @@ describeSpec(await loadFeature('./hot-potato.feature'), ({ Rule }) => {
       );
     });
 
-    RuleScenario('"Phew!" beside them, wherever they sit', ({ When, Then }) => {
+    RuleScenario('"Phew!" points at whoever says it', ({ When, Then, And }) => {
       let runs: Run[];
       When('the show runs at 3, at 6 and at 12 people', () => {
         runs = lab.filter((run) => run.plan.ring.length >= 3);
@@ -899,6 +904,45 @@ describeSpec(await loadFeature('./hot-potato.feature'), ({ Rule }) => {
         }
         expect(seen).toBeGreaterThan(0);
       });
+      /** Whether `tail` ends just over `head`: up to 24 px above it, within its middle half. */
+      const over = (tail: Point, head: Box) =>
+        Math.abs(tail.x - (head.left + head.right) / 2) <= (head.right - head.left) / 4 + 1e-6 &&
+        tail.y <= head.top + 1e-6 &&
+        tail.y >= head.top - 24 - 1e-6;
+      And(
+        'at 3 and at 6 people, its tail ends just over their head, within the middle half of it',
+        () => {
+          for (const run of runs.filter((each) => each.plan.ring.length <= 6)) {
+            for (const { name, at } of run.plan.sits) {
+              const { tail } = phewAt(run, at)!;
+              const head = sittingHead(standing(run, name, at));
+              expect(over(tail, head), `${run.label}: ${name}`).toBe(true);
+            }
+          }
+        },
+      );
+      And(
+        'at 12 people too, unless the potato or the caption is over their head; then its tail leans as near their head as it may',
+        () => {
+          let pointing = 0;
+          for (const run of runs.filter((each) => each.plan.ring.length === 12)) {
+            for (const { name, at } of run.plan.sits) {
+              const { tail, box, potato } = phewAt(run, at)!;
+              const head = sittingHead(standing(run, name, at));
+              const label = `${run.label}: ${name}`;
+              if (over(tail, head)) {
+                pointing++;
+                continue;
+              }
+              expect(overHead('Phew!', head, [], potato ? [potato] : []), label).toBeNull();
+              const middle = (head.left + head.right) / 2;
+              const off = Math.abs((box.left + box.right) / 2 - middle) - leanRoom('Phew!');
+              expect(Math.abs(tail.x - middle), label).toBeLessThanOrEqual(Math.max(0, off) + 1e-6);
+            }
+          }
+          expect(pointing).toBeGreaterThan(0);
+        },
+      );
     });
   });
 

@@ -34,12 +34,14 @@ import {
   heldOut,
   highest,
   nameBox,
+  overHead,
   overlap,
   POTATO,
   potatoBox,
   ring,
   seated,
   SITTING,
+  tailToward,
   throwPath,
   type Box,
   type Path,
@@ -367,7 +369,7 @@ export async function playHotPotato(show: Show): Promise<void> {
   };
   /**
    * A bubble beside `beside`, `near` it with `keepOff` all of `avoid` unless
-   * given; at `anchor` when given.
+   * given; at `anchor`, leaning as it says, when given.
    */
   const say = (
     time: number,
@@ -376,9 +378,9 @@ export async function playHotPotato(show: Show): Promise<void> {
     avoid: Box[] = [],
     colour: 'paper' | 'sun' = 'paper',
     keepOff: Box[] = avoid,
-    anchor = near(text, beside, avoid, keepOff),
+    anchor: Point & { lean?: number } = near(text, beside, avoid, keepOff),
   ) => {
-    const speech = bubble(text, anchor, { colour });
+    const speech = bubble(text, anchor, { colour, lean: anchor.lean });
     speech.dataset.part = 'bubble';
     scene.append(speech);
     timeline.add(popIn(speech), time);
@@ -402,13 +404,18 @@ export async function playHotPotato(show: Show): Promise<void> {
       refresh();
     });
     change(person.face.el, { scale: SITTING.scale, y: SITTING.drop * person.spot.size }, time, SIT);
-    // Beside their head, clear of the names too where the ring has room.
+    // Over their head, its tail pointing at it, clear of the names too where
+    // the ring has room. Where the potato or the caption is over it: beside
+    // the head, its tail leaning as near it as it goes.
     const potatoThen = inHands(catcher, time);
     const face = headBox(spotAt(name, time));
     const tag = nameBox(standAt(name, time));
     const names = [...namesBut(name, time), tag];
-    const phew = besideHead('Phew!', face, tag, names, [potatoThen]);
-    say(time, 'Phew!', face, [potatoThen, ...names], 'paper', [potatoThen], phew ?? undefined);
+    const beside = besideHead('Phew!', face, tag, names, [potatoThen]);
+    const phew =
+      overHead('Phew!', face, names, [potatoThen]) ??
+      (beside ? tailToward('Phew!', beside, face) : undefined);
+    say(time, 'Phew!', face, [potatoThen, ...names], 'paper', [potatoThen], phew);
   }
 
   // The crawl: the last three grow where they stand, tags and all, the
