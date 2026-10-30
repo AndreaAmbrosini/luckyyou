@@ -1,6 +1,6 @@
 # 0012 Line-up choices can come in groups
 
-Accepted 2026-10-30
+Superseded by 0013
 
 The Race's racer option holds sixteen choices: eight rides and eight
 creatures. Split into two options, a look could hold a ride and a creature at

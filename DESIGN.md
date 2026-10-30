@@ -14,14 +14,13 @@ This file says how they're used.
 - Text is ink or ink-soft on paper, sky, sun, mint, tomato or tomato-soft.
   White text is never used.
 - Solid fills only: no gradients, glows, blur or thin lines.
-- Outlines are `--line` in ink. Surfaces that sit on the ground get a hard
-  ink shadow, never a blurred one.
+- Outlines are `--line` in ink. Surfaces on the ground get a hard ink shadow.
 - On and off look different without colour: a ticked person has a check
   mark and a solid outline; an unticked or disabled one is white with a
   dashed outline.
 - One primary button per screen, in tomato.
 - Only the logo and the stickers on the result and in shows are tilted,
-  between −2° and 2°. Lists and buttons stay straight.
+  between −2° and 2°.
 - Click targets are at least `--target-min`. Keyboard focus shows as
   `--focus`, offset 3px.
 
@@ -52,9 +51,9 @@ This file says how they're used.
 
 - **Sheet**: paper, ink outline, `--radius-card`, `--shadow`. Holds the team.
 - **Person tile**: a grid of equal tiles at least 250px wide. Ticked: sun,
-  solid outline, `--shadow-small`, a check in a paper box. Unticked: paper,
-  dashed ink-soft outline, an empty box. A long name wraps inside its tile. In remove mode: paper, solid outline,
-  and a round tomato × labelled "Remove" and the name.
+  `--shadow-small`, a check in a paper box. Unticked: paper, an empty box. A
+  long name wraps inside its tile. In remove mode: paper, solid outline, and a
+  round tomato × labelled "Remove" and the name.
 - **Count pill**: "8 of 10 in", mint from 2 to 12 ticked, tomato otherwise.
 - **Notes**: a refused name's note in tomato-soft beside the add field; the
   reason a button is disabled in paper beside or under it.
@@ -82,10 +81,10 @@ teammate once, below. They stay in this browser, ready for the next call."
 followed by the names. Show cards sit in a grid at least 300px wide. The
 footer says "Click a show to start it."
 
-**Line-up.** "Pick a show" to go back, the heading, today's people as tiles,
-and beside them the chosen one bigger, with the show's options, their choices
-under group labels when a show groups them. The footer has "Shuffle everyone"
-and the primary button.
+**Line-up.** "Pick a show" to go back, the heading, today's people in a row,
+then the chosen one bigger with the show's options, each heading naming the
+choice. An option shown as pictures has a sheet of its own, groups as tabs.
+The footer has "Shuffle everyone" and the primary button.
 
 **Show.** The scenario owns the window ([show.feature](specs/show.feature)).
 
@@ -102,17 +101,18 @@ Every scenario follows these:
   [PRODUCT.md](PRODUCT.md), then checked at its smallest and largest.
 - The stage is 1280×720 stage pixels, scaled to fit the window.
 - Drawings use flat fills and ink outlines of 4 to 5 stage pixels.
-- Name tags are paper stickers with an ink outline and ink text, straight
-  (never on a curve), at least `--size-stage-tag-min`, at most two lines,
-  never over another tag. They grow as fewer people are left. On land they
-  sit on the chest, so hands can hold things overhead; on a mount or a
-  creature, beside the face, behind it.
+- Name tags are paper stickers with an ink outline and ink text, straight,
+  at least `--size-stage-tag-min`, at most two lines, never over another
+  tag. They grow as fewer people are left. On land they sit on the chest, so
+  hands can hold things overhead; on a mount or a creature, beside the face,
+  behind it.
 - Captions are one at a time, top centre, in the display font at
   `--size-stage-caption` on a paper sticker, each for at least a second.
-- People are cartoon heads with a mood (calm, worried, scared, happy, party)
-  and a cap, goggles or snorkel, handed out per run. On land they wear a
-  shirt and raise their arms from the shoulders, and sweat when nervous. A
-  show may cast people as creatures, whose own faces carry the mood.
+- People are cartoon heads with a mood and a cap, goggles or snorkel, handed
+  out per run. On land they wear a shirt and raise their arms from the
+  shoulders, and sweat when nervous. A show may cast people as creatures:
+  modern cartoons whose own faces carry the mood, shaded with ink at 18% on
+  each part's lower left, the one see-through fill.
 - Movement that matters lasts at least 0.4 seconds, and nothing flashes more
   than three times a second. With `prefers-reduced-motion`, a show keeps its
   story and drops shaking and speed lines.
