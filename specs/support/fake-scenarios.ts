@@ -1,6 +1,7 @@
 import type {
   ChosenLook,
   LineUp,
+  LineUpOption,
   Scenario,
   ScenarioMeta,
   Show,
@@ -105,4 +106,29 @@ export function groupedLineUp(): LineUp {
     ],
   };
   return { ...lineUp, options: [hat, ...lineUp.options.slice(1)] };
+}
+
+/**
+ * A line-up whose hat shows as the person drawn in each hat, and whose
+ * colours each have a picture that reads back its colour.
+ */
+export function pictureLineUp(): LineUp {
+  const [hat, colour] = fakeLineUp().options as [LineUpOption, LineUpOption];
+  return fakeLineUp({
+    options: [
+      { ...hat, drawn: true },
+      {
+        ...colour,
+        choices: colour.choices.map(({ name, label }) => ({
+          name,
+          label,
+          picture() {
+            const drawn = document.createElement('div');
+            drawn.dataset.picture = name;
+            return drawn;
+          },
+        })),
+      },
+    ],
+  });
 }

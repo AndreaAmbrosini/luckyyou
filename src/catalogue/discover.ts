@@ -108,6 +108,10 @@ function lineUpProblems(lineUp: unknown): string[] {
       if (given.some((choice) => choice.group !== undefined && !filled(choice.group))) {
         problems.push(`its line-up option "${name}" has a group without a label`);
       }
+      const pictured = given.filter((choice) => typeof choice.picture === 'function').length;
+      if (pictured > 0 && pictured < given.length) {
+        problems.push(`its line-up option "${name}" has a picture for only some choices`);
+      }
     }
   }
 
