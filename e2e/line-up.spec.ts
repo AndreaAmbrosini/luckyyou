@@ -46,6 +46,13 @@ test("The Race's start line fits 1280 by 800 with 8 people", async ({ page }) =>
     const shown = (await racers.boundingBox())!;
     const firstEight = (await racers.getByRole('button').all()).slice(0, 8);
     for (const racer of firstEight) await inView(racer, shown);
+    // Each name fits its card, breaking between words or at a soft hyphen.
+    const overflowing = await racers.evaluate((panel) =>
+      [...panel.querySelectorAll('button > span:nth-of-type(2)')]
+        .filter((name) => name.scrollWidth > name.clientWidth + 0.5)
+        .map((name) => name.textContent),
+    );
+    expect(overflowing).toEqual([]);
 
     const scrolls = await page.evaluate(() =>
       [...document.querySelectorAll('*')]
@@ -59,4 +66,28 @@ test("The Race's start line fits 1280 by 800 with 8 people", async ({ page }) =>
     const many = (await racers.getByRole('button').count()) > 8;
     expect(scrolls).toEqual(many ? ['tabpanel'] : []);
   }
+
+  // Each person's die, pin and click area, and the chosen one's sun row, are
+  // level with their own name tag and nobody else's.
+  await start.getByRole('button', { name: 'Dario', exact: true }).click();
+  const tags = new Map<string, { y: number; height: number }>();
+  for (const name of team) {
+    tags.set(name, (await start.locator(`div[data-person="${name}"]`).boundingBox())!);
+  }
+  const levelWith = (box: { y: number; height: number }) =>
+    team.filter((name) => {
+      const tag = tags.get(name)!;
+      return box.y < tag.y + tag.height && tag.y < box.y + box.height;
+    });
+  for (const name of team) {
+    for (const control of [
+      start.getByRole('button', { name: `A new look for ${name}` }),
+      start.getByRole('button', { name: `Pin ${name}` }),
+      start.getByRole('button', { name, exact: true }),
+    ]) {
+      expect(levelWith((await control.boundingBox())!), name).toEqual([name]);
+    }
+  }
+  const row = (await start.locator('[data-part="chosen"] path').boundingBox())!;
+  expect(levelWith(row)).toEqual(['Dario']);
 });
