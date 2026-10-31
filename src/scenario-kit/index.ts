@@ -26,7 +26,7 @@ export {
 } from './contract';
 export { bob, hoverWobble, popIn, scroller, shake } from './motion';
 export { eliminationOrder } from './order';
-export { drums, melody, oomPah, type Music, type Note } from './music';
+export { drums, melody, oomPah, type Music, type Note, type Voice } from './music';
 export { pickOne, shuffle } from './random';
 export type { Cue, SoundPlayer } from './sound';
 export { spread, STAGE } from './stage';

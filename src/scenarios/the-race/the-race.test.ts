@@ -585,7 +585,12 @@ interface Heard {
 }
 
 /** Runs the race with a sound that keeps what the show asked of it. */
-async function listen(team: readonly string[], unlucky: string, seed = 1): Promise<Heard> {
+async function listen(
+  team: readonly string[],
+  unlucky: string,
+  seed = 1,
+  course: Course = 'field',
+): Promise<Heard> {
   let notes: readonly Note[] = [];
   const moves: { time: number | null; beat: number; speed: number }[] = [];
   const cues: { time: number | null; cue: Cue }[] = [];
@@ -608,7 +613,7 @@ async function listen(team: readonly string[], unlucky: string, seed = 1): Promi
     names: team,
     unlucky,
     seed,
-    theme: 'field',
+    theme: course,
     looks: dealLooks(theRace.lineUp!, team, createRandom(seed)),
     onFrame(time) {
       for (const each of [...moves, ...cues]) each.time ??= time;
@@ -616,7 +621,7 @@ async function listen(team: readonly string[], unlucky: string, seed = 1): Promi
   });
   return {
     record,
-    plan: planShow(team, unlucky, createRandom(seed)),
+    plan: planShow(team, unlucky, createRandom(seed), course),
     notes,
     moves: moves.map(({ time, ...move }) => ({ time: time!, ...move })),
     cues: cues.map(({ time, cue }) => ({ time: time!, cue })),
@@ -4736,6 +4741,81 @@ describeSpec(await loadFeature('./the-race.feature'), ({ Rule }) => {
         const fanfare = race.cues.find((each) => each.cue === 'fanfare')!;
         expect(fanfare.time).toBe(win.from);
         expect(win.from).toBeGreaterThan(race.plan.times.finish);
+      });
+    });
+
+    RuleScenario('Jingle Bells at Christmas', ({ When, Then, And }) => {
+      let race: Heard;
+      When('the show runs on Christmas with music on', async () => {
+        race = await listen(names(8), 'Anna', 1, 'christmas');
+        expect(race.record.outcome).toBe('finished');
+      });
+      Then(
+        `Jingle Bells plays instead of the galop, with sleigh bells, on the galop's beats: a roll under "On your marks…", the chorus from "Go!", a faster strain from "Final stretch!", a run down at a quarter of the speed in the slow moment, and silence from the line to the fanfare`,
+        () => {
+          const { plan, notes, moves, record } = race;
+          const { times } = plan;
+          const score = raceMusic(plan);
+          const pitches = (from: readonly Note[]) => from.map((note) => note.pitch!);
+          const tune = (text: string) => text.split(' ').map(pitchOf);
+          // On the galop's beats: the song is where the galop's would be, at every frame.
+          const galop = raceMusic({ ...plan, course: 'field' });
+          for (const { time } of moves) expect(score.at(time)).toEqual(galop.at(time));
+          const stretchAt = score.at(times.stretch).beat;
+          const slowAt = score.at(times.slow).beat;
+          const atLine = score.at(before(times.finish)).beat;
+
+          // A roll of bells that swells under "On your marks…", then a run up into "Go!".
+          const marks = record.captions.find((each) => each.text === 'On your marks…')!;
+          expect(moves[0]!.time).toBeLessThanOrEqual(marks.to);
+          const roll = notes.filter((note) => note.at < 0 && note.voice !== 'lead');
+          const shakes = roll.filter((note) => note.voice === 'bells');
+          expect(shakes.length).toBeGreaterThan(8);
+          shakes.forEach((note, i) => {
+            if (i > 0) expect(note.level!).toBeGreaterThan(shakes[i - 1]!.level!);
+          });
+          const runUp = pitches(lead(notes.filter((note) => note.at < 0)));
+          runUp.forEach((pitch, i) => i > 0 && expect(pitch).toBeGreaterThan(runUp[i - 1]!));
+
+          // The chorus from "Go!", with sleigh bells on every beat until the stretch.
+          expect(score.at(times.go).beat).toBeCloseTo(0, 9);
+          const racing = lead(notes.filter((note) => note.at >= 0 && note.at < stretchAt));
+          expect(pitches(racing).slice(0, 11)).toEqual(tune('E5 E5 E5 E5 E5 E5 E5 G5 C5 D5 E5'));
+          const bells = notes.filter((note) => note.voice === 'bells' && note.at >= 0);
+          for (let beat = 0; beat < stretchAt; beat++) {
+            expect(bells.some((note) => note.at === beat)).toBe(true);
+          }
+
+          // A faster strain from "Final stretch!": the verse.
+          expect(score.at(times.stretch).speed).toBeGreaterThan(score.at(times.go).speed);
+          const verse = lead(notes.filter((note) => note.at >= stretchAt && note.at < slowAt));
+          expect(verse[0]!.at).toBe(stretchAt);
+          expect(pitches(verse).slice(0, 4)).toEqual(tune('G4 E5 D5 C5'));
+
+          // A run down at a quarter of the speed, ending at the line.
+          expect(score.at(times.slow).speed / score.at(times.stretch).speed).toBeCloseTo(0.25, 2);
+          const run = pitches(lead(notes.filter((note) => note.at >= slowAt)));
+          expect(run.length).toBeGreaterThan(2);
+          run.forEach((pitch, i) => i > 0 && expect(pitch).toBeLessThan(run[i - 1]!));
+
+          // Silence from the line to the fanfare.
+          const last = Math.max(...notes.map((note) => note.at + note.beats));
+          expect(last).toBeLessThanOrEqual(atLine + 1e-4);
+          for (const move of moves.filter((each) => each.time >= times.finish)) {
+            expect(move.speed).toBe(0);
+          }
+          const win = record.captions.find((each) => each.text === 'Anna wins!')!;
+          expect(race.cues.find((each) => each.cue === 'fanfare')!.time).toBe(win.from);
+        },
+      );
+      And('every other theme keeps the galop', () => {
+        for (const course of COURSES.filter((each) => each !== 'christmas')) {
+          for (const plan of plansOn(names(8), 'Anna', course, 3)) {
+            const score = raceMusic(plan);
+            expect(score.notes, course).toEqual(raceMusic({ ...plan, course: 'field' }).notes);
+            expect(score.notes.some((note) => note.voice === 'bells')).toBe(false);
+          }
+        }
       });
     });
   });
