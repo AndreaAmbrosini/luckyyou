@@ -538,10 +538,8 @@ Feature: The Race
       When the show runs at every head count from 2 to 8, with each ending
       Then each run lasts between 14 and 25 seconds
 
-  # Music, built in one go with the music rule in specs/setup.feature. The
-  # galop from Rossini's William Tell Overture, which is public domain,
+  # The galop from Rossini's William Tell Overture, which is public domain,
   # arranged for the show as lead, oom-pah bass and drums.
-  @pending
   Rule: Its music follows the race
 
     Scenario: A drum roll, then the galop from "Go!"

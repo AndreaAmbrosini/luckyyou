@@ -1,12 +1,23 @@
 import { loadFeature } from '@amiceli/vitest-cucumber';
 import { describe, expect, it } from 'vitest';
-import { handOutLooks, speechBox, type Box, type ChosenLook, type Mood } from '../../scenario-kit';
+import {
+  handOutLooks,
+  speechBox,
+  type Box,
+  type ChosenLook,
+  type Cue,
+  type Mood,
+  type Note,
+  type Scenario,
+} from '../../scenario-kit';
+import { pitchOf } from '../../scenario-kit/music';
 import { dealLooks } from '../../scenario-kit/line-up';
 import { createRandom } from '../../scenario-kit/random';
 import { describeSpec, runShow, type ShowRecord } from '../../scenario-kit/testing';
 import theRace from './index';
 import { eventCaption } from './play';
 import { faceAt, lane, tagBox } from './layout';
+import { raceMusic } from './music';
 import { creature, CREATURE_SPEC } from './creature';
 import {
   CREATURES,
@@ -514,6 +525,65 @@ function plansOn(
     if (plan.course === course && fits(plan)) found.push(plan);
   }
   return found;
+}
+
+/** A race run with music on: the song it handed the kit, how it moved it, and its sounds. */
+interface Heard {
+  readonly record: ShowRecord;
+  readonly plan: Plan;
+  readonly notes: readonly Note[];
+  /** Each move of the song, at the show second of its frame. */
+  readonly moves: readonly { time: number; beat: number; speed: number }[];
+  readonly cues: readonly { time: number; cue: Cue }[];
+}
+
+/** Runs the race with a sound that keeps what the show asked of it. */
+async function listen(team: readonly string[], unlucky: string, seed = 1): Promise<Heard> {
+  let notes: readonly Note[] = [];
+  const moves: { time: number | null; beat: number; speed: number }[] = [];
+  const cues: { time: number | null; cue: Cue }[] = [];
+  const listened: Scenario = {
+    ...theRace,
+    play: (show) =>
+      theRace.play({
+        ...show,
+        sound: {
+          play: (cue) => (cues.push({ time: null, cue }), () => undefined),
+          stopAll() {},
+          music(song) {
+            notes = song;
+            return { to: (beat, speed) => void moves.push({ time: null, beat, speed }) };
+          },
+        },
+      }),
+  };
+  const record = await runShow(listened, {
+    names: team,
+    unlucky,
+    seed,
+    looks: dealLooks(theRace.lineUp!, team, createRandom(seed)),
+    onFrame(time) {
+      for (const each of [...moves, ...cues]) each.time ??= time;
+    },
+  });
+  return {
+    record,
+    plan: planShow(team, unlucky, createRandom(seed)),
+    notes,
+    moves: moves.map(({ time, ...move }) => ({ time: time!, ...move })),
+    cues: cues.map(({ time, cue }) => ({ time: time!, cue })),
+  };
+}
+
+/** For each ending, the first plan from seed 1 on with `count` people that ends that way. */
+function plansByEnding(count: number): Plan[] {
+  const team = names(count);
+  return ENDINGS.map((ending) => {
+    for (let seed = 1; ; seed++) {
+      const plan = planShow(team, team.at(-1)!, createRandom(seed));
+      if (plan.ending === ending) return plan;
+    }
+  });
 }
 
 /** A piece of text on the stage, and what carries it. */
@@ -3432,6 +3502,185 @@ describeSpec(await loadFeature('./the-race.feature'), ({ Rule }) => {
           }
         },
       );
+    });
+  });
+
+  Rule('Its music follows the race', ({ RuleScenario }) => {
+    /** A show second just before `time`. */
+    const before = (time: number) => time - 1e-6;
+    let heard: Promise<Heard> | undefined;
+    /** One run at 8 people, Anna unlucky, shared by the scenarios that watch the show. */
+    const heardRace = () => (heard ??= listen(names(8), 'Anna'));
+    const lead = (notes: readonly Note[]) => notes.filter((note) => note.voice === 'lead');
+
+    RuleScenario('A drum roll, then the galop from "Go!"', ({ When, Then, And }) => {
+      let race: Heard;
+      When('the show runs with music on', async () => {
+        race = await heardRace();
+        expect(race.record.outcome).toBe('finished');
+      });
+      Then(
+        `a snare roll swells under "On your marks…" and leads into the galop's first bar on "Go!"`,
+        () => {
+          const { times } = race.plan;
+          const roll = race.notes.filter((note) => note.at < -1);
+          expect(roll.length).toBeGreaterThan(8);
+          expect(new Set(roll.map((note) => note.voice))).toEqual(new Set(['snare']));
+          roll.forEach((note, i) => {
+            if (i > 0) expect(note.level!).toBeGreaterThan(roll[i - 1]!.level!);
+          });
+          // The roll, then a pickup into the first bar, all under "On your marks…".
+          const marks = race.record.captions.find((each) => each.text === 'On your marks…')!;
+          const [first] = race.moves;
+          expect(first!.time).toBeLessThanOrEqual(marks.to);
+          expect(first!.beat).toBeLessThanOrEqual(roll[0]!.at);
+          expect(lead(race.notes.filter((note) => note.at < 0)).map((note) => note.at)).toEqual([
+            -1, -0.5,
+          ]);
+          // On "Go!" the song is at the first bar's first beat.
+          const go = race.record.captions.find((each) => each.text === 'Go!')!;
+          expect(go.from).toBeCloseTo(times.go, 1);
+          expect(raceMusic(race.plan).at(times.go).beat).toBeCloseTo(0, 9);
+          expect(race.notes.filter((note) => note.at === 0).map((note) => note.voice)).toEqual(
+            expect.arrayContaining(['lead', 'bass', 'kick']),
+          );
+        },
+      );
+      And(
+        'the galop plays at 4.2 to 4.6 beats a second, 4 beats a bar, until "Final stretch!"',
+        () => {
+          const [least, most, bar] = [4.2, 4.6, 4];
+          const { times } = race.plan;
+          const stretchAt = raceMusic(race.plan).at(times.stretch).beat;
+          const galop = race.moves.filter((move) => move.beat > 0 && move.beat < stretchAt - 1);
+          expect(galop.length).toBeGreaterThan(100);
+          const { speed } = galop[0]!;
+          for (const move of galop) expect(move.speed).toBe(speed);
+          expect(speed).toBeGreaterThanOrEqual(least);
+          expect(speed).toBeLessThanOrEqual(most);
+          // Bass and kicks on a bar's first and third beats, snares on the others.
+          const inGalop = race.notes.filter((note) => note.at >= 0 && note.at < stretchAt);
+          const beatsOf = (voice: string) =>
+            new Set(inGalop.filter((note) => note.voice === voice).map((note) => note.at % bar));
+          expect(beatsOf('bass')).toEqual(new Set([0, 2]));
+          expect(beatsOf('kick')).toEqual(new Set([0, 2]));
+          expect(beatsOf('snare')).toEqual(new Set([1, 3]));
+          // The galop's tune stops at the stretch.
+          const tune = lead(inGalop);
+          expect(Math.max(...tune.map((note) => note.at + note.beats))).toBeLessThanOrEqual(
+            stretchAt,
+          );
+        },
+      );
+    });
+
+    RuleScenario('The final stretch starts on a bar', ({ When, Then }) => {
+      let runs: Plan[];
+      When('the show runs at every head count from 2 to 8, with each ending', () => {
+        runs = Array.from({ length: 7 }, (_, i) => plansByEnding(i + 2)).flat();
+      });
+      Then('"Final stretch!" comes on the first beat of a bar', () => {
+        for (const plan of runs) {
+          // The galop itself gets there: it is fitted to whole bars.
+          const { beat } = raceMusic(plan).at(before(plan.times.stretch));
+          const label = `${plan.setOff.length} people, ${plan.ending}`;
+          expect(beat / 4 - Math.round(beat / 4), label).toBeCloseTo(0, 4);
+          expect(beat, label).toBeGreaterThan(4);
+        }
+      });
+    });
+
+    RuleScenario(
+      'The final stretch is faster, and leaves the low end to the heartbeat',
+      ({ When, Then, And }) => {
+        let runs: Plan[];
+        When('"Final stretch!" appears', () => {
+          runs = [2, 5, 8].flatMap(plansByEnding);
+        });
+        Then("the galop's minor strain plays, four bars in the stretch's time", () => {
+          for (const plan of runs) {
+            const { times } = plan;
+            const score = raceMusic(plan);
+            const start = score.at(times.stretch);
+            expect(start.speed).toBeGreaterThan(score.at(times.go).speed);
+            // Four bars, from "Final stretch!" to the slow moment.
+            expect(score.at(before(times.slow)).beat - start.beat).toBeCloseTo(16, 4);
+            const strain = score.notes.filter(
+              (note) => note.at >= start.beat && note.at < start.beat + 16,
+            );
+            // In A minor: its bass on A and E, its tune ending on A.
+            const bass = strain.filter((note) => note.voice === 'bass').map((note) => note.pitch);
+            expect(new Set(bass)).toEqual(new Set([pitchOf('A2'), pitchOf('E3')]));
+            expect(lead(strain).at(-1)!.pitch).toBe(pitchOf('A4'));
+          }
+        });
+        And('no kick drum plays until the line', () => {
+          for (const plan of runs) {
+            const score = raceMusic(plan);
+            const stretchAt = score.at(plan.times.stretch).beat;
+            const kicks = score.notes.filter(
+              (note) => note.voice === 'kick' && note.at >= stretchAt,
+            );
+            expect(kicks).toEqual([]);
+          }
+        });
+      },
+    );
+
+    RuleScenario('The slow last moment slows the music too', ({ When, Then }) => {
+      let runs: Plan[];
+      When('the slow moment starts', () => {
+        runs = Array.from({ length: 7 }, (_, i) => plansByEnding(i + 2)).flat();
+      });
+      Then(
+        "the music plays a run down, an octave lower, at a quarter of the stretch's speed, until the line",
+        () => {
+          for (const plan of runs) {
+            const { times } = plan;
+            const score = raceMusic(plan);
+            const slow = score.at(times.slow);
+            const label = `${plan.setOff.length} people, ${plan.ending}`;
+            expect(slow.speed / score.at(times.stretch).speed, label).toBeCloseTo(0.25, 2);
+            const run = lead(score.notes.filter((note) => note.at >= slow.beat));
+            const pitches = run.map((note) => note.pitch!);
+            pitches.forEach((pitch, i) => i > 0 && expect(pitch).toBeLessThan(pitches[i - 1]!));
+            // The galop's own run down, an octave up.
+            const galop = lead(score.notes.filter((note) => note.at < slow.beat))
+              .map((note) => note.pitch!)
+              .join(' ');
+            expect(galop).toContain(pitches.map((pitch) => pitch + 12).join(' '));
+            // Its last note ends at the line.
+            const end = Math.max(...run.map((note) => note.at + note.beats));
+            expect(score.at(before(times.finish)).beat, label).toBeCloseTo(end, 4);
+          }
+        },
+      );
+    });
+
+    RuleScenario('Silence from the line to the fanfare', ({ Given, When, Then, And }) => {
+      let race: Heard;
+      Given('the unlucky person is {string}', async (_, name: string) => {
+        race = await heardRace();
+        expect(race.record.captions.at(-1)!.text).toBe(`${name} wins!`);
+      });
+      When('the slow last moment ends at the line', () => {
+        expect(race.moves.at(-1)!.time).toBeGreaterThan(race.plan.times.finish);
+      });
+      Then('the music stops', () => {
+        const { times } = race.plan;
+        const atLine = raceMusic(race.plan).at(before(times.finish)).beat;
+        const last = Math.max(...race.notes.map((note) => note.at + note.beats));
+        expect(last).toBeLessThanOrEqual(atLine + 1e-4);
+        const atTheLine = race.moves.filter((move) => move.beat >= atLine - 1e-6);
+        expect(atTheLine.length).toBeGreaterThan(30);
+        for (const move of atTheLine) expect(move.speed).toBe(0);
+      });
+      And('the fanfare plays with {string}, as before', (_, text: string) => {
+        const win = race.record.captions.find((each) => each.text === text)!;
+        const fanfare = race.cues.find((each) => each.cue === 'fanfare')!;
+        expect(fanfare.time).toBe(win.from);
+        expect(win.from).toBeGreaterThan(race.plan.times.finish);
+      });
     });
   });
 

@@ -21,6 +21,7 @@ import {
 } from '../../scenario-kit';
 import { creature, CREATURE_SPEC, FLAIL, REACH, TENTACLES, type CreatureRunner } from './creature';
 import { boxAt, bubbleOffsets, faceAt, lane, tagAt, tagBox, tagSize, type Lane } from './layout';
+import { raceMusic } from './music';
 import {
   isCreature,
   group,
@@ -1466,7 +1467,18 @@ export async function playTheRace(show: Show): Promise<void> {
     }
   };
 
-  const timeline = gsap.timeline({ paused: true, onUpdate: () => place(timeline.time()) });
+  // The music moves along with the show's time, as everything else does.
+  const score = raceMusic(plan);
+  const music = show.sound.music(score.notes);
+  const timeline = gsap.timeline({
+    paused: true,
+    onUpdate: () => {
+      const t = timeline.time();
+      place(t);
+      const { beat, speed } = score.at(t);
+      music.to(beat, speed);
+    },
+  });
   const at = (time: number, run: () => void) => void timeline.call(run, [], time);
   const cue = (time: number, sound: Cue) => at(time, () => void show.sound.play(sound));
   const starts = BEATS.map((beat) => [beat, times[beat]] as const);
