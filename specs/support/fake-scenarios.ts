@@ -167,3 +167,26 @@ export function themedLineUp(): LineUp {
     ],
   };
 }
+
+/**
+ * The themed line-up drawing its start: the scene reads back its theme, and
+ * each person stands in a lane 40 px tall from y 64, drawn as `draw` does,
+ * marked when chosen.
+ */
+export function startLineUp(): LineUp {
+  const lineUp = themedLineUp();
+  return {
+    ...lineUp,
+    drawStart({ people, theme }) {
+      const scene = document.createElement('div');
+      scene.dataset.part = 'fake-start';
+      scene.dataset.theme = theme ?? '';
+      const places = people.map(({ name, place, look, chosen }, index) => {
+        const drawn = scene.appendChild(lineUp.draw(look, { name, place }));
+        if (chosen) (drawn as HTMLElement).dataset.chosen = 'true';
+        return { box: { left: 104, top: 64 + 40 * index, width: 340, height: 40 }, drawing: drawn };
+      });
+      return { el: scene, places };
+    },
+  };
+}

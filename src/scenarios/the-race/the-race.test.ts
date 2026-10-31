@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   handOutLooks,
   speechBox,
+  START,
   type Box,
   type ChosenLook,
   type Cue,
@@ -16,7 +17,7 @@ import { createRandom } from '../../scenario-kit/random';
 import { describeSpec, runShow, type ShowRecord } from '../../scenario-kit/testing';
 import theRace from './index';
 import { eventCaption } from './play';
-import { faceAt, lane, tagBox } from './layout';
+import { faceAt, lane, startLane, START_TRACK, tagAt, tagBox } from './layout';
 import { raceMusic } from './music';
 import { creature, CREATURE_SPEC } from './creature';
 import {
@@ -907,11 +908,121 @@ describeSpec(await loadFeature('./the-race.feature'), ({ Rule }) => {
       );
     });
 
-    RuleScenario('The Line-up fits the window', ({ Given, When, Then }) => {
+    /** Everyone at The Race's start, with looks dealt from a seed, `chosen` the one chosen. */
+    function startOf(people: readonly string[], theme: Course, chosen: number) {
+      const looks = dealLooks(theRace.lineUp!, people, createRandom(7));
+      const scene = {
+        people: people.map((name, index) => ({
+          name,
+          place: index + 1,
+          look: looks.get(name)!,
+          chosen: index === chosen,
+        })),
+        theme,
+      };
+      return { scene, ...theRace.lineUp!.drawStart!(scene) };
+    }
+
+    RuleScenario('The Line-up is the start line', ({ Given, When, Then, And }) => {
+      let people: string[] = [];
+      let theme: Course;
+      let start: ReturnType<typeof startOf>;
+      const CHOSEN = 2;
+      const kindOf = (index: number) => start.scene.people[index]!.look.mount as Kind;
+      const racers = () => [...start.el.querySelectorAll<SVGSVGElement>('svg[data-person]')];
+      const tags = () => [...start.el.querySelectorAll<HTMLElement>('div[data-person]')];
+      Given('{int} people, with {string} chosen', (_, count: number, label: string) => {
+        people = names(count);
+        theme = theRace.lineUp!.themes!.find((each) => each.label === label)!.name as Course;
+      });
+      When('the Line-up opens for The Race', () => {
+        start = startOf(people, theme, CHOSEN);
+      });
+      Then(
+        "everyone waits at the start line, a lane each, in today's order, noses on the line, on the office track with its backdrop above the lanes",
+        () => {
+          expect((start.el as HTMLElement).dataset).toMatchObject({
+            part: 'start',
+            course: 'office',
+          });
+          expect(start.el.classList).toContain(styles.office);
+          expect(racers().map((each) => each.dataset.person)).toEqual(people);
+          expect(start.places).toHaveLength(people.length);
+          start.places.forEach(({ box, drawing }, index) => {
+            const at = startLane(index, people.length);
+            expect(drawing).toBe(racers()[index]);
+            // A lane each, one under the other, under the backdrop's band.
+            expect(box.top).toBeCloseTo(at.top);
+            expect(box.height).toBeCloseTo(at.pitch);
+            expect(box.top).toBeGreaterThanOrEqual(START_TRACK.top);
+            expect(box.top + box.height).toBeLessThanOrEqual(START.height + 0.01);
+            const next = start.places[index + 1];
+            if (next) expect(next.box.top).toBeCloseTo(box.top + box.height);
+            // Feet in the lane, the nose just short of the line.
+            const el = drawing as SVGSVGElement;
+            const k = parseFloat(el.style.width) / RACER.width;
+            const kind = kindOf(index);
+            const nose = isCreature(kind) ? CREATURE_SPEC[kind].nose : SPEC[kind].nose;
+            expect(parseFloat(el.style.left) + nose * k).toBeCloseTo(START_TRACK.nose);
+            const feet = parseFloat(el.style.top) + RACER.feet * k;
+            expect(feet).toBeGreaterThan(box.top);
+            expect(feet).toBeLessThan(box.top + box.height);
+          });
+          expect(START_TRACK.nose).toBeLessThan(START_TRACK.line);
+          const band = start.el.querySelector('[data-part="band"]')!;
+          expect(band.children.length).toBeGreaterThan(0);
+          expect(start.el.querySelector('[data-part="start-line"]')).not.toBeNull();
+        },
+      );
+      And(
+        "each lane has its die and pin at the left, and its racer's name tag beside the face",
+        () => {
+          for (const { box } of start.places) {
+            // Room for a die and a pin, each 44 px, with gaps round them.
+            expect(box.left).toBeGreaterThanOrEqual(2 * 44 + 16);
+            expect(box.left + box.width).toBeLessThanOrEqual(START_TRACK.line);
+          }
+          expect(tags().map((each) => each.dataset.person)).toEqual(people);
+          tags().forEach((tag, index) => {
+            const at = startLane(index, people.length);
+            const { right, middle } = tagAt(kindOf(index), at, START_TRACK.nose);
+            expect(tag.style.translate).toBe(`calc(${right}px - 100%) calc(${middle}px - 50%)`);
+            expect(right).toBeLessThan(faceAt(kindOf(index), at, START_TRACK.nose).left);
+          });
+        },
+      );
+      And("the chosen person's lane and name tag are sun, and they wave", () => {
+        const lane = start.el.querySelector('[data-part="chosen"] path')!;
+        expect(lane.getAttribute('class')).toBe(styles.sun);
+        const [, y, height] = lane.getAttribute('d')!.match(/^M0 ([\d.]+) h[\d.]+ v([\d.]+)/)!;
+        const [top, bottom] = [Number(y), Number(y) + Number(height)];
+        const chosen = start.places[CHOSEN]!.box;
+        expect(top).toBeGreaterThan(chosen.top);
+        expect(bottom).toBeLessThan(chosen.top + chosen.height);
+        tags().forEach((tag, index) => {
+          expect(tag.classList.contains(styles.chosenTag!)).toBe(index === CHOSEN);
+        });
+        expect(css).toMatch(/\.chosenTag \{\s*background-color: var\(--color-sun\);/);
+        racers().forEach((racer, index) => {
+          expect(racer.dataset.pose).toBe(index === CHOSEN ? 'wave' : 'hold');
+          expect(racer.dataset.mood).toBe(index === CHOSEN ? 'happy' : 'calm');
+        });
+      });
+      And('the panel sits over the track ahead of the line', () => {
+        // The Line-up lays its panel over the grid's right START.panel px.
+        expect(START_TRACK.line + 12).toBeLessThanOrEqual(START.width - START.panel);
+        const sign = start.el.querySelector<HTMLElement>(`.${styles.startSign}`)!;
+        expect(sign).toHaveTextContent('Start');
+        expect(parseFloat(sign.style.right)).toBeGreaterThan(START.panel);
+      });
+    });
+
+    RuleScenario('The start line fits the window', ({ Given, When, Then, And }) => {
       // jsdom has no layout: e2e/line-up.spec.ts measures this Line-up in a
-      // real 1280 by 800 window. Here: nothing it shows is more than one row holds.
+      // real 1280 by 800 window. Here: the start keeps inside its grid.
       const lineUp = theRace.lineUp!;
       let people: string[] = [];
+      let start: ReturnType<typeof startOf>;
       Given(
         '{int} people, a 15-character name among them, in a 1280 by 800 window',
         (_, count: number) => {
@@ -921,19 +1032,27 @@ describeSpec(await loadFeature('./the-race.feature'), ({ Rule }) => {
       );
       When('the Line-up opens for The Race', () => {
         expect(people.length).toBeLessThanOrEqual(theRace.people.max);
+        start = startOf(people, 'field', 0);
       });
       Then(
-        "every person, the chosen one's look, the tabs, every racer in the open tab, every colour and extra, and both buttons are in view without scrolling",
+        "the postcards, every lane, the panel's tabs, every colour and extra, and both buttons are in view without scrolling",
         () => {
-          const [racer, colour, extra] = lineUp.options;
-          const tabs = new Set(racer!.choices.map((choice) => choice.group));
-          // Two rows of four racers, eight swatches and six extras in one row each.
-          for (const tab of tabs) {
-            const inTab = racer!.choices.filter((choice) => choice.group === tab);
-            expect(inTab.length).toBeLessThanOrEqual(8);
+          for (const { box } of start.places) {
+            expect(box.top).toBeGreaterThanOrEqual(0);
+            expect(box.top + box.height).toBeLessThanOrEqual(START.height + 0.01);
           }
+          const [, colour, extra] = lineUp.options;
+          // Two rows of four swatches and two of three extras beside the racers.
           expect(colour!.choices).toHaveLength(8);
           expect(extra!.choices).toHaveLength(6);
+          expect(lineUp.themes!.length + 1).toBeLessThanOrEqual(8);
+        },
+      );
+      And(
+        "the open tab's first eight racers are in view, and any more scroll inside the panel",
+        () => {
+          // Measured in e2e/line-up.spec.ts.
+          expect(lineUp.options[0]!.drawn).toBe(true);
         },
       );
     });

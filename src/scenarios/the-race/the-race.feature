@@ -37,12 +37,6 @@ Feature: The Race
       And each racer is shown as the chosen person racing as it, in their colour and extra, calm, its name under it
       And "Colour" offers the same swatches as before, and "Extra" a picture of each extra, each named for screen readers
 
-    # Old design: replaced by "The start line fits the window" (step 2).
-    Scenario: The Line-up fits the window
-      Given 8 people, a 15-character name among them, in a 1280 by 800 window
-      When the Line-up opens for The Race
-      Then every person, the chosen one's look, the tabs, every racer in the open tab, every colour and extra, and both buttons are in view without scrolling
-
     Scenario: Its themes, and the racers that suit each
       When the Line-up opens for The Race
       Then its themes are "Sports field", "Office", "Under the sea" and "Moon", after "Surprise", each a postcard of its track
@@ -53,8 +47,6 @@ Feature: The Race
         | Under the sea | Shark with feet, Octopus, Sushi, Duck, Penguin                                  |
         | Moon          | Rocket, Astronaut, Alien, Robot, Space hopper                                   |
 
-    # Step 2.
-    @pending
     Scenario: The Line-up is the start line
       Given 8 people, with "Office" chosen
       When the Line-up opens for The Race
@@ -63,8 +55,6 @@ Feature: The Race
       And the chosen person's lane and name tag are sun, and they wave
       And the panel sits over the track ahead of the line
 
-    # Step 2.
-    @pending
     Scenario: The start line fits the window
       Given 8 people, a 15-character name among them, in a 1280 by 800 window
       When the Line-up opens for The Race

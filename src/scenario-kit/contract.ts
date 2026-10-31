@@ -43,6 +43,46 @@ export interface LineUp {
   draw(look: ChosenLook, person: { readonly name: string; readonly place: number }): Element;
   /** Where the whole show takes place, one for everyone, shown as postcards (decision 0015). */
   readonly themes?: readonly LineUpTheme[];
+  /**
+   * Draws the show's start on the START grid, in `theme`, everyone in their
+   * look, and says where each one stands (decision 0016). Without it, the
+   * Line-up shows a row of tiles.
+   */
+  drawStart?(scene: {
+    readonly people: readonly StartPerson[];
+    readonly theme: string | null;
+  }): LineUpStart;
+}
+
+/**
+ * The grid a line-up's start is drawn on, in px, and how much of its right
+ * the Line-up's panel covers.
+ */
+export const START = { width: 1194, height: 440, panel: 648 } as const;
+
+/** One of today's people at a show's start. */
+export interface StartPerson {
+  readonly name: string;
+  /** Their place in today's list, from 1. */
+  readonly place: number;
+  readonly look: ChosenLook;
+  /** The one whose look is in the panel, drawn so it shows. */
+  readonly chosen: boolean;
+}
+
+/** A show's start, as its line-up draws it. */
+export interface LineUpStart {
+  /** The scene, filling a START-sized box. */
+  readonly el: Element;
+  /**
+   * Each person, in today's order: the box on the grid that chooses them,
+   * left of the panel with room on its left for a die and a pin, and their
+   * drawing, which flips in when their look is dealt.
+   */
+  readonly places: readonly {
+    readonly box: { left: number; top: number; width: number; height: number };
+    readonly drawing: Element;
+  }[];
 }
 
 /** One of a line-up's themes. A line-up offers none, or at least two. */

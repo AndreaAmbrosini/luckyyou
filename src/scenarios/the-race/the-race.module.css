@@ -507,3 +507,40 @@
   background-color: var(--color-ink-soft);
   opacity: 0.6;
 }
+
+.grape {
+  fill: var(--color-grape);
+  stroke: var(--color-ink);
+}
+
+/* The Line-up's start (decision 0016), on its 1194 by 440 grid. */
+.startScene {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+}
+
+.startSign {
+  position: absolute;
+  top: 12px;
+  margin: 0;
+  padding: 2px 12px 5px;
+  border: var(--line) solid var(--color-ink);
+  border-radius: 12px;
+  background-color: var(--color-paper);
+  box-shadow: var(--shadow-small);
+  color: var(--color-ink);
+  font-family: var(--font-display);
+  font-size: var(--size-button);
+  line-height: 1.1;
+}
+
+/* A racer at the start, placed by its top left at its lane's size. */
+.startRacer {
+  position: absolute;
+  display: block;
+}
+
+.chosenTag {
+  background-color: var(--color-sun);
+}

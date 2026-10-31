@@ -6,7 +6,13 @@
 // which runs at full speed; only the last moment before the line is slow,
 // and the unlucky person crosses first.
 
-import { defineScenario, handOutLooks, type LineUp } from '../../scenario-kit';
+import {
+  defineScenario,
+  handOutLooks,
+  type ChosenLook,
+  type LineUp,
+  type Mood,
+} from '../../scenario-kit';
 import { creature } from './creature';
 import {
   CREATURES,
@@ -15,6 +21,7 @@ import {
   isCreature,
   MOUNTS,
   type Kind,
+  type Pose,
   RACER_COLOURS,
   racer,
   type Creature,
@@ -24,6 +31,7 @@ import {
 import type { Course } from './plan';
 import { playTheRace } from './play';
 import { postcard } from './postcards';
+import { startLine } from './start';
 
 /** What someone races as. */
 const RACERS = {
@@ -132,6 +140,15 @@ function faceOf(name: string) {
   return handOutLooks([name], random).get(name)!;
 }
 
+/** Someone in their look, as the Line-up draws them: calm and holding on, unless told otherwise. */
+function drawRacer(chosen: ChosenLook, name: string, place: number, mood?: Mood, pose?: Pose) {
+  const look = chosen as unknown as RacerLook;
+  const drawn = { face: faceOf(name), number: place, mood, pose };
+  return isCreature(look.mount)
+    ? creature(look as RacerLook & { mount: Creature }, drawn)
+    : racer(look as RideLook, drawn);
+}
+
 const lineUp: LineUp = {
   heading: 'Line up the racers',
   start: 'Start the race',
@@ -172,13 +189,11 @@ const lineUp: LineUp = {
     },
   ],
   themes: THEMES.map((theme) => ({ ...theme, picture: () => postcard(theme.name) })),
-  draw: (chosen, { name, place }) => {
-    const look = chosen as unknown as RacerLook;
-    const drawn = { face: faceOf(name), number: place };
-    return isCreature(look.mount)
-      ? creature(look as RacerLook & { mount: Creature }, drawn).el
-      : racer(look as RideLook, drawn).el;
-  },
+  draw: (chosen, { name, place }) => drawRacer(chosen, name, place).el,
+  drawStart: (scene) =>
+    startLine(scene, ({ look, name, place }, mood, pose) =>
+      drawRacer(look, name, place, mood, pose),
+    ),
 };
 
 export default defineScenario({

@@ -8,7 +8,7 @@ import { discoverScenarios, validateScenario } from '../src/catalogue/discover';
 import { Lab } from '../src/lab/Lab';
 import type { ChosenLook, LineUp, LineUpOption, LineUpTheme } from '../src/scenario-kit/contract';
 import { runShow } from '../src/scenario-kit/testing';
-import { looksKey, themeKey } from '../src/line-up/looks';
+import { looksKey, pinsKey, themeKey } from '../src/line-up/looks';
 import {
   addName,
   blockStorage,
@@ -30,6 +30,7 @@ import {
   fakeScenario,
   groupedLineUp,
   pictureLineUp,
+  startLineUp,
   themedLineUp,
   type FakeScenario,
 } from './support/fake-scenarios';
@@ -104,6 +105,33 @@ const otherChoice = (option: string, look: ChosenLook) =>
   fakeLineUp()
     .options.find((each) => each.name === option)!
     .choices.find((choice) => choice.name !== look[option])!;
+
+/** Hat Show, drawing its start. */
+const startShow = () => fakeScenario({ name: 'Hat Show', lineUp: startLineUp() });
+const startRegion = () => screen.getByRole('region', { name: 'The start' });
+/** The scene the show drew. */
+const drawnStart = () => startRegion().querySelector<HTMLElement>('[data-part="fake-start"]')!;
+const places = () => screen.getByRole('list', { name: "Today's people" });
+/** Where `name` stands, which chooses them. */
+const standingAt = (name: string) => within(places()).getByRole('button', { name });
+const die = (name: string) => screen.getByRole('button', { name: `A new look for ${name}` });
+const pin = (name: string) => screen.getByRole('button', { name: `Pin ${name}` });
+/** `name` as the show drew them at its start. */
+const drawingOf = (name: string) =>
+  drawnStart().querySelector<HTMLElement>(`[data-person$=" ${name}"]`)!;
+/** Each look drawn at the start, by name. */
+const startLooks = () =>
+  new Map(
+    [...drawnStart().querySelectorAll<HTMLElement>('[data-person]')].map((drawn) => [
+      drawn.dataset.person!.split(' ').slice(1).join(' '),
+      readLook(drawn),
+    ]),
+  );
+const readLook = (drawn: HTMLElement): ChosenLook =>
+  Object.fromEntries(drawn.dataset.look!.split(' ').map((pair) => pair.split('=')));
+const sameLook = (one: ChosenLook, two: ChosenLook) =>
+  Object.keys(one).every((option) => one[option] === two[option]);
+const pinBen = () => localStorage.setItem(pinsKey('hat-show'), JSON.stringify(['Ben']));
 
 /** A size that is --target-min, or a size in rem that is at least as big. */
 const bigEnough = (value: string) =>
@@ -959,6 +987,250 @@ describeSpec(await loadFeature('./line-up.feature'), ({ Rule }) => {
         expect(
           others.some((looks) => JSON.stringify([...looks]) !== JSON.stringify([...first])),
         ).toBe(true);
+      });
+    });
+  });
+
+  Rule('A show can draw its start', ({ RuleScenario }) => {
+    RuleScenario("The Line-up shows the show's start", ({ Given, When, Then, And }) => {
+      const team = TEAM.slice(0, 8);
+      Given('a show whose line-up draws its start, with {int} people', () => {
+        localStorage.setItem(themeKey('hat-show'), JSON.stringify('snow'));
+      });
+      When('its Line-up opens', () => openLineUp(team, startShow()));
+      Then(
+        "the show's start, drawn in the chosen theme, takes the place of the row of tiles, with everyone in their look, in today's order",
+        () => {
+          expect(drawnStart().dataset.theme).toBe('snow');
+          const standing = [...drawnStart().querySelectorAll<HTMLElement>('[data-person]')];
+          expect(standing.map((each) => each.dataset.person)).toEqual(
+            team.map((name, index) => `${index + 1} ${name}`),
+          );
+          for (const look of startLooks().values()) expect(fits(startLineUp(), look)).toBe(true);
+          // Nobody is drawn anywhere else: there are no tiles.
+          expect(document.querySelectorAll('[data-person]')).toHaveLength(team.length);
+          for (const name of team) expect(startRegion()).toContainElement(standingAt(name));
+        },
+      );
+      And('beside each person are a die and a pin', () => {
+        for (const name of team) {
+          const left = (button: HTMLElement) => parseFloat(button.style.left);
+          expect(left(die(name))).toBeLessThan(left(pin(name)));
+          expect(left(pin(name))).toBeLessThan(left(standingAt(name)));
+          expect(pin(name)).toHaveAttribute('aria-pressed', 'false');
+        }
+      });
+      And(
+        `the chosen person's look is in a panel over the start, with their name, their pin, "Surprise me" and the show's options`,
+        () => {
+          const look = panel('Anna');
+          expect(startRegion()).toContainElement(look);
+          expect(within(look).getByRole('heading', { level: 2 })).toHaveTextContent('Anna');
+          expect(within(look).getByRole('button', { name: 'Pin' })).toHaveAttribute(
+            'aria-pressed',
+            'false',
+          );
+          expect(within(look).getByRole('button', { name: 'Surprise me' })).toBeInTheDocument();
+          expect(group('Anna', 'Hat')).toBeInTheDocument();
+          expect(group('Anna', 'Colour')).toBeInTheDocument();
+        },
+      );
+    });
+
+    RuleScenario('Choosing someone where they stand', ({ When, Then }) => {
+      When('I click Ben where he stands', async () => {
+        await openLineUp(['Anna', 'Ben', 'Carla'], startShow());
+        await currentUser().click(standingAt('Ben'));
+      });
+      Then('Ben is marked as chosen, in sun, and pressed, and his look is in the panel', () => {
+        expect(standingAt('Ben')).toHaveAttribute('aria-pressed', 'true');
+        for (const other of ['Anna', 'Carla']) {
+          expect(standingAt(other)).toHaveAttribute('aria-pressed', 'false');
+        }
+        // The show draws who is chosen, in sun: the-race.feature.
+        const chosen = drawnStart().querySelectorAll<HTMLElement>('[data-chosen]');
+        expect([...chosen].map((each) => each.dataset.person)).toEqual(['2 Ben']);
+        expect(within(panel('Ben')).getByRole('heading', { level: 2 })).toHaveTextContent('Ben');
+      });
+    });
+
+    RuleScenario('Another theme redraws the start', ({ When, Then }) => {
+      let before: Map<string, ChosenLook>;
+      When('I choose another theme', async () => {
+        localStorage.setItem(themeKey('hat-show'), JSON.stringify('snow'));
+        await openLineUp(['Anna', 'Ben', 'Carla'], startShow());
+        before = startLooks();
+        await currentUser().click(
+          within(screen.getByRole('group', { name: 'Theme' })).getByRole('button', {
+            name: 'Beach',
+          }),
+        );
+      });
+      Then('the start is drawn in it at once, everyone in their look', () => {
+        expect(drawnStart().dataset.theme).toBe('beach');
+        expect(startLooks()).toEqual(before);
+      });
+    });
+  });
+
+  Rule('Pinned looks stay', ({ RuleScenario }) => {
+    /** The pin's look: pressed, its fill and its outline. */
+    const pinLook = (button: HTMLElement) => ({
+      pressed: button.getAttribute('aria-pressed'),
+      fill: getComputedStyle(button).backgroundColor,
+      outline: getComputedStyle(button).borderStyle,
+    });
+    const panelPin = (name: string) => within(panel(name)).getByRole('button', { name: /^Pin/ });
+
+    RuleScenario('Choosing by hand pins a look', ({ Given, When, Then }) => {
+      Given("Ben's look is shown and isn't pinned", async () => {
+        await openLineUp(['Anna', 'Ben', 'Carla'], startShow());
+        await currentUser().click(standingAt('Ben'));
+        expect(pin('Ben')).toHaveAttribute('aria-pressed', 'false');
+      });
+      When('I choose any of his choices', async () => {
+        const colours = within(group('Ben', 'Colour')).getAllByRole('button');
+        await currentUser().click(
+          colours.find((button) => button.getAttribute('aria-pressed') === 'false')!,
+        );
+      });
+      Then('Ben is pinned: his pin is pressed, in sun with a solid outline', () => {
+        for (const button of [pin('Ben'), panelPin('Ben')]) {
+          expect(pinLook(button)).toEqual({
+            pressed: 'true',
+            fill: 'var(--color-sun)',
+            outline: 'solid',
+          });
+        }
+        expect(panelPin('Ben')).toHaveTextContent('Pinned');
+        expect(pin('Anna')).toHaveAttribute('aria-pressed', 'false');
+      });
+    });
+
+    RuleScenario('A pin can be taken off', ({ Given, When, Then }) => {
+      Given('Ben is pinned', () => pinBen());
+      When('I press his pin', async () => {
+        await openLineUp(['Anna', 'Ben', 'Carla'], startShow());
+        expect(pin('Ben')).toHaveAttribute('aria-pressed', 'true');
+        await currentUser().click(pin('Ben'));
+      });
+      Then("he isn't pinned: his pin is white with a dashed outline", () => {
+        expect(pinLook(pin('Ben'))).toEqual({
+          pressed: 'false',
+          fill: 'var(--color-paper)',
+          outline: 'dashed',
+        });
+      });
+    });
+
+    RuleScenario('Shuffle everyone leaves pinned looks alone', ({ Given, When, Then, And }) => {
+      const team = TEAM.slice(0, 8);
+      let before: Map<string, ChosenLook>;
+      Given('Anna and Ben are pinned', async () => {
+        localStorage.setItem(pinsKey('hat-show'), JSON.stringify(['Anna', 'Ben']));
+        await openLineUp(team, startShow());
+        before = startLooks();
+      });
+      When('I choose {string}', (_, label: string) => choose(label));
+      Then('everyone else gets a look drawn at random, and Anna and Ben keep theirs', () => {
+        const after = startLooks();
+        expect(after.get('Anna')).toEqual(before.get('Anna'));
+        expect(after.get('Ben')).toEqual(before.get('Ben'));
+        const others = team.slice(2);
+        for (const name of others) expect(fits(startLineUp(), after.get(name))).toBe(true);
+        expect(others.some((name) => !sameLook(after.get(name)!, before.get(name)!))).toBe(true);
+        expect(pin('Anna')).toHaveAttribute('aria-pressed', 'true');
+        expect(pin('Ben')).toHaveAttribute('aria-pressed', 'true');
+      });
+      And('beside the button, a note says how many pinned looks stay', () => {
+        const shuffle = screen.getByRole('button', { name: 'Shuffle everyone' });
+        expect(shuffle.nextElementSibling).toHaveTextContent('Pinned looks stay as they are (2).');
+      });
+    });
+
+    RuleScenario('A die deals one look', ({ Given, When, Then }) => {
+      const dealt: { before: ChosenLook; after: ChosenLook; pinned: string | null }[] = [];
+      Given('Ben is pinned', () => pinBen());
+      When(`I press the die beside Ben, or "Surprise me" in his panel`, async () => {
+        await openLineUp(['Anna', 'Ben', 'Carla'], startShow());
+        for (const press of [
+          () => die('Ben'),
+          () => within(panel('Ben')).getByRole('button', { name: 'Surprise me' }),
+        ]) {
+          await currentUser().click(standingAt('Ben'));
+          if (pin('Ben').getAttribute('aria-pressed') === 'false') {
+            await currentUser().click(pin('Ben'));
+          }
+          for (let turn = 0; turn < 5; turn++) {
+            const before = startLooks().get('Ben')!;
+            await currentUser().click(press());
+            dealt.push({
+              before,
+              after: startLooks().get('Ben')!,
+              pinned: pin('Ben').getAttribute('aria-pressed'),
+            });
+            await currentUser().click(pin('Ben'));
+          }
+        }
+      });
+      Then("Ben gets a look drawn at random, unlike the one he had, and isn't pinned", () => {
+        expect(dealt).toHaveLength(10);
+        for (const { before, after, pinned } of dealt) {
+          expect(fits(startLineUp(), after)).toBe(true);
+          expect(sameLook(after, before)).toBe(false);
+          expect(pinned).toBe('false');
+        }
+      });
+    });
+
+    RuleScenario('Pins are kept', ({ Given, When, Then }) => {
+      Given('Ben is pinned', async () => {
+        await openLineUp(['Anna', 'Ben', 'Carla'], startShow());
+        await currentUser().click(pin('Ben'));
+      });
+      When("I reload the page and open that show's Line-up again", async () => {
+        reload();
+        await moveOnToShows();
+        await currentUser().click(showCard('Hat Show'));
+      });
+      Then('Ben is still pinned', () => {
+        expect(pin('Ben')).toHaveAttribute('aria-pressed', 'true');
+        expect(pin('Anna')).toHaveAttribute('aria-pressed', 'false');
+      });
+    });
+
+    RuleScenario('New looks flip in', ({ When, Then, And }) => {
+      const team = TEAM.slice(0, 8);
+      When('"Shuffle everyone" deals new looks', async () => {
+        localStorage.setItem(pinsKey('hat-show'), JSON.stringify(['Ben']));
+        await openLineUp(team, startShow());
+        await choose('Shuffle everyone');
+      });
+      Then(
+        'each one flips in like a turned sticker, in 0.4 seconds or more, one after another from the first person down',
+        () => {
+          const flipping = team.filter((name) => name !== 'Ben').map(drawingOf);
+          for (const drawn of flipping) {
+            expect(parseFloat(getComputedStyle(drawn).animationDuration)).toBeGreaterThanOrEqual(
+              0.4,
+            );
+            expect(getComputedStyle(drawn).transformOrigin).toBe('50% 100%');
+          }
+          const delays = flipping.map((drawn) => parseFloat(drawn.style.animationDelay));
+          expect(delays[0]).toBe(0);
+          delays.slice(1).forEach((delay, index) => expect(delay).toBeGreaterThan(delays[index]!));
+          // Ben's look is pinned: it wasn't dealt, so it doesn't flip.
+          expect(drawingOf('Ben').getAttribute('class')).toBeNull();
+        },
+      );
+      And('with reduced motion, the looks change without flipping', async () => {
+        vi.stubGlobal('matchMedia', (query: string) => ({
+          matches: query === '(prefers-reduced-motion: reduce)',
+        }));
+        const before = startLooks();
+        await choose('Shuffle everyone');
+        expect(startLooks()).not.toEqual(before);
+        for (const name of team) expect(drawingOf(name).getAttribute('class')).toBeNull();
       });
     });
   });
