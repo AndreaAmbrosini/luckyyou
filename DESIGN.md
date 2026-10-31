@@ -105,10 +105,9 @@ Every scenario follows these:
 - The stage is 1280×720 stage pixels, scaled to fit the window.
 - Drawings use flat fills and ink outlines of 4 to 5 stage pixels.
 - Name tags are paper stickers with an ink outline and ink text, straight,
-  at least `--size-stage-tag-min`, at most two lines, never over another
-  tag. They grow as fewer people are left. On land they sit on the chest, so
-  hands can hold things overhead; on a mount or a creature, beside the face,
-  behind it.
+  at least `--size-stage-tag-min`, never over another tag. They grow as fewer
+  people are left. On land they sit on the chest, so hands can hold things
+  overhead; on a mount or a creature, beside the face, behind it.
 - Captions are one at a time, top centre, in the display font at
   `--size-stage-caption` on a paper sticker.
 - People are cartoon heads with a mood and a cap, goggles or snorkel, handed
@@ -116,8 +115,8 @@ Every scenario follows these:
   their arms from the shoulders, and sweat when nervous. A show may cast
   people as creatures: modern cartoons whose own faces carry the mood, shaded
   with ink at 18% on each part's lower left, the one see-through fill.
-- Movement that matters lasts at least 0.4 seconds, and nothing flashes more
-  than three times a second. With `prefers-reduced-motion`, a show keeps its
-  story and drops shaking and speed lines.
+- Movement that matters lasts at least 0.4 seconds, lights don't blink, and
+  nothing flashes more than three times a second. With `prefers-reduced-motion`,
+  a show keeps its story and drops shaking and speed lines.
 - Every show reads with the sound off.
 - Nobody gets hurt.

@@ -9,12 +9,11 @@ Feature: The Race
   finish, past a rival who brakes, or in a surge from behind. The contract in
   specs/scenarios.feature applies as well.
 
-  # Themes, in five build steps, in this order: 1. themes on the Line-up, the
-  # four tracks as themes (with specs/line-up.feature); 2. the Line-up as the
-  # start line, with pins and dice; 3. Christmas; 4. Christmas's four racers;
-  # 5. Christmas's music. Each pending scenario says its step. Scenarios marked
-  # "Old design" describe the race before a step; the build deletes each one,
-  # with its steps, when the scenario that replaces it passes.
+  # Autumn, in four build steps, in this order: 1. Christmas's fixes; 2.
+  # Autumn; 3. Autumn's five racers; 4. Autumn's music. Each pending scenario
+  # says its step. Scenarios marked "Old design" describe the race before a
+  # step; the build deletes each one, with its steps, when the scenario that
+  # replaces it passes.
 
   Rule: Its card
 
@@ -283,9 +282,17 @@ Feature: The Race
 
   Rule: Christmas
 
+    # Old design: replaced by "Christmas is a theme, after Autumn" (step 2).
     Scenario: Christmas is a theme
       When the Line-up opens for The Race
       Then "Christmas" is a theme, after "Moon", its postcard a tree on snow at dusk
+      And with Christmas chosen, the racer option's first tab is "Christmas"
+
+    # Step 2.
+    @pending
+    Scenario: Christmas is a theme, after Autumn
+      When the Line-up opens for The Race
+      Then "Christmas" is a theme, after "Autumn", its postcard a tree on snow at dusk
       And with Christmas chosen, the racer option's first tab is "Christmas"
 
     Scenario: What Christmas looks like
@@ -337,11 +344,20 @@ Feature: The Race
       And the group "Things on legs" also holds "Snowman", "Gingerbread" and "Christmas tree", after "Sushi"
       And with Christmas chosen, its tab holds "Reindeer", "Snowman", "Gingerbread" and "Christmas tree", then "Penguin", "Yeti" and "Garden gnome"
 
+    # Old design: replaced by "The reindeer, reins up its neck" (step 1).
     Scenario: The reindeer
       Given Ivo chose the reindeer in grape
       When the show runs
       Then Ivo rides a brown reindeer with cream antlers, a red nose, a gold collar with a bell, and a grape blanket under him
       And he holds reins tied to its collar, in a grape shirt, his head at the same height as every rider's
+
+    # Step 1.
+    @pending
+    Scenario: The reindeer, reins up its neck
+      Given Ivo chose the reindeer in grape
+      When the show runs
+      Then Ivo rides a brown reindeer with cream antlers, a red nose, a gold collar with a bell, and a grape blanket under him
+      And he holds reins tied on up its neck, above the collar, in a grape shirt, his head at the same height as every rider's
 
     Scenario: Three things on legs for Christmas
       When someone races as a snowman, a gingerbread or a Christmas tree
@@ -386,10 +402,151 @@ Feature: The Race
         | gingerbread    | Marco  | loses a button               | a gumdrop pops off and it stops to stick it back on     |
         | Christmas tree | Jonas  | drops a bauble               | a bauble falls off and it stops to hang it back         |
 
+    # Old design: replaced by "The Christmas tree's lights stay on" and "With
+    # reduced motion, the blizzard keeps still" (step 1).
     Scenario: With reduced motion, the Christmas racers keep still too
       Given reduced motion is on
       When the show runs
       Then the blizzard's swirl doesn't spin, and the tree's lights come on without twinkling
+
+    # Step 1. PRODUCT.md rules out flashing lights.
+    @pending
+    Scenario: The Christmas tree's lights stay on
+      When someone's Christmas tree lights up
+      Then all its lights come on at once and stay on until its burst ends, none of them blinking
+
+    # Step 1.
+    @pending
+    Scenario: With reduced motion, the blizzard keeps still
+      Given reduced motion is on
+      When the show runs
+      Then the blizzard's swirl doesn't spin
+
+  # Step 2. Autumn is a park by day; night, pumpkins, bats and graves are
+  # Halloween's.
+  @pending
+  Rule: Autumn
+
+    Scenario: Autumn is a theme
+      When the Line-up opens for The Race
+      Then "Autumn" is a theme, after "Moon", its postcard trees in autumn colours over a path
+      And with Autumn chosen, the racer option's first tab is "Autumn"
+
+    Scenario: What Autumn looks like
+      When the show runs on Autumn
+      Then the ground is a bark path strewn with fallen leaves, the lanes split by paper lines, and paper name tags read clearly on it
+      And behind the track is a park on a sunny afternoon: trees in orange, tomato and sun on a lawn, leaves falling, and a wooden fence with piles of leaves
+      And each distance is a paper sign on a wooden post, a rake standing in a pile of leaves beside it
+      And a photo finish's photo shows the path and its finish line
+
+    Scenario: Autumn has a stop and a burst of its own
+      Given 8 people, on Autumn
+      When the show runs with 20 different random seeds
+      Then in every run, one event before "Final stretch!" is Autumn's own stop or burst
+      And both come up across the runs
+
+    Scenario Outline: On Autumn, <caption>
+      When someone's event is Autumn's own <event>
+      Then the caption is "<caption>"
+      And <what>
+
+      Examples:
+        | event | caption                        | what                                                                                                                                   |
+        | stop  | Ben jumps in a pile of leaves! | Ben's racer lands in a pile of leaves that fly up round it, climbs out, says "Phew!" and sets off again further back                   |
+        | burst | Carla catches the wind!        | an umbrella opens in Carla's racer's hand, and the wind lifts it off the ground and into the lead, shouting "Nooo!", or its rider does |
+
+    Scenario: Everyone wears an acorn cap
+      When the show runs on Autumn, or its Line-up shows Autumn
+      Then every rider wears an acorn cap instead of the cap, goggles or snorkel the kit hands out, and a top hat stays on the mount
+      And every creature wears one where its top hat goes, instead of the top hat
+      And the garden gnome wears a small one on the tip of its own hat
+      And on any other theme, nobody wears one
+
+    Scenario: The winner gets a golden acorn
+      Given the unlucky person is "Anna", on Autumn
+      When she has crossed the line
+      Then the caption is "Anna wins!", with a fanfare and confetti with leaves in it
+      And Anna holds up a golden acorn with a bark cap, where the trophy would be
+      And whoever balances the trophy balances the acorn, on top of their acorn cap
+
+    Scenario: On Autumn, the unlucky person still crosses first
+      Given 8 people, on Autumn
+      When the show runs with 20 different random seeds
+      Then the first nose over the finish line is always the unlucky person's
+
+    Scenario: With reduced motion, Autumn keeps still too
+      Given reduced motion is on
+      When the show runs on Autumn
+      Then no leaves fly up out of the pile, and the umbrella lifts its racer without swaying
+
+  # Step 3.
+  @pending
+  Rule: Autumn's own racers
+
+    Scenario: Five racers for Autumn
+      When the Line-up opens for The Race
+      Then the group "Rides" also holds "Giant leaf", after "Reindeer"
+      And the group "Animals" also holds "Squirrel" and "Hedgehog", after "Pigeon"
+      And the group "Things on legs" also holds "Mushroom" and "Acorn", after "Christmas tree"
+      And with Autumn chosen, its tab holds "Giant leaf", "Squirrel", "Hedgehog", "Mushroom" and "Acorn", then "Snail", "Caterpillar", "Pigeon" and "Garden gnome"
+
+    Scenario: The giant leaf
+      Given Ivo chose the giant leaf in sun
+      When the show runs
+      Then Ivo sits on a sun leaf with a face, floating on the breeze just off the ground, and holds its curled-up tip
+      And his head is at the same height as every rider's
+
+    Scenario: Four creatures for Autumn
+      When someone races as a squirrel, a hedgehog, a mushroom or an acorn
+      Then the squirrel has a bushy tail curling up behind it, a white belly and buck teeth, and runs on bare paws
+      And the hedgehog has spines over its back and head, a pointed snout with a black nose, and runs on bare feet
+      And the mushroom has a spotted cap and its face on a white stalk, on dark legs in white sneakers
+      And the acorn has its face on the nut under a scaly bark cap with a stalk, on dark legs in white sneakers
+      And on Autumn, the acorn's own cap is all it wears
+
+    Scenario Outline: Where an autumn <racer> wears its colour
+      When someone races as a <racer> in tomato
+      Then <where> is tomato
+
+      Examples:
+        | racer      | where                          |
+        | giant leaf | the leaf and its curled tip    |
+        | squirrel   | its fur, its tail and its paws |
+        | hedgehog   | its spines                     |
+        | mushroom   | its cap                        |
+        | acorn      | its nut                        |
+
+    Scenario Outline: An autumn <racer> bursts ahead
+      When someone's <racer> bursts ahead
+      Then the caption is "<name>'s <racer> <burst>!"
+      And <what>, and it shoots into the lead, shouting "Nooo!", or its rider does
+
+      Examples:
+        | racer      | name   | burst                   | what                                                  |
+        | giant leaf | Ivo    | catches the breeze      | it lifts high and sails ahead                         |
+        | squirrel   | Giulia | goes nuts               | it whizzes ahead in a blur, its tail whirling         |
+        | hedgehog   | Marco  | rolls into a ball       | it curls into a spiky ball and rolls ahead            |
+        | mushroom   | Jonas  | pops up ahead           | it sinks into the ground and pops up again further on |
+        | acorn      | Femi   | is chased by a squirrel | a squirrel pops up behind it and it runs for it       |
+
+    Scenario Outline: An autumn <racer> stops
+      When someone's <racer> stops
+      Then the caption is "<name>'s <racer> <stop>!"
+      And <what>, and it drops back while the camera goes on
+      And it waves, says "Phew!", and sets off again further back, or its rider does
+
+      Examples:
+        | racer      | name   | stop              | what                                                      |
+        | giant leaf | Ivo    | lands in a puddle | it settles in a puddle and turns slowly round             |
+        | squirrel   | Giulia | buries an acorn   | it digs a little hole, drops an acorn in and pats it down |
+        | hedgehog   | Marco  | collects leaves   | leaves stick to its spines and it shakes them off         |
+        | mushroom   | Jonas  | sneezes           | a puff of spores bursts from its cap with an "Achoo!"     |
+        | acorn      | Femi   | loses its cap     | its cap pops off and it stops to put it back on           |
+
+    Scenario: With reduced motion, the Autumn racers keep still too
+      Given reduced motion is on
+      When the show runs
+      Then the squirrel's tail doesn't whirl, the hedgehog doesn't spin as it rolls, and the giant leaf doesn't turn in its puddle
 
   Rule: The unlucky person crosses first
 
@@ -707,10 +864,25 @@ Feature: The Race
       And the fanfare plays with "Anna wins!", as before
 
     # Jingle Bells (James Lord Pierpont, 1857) is public domain.
+    # Old design: replaced by "Jingle Bells at Christmas, the galop elsewhere" (step 4).
     Scenario: Jingle Bells at Christmas
       When the show runs on Christmas with music on
       Then Jingle Bells plays instead of the galop, with sleigh bells, on the galop's beats: a roll under "On your marks…", the chorus from "Go!", a faster strain from "Final stretch!", a run down at a quarter of the speed in the slow moment, and silence from the line to the fanfare
       And every other theme keeps the galop
+
+    # Step 4.
+    @pending
+    Scenario: Jingle Bells at Christmas, the galop elsewhere
+      When the show runs on Christmas with music on
+      Then Jingle Bells plays instead of the galop, with sleigh bells, on the galop's beats: a roll under "On your marks…", the chorus from "Go!", a faster strain from "Final stretch!", a run down at a quarter of the speed in the slow moment, and silence from the line to the fanfare
+      And the sports field, the office, under the sea and the Moon keep the galop
+
+    # Step 4. Vivaldi's The Four Seasons (1725) is public domain. This passes
+    # only once the user has heard it in the Lab and said so.
+    @pending
+    Scenario: Vivaldi's Autumn on Autumn
+      When the show runs on Autumn with music on
+      Then the opening of Autumn from Vivaldi's The Four Seasons plays instead of the galop, on the galop's beats: a roll under "On your marks…", its first theme from "Go!", a faster strain from "Final stretch!", a run down at a quarter of the speed in the slow moment, and silence from the line to the fanfare
 
   Rule: It reads without sound
 
