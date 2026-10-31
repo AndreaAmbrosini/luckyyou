@@ -59,6 +59,9 @@ import {
 
 const ENDINGS: readonly Ending[] = ['photo', 'brake', 'surge'];
 
+/** A label as it reads, without the soft hyphens that only break it on screen. */
+const read = (label: string) => label.replaceAll('\u00AD', '');
+
 /** The six things on legs, as the feature names them, in the Line-up's order. */
 const THING_NAMES: Readonly<Record<string, Creature>> = {
   'coffee mug': 'mug',
@@ -815,7 +818,7 @@ describeSpec(await loadFeature('./the-race.feature'), ({ Rule }) => {
       const holds = (group: string, held: string) => {
         const choices = option('Racer').choices.filter((choice) => choice.group === group);
         const names = listed(held);
-        expect(choices.slice(0, names.length).map((choice) => choice.label)).toEqual(names);
+        expect(choices.slice(0, names.length).map((choice) => read(choice.label))).toEqual(names);
       };
       When('the Line-up opens for The Race', () => {
         expect(lineUp.heading).toBe('Line up the racers');
@@ -878,7 +881,7 @@ describeSpec(await loadFeature('./the-race.feature'), ({ Rule }) => {
     RuleScenario('Its themes, and the racers that suit each', ({ When, Then, And }) => {
       const lineUp = theRace.lineUp!;
       const labelOf = (name: string) =>
-        lineUp.options[0]!.choices.find((choice) => choice.name === name)!.label;
+        read(lineUp.options[0]!.choices.find((choice) => choice.name === name)!.label);
       When('the Line-up opens for The Race', () => {
         expect(lineUp.themes).toBeDefined();
       });
@@ -931,6 +934,16 @@ describeSpec(await loadFeature('./the-race.feature'), ({ Rule }) => {
       const kindOf = (index: number) => start.scene.people[index]!.look.mount as Kind;
       const racers = () => [...start.el.querySelectorAll<SVGSVGElement>('svg[data-person]')];
       const tags = () => [...start.el.querySelectorAll<HTMLElement>('div[data-person]')];
+      /** Where person `index`'s name tag is, from its name, as the race sizes it. */
+      const tagOf = (index: number) =>
+        tagBox(people[index]!, kindOf(index), startLane(index, people.length), START_TRACK.nose);
+      const overlaps = (
+        one: { top: number; bottom: number },
+        two: { top: number; bottom: number },
+      ) => one.top < two.bottom && two.top < one.bottom;
+      /** The people whose name tags a span from `top` to `bottom` is level with. */
+      const levelWith = (top: number, bottom: number) =>
+        people.filter((_, index) => overlaps({ top, bottom }, tagOf(index)));
       Given('{int} people, with {string} chosen', (_, count: number, label: string) => {
         people = names(count);
         theme = theRace.lineUp!.themes!.find((each) => each.label === label)!.name as Course;
@@ -948,16 +961,12 @@ describeSpec(await loadFeature('./the-race.feature'), ({ Rule }) => {
           expect(start.el.classList).toContain(styles.office);
           expect(racers().map((each) => each.dataset.person)).toEqual(people);
           expect(start.places).toHaveLength(people.length);
-          start.places.forEach(({ box, drawing }, index) => {
+          start.places.forEach(({ drawing }, index) => {
             const at = startLane(index, people.length);
             expect(drawing).toBe(racers()[index]);
             // A lane each, one under the other, under the backdrop's band.
-            expect(box.top).toBeCloseTo(at.top);
-            expect(box.height).toBeCloseTo(at.pitch);
-            expect(box.top).toBeGreaterThanOrEqual(START_TRACK.top);
-            expect(box.top + box.height).toBeLessThanOrEqual(START.height + 0.01);
-            const next = start.places[index + 1];
-            if (next) expect(next.box.top).toBeCloseTo(box.top + box.height);
+            expect(at.top).toBeGreaterThanOrEqual(START_TRACK.top);
+            expect(at.top + at.pitch).toBeLessThanOrEqual(START.height + 0.01);
             // Feet in the lane, the nose just short of the line.
             const el = drawing as SVGSVGElement;
             const k = parseFloat(el.style.width) / RACER.width;
@@ -965,8 +974,8 @@ describeSpec(await loadFeature('./the-race.feature'), ({ Rule }) => {
             const nose = isCreature(kind) ? CREATURE_SPEC[kind].nose : SPEC[kind].nose;
             expect(parseFloat(el.style.left) + nose * k).toBeCloseTo(START_TRACK.nose);
             const feet = parseFloat(el.style.top) + RACER.feet * k;
-            expect(feet).toBeGreaterThan(box.top);
-            expect(feet).toBeLessThan(box.top + box.height);
+            expect(feet).toBeGreaterThan(at.top);
+            expect(feet).toBeLessThan(at.top + at.pitch);
           });
           expect(START_TRACK.nose).toBeLessThan(START_TRACK.line);
           const band = start.el.querySelector('[data-part="band"]')!;
@@ -975,13 +984,8 @@ describeSpec(await loadFeature('./the-race.feature'), ({ Rule }) => {
         },
       );
       And(
-        "each lane has its die and pin at the left, and its racer's name tag beside the face",
+        "each racer's name tag is beside the face, and their die and pin are at the left, level with the tag",
         () => {
-          for (const { box } of start.places) {
-            // Room for a die and a pin, each 44 px, with gaps round them.
-            expect(box.left).toBeGreaterThanOrEqual(2 * 44 + 16);
-            expect(box.left + box.width).toBeLessThanOrEqual(START_TRACK.line);
-          }
           expect(tags().map((each) => each.dataset.person)).toEqual(people);
           tags().forEach((tag, index) => {
             const at = startLane(index, people.length);
@@ -989,25 +993,46 @@ describeSpec(await loadFeature('./the-race.feature'), ({ Rule }) => {
             expect(tag.style.translate).toBe(`calc(${right}px - 100%) calc(${middle}px - 50%)`);
             expect(right).toBeLessThan(faceAt(kindOf(index), at, START_TRACK.nose).left);
           });
+          start.places.forEach(({ box }, index) => {
+            // Room for a die and a pin, each --target-min, with gaps round them.
+            expect(box.left).toBeGreaterThanOrEqual(2 * 44 + 16);
+            expect(box.left + box.width).toBeLessThanOrEqual(START_TRACK.line);
+            expect(box.height).toBeGreaterThanOrEqual(44);
+            expect(box.top).toBeGreaterThanOrEqual(0);
+            // The Line-up centres the die and the pin on the box: level with
+            // this person's tag and face, and no one else's tag.
+            const middle = box.top + box.height / 2;
+            expect(levelWith(middle - 22, middle + 22)).toEqual([people[index]]);
+            expect(levelWith(box.top, box.top + box.height)).toEqual([people[index]]);
+            const face = faceAt(kindOf(index), startLane(index, people.length), START_TRACK.nose);
+            expect(overlaps({ top: middle - 22, bottom: middle + 22 }, face)).toBe(true);
+            const next = start.places[index + 1];
+            if (next) expect(next.box.top).toBeCloseTo(box.top + box.height);
+          });
         },
       );
-      And("the chosen person's lane and name tag are sun, and they wave", () => {
-        const lane = start.el.querySelector('[data-part="chosen"] path')!;
-        expect(lane.getAttribute('class')).toBe(styles.sun);
-        const [, y, height] = lane.getAttribute('d')!.match(/^M0 ([\d.]+) h[\d.]+ v([\d.]+)/)!;
-        const [top, bottom] = [Number(y), Number(y) + Number(height)];
-        const chosen = start.places[CHOSEN]!.box;
-        expect(top).toBeGreaterThan(chosen.top);
-        expect(bottom).toBeLessThan(chosen.top + chosen.height);
-        tags().forEach((tag, index) => {
-          expect(tag.classList.contains(styles.chosenTag!)).toBe(index === CHOSEN);
-        });
-        expect(css).toMatch(/\.chosenTag \{\s*background-color: var\(--color-sun\);/);
-        racers().forEach((racer, index) => {
-          expect(racer.dataset.pose).toBe(index === CHOSEN ? 'wave' : 'hold');
-          expect(racer.dataset.mood).toBe(index === CHOSEN ? 'happy' : 'calm');
-        });
-      });
+      And(
+        "the chosen person's row, level with their name tag, is sun, as is the tag, and they wave",
+        () => {
+          const row = start.el.querySelector('[data-part="chosen"] path')!;
+          expect(row.getAttribute('class')).toBe(styles.sun);
+          const [, y, height] = row.getAttribute('d')!.match(/^M0 ([\d.]+) h[\d.]+ v([\d.]+)/)!;
+          const [top, bottom] = [Number(y), Number(y) + Number(height)];
+          expect(levelWith(top, bottom)).toEqual([people[CHOSEN]]);
+          // Behind every racer.
+          expect(
+            row.compareDocumentPosition(racers()[0]!) & Node.DOCUMENT_POSITION_FOLLOWING,
+          ).toBeTruthy();
+          tags().forEach((tag, index) => {
+            expect(tag.classList.contains(styles.chosenTag!)).toBe(index === CHOSEN);
+          });
+          expect(css).toMatch(/\.chosenTag \{\s*background-color: var\(--color-sun\);/);
+          racers().forEach((racer, index) => {
+            expect(racer.dataset.pose).toBe(index === CHOSEN ? 'wave' : 'hold');
+            expect(racer.dataset.mood).toBe(index === CHOSEN ? 'happy' : 'calm');
+          });
+        },
+      );
       And('the panel sits over the track ahead of the line', () => {
         // The Line-up lays its panel over the grid's right START.panel px.
         expect(START_TRACK.line + 12).toBeLessThanOrEqual(START.width - START.panel);

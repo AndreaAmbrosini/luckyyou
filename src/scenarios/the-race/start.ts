@@ -1,12 +1,14 @@
 // The race's start on the Line-up (decision 0016), from the Design canvas:
 // everyone waiting at the start line, a lane each, noses on the line, on the
 // theme's track with a short version of its backdrop in a band above the
-// lanes. The chosen person's lane and name tag are sun, and they wave. Every
+// lanes. Each person's row, where the Line-up puts their die, pin and click
+// area, is level with their name tag and face, which stand above their lane.
+// The chosen person's row and name tag are sun, and they wave. Every
 // colour comes from a class in the-race.module.css; a layer without an
 // outline has a stroke width of 0.
 
 import { nameTag, START, type LineUpStart, type StartPerson } from '../../scenario-kit';
-import { boxAt, startLane, START_TRACK, tagAt, tagSize } from './layout';
+import { boxAt, startLane, startRows, START_TRACK, tagAt, tagSize } from './layout';
 import { drawing, group, RACER, type Kind, type Pose, type Runner, type Shape } from './parts';
 import { COURSES, type Course } from './plan';
 import styles from './the-race.module.css';
@@ -155,6 +157,7 @@ export function startLine(
   const course = COURSES.find((each) => each === theme) ?? 'field';
   const count = people.length;
   const lanes = people.map((_, index) => startLane(index, count));
+  const rows = startRows(count);
   const { nose: NOSE, line: LINE } = START_TRACK;
 
   const el = document.createElement('div');
@@ -163,14 +166,14 @@ export function startLine(
   el.dataset.course = course;
 
   // The ground, the backdrop band over its top, the lines between lanes,
-  // the chosen lane, and the chequered start line.
+  // the chosen row, and the chequered start line.
   const { ground, lines, dashed } = GROUNDS[course];
   let between = '';
   for (const { top } of lanes.slice(1)) {
     if (dashed) for (let x = -10; x < START.width + 10; x += 60) between += R(x, top - 3, 32, 6);
     else between += R(-10, top - 3, START.width + 20, 6);
   }
-  const chosen = lanes.find((_, index) => people[index]!.chosen);
+  const chosen = rows.find((_, index) => people[index]!.chosen);
   let ink = '';
   let paper = '';
   for (let row = 0, y = START_TRACK.top; y < START.height; y += 6, row++) {
@@ -187,7 +190,7 @@ export function startLine(
   group(scene, 'band', BANDS[course]());
   group(scene, 'lines', [L(between || 'M0 0', lines)]);
   if (chosen) {
-    group(scene, 'chosen', [L(R(0, chosen.top + 3, LINE, chosen.pitch - 6), styles.sun!, 3)]);
+    group(scene, 'chosen', [L(R(0, chosen.top + 3, LINE, chosen.height - 6), styles.sun!, 3)]);
   }
   group(scene, 'start-line', [L(ink, styles.inkFill!), L(paper, styles.paperFill!)]);
   scene.classList.add(styles.full!);
@@ -216,7 +219,7 @@ export function startLine(
     racer.style.width = `${RACER.width * at.k}px`;
     racer.style.height = `${RACER.height * at.k}px`;
     return {
-      box: { left: 104, top: at.top, width: LINE - 104, height: at.pitch },
+      box: { left: 104, top: rows[index]!.top, width: LINE - 104, height: rows[index]!.height },
       drawing: racer,
       tag: { kind, at },
     };

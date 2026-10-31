@@ -191,6 +191,23 @@ export const TAG_GAP = 2;
 export function tagAt(kind: Kind, at: Lane, nose: number) {
   return {
     right: faceAt(kind, at, nose).left - TAG_GAP,
-    middle: at.ground - 129 * at.k,
+    middle: tagMiddle(at),
   };
+}
+
+/** The middle of a name tag and its face, in lane `at`. */
+const tagMiddle = (at: Lane) => at.ground - 129 * at.k;
+
+/**
+ * Each of `count` people's row at the Line-up's start: level with their name
+ * tag and face, which stand above their lane, the rows meeting halfway
+ * between one tag and the next.
+ */
+export function startRows(count: number): { top: number; height: number }[] {
+  const middles = Array.from({ length: count }, (_, index) => tagMiddle(startLane(index, count)));
+  const edges = middles.slice(1).map((middle, index) => (middles[index]! + middle) / 2);
+  const end = count > 1 ? (middles[1]! - middles[0]!) / 2 : startLane(0, 1).pitch / 2;
+  const tops = [Math.max(0, middles[0]! - end), ...edges];
+  const bottoms = [...edges, middles.at(-1)! + end];
+  return tops.map((top, index) => ({ top, height: bottoms[index]! - top }));
 }

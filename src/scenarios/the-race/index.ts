@@ -38,7 +38,8 @@ const RACERS = {
   snail: 'Snail',
   duck: 'Duck',
   chair: 'Office chair',
-  caterpillar: 'Caterpillar',
+  // Soft hyphens: too long for a line of a racer's card, these break there.
+  caterpillar: 'Cater\u00ADpillar',
   hopper: 'Space hopper',
   ostrich: 'Ostrich',
   rocket: 'Rocket',
@@ -46,7 +47,7 @@ const RACERS = {
   zombie: 'Zombie',
   robot: 'Robot',
   shark: 'Shark with feet',
-  astronaut: 'Astronaut',
+  astronaut: 'Astro­naut',
   monster: 'Monster',
   villain: 'Villain',
   alien: 'Alien',

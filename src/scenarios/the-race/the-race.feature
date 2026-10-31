@@ -51,8 +51,8 @@ Feature: The Race
       Given 8 people, with "Office" chosen
       When the Line-up opens for The Race
       Then everyone waits at the start line, a lane each, in today's order, noses on the line, on the office track with its backdrop above the lanes
-      And each lane has its die and pin at the left, and its racer's name tag beside the face
-      And the chosen person's lane and name tag are sun, and they wave
+      And each racer's name tag is beside the face, and their die and pin are at the left, level with the tag
+      And the chosen person's row, level with their name tag, is sun, as is the tag, and they wave
       And the panel sits over the track ahead of the line
 
     Scenario: The start line fits the window
