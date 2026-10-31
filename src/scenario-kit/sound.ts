@@ -13,7 +13,11 @@ export type Cue =
   | 'pop'
   | 'thunk'
   | 'creak'
-  | 'tumble';
+  | 'tumble'
+  | 'sniff'
+  | 'grumble'
+  | 'bark'
+  | 'latch';
 
 export interface SoundPlayer {
   /**
@@ -164,8 +168,12 @@ const CUES: Record<Cue, (context: AudioContext) => AudioScheduledSourceNode[]> =
     const squeal = filter(context, 'bandpass', 380);
     squeal.Q.setValueAtTime(12, context.currentTime);
     squeal.frequency.exponentialRampToValueAtTime(900, context.currentTime + 0.55);
+    // So narrow a band keeps little of the noise: boosted, it peaks with the rest.
+    const boost = context.createGain();
+    boost.gain.setValueAtTime(14, context.currentTime);
     rasp
       .connect(squeal)
+      .connect(boost)
       .connect(envelope(context, 0.5, 0.2, 0.4))
       .connect(context.destination);
     return start(context, [rasp], 0.6);
@@ -182,6 +190,55 @@ const CUES: Record<Cue, (context: AudioContext) => AudioScheduledSourceNode[]> =
       .connect(envelope(context, 0.35, 0.3, 0.6, 0.3))
       .connect(context.destination);
     return [...knocks, ...start(context, [rumble], 1)];
+  },
+
+  sniff(context) {
+    // Three quick breaths in through the nose, each a hiss that rises.
+    return [0, 0.16, 0.32].flatMap((delay) => {
+      const breath = noise(context, 0.14);
+      const nose = filter(context, 'bandpass', 1800);
+      nose.frequency.setValueAtTime(1800, context.currentTime + delay);
+      nose.frequency.exponentialRampToValueAtTime(3200, context.currentTime + delay + 0.12);
+      breath
+        .connect(nose)
+        .connect(envelope(context, 0.45, 0.08, 0.05, delay))
+        .connect(context.destination);
+      return start(context, [breath], 0.14, delay);
+    });
+  },
+
+  grumble(context) {
+    // A low, sleepy mumble that sags as it fades.
+    const throat = tone(context, 'sawtooth', 120);
+    throat.frequency.exponentialRampToValueAtTime(80, context.currentTime + 0.5);
+    throat
+      .connect(filter(context, 'lowpass', 500))
+      .connect(envelope(context, 0.35, 0.08, 0.45))
+      .connect(context.destination);
+    return start(context, [throat], 0.55);
+  },
+
+  bark(context) {
+    // One bark: a rough yelp that jumps up and drops, over a puff of breath.
+    const now = context.currentTime;
+    const voice = tone(context, 'sawtooth', 300);
+    voice.frequency.exponentialRampToValueAtTime(520, now + 0.04);
+    voice.frequency.exponentialRampToValueAtTime(220, now + 0.22);
+    voice
+      .connect(filter(context, 'lowpass', 1600))
+      .connect(envelope(context, 0.6, 0.015, 0.22))
+      .connect(context.destination);
+    const breath = noise(context, 0.2);
+    breath
+      .connect(filter(context, 'bandpass', 900))
+      .connect(envelope(context, 0.4, 0.01, 0.15))
+      .connect(context.destination);
+    return start(context, [voice, breath], 0.25);
+  },
+
+  latch(context) {
+    // The gate meets its post, then the latch drops: two clicks.
+    return [...click(context, 0, 1400, 0.45), ...click(context, 0.07, 2200, 0.3)];
   },
 
   fanfare(context) {
@@ -208,6 +265,18 @@ function knock(context: AudioContext, delay: number, pitch: number, level: numbe
     .connect(envelope(context, level * 0.4, 0.002, 0.04, delay))
     .connect(context.destination);
   return start(context, [body, tap], 0.15, delay);
+}
+
+/** A short click: a high tick over a snap of noise. */
+function click(context: AudioContext, delay: number, pitch: number, level: number) {
+  const tick = tone(context, 'square', pitch);
+  tick.connect(envelope(context, level * 0.3, 0.001, 0.03, delay)).connect(context.destination);
+  const snap = noise(context, 0.04);
+  snap
+    .connect(filter(context, 'highpass', 1500))
+    .connect(envelope(context, level, 0.001, 0.03, delay))
+    .connect(context.destination);
+  return start(context, [tick, snap], 0.04, delay);
 }
 
 function noise(context: AudioContext, seconds: number, { loop = false } = {}) {

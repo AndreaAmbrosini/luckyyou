@@ -236,6 +236,14 @@ Feature: Don't Wake the Dog
       When the show runs at every head count from 2 to 12, with each ending, waking with 3 left and with 2 left
       Then each run lasts between 12 and 29 seconds
 
+  Rule: What it sounds like
+
+    Scenario: The dog and the gate are heard
+      Given 8 people
+      When the show runs with each ending, a "Wuf…" among its scares
+      Then each "Sniff…" and "Sniff!" sniffs, each "Wuf…" grumbles, the "Woof!" barks and each "Creak!" creaks, as its bubble appears
+      And each time the gate swings shut, its latch clicks
+
   Rule: It reads without sound
 
     Scenario: Captions tell the story, a turn at a time

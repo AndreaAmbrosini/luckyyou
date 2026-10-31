@@ -12,6 +12,10 @@ const CUES: Cue[] = [
   'thunk',
   'creak',
   'tumble',
+  'sniff',
+  'grumble',
+  'bark',
+  'latch',
 ];
 
 /**
