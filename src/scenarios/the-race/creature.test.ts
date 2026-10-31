@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { Look } from '../../scenario-kit';
-import { creature, CREATURE_SPEC, FEET, LEAN } from './creature';
-import { CREATURES, EXTRAS, RACER, type Creature, type RacerLook } from './parts';
+import { creature, CREATURE_SPEC, FEET, FLAIL, LEAN, REACH } from './creature';
+import { CREATURES, EXTRAS, RACER, type Creature, type Pose, type RacerLook } from './parts';
 import styles from './the-race.module.css';
 
 const FACE: Look = { skin: 4, accessory: 'cap', colour: 'grape', ring: 'mint' };
@@ -228,6 +228,45 @@ describe('a creature', () => {
     one.setMood('party');
     expect(brows()).toBeNull();
     expect(shown(drawn({ mount: 'robot' }).face, '[data-part="brows"]')).toBe(false);
+  });
+
+  it('keeps its hands within its reach past its nose, in any pose it races in and flailing', () => {
+    const poses: [Pose, number[]][] = [
+      ['hold', [0]],
+      ['wave', [0]],
+      ['pull', [-FLAIL.degrees, 0, FLAIL.degrees]],
+    ];
+    for (const kind of CREATURES) {
+      const spec = CREATURE_SPEC[kind];
+      for (const [pose, flails] of poses) {
+        for (const flail of flails) {
+          const racer = drawn({ mount: kind });
+          racer.setPose(pose);
+          racer.arms.forEach((arm, i) => {
+            const [x, y] = spec.shoulders[i]!;
+            arm.setAttribute('transform', `rotate(${i ? flail : -flail} ${x} ${y})`);
+          });
+          for (const hand of racer.el.querySelectorAll('[data-part="hand"]')) {
+            let [x, y] = [Number(hand.getAttribute('cx')), Number(hand.getAttribute('cy'))];
+            let visible = true;
+            // Turned with its arm about the shoulder, and with the body about the hips.
+            for (let at: Element | null = hand; at && at !== racer.el; at = at.parentElement) {
+              if (at.getAttribute('display') === 'none') visible = false;
+              const turn = at.getAttribute('transform')?.match(/^rotate\((\S+) (\S+) (\S+)\)$/);
+              if (!turn) continue;
+              const [a, cx, cy] = turn.slice(1).map(Number) as [number, number, number];
+              const [cos, sin] = [Math.cos((a * Math.PI) / 180), Math.sin((a * Math.PI) / 180)];
+              [x, y] = [cx + (x - cx) * cos - (y - cy) * sin, cy + (x - cx) * sin + (y - cy) * cos];
+            }
+            if (!visible) continue;
+            const right = x + Number(hand.getAttribute('r'));
+            expect(right, `${kind} ${pose} ${flail}`).toBeLessThanOrEqual(
+              spec.nose + REACH[kind].most + 0.5,
+            );
+          }
+        }
+      }
+    }
   });
 
   it('waves one arm', () => {

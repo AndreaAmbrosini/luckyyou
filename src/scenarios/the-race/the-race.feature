@@ -266,6 +266,12 @@ Feature: The Race
         | 8     | first    |
         | 8     | last     |
 
+    Scenario: Whatever reaches furthest, the unlucky person is over first
+      Given 8 people, the unlucky person's racer leaning back 40 px short of its nose as it leads
+      And everyone else's hands reaching 40 px past their noses
+      When the show runs with 40 different random seeds
+      Then all of the unlucky person's racer is over the line before anyone else's hands reach it
+
     Scenario: Nobody wins out of nowhere
       Given 8 people
       When the show runs with 20 different random seeds
