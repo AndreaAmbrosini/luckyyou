@@ -460,6 +460,13 @@
   fill: var(--color-sky);
 }
 
+/* The same, outlined, on the sea's postcard. */
+.skyBlue {
+  fill: var(--color-sky);
+  stroke: var(--color-ink);
+  stroke-linejoin: round;
+}
+
 .orangeFill {
   fill: var(--color-orange);
 }

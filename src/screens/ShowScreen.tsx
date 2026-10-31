@@ -19,6 +19,8 @@ export interface Run {
   readonly unlucky: string;
   /** Everyone's look from the Line-up; the lab leaves it out, and looks come from the seed. */
   readonly looks?: ReadonlyMap<string, ChosenLook>;
+  /** The theme from the Line-up; the lab may leave it out, and it comes from the seed. */
+  readonly theme?: string;
   readonly seed: number;
   readonly muted: boolean;
   /** The music's volume, 0 to 1; 0 when the music is off. */
@@ -105,6 +107,7 @@ export function ShowScreen({ run, onFinish, onCancel, music, onMusicChange }: Sh
       names: run.names,
       unlucky: run.unlucky,
       looks: run.looks,
+      theme: run.theme,
       seed: run.seed,
       muted: run.muted,
       music: () => tuned.current.level,

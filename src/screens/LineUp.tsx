@@ -6,16 +6,19 @@ import {
   useState,
   type CSSProperties,
   type KeyboardEvent,
+  type ReactNode,
 } from 'react';
+import type { ThemeChoice } from '../line-up/looks';
 import type {
   ChosenLook,
   LineUpChoice,
   LineUpOption,
   LineUp as LineUpOf,
+  LineUpTheme,
 } from '../scenario-kit/contract';
-import { dealLooks, randomLook } from '../scenario-kit/line-up';
+import { dealLooks, drawTheme, randomLook, themeNamed } from '../scenario-kit/line-up';
 import { Button } from '../ui/Button';
-import { ArrowLeftIcon, CheckIcon } from '../ui/icons';
+import { ArrowLeftIcon, CheckIcon, DieIcon } from '../ui/icons';
 import layout from './layout.module.css';
 import styles from './LineUp.module.css';
 
@@ -25,13 +28,25 @@ export interface LineUpProps {
   names: readonly string[];
   /** Each of today's people's look. */
   looks: ReadonlyMap<string, ChosenLook>;
+  /** The theme it shows; null for a line-up without themes. */
+  theme: ThemeChoice | null;
+  onThemeChange(theme: ThemeChoice): void;
   onLooksChange(looks: ReadonlyMap<string, ChosenLook>): void;
   onBack(): void;
   onStart(): void;
 }
 
-/** Step 3, for a show with a line-up: how each of today's people looks. */
-export function LineUp({ lineUp, names, looks, onLooksChange, onBack, onStart }: LineUpProps) {
+/** Step 3, for a show with a line-up: its theme, and how each of today's people looks. */
+export function LineUp({
+  lineUp,
+  names,
+  looks,
+  theme,
+  onThemeChange,
+  onLooksChange,
+  onBack,
+  onStart,
+}: LineUpProps) {
   const id = useId();
   const start = useRef<HTMLButtonElement>(null);
   const [chosen, setChosen] = useState(0);
@@ -44,6 +59,14 @@ export function LineUp({ lineUp, names, looks, onLooksChange, onBack, onStart }:
   useEffect(() => start.current?.focus(), []);
 
   const change = (next: ChosenLook) => onLooksChange(new Map(looks).set(name, next));
+
+  // While a theme is chosen, the first option's choices that suit it are its first tab.
+  const themed = theme ? themeNamed(lineUp, theme.name) : undefined;
+  const first = lineUp.options[0];
+  const suiting = (themed?.suits ?? []).flatMap((each) =>
+    first!.choices.filter((choice) => choice.name === each),
+  );
+  const themeTab = themed && suiting.length > 0 ? { label: themed.label, choices: suiting } : null;
 
   function surprise() {
     // A surprise that changes nothing would look like a broken button.
@@ -68,8 +91,9 @@ export function LineUp({ lineUp, names, looks, onLooksChange, onBack, onStart }:
           look={look}
           name={name}
           place={chosen + 1}
+          themeTab={option === first ? themeTab : null}
           open={open[option.name]}
-          onOpen={(group) => setOpen({ ...open, [option.name]: group })}
+          onOpen={(key) => setOpen({ ...open, [option.name]: key })}
           onChange={change}
         />
       ));
@@ -88,6 +112,17 @@ export function LineUp({ lineUp, names, looks, onLooksChange, onBack, onStart }:
       </div>
 
       <div className={styles.body}>
+        {lineUp.themes && theme && (
+          <Postcards
+            themes={lineUp.themes}
+            theme={theme}
+            surprise={() => drawTheme(lineUp, Math.random, theme.name)}
+            onChange={(next) => {
+              onThemeChange(next);
+              setOpen({});
+            }}
+          />
+        )}
         <ul className={styles.tiles} aria-label="Today's people">
           {names.map((each, index) => (
             <li key={each} className={styles.slot}>
@@ -166,9 +201,11 @@ interface OptionProps {
   look: ChosenLook;
   name: string;
   place: number;
-  /** The open tab's group, when one was clicked. */
+  /** The chosen theme's own tab, ahead of the groups' (decision 0015). */
+  themeTab: { label: string; choices: readonly LineUpChoice[] } | null;
+  /** The open tab's key, when one was clicked. */
   open: string | undefined;
-  onOpen(group: string): void;
+  onOpen(key: string): void;
   onChange(look: ChosenLook): void;
 }
 
@@ -176,23 +213,32 @@ interface OptionProps {
  * One option of the chosen person's look: its choices as chips, swatches or
  * pictures, under a tab per group when they come in groups (decision 0013).
  */
-function Option({ id, option, lineUp, look, name, place, open, onOpen, onChange }: OptionProps) {
+function Option(props: OptionProps) {
+  const { id, option, lineUp, look, name, place, themeTab, open, onOpen, onChange } = props;
   const groups = groupsOf(option.choices);
   const tabbed = groups.some((group) => group.label !== undefined);
   const mine = option.choices.find((choice) => choice.name === look[option.name]);
-  const shown = tabbed
-    ? (groups.find((group) => group.label === (open ?? mine?.group)) ?? groups[0]!)
-    : undefined;
+  const tabs = tabbed
+    ? [
+        ...(themeTab ? [{ key: THEME_TAB, star: true, ...themeTab }] : []),
+        ...groups.map((group) => ({ key: `group:${group.label}`, star: false, ...group })),
+      ]
+    : [];
+  // It opens on the theme's tab when that holds their choice, or else on their choice's group.
+  const theirs =
+    themeTab && mine && themeTab.choices.includes(mine) ? THEME_TAB : `group:${mine?.group}`;
+  const shown = tabbed ? (tabs.find((tab) => tab.key === (open ?? theirs)) ?? tabs[0]!) : undefined;
 
   /** Arrow keys move along the tabs, opening each. */
   function onTabKey(event: KeyboardEvent<HTMLButtonElement>, index: number) {
     const step = { ArrowRight: 1, ArrowLeft: -1 }[event.key];
     if (step === undefined) return;
     event.preventDefault();
-    const next = (index + step + groups.length) % groups.length;
-    onOpen(groups[next]!.label!);
-    const tabs = event.currentTarget.parentElement!.querySelectorAll<HTMLElement>('[role="tab"]');
-    tabs[next]?.focus();
+    const next = (index + step + tabs.length) % tabs.length;
+    onOpen(tabs[next]!.key);
+    const buttons =
+      event.currentTarget.parentElement!.querySelectorAll<HTMLElement>('[role="tab"]');
+    buttons[next]?.focus();
   }
 
   const choices = (shown?.choices ?? option.choices).map((choice) => {
@@ -229,7 +275,7 @@ function Option({ id, option, lineUp, look, name, place, open, onOpen, onChange 
           aria-pressed={on}
           onClick={pick}
         >
-          <Picture choice={choice} />
+          <Picture of={choice} />
           {mark}
         </button>
       );
@@ -277,19 +323,20 @@ function Option({ id, option, lineUp, look, name, place, open, onOpen, onChange 
         </h3>
         {shown && (
           <div className={styles.tabs} role="tablist" aria-labelledby={id}>
-            {groups.map(({ label }, index) => (
+            {tabs.map(({ key, label, star }, index) => (
               <button
-                key={label}
+                key={key}
                 type="button"
                 role="tab"
                 id={`${id}-tab-${index}`}
                 className={styles.tab}
-                aria-selected={label === shown.label}
+                aria-selected={key === shown.key}
                 aria-controls={`${id}-panel`}
-                tabIndex={label === shown.label ? 0 : -1}
-                onClick={() => onOpen(label!)}
+                tabIndex={key === shown.key ? 0 : -1}
+                onClick={() => onOpen(key)}
                 onKeyDown={(event) => onTabKey(event, index)}
               >
+                {star && <Star />}
                 {label}
               </button>
             ))}
@@ -301,7 +348,7 @@ function Option({ id, option, lineUp, look, name, place, open, onOpen, onChange 
           id={`${id}-panel`}
           className={option.drawn ? styles.drawnChoices : styles.choices}
           role="tabpanel"
-          aria-labelledby={`${id}-tab-${groups.indexOf(shown)}`}
+          aria-labelledby={`${id}-tab-${tabs.indexOf(shown)}`}
         >
           {choices}
         </div>
@@ -309,6 +356,90 @@ function Option({ id, option, lineUp, look, name, place, open, onOpen, onChange 
         <div className={option.drawn ? styles.drawnChoices : styles.choices}>{choices}</div>
       )}
     </div>
+  );
+}
+
+/** The key of the chosen theme's tab; a group's starts with "group:". */
+const THEME_TAB = 'theme';
+
+/** The star on the chosen theme's tab. */
+function Star() {
+  return (
+    <svg className={styles.star} viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+      <path d="M12 2l2.6 6.6 6.9.6-5.3 4.5 1.7 6.8-5.9-3.7-5.9 3.7 1.7-6.8-5.3-4.5 6.9-.6z" />
+    </svg>
+  );
+}
+
+interface PostcardsProps {
+  themes: readonly LineUpTheme[];
+  theme: ThemeChoice;
+  /** Draws a theme for "Surprise", other than the one showing. */
+  surprise(): string;
+  onChange(theme: ThemeChoice): void;
+}
+
+/**
+ * The themes as postcards, "Surprise" first: the chosen one in sun, with a
+ * check, or with a die on "Surprise", which shows the theme it drew.
+ */
+function Postcards({ themes, theme, surprise, onChange }: PostcardsProps) {
+  const drawn = themes.find((each) => each.name === theme.name)!;
+  const mark = (kind: string, icon: ReactNode) => (
+    <span className={styles.mark} data-mark={kind}>
+      {icon}
+    </span>
+  );
+  return (
+    <div className={styles.postcards} role="group" aria-label="Theme">
+      <button
+        type="button"
+        className={styles.postcard}
+        aria-pressed={theme.surprise}
+        onClick={() => onChange({ name: surprise(), surprise: true })}
+      >
+        {theme.surprise ? <Picture of={drawn} postcard /> : <SurprisePicture />}
+        <span className={styles.postcardName}>Surprise</span>
+        {theme.surprise && mark('die', <DieIcon size={20} />)}
+      </button>
+      {themes.map((each) => {
+        const on = !theme.surprise && each.name === theme.name;
+        return (
+          <button
+            key={each.name}
+            type="button"
+            className={styles.postcard}
+            aria-pressed={on}
+            onClick={() => onChange({ name: each.name, surprise: false })}
+          >
+            <Picture of={each} postcard />
+            <span className={styles.postcardName}>{each.label}</span>
+            {on && mark('check', <CheckIcon size={18} />)}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+/** "Surprise" before it has drawn a theme: a die on sun. */
+function SurprisePicture() {
+  const dots = [
+    [51, 14],
+    [69, 14],
+    [60, 23],
+    [51, 32],
+    [69, 32],
+  ];
+  return (
+    <span className={`${styles.postcardPicture} ${styles.surprisePicture}`} aria-hidden="true">
+      <svg viewBox="0 0 120 46" preserveAspectRatio="xMidYMid slice" focusable="false">
+        <rect className={styles.dieFace} x="41" y="5" width="38" height="36" rx="5" />
+        {dots.map(([cx, cy]) => (
+          <circle key={`${cx} ${cy}`} className={styles.dieDot} cx={cx} cy={cy} r="2.6" />
+        ))}
+      </svg>
+    </span>
   );
 }
 
@@ -347,13 +478,19 @@ function Drawing({ className, lineUp, look, name, place }: DrawingProps) {
   return <span ref={box} className={`${styles.drawing} ${className}`} aria-hidden="true" />;
 }
 
-/** A choice's own picture. */
-function Picture({ choice }: { choice: LineUpChoice }) {
+/** A choice's own picture, or a theme's on its postcard. */
+function Picture({ of, postcard = false }: { of: LineUpChoice | LineUpTheme; postcard?: boolean }) {
   const box = useRef<HTMLSpanElement>(null);
   useLayoutEffect(() => {
-    const drawn = choice.picture!();
+    const drawn = of.picture!();
     box.current?.replaceChildren(drawn);
     return () => drawn.remove();
-  }, [choice]);
-  return <span ref={box} className={styles.pictureBox} aria-hidden="true" />;
+  }, [of]);
+  return (
+    <span
+      ref={box}
+      className={postcard ? styles.postcardPicture : styles.pictureBox}
+      aria-hidden="true"
+    />
+  );
 }

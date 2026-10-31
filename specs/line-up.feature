@@ -100,8 +100,7 @@ Feature: The Line-up
       Then every name is at least --size-body, wrapping inside its tile
       And every control is at least --target-min across, and shows the keyboard focus
 
-  # Decision 0015. Step 1 of The Race's themes (src/scenarios/the-race/the-race.feature).
-  @pending
+  # Decision 0015.
   Rule: A show can offer themes
 
     Scenario: Themes as postcards, "Surprise" first
@@ -264,10 +263,14 @@ Feature: The Line-up
       And the console says why
 
       Examples:
-        | problem                             |
-        | no options                          |
-        | an option with fewer than 2 choices |
-        | two options with the same name      |
-        | no way to draw a look               |
-      | a choice in a group without a label |
-      | a picture for only some choices     |
+        | problem                                           |
+        | no options                                        |
+        | an option with fewer than 2 choices               |
+        | two options with the same name                    |
+        | no way to draw a look                             |
+        | a choice in a group without a label               |
+        | a picture for only some choices                   |
+        | fewer than 2 themes                               |
+        | two themes with the same name                     |
+        | a theme without a picture                         |
+        | a theme suiting a choice its option doesn't offer |

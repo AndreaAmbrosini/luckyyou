@@ -1,6 +1,6 @@
 import { gsap } from 'gsap';
 import { SHOW_LENGTH, type ChosenLook, type Scenario, type Show } from './contract';
-import { dealLooks, freezeLooks } from './line-up';
+import { dealLooks, drawTheme, freezeLooks, themeNamed } from './line-up';
 import { createRandom } from './random';
 import { createSound } from './sound';
 import { buildStage } from './stage';
@@ -20,6 +20,11 @@ export interface RunOptions {
    * given none, as in the lab, looks are dealt from the seed.
    */
   readonly looks?: ReadonlyMap<string, ChosenLook>;
+  /**
+   * The theme from the Line-up. For a show with themes that is given none,
+   * or one it doesn't offer, as in the lab, one is drawn from the seed.
+   */
+  readonly theme?: string;
   readonly seed: number;
   readonly muted: boolean;
   /**
@@ -46,11 +51,13 @@ export async function runScenario(scenario: Scenario, options: RunOptions): Prom
   const frame = buildStage(options.host);
   const sound = createSound({ muted: options.muted, music: options.music });
 
-  const show: Show = {
+  // Frozen, so the show can't change what it was handed.
+  const show: Show = Object.freeze<Show>({
     stage: frame.stage,
     names: Object.freeze([...options.names]),
     unlucky: options.unlucky,
     looks: freezeLooks(lookFor(scenario, options)),
+    theme: themeFor(scenario, options),
     random: createRandom(options.seed),
     signal,
     reducedMotion,
@@ -58,7 +65,7 @@ export async function runScenario(scenario: Scenario, options: RunOptions): Prom
     wait: (seconds) => wait(seconds, signal),
     play: (animation) => play(animation, signal),
     caption: createCaptions(frame.overlay, frame.live, signal),
-  };
+  });
 
   // A scenario may ignore the signal; the run doesn't wait for it once aborted.
   const aborted = new Promise<void>((resolve) => {
@@ -118,6 +125,15 @@ function lookFor(scenario: Scenario, { looks, names, seed }: RunOptions) {
   if (looks) return looks;
   if (!scenario.lineUp) return new Map<string, ChosenLook>();
   return dealLooks(scenario.lineUp, names, createRandom(seed ^ LOOKS_SEED));
+}
+
+/** And for the theme, apart from both. */
+const THEME_SEED = 0x7468656d;
+
+function themeFor(scenario: Scenario, { theme, seed }: RunOptions) {
+  const lineUp = scenario.lineUp;
+  if (!lineUp?.themes) return null;
+  return themeNamed(lineUp, theme)?.name ?? drawTheme(lineUp, createRandom(seed ^ THEME_SEED));
 }
 
 const prefersReducedMotion = () =>

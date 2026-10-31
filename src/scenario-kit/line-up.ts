@@ -1,5 +1,6 @@
 // Looks for a show's Line-up (decision 0011): dealt at random, fitted to
 // what the show offers now, and handed to the show where it can't change them.
+// Its theme (decision 0015): drawn at random, or found among those offered.
 
 import type { ChosenLook, LineUp } from './contract';
 import { pickOne, shuffle } from './random';
@@ -46,6 +47,17 @@ export function fitLook(lineUp: LineUp, stored: unknown, random: () => number): 
     }),
   );
 }
+
+/** A theme drawn at random, other than `not` when one is given. */
+export function drawTheme(lineUp: LineUp, random: () => number, not?: string): string {
+  const themes = lineUp.themes ?? [];
+  const others = themes.filter((theme) => theme.name !== not);
+  return pickOne(others.length > 0 ? others : themes, random).name;
+}
+
+/** The theme named `name`, when the line-up offers it. */
+export const themeNamed = (lineUp: LineUp, name: unknown) =>
+  lineUp.themes?.find((theme) => theme.name === name);
 
 /** A map that refuses changes, once filled. */
 class FrozenMap<K, V> extends Map<K, V> {

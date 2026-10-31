@@ -329,3 +329,91 @@
   background-color: var(--color-sun);
   box-shadow: var(--shadow-small);
 }
+
+/* The themes, a postcard each in a row of eight, "Surprise" first; the chosen one in sun. */
+.postcards {
+  display: grid;
+  grid-template-columns: repeat(8, minmax(0, 1fr));
+  gap: 0.625rem;
+  /* Room for the chosen one's mark, above its corner. */
+  padding-top: 0.5rem;
+}
+
+.postcard {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.1875rem;
+  min-width: 0;
+  min-height: var(--target-min);
+  padding: 0.3125rem 0.3125rem 0.25rem;
+  border: var(--line) solid var(--color-ink);
+  border-radius: var(--radius-tile);
+  background-color: var(--color-paper);
+  color: var(--color-ink);
+  cursor: pointer;
+}
+
+.postcard[aria-pressed='true'] {
+  border-width: var(--line-bold);
+  background-color: var(--color-sun);
+  box-shadow: var(--shadow-small);
+}
+
+/* A theme's picture, 120 by 46, with a border of its own. */
+.postcardPicture {
+  display: block;
+  width: 100%;
+  max-width: 7.5rem;
+  aspect-ratio: 120 / 46;
+  overflow: hidden;
+  border: var(--line) solid var(--color-ink);
+  border-radius: 9px;
+  background-color: var(--color-paper);
+}
+
+.postcardPicture > * {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.postcardName {
+  max-width: 100%;
+  font-size: var(--size-small);
+  font-weight: 900;
+  line-height: 1.1;
+  text-align: center;
+  overflow-wrap: anywhere;
+}
+
+.surprisePicture {
+  background-color: var(--color-sun);
+}
+
+.dieFace {
+  fill: var(--color-paper);
+  stroke: var(--color-ink);
+  stroke-width: 2;
+}
+
+.dieDot {
+  fill: var(--color-ink);
+}
+
+/* The chosen theme's tab leads with a star. */
+.tab:has(.star) {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+}
+
+.star {
+  width: 1.125rem;
+  height: 1.125rem;
+  fill: var(--color-sun);
+  stroke: var(--color-ink);
+  stroke-width: 2.5;
+  stroke-linejoin: round;
+}

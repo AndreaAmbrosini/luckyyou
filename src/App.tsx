@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { catalogue } from './catalogue/catalogue';
-import { useLooks } from './line-up/looks';
+import { useLooks, type ThemeChoice } from './line-up/looks';
 import { usePeople } from './people/people';
 import { newSeed, pickUnlucky } from './pick/pick';
 import type { ChosenLook, Scenario } from './scenario-kit/contract';
@@ -18,7 +18,7 @@ type Looks = ReadonlyMap<string, ChosenLook>;
 type Screen =
   | { name: 'whos-in' }
   | { name: 'shows' }
-  | { name: 'line-up'; scenario: Scenario; looks: Looks }
+  | { name: 'line-up'; scenario: Scenario; looks: Looks; theme: ThemeChoice | null }
   | { name: 'show'; run: Run }
   | { name: 'result'; run: Run };
 
@@ -35,7 +35,7 @@ export default function App({ scenarios = catalogue }: AppProps) {
   const ticked = people.list.filter((person) => person.ticked).map((person) => person.name);
 
   /** Picks the unlucky person, then hands the show the window (decision 0005). */
-  function start(scenario: Scenario, names: readonly string[], looks?: Looks) {
+  function start(scenario: Scenario, names: readonly string[], looks?: Looks, theme?: string) {
     changeSettings({ lastScenario: scenario.id });
     setScreen({
       name: 'show',
@@ -44,6 +44,7 @@ export default function App({ scenarios = catalogue }: AppProps) {
         names,
         unlucky: pickUnlucky(names),
         looks,
+        theme,
         seed: newSeed(),
         muted: settings.muted,
         music: musicLevel(settings),
@@ -54,7 +55,12 @@ export default function App({ scenarios = catalogue }: AppProps) {
   /** A show with a line-up opens it first; any other starts at once. */
   function choose(scenario: Scenario) {
     if (scenario.lineUp) {
-      setScreen({ name: 'line-up', scenario, looks: looks.open(scenario, ticked) });
+      setScreen({
+        name: 'line-up',
+        scenario,
+        looks: looks.open(scenario, ticked),
+        theme: looks.openTheme(scenario),
+      });
     } else {
       start(scenario, ticked);
     }
@@ -78,11 +84,12 @@ export default function App({ scenarios = catalogue }: AppProps) {
     return (
       <Result
         run={run}
-        onRunAgain={() => start(run.scenario, run.names, run.looks)}
+        onRunAgain={() => start(run.scenario, run.names, run.looks, run.theme)}
         onRunWithout={() => {
           people.untick(run.unlucky);
           const names = run.names.filter((name) => name !== run.unlucky);
-          start(run.scenario, names, run.looks && withoutLooks(run.looks, run.unlucky));
+          const left = run.looks && withoutLooks(run.looks, run.unlucky);
+          start(run.scenario, names, left, run.theme);
         }}
         onChangeWhosIn={() => setScreen({ name: 'whos-in' })}
       />
@@ -106,12 +113,17 @@ export default function App({ scenarios = catalogue }: AppProps) {
           lineUp={screen.scenario.lineUp!}
           names={ticked}
           looks={screen.looks}
+          theme={screen.theme}
+          onThemeChange={(theme) => {
+            looks.changeTheme(screen.scenario, theme);
+            setScreen({ ...screen, theme });
+          }}
           onLooksChange={(next) => {
             looks.change(screen.scenario, next);
             setScreen({ ...screen, looks: next });
           }}
           onBack={() => setScreen({ name: 'shows' })}
-          onStart={() => start(screen.scenario, ticked, screen.looks)}
+          onStart={() => start(screen.scenario, ticked, screen.looks, screen.theme?.name)}
         />
       ) : (
         <PickAShow

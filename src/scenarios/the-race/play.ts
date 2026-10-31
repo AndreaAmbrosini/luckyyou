@@ -46,6 +46,7 @@ import {
   BEATS,
   BURST,
   CAMERA,
+  COURSES,
   cameraAt,
   FINISH,
   LENGTH,
@@ -458,8 +459,9 @@ function sayings(plan: Plan, unlucky: string, mountOf: (name: string) => Kind): 
 export async function playTheRace(show: Show): Promise<void> {
   const count = show.names.length;
   const lookOf = (name: string) => (show.looks.get(name) as RacerLook | undefined) ?? FALLBACK;
-  // Each racer's reach in stage px, in its lane.
-  const plan = planShow(show.names, show.unlucky, show.random, (name) => {
+  // The theme's track, and each racer's reach in stage px, in its lane.
+  const course = COURSES.find((each) => each === show.theme) ?? 'field';
+  const plan = planShow(show.names, show.unlucky, show.random, course, (name) => {
     const { k } = lane(show.names.indexOf(name), count);
     const { least, most } = reachOf(lookOf(name));
     return { least: least * k, most: most * k };
@@ -469,7 +471,6 @@ export async function playTheRace(show: Show): Promise<void> {
 
   const scene = show.stage.appendChild(document.createElement('div'));
   scene.className = styles.scene!;
-  const { course } = plan;
   const own = plan.events.find((event) => event.cause === 'track') ?? null;
   const field = track({
     lanes: show.names.map((_, index) => lane(index, count).top),

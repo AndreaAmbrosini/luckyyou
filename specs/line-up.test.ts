@@ -1,14 +1,14 @@
 import { loadFeature } from '@amiceli/vitest-cucumber';
-import { render, screen, waitFor, within } from '@testing-library/react';
+import { cleanup, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { readFileSync } from 'node:fs';
 import { createElement } from 'react';
 import { expect, vi } from 'vitest';
 import { discoverScenarios, validateScenario } from '../src/catalogue/discover';
 import { Lab } from '../src/lab/Lab';
-import type { ChosenLook, LineUp, LineUpOption } from '../src/scenario-kit/contract';
+import type { ChosenLook, LineUp, LineUpOption, LineUpTheme } from '../src/scenario-kit/contract';
 import { runShow } from '../src/scenario-kit/testing';
-import { looksKey } from '../src/line-up/looks';
+import { looksKey, themeKey } from '../src/line-up/looks';
 import {
   addName,
   blockStorage,
@@ -30,6 +30,7 @@ import {
   fakeScenario,
   groupedLineUp,
   pictureLineUp,
+  themedLineUp,
   type FakeScenario,
 } from './support/fake-scenarios';
 import { describeSpec } from './support/spec';
@@ -46,6 +47,12 @@ function fits(lineUp: LineUp, look: ChosenLook | undefined): boolean {
 }
 
 const HATS = fakeLineUp().options[0]!;
+
+/** Two themes that suit Hat Show's hats. */
+const THEMES_FOR_HATS: LineUpTheme[] = [
+  { name: 'beach', label: 'Beach', suits: ['cap'], picture: () => document.createElement('i') },
+  { name: 'snow', label: 'Snow', suits: ['beanie'], picture: () => document.createElement('i') },
+];
 
 const hatShow = () => fakeScenario({ name: 'Hat Show', lineUp: fakeLineUp() });
 
@@ -133,6 +140,24 @@ const PROBLEMS: Record<string, { lineUp: Partial<LineUp>; why: string }> = {
       ],
     },
     why: 'its line-up option "hat" has a picture for only some choices',
+  },
+  'fewer than 2 themes': {
+    lineUp: { themes: THEMES_FOR_HATS.slice(0, 1) },
+    why: 'its line-up has fewer than 2 themes',
+  },
+  'two themes with the same name': {
+    lineUp: { themes: [THEMES_FOR_HATS[0]!, { ...THEMES_FOR_HATS[1]!, name: 'beach' }] },
+    why: 'its line-up has two themes named "beach"',
+  },
+  'a theme without a picture': {
+    lineUp: {
+      themes: [{ ...THEMES_FOR_HATS[0]!, picture: undefined as never }, THEMES_FOR_HATS[1]!],
+    },
+    why: 'its line-up theme "beach" has no picture',
+  },
+  "a theme suiting a choice its option doesn't offer": {
+    lineUp: { themes: [{ ...THEMES_FOR_HATS[0]!, suits: ['cap', 'helmet'] }, THEMES_FOR_HATS[1]!] },
+    why: `its line-up theme "beach" suits a choice its first option doesn't offer`,
   },
   'no way to draw a look': {
     lineUp: { draw: undefined as unknown as LineUp['draw'] },
@@ -589,6 +614,289 @@ describeSpec(await loadFeature('./line-up.feature'), ({ Rule }) => {
         expect(css('../src/screens/LineUp.module.css')).not.toMatch(/outline/);
       });
     });
+  });
+
+  Rule('A show can offer themes', ({ RuleScenario }) => {
+    const themedShow = () => fakeScenario({ name: 'Hat Show', lineUp: themedLineUp() });
+    const THEMES = themedLineUp().themes!;
+    const postcardRow = () => screen.getByRole('group', { name: 'Theme' });
+    const postcards = () => within(postcardRow()).getAllByRole('button');
+    const postcard = (label: string) => within(postcardRow()).getByRole('button', { name: label });
+    const chosenCards = () =>
+      postcards().filter((card) => card.getAttribute('aria-pressed') === 'true');
+    /** The theme a postcard's picture shows, or null for Surprise's own. */
+    const pictured = (card: HTMLElement) =>
+      card.querySelector<HTMLElement>('[data-picture]')?.dataset.picture ?? null;
+    const markOn = (card: HTMLElement) =>
+      card.querySelector<HTMLElement>('[data-mark]')?.dataset.mark ?? null;
+    const tabNames = () =>
+      within(group('Ben', 'Hat'))
+        .getAllByRole('tab')
+        .map((tab) => tab.textContent);
+    const shownChoices = () =>
+      within(within(group('Ben', 'Hat')).getByRole('tabpanel'))
+        .getAllByRole('button')
+        .map((button) => button.textContent);
+    const labelsOf = (names: readonly string[]) =>
+      names.map(
+        (name) => themedLineUp().options[0]!.choices.find((choice) => choice.name === name)!.label,
+      );
+
+    /** Opens Hat Show's Line-up again after going back to the shows. */
+    async function goBackAndReopen() {
+      await choose('Pick a show');
+      await currentUser().click(showCard('Hat Show'));
+    }
+
+    RuleScenario('Themes as postcards, "Surprise" first', ({ Given, When, Then, And }) => {
+      Given('a show whose line-up offers themes', () => {
+        localStorage.setItem(themeKey('hat-show'), JSON.stringify('snow'));
+      });
+      When('its Line-up opens', () => openLineUp(['Anna', 'Ben'], themedShow()));
+      Then(
+        `a row of postcards sits above today's people: "Surprise", then each theme as a picture over its name`,
+        () => {
+          expect(postcards().map((card) => card.textContent)).toEqual([
+            'Surprise',
+            ...THEMES.map((theme) => theme.label),
+          ]);
+          expect(
+            postcardRow().compareDocumentPosition(tileList()) & Node.DOCUMENT_POSITION_FOLLOWING,
+          ).toBeTruthy();
+          postcards()
+            .slice(1)
+            .forEach((card, index) => {
+              expect(pictured(card)).toBe(THEMES[index]!.name);
+              const [picture, name] = [...card.children];
+              expect(picture).toContainElement(card.querySelector('[data-picture]'));
+              expect(name).toHaveTextContent(THEMES[index]!.label);
+            });
+        },
+      );
+      And('the chosen one is marked by a check mark as well as by colour', () => {
+        expect(chosenCards()).toEqual([postcard('Snow')]);
+        expect(markOn(postcard('Snow'))).toBe('check');
+        expect(getComputedStyle(postcard('Snow')).backgroundColor).toBe('var(--color-sun)');
+        for (const card of postcards().filter((each) => each !== postcard('Snow'))) {
+          expect(markOn(card)).toBeNull();
+          expect(getComputedStyle(card).backgroundColor).toBe('var(--color-paper)');
+        }
+      });
+    });
+
+    RuleScenario('Surprise draws a theme at once', ({ Given, When, Then, And }) => {
+      Given("a show's Line-up with themes is open", async () => {
+        localStorage.setItem(themeKey('hat-show'), JSON.stringify('snow'));
+        await openLineUp(['Anna', 'Ben'], themedShow());
+      });
+      When('I choose {string}', (_, label: string) => currentUser().click(postcard(label)));
+      Then(
+        'a theme other than the one showing is drawn at random, and the Line-up shows it at once',
+        () => {
+          const drawn = pictured(postcard('Surprise'));
+          expect(THEMES.map((theme) => theme.name)).toContain(drawn);
+          expect(drawn).not.toBe('snow');
+        },
+      );
+      And(`"Surprise" is marked as chosen with a die, showing the drawn theme's picture`, () => {
+        expect(chosenCards()).toEqual([postcard('Surprise')]);
+        expect(markOn(postcard('Surprise'))).toBe('die');
+        expect(getComputedStyle(postcard('Surprise')).backgroundColor).toBe('var(--color-sun)');
+      });
+      And('choosing "Surprise" again draws another', async () => {
+        for (let turn = 0; turn < 5; turn++) {
+          const before = pictured(postcard('Surprise'));
+          await currentUser().click(postcard('Surprise'));
+          expect(pictured(postcard('Surprise'))).not.toBe(before);
+          expect(chosenCards()).toEqual([postcard('Surprise')]);
+        }
+      });
+    });
+
+    RuleScenario('Choosing a theme', ({ Given, When, Then }) => {
+      Given("a show's Line-up with themes is open", () =>
+        openLineUp(['Anna', 'Ben'], themedShow()),
+      );
+      When("I choose a theme's postcard", () => currentUser().click(postcard('Beach')));
+      Then('that theme is chosen, and "Surprise" isn\'t', () => {
+        expect(chosenCards()).toEqual([postcard('Beach')]);
+        expect(markOn(postcard('Surprise'))).toBeNull();
+        expect(pictured(postcard('Surprise'))).toBeNull();
+      });
+    });
+
+    RuleScenario('The theme is kept', ({ Given, When, Then }) => {
+      Given("I chose a theme on a show's Line-up", async () => {
+        await openLineUp(['Anna', 'Ben'], themedShow());
+        await currentUser().click(postcard('Party'));
+      });
+      When("I reload the page and open that show's Line-up again", async () => {
+        reload();
+        await moveOnToShows();
+        await currentUser().click(showCard('Hat Show'));
+      });
+      Then('the same theme is chosen', () => {
+        expect(chosenCards()).toEqual([postcard('Party')]);
+      });
+    });
+
+    RuleScenario('A kept Surprise draws afresh', ({ Given, When, Then }) => {
+      const drawn = new Set<string | null>();
+      Given(`I left a show's Line-up on "Surprise"`, async () => {
+        await openLineUp(['Anna', 'Ben'], themedShow());
+        await currentUser().click(postcard('Beach'));
+        await currentUser().click(postcard('Surprise'));
+      });
+      When("I open that show's Line-up again", async () => {
+        for (let turn = 0; turn < 12; turn++) {
+          await goBackAndReopen();
+          expect(chosenCards()).toEqual([postcard('Surprise')]);
+          drawn.add(pictured(postcard('Surprise')));
+        }
+      });
+      Then('"Surprise" is chosen, with a theme drawn afresh', () => {
+        expect(markOn(postcard('Surprise'))).toBe('die');
+        for (const theme of drawn) expect(THEMES.map((each) => each.name)).toContain(theme);
+        expect(drawn.size).toBeGreaterThan(1);
+      });
+    });
+
+    RuleScenario("The first time, it's Surprise", ({ Given, When, Then }) => {
+      /** Opens the Line-up with `stored` kept as its theme, or nothing kept. */
+      async function openWith(stored?: string) {
+        cleanup();
+        localStorage.clear();
+        if (stored) localStorage.setItem(themeKey('hat-show'), JSON.stringify(stored));
+        await openLineUp(['Anna', 'Ben'], themedShow());
+        return {
+          chosen: chosenCards(),
+          mark: markOn(postcard('Surprise')),
+          drawn: pictured(postcard('Surprise')),
+        };
+      }
+      let first: Awaited<ReturnType<typeof openWith>>;
+      let gone: Awaited<ReturnType<typeof openWith>>;
+      Given(
+        'no theme was ever chosen for a show in this browser, or the one kept is no longer offered',
+        () => undefined,
+      );
+      When('its Line-up opens', async () => {
+        first = await openWith();
+        gone = await openWith('volcano');
+      });
+      Then('"Surprise" is chosen, with a theme drawn', () => {
+        for (const opened of [first, gone]) {
+          expect(opened.chosen.map((card) => card.textContent)).toEqual(['Surprise']);
+          expect(opened.mark).toBe('die');
+          expect(THEMES.map((theme) => theme.name)).toContain(opened.drawn);
+        }
+      });
+    });
+
+    RuleScenario("A theme's own tab", ({ Given, When, Then, And }) => {
+      Given("a show whose themes each suit some of its first option's choices", () =>
+        openLineUp(['Anna', 'Ben'], themedShow()),
+      );
+      When("a theme is chosen and Ben's look is shown", async () => {
+        await currentUser().click(postcard('Beach'));
+        await currentUser().click(tile('Ben'));
+      });
+      Then(
+        "the option's first tab is named for the theme, marked with a star, and holds the choices that suit it",
+        async () => {
+          const [first] = within(group('Ben', 'Hat')).getAllByRole('tab');
+          expect(tabNames()).toEqual(['Beach', 'Hats', 'Helmets']);
+          expect(first!.querySelector('svg')).not.toBeNull();
+          expect(first).toHaveAccessibleName('Beach');
+          await currentUser().click(first!);
+          expect(shownChoices()).toEqual(labelsOf(['crown', 'bike']));
+        },
+      );
+      And("each of those choices is still in its own group's tab", async () => {
+        const tab = (name: string) => within(group('Ben', 'Hat')).getByRole('tab', { name });
+        await currentUser().click(tab('Hats'));
+        expect(shownChoices()).toContain('Crown');
+        await currentUser().click(tab('Helmets'));
+        expect(shownChoices()).toContain('Bike helmet');
+      });
+      And('with a theme that no choice suits, there is no such tab', async () => {
+        await currentUser().click(postcard('Party'));
+        expect(tabNames()).toEqual(['Hats', 'Helmets']);
+      });
+    });
+
+    RuleScenario('The show is handed the theme', ({ Given, When, Then, And }) => {
+      const scenario = themedShow();
+      const shown: string[] = [];
+      Given('a theme is chosen, by hand or by "Surprise"', async () => {
+        await openLineUp(['Anna', 'Ben', 'Carla'], scenario);
+        await currentUser().click(postcard('Snow'));
+        shown.push('snow');
+      });
+      When('I start the show', async () => {
+        await currentUser().click(startButton());
+        await resultHeading();
+        // And once more, on what "Surprise" drew.
+        await choose("Change who's in");
+        await moveOnToShows();
+        await currentUser().click(showCard('Hat Show'));
+        await currentUser().click(postcard('Surprise'));
+        shown.push(pictured(postcard('Surprise'))!);
+        await currentUser().click(startButton());
+        await resultHeading();
+      });
+      Then("the show is handed that theme, and can't change it", () => {
+        expect(scenario.runs.map((run) => run.theme)).toEqual(shown);
+        const { show } = scenario.runs[1]!;
+        expect(() => {
+          (show as { theme: string | null }).theme = 'party';
+        }).toThrow(TypeError);
+        expect(show.theme).toBe(shown[1]);
+      });
+      And('"Run again" runs it with the same theme', async () => {
+        await choose('Run again');
+        await waitFor(() => expect(scenario.runs).toHaveLength(3));
+        expect(scenario.runs[2]!.theme).toBe(shown[1]);
+      });
+    });
+
+    RuleScenario(
+      'In the lab, the theme is drawn from the seed, unless I choose one',
+      ({ When, Then, And }) => {
+        const scenario = themedShow();
+
+        /** Runs the show in the lab with `seed`, on `theme` if given, and gives the theme it was handed. */
+        async function runInLab(seed: number, theme?: string) {
+          const user = userEvent.setup();
+          const { unmount } = render(createElement(Lab, { scenarios: [scenario] }));
+          await user.clear(screen.getByRole('spinbutton', { name: 'Seed' }));
+          await user.type(screen.getByRole('spinbutton', { name: 'Seed' }), String(seed));
+          if (theme) {
+            await user.selectOptions(screen.getByRole('combobox', { name: 'Theme' }), theme);
+          }
+          await user.click(screen.getByRole('button', { name: 'Run' }));
+          await screen.findByText('Hat Show finished.');
+          unmount();
+          return scenario.runs.at(-1)!.theme;
+        }
+
+        let first: string | null;
+        When('I run a show with themes in the lab', async () => {
+          first = await runInLab(7);
+        });
+        Then("its theme is drawn from the run's seed", async () => {
+          expect(THEMES.map((theme) => theme.name)).toContain(first);
+          expect(await runInLab(7)).toBe(first);
+          const others = [];
+          for (let seed = 8; seed < 14; seed++) others.push(await runInLab(seed));
+          expect(others.some((theme) => theme !== first)).toBe(true);
+        });
+        And('when I choose a theme in the lab, it runs on that one', async () => {
+          const other = THEMES.find((theme) => theme.name !== first)!;
+          expect(await runInLab(7, other.label)).toBe(other.name);
+        });
+      },
+    );
   });
 
   Rule('The show gets the looks', ({ RuleScenario }) => {
