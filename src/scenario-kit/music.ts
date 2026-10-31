@@ -2,7 +2,7 @@
 // 0014). The show moves the song along from its own time each frame, so a
 // show that slows down slows its music with it.
 
-export type Voice = 'lead' | 'bass' | 'stab' | 'kick' | 'snare' | 'hat';
+export type Voice = 'lead' | 'bass' | 'stab' | 'kick' | 'snare' | 'hat' | 'bells';
 
 export interface Note {
   /** Where it starts, in beats from the song's first bar; negative before it. */
@@ -91,6 +91,8 @@ const CHORDS: Record<string, { root: string; fifth: string; stab: string[] }> = 
   C: { root: 'C3', fifth: 'G2', stab: ['C4', 'E4', 'G4'] },
   G7: { root: 'G2', fifth: 'D3', stab: ['B3', 'D4', 'F4'] },
   Am: { root: 'A2', fifth: 'E3', stab: ['A3', 'C4', 'E4'] },
+  F: { root: 'F2', fifth: 'C3', stab: ['A3', 'C4', 'F4'] },
+  D7: { root: 'D3', fifth: 'A2', stab: ['C4', 'D4', 'F#4'] },
 };
 
 /** A galop's oom-pah, one chord a bar of four beats: bass, stab, bass, stab. */
@@ -265,6 +267,19 @@ export function playNote(
         .connect(gain(context, when, 0.05 * level, 0.001, 0.005, 0.03))
         .connect(out);
       return [timed(hiss, when, 0.05)];
+    }
+    case 'bells': {
+      // Sleigh bells: a bright shake of noise, with a ring that dies away.
+      const hiss = noise(context);
+      const band = context.createBiquadFilter();
+      band.type = 'bandpass';
+      band.frequency.setValueAtTime(8000, context.currentTime);
+      band.Q.setValueAtTime(1.5, context.currentTime);
+      hiss
+        .connect(band)
+        .connect(gain(context, when, 0.12 * level, 0.004, 0.02, 0.14))
+        .connect(out);
+      return [timed(hiss, when, 0.17)];
     }
   }
 }

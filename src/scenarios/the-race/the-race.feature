@@ -706,9 +706,7 @@ Feature: The Race
       Then the music stops
       And the fanfare plays with "Anna wins!", as before
 
-    # Step 5. Jingle Bells (James Lord Pierpont, 1857) is public domain. This
-    # passes only once the user has heard it in the Lab and said so.
-    @pending
+    # Jingle Bells (James Lord Pierpont, 1857) is public domain.
     Scenario: Jingle Bells at Christmas
       When the show runs on Christmas with music on
       Then Jingle Bells plays instead of the galop, with sleigh bells, on the galop's beats: a roll under "On your marks…", the chorus from "Go!", a faster strain from "Final stretch!", a run down at a quarter of the speed in the slow moment, and silence from the line to the fanfare
