@@ -24,6 +24,23 @@ import { describeSpec } from './support/spec';
 
 /** One frame of the harness's clock. */
 const FRAME = 1 / 30;
+/** Every sound a show can ask for. */
+const CUES: readonly Cue[] = [
+  'splash',
+  'rotor',
+  'whoosh',
+  'heartbeat',
+  'fanfare',
+  'sizzle',
+  'pop',
+  'thunk',
+  'creak',
+  'tumble',
+  'sniff',
+  'grumble',
+  'bark',
+  'latch',
+];
 /** A pick to run kit checks on, when who is in it doesn't matter. */
 const PICK = { names: ['Anna', 'Ben', 'Carla'], unlucky: 'Ben' };
 
@@ -950,28 +967,42 @@ describeSpec(await loadFeature('./kit.feature'), ({ Rule }) => {
 
     RuleScenario('A show can ask for every sound', ({ Then }) => {
       Then(
-        'a show can play splash, rotor, whoosh, heartbeat, fanfare, sizzle, pop, thunk, creak and tumble',
+        'a show can play splash, rotor, whoosh, heartbeat, fanfare, sizzle, pop, thunk, creak, tumble, sniff, grumble, bark and latch',
         () => {
           const counts = fakeAudio();
           const { player } = createSound({ muted: false });
-          for (const cue of [
-            'splash',
-            'rotor',
-            'whoosh',
-            'heartbeat',
-            'fanfare',
-            'sizzle',
-            'pop',
-            'thunk',
-            'creak',
-            'tumble',
-          ]) {
+          for (const cue of CUES) {
             const before = counts.started;
             expect(() => player.play(cue as Cue), cue).not.toThrow();
             expect(counts.started, cue).toBeGreaterThan(before);
           }
         },
       );
+    });
+
+    RuleScenario('Every sound can be heard', ({ When, Then, And }) => {
+      // jsdom has no audio: e2e/sound.spec.ts renders each sound in a real
+      // browser and measures its peaks. Here: each one starts something.
+      let counts: ReturnType<typeof fakeAudio>;
+      When('a show plays each sound', () => {
+        counts = fakeAudio();
+      });
+      Then('the rotor and the sizzle, which loop under a show, peak at 0.05 or more', () => {
+        const { player } = createSound({ muted: false });
+        for (const cue of ['rotor', 'sizzle'] as const) {
+          const before = counts.started;
+          player.play(cue);
+          expect(counts.started, cue).toBeGreaterThan(before);
+        }
+      });
+      And('every other sound peaks at 0.15 or more', () => {
+        const { player } = createSound({ muted: false });
+        for (const cue of CUES.filter((cue) => cue !== 'rotor' && cue !== 'sizzle')) {
+          const before = counts.started;
+          player.play(cue);
+          expect(counts.started, cue).toBeGreaterThan(before);
+        }
+      });
     });
 
     RuleScenario('The sizzle loops until it is stopped', ({ When, Then }) => {

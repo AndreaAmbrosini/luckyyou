@@ -12,6 +12,7 @@ import {
   head,
   popIn,
   type Box,
+  type Cue,
   type Head,
   type Mood,
   type Show,
@@ -54,6 +55,14 @@ const LIFTING = 0.25;
 const BREATH = { seconds: 3, rise: 0.035 };
 /** Seconds the gate takes to swing open, or shut. */
 const SWING = 0.3;
+/** The sound each bubble makes as it appears. */
+const SAID: Readonly<Record<string, Cue>> = {
+  'Sniff…': 'sniff',
+  'Sniff!': 'sniff',
+  'Wuf…': 'grumble',
+  'Woof!': 'bark',
+  'Creak!': 'creak',
+};
 /** Seconds between the moments a bubble is checked clear of what moves around it. */
 const SAMPLE = 0.05;
 /** Stage pixels a bubble keeps clear of what moves round it, between samples. */
@@ -322,9 +331,16 @@ export async function playDontWakeTheDog(show: Show): Promise<void> {
     timeline.set(el, { visibility: 'hidden' }, until);
   }
 
-  // Sounds: the gate's creak, the heartbeat from the spotlight, the fanfare.
+  // Sounds: the dog's sniffs, mumbles and woof, the gate's creak and latch,
+  // the heartbeat from the spotlight, the fanfare.
   for (const saying of plan.says) {
-    if (saying.text === 'Creak!') at(saying.at, () => void show.sound.play('creak'));
+    const cue = SAID[saying.text];
+    if (cue) at(saying.at, () => void show.sound.play(cue));
+  }
+  for (const { gate: swung } of plan.turns) {
+    if (swung && swung.to + SWING <= plan.end) {
+      at(swung.to + SWING, () => void show.sound.play('latch'));
+    }
   }
   for (const time of plan.heartbeats) at(time, () => void show.sound.play('heartbeat'));
   at(plan.walkies, () => void show.sound.play('fanfare'));

@@ -214,7 +214,12 @@ Feature: The scenario kit
   Rule: Sounds
 
     Scenario: A show can ask for every sound
-      Then a show can play splash, rotor, whoosh, heartbeat, fanfare, sizzle, pop, thunk, creak and tumble
+      Then a show can play splash, rotor, whoosh, heartbeat, fanfare, sizzle, pop, thunk, creak, tumble, sniff, grumble, bark and latch
+
+    Scenario: Every sound can be heard
+      When a show plays each sound
+      Then the rotor and the sizzle, which loop under a show, peak at 0.05 or more
+      And every other sound peaks at 0.15 or more
 
     Scenario: The sizzle loops until it is stopped
       When a show plays the sizzle

@@ -1100,6 +1100,71 @@ describeSpec(await loadFeature('./dont-wake-the-dog.feature'), ({ Rule }) => {
     });
   });
 
+  Rule('What it sounds like', ({ RuleScenario }) => {
+    RuleScenario('The dog and the gate are heard', ({ Given, When, Then, And }) => {
+      const runs: Watched[] = [];
+      Given('8 people', () => undefined);
+      When('the show runs with each ending, a "Wuf…" among its scares', async () => {
+        // One at a time: every show plays on the same stage.
+        for (const ending of ENDINGS) {
+          const { team, unlucky, seed } = find(
+            8,
+            (plan) => plan.ending === ending && plan.turns.some((turn) => turn.scare === 'wuf'),
+          );
+          runs.push(await watch(team, unlucky, seed));
+        }
+      });
+      Then(
+        'each "Sniff…" and "Sniff!" sniffs, each "Wuf…" grumbles, the "Woof!" barks and each "Creak!" creaks, as its bubble appears',
+        () => {
+          const sounds = {
+            'Sniff…': 'sniff',
+            'Sniff!': 'sniff',
+            'Wuf…': 'grumble',
+            'Woof!': 'bark',
+            'Creak!': 'creak',
+          };
+          const heard = new Set<string>();
+          for (const run of runs) {
+            for (const [text, cue] of Object.entries(sounds)) {
+              const times = run.plan.says.filter((say) => say.text === text).map((say) => say.at);
+              const cues = run.cues.filter((each) => each.cue === cue);
+              for (const time of times) {
+                expect(
+                  cues.some((each) => Math.abs(each.time - time) <= STEP + 1e-9),
+                  text,
+                ).toBe(true);
+                heard.add(text);
+              }
+            }
+            const said = Object.entries(sounds).flatMap(([text, cue]) =>
+              run.plan.says.filter((say) => say.text === text).map(() => cue),
+            );
+            for (const cue of new Set(Object.values(sounds))) {
+              expect(run.cues.filter((each) => each.cue === cue)).toHaveLength(
+                said.filter((each) => each === cue).length,
+              );
+            }
+          }
+          expect([...heard].sort()).toEqual(Object.keys(sounds).sort());
+        },
+      );
+      And('each time the gate swings shut, its latch clicks', () => {
+        for (const run of runs) {
+          const latches = run.cues.filter((each) => each.cue === 'latch').map((each) => each.time);
+          const shuts = between(run, 0)
+            .filter((frame, k, frames) => k > 0 && frame.gate === 0 && frames[k - 1]!.gate > 0)
+            .map((frame) => frame.time);
+          expect(shuts.length).toBeGreaterThan(0);
+          expect(latches).toHaveLength(shuts.length);
+          latches.forEach((time, k) =>
+            expect(Math.abs(time - shuts[k]!)).toBeLessThanOrEqual(STEP + 1e-9),
+          );
+        }
+      });
+    });
+  });
+
   Rule('It reads without sound', ({ RuleScenario }) => {
     RuleScenario('Captions tell the story, a turn at a time', ({ Given, When, Then }) => {
       let run: Watched;
