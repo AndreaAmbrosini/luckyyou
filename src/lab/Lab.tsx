@@ -62,7 +62,7 @@ const USUAL_HEAD_COUNT = 8;
 /**
  * A development-only page that runs any scenario at any head count, with
  * the unlucky person first or last and a fixed seed, so a show can be
- * watched again exactly as it ran.
+ * watched again exactly as it ran, on a theme drawn from the seed or chosen.
  */
 export function Lab({ scenarios }: { scenarios: readonly Scenario[] }) {
   const id = useId();
@@ -72,6 +72,8 @@ export function Lab({ scenarios }: { scenarios: readonly Scenario[] }) {
   const [position, setPosition] = useState<'first' | 'last'>('last');
   const [nameSet, setNameSet] = useState<NameSet>('Short');
   const [seed, setSeed] = useState('1');
+  // A theme's name, or '' to draw one from the seed.
+  const [theme, setTheme] = useState('');
   const [sound, setSound] = useState(false);
   const [run, setRun] = useState<Run | null>(null);
   const [said, setSaid] = useState('');
@@ -103,6 +105,7 @@ export function Lab({ scenarios }: { scenarios: readonly Scenario[] }) {
       scenario: scenario!,
       names,
       unlucky: position === 'first' ? names[0]! : names.at(-1)!,
+      theme: theme || undefined,
       seed: Number.parseInt(seed, 10) || 0,
       muted: !sound,
       // The level music starts at in the app.
@@ -125,7 +128,10 @@ export function Lab({ scenarios }: { scenarios: readonly Scenario[] }) {
           <select
             id={`${id}-show`}
             value={scenario.id}
-            onChange={(event) => setChosen(event.target.value)}
+            onChange={(event) => {
+              setChosen(event.target.value);
+              setTheme('');
+            }}
           >
             {scenarios.map((each) => (
               <option key={each.id} value={each.id}>
@@ -171,6 +177,23 @@ export function Lab({ scenarios }: { scenarios: readonly Scenario[] }) {
             ))}
           </select>
         </div>
+        {scenario.lineUp?.themes && (
+          <div className={styles.field}>
+            <label htmlFor={`${id}-theme`}>Theme</label>
+            <select
+              id={`${id}-theme`}
+              value={theme}
+              onChange={(event) => setTheme(event.target.value)}
+            >
+              <option value="">From the seed</option>
+              {scenario.lineUp.themes.map((each) => (
+                <option key={each.name} value={each.name}>
+                  {each.label}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
         <div className={styles.field}>
           <label htmlFor={`${id}-seed`}>Seed</label>
           <input

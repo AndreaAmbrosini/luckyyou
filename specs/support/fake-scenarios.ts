@@ -11,6 +11,9 @@ export interface Run {
   readonly names: readonly string[];
   readonly unlucky: string;
   readonly looks: ReadonlyMap<string, ChosenLook>;
+  readonly theme: string | null;
+  /** The show it was handed. */
+  readonly show: Show;
 }
 
 export interface FakeScenario extends Scenario {
@@ -37,7 +40,13 @@ export function fakeScenario(options: FakeOptions = {}): FakeScenario {
     lineUp: options.lineUp,
     runs,
     async play(show) {
-      runs.push({ names: show.names, unlucky: show.unlucky, looks: show.looks });
+      runs.push({
+        names: show.names,
+        unlucky: show.unlucky,
+        looks: show.looks,
+        theme: show.theme,
+        show,
+      });
       await options.play?.(show);
     },
   };
@@ -131,4 +140,30 @@ export function pictureLineUp(): LineUp {
       },
     ],
   });
+}
+
+/**
+ * The grouped line-up with three themes: "Beach" suits the crown and the
+ * bike helmet, in that order; "Snow" the beanie and the hard hat; "Party"
+ * none. Each picture reads back its theme.
+ */
+export function themedLineUp(): LineUp {
+  const theme = (name: string, label: string, suits?: string[]) => ({
+    name,
+    label,
+    suits,
+    picture() {
+      const drawn = document.createElement('div');
+      drawn.dataset.picture = name;
+      return drawn;
+    },
+  });
+  return {
+    ...groupedLineUp(),
+    themes: [
+      theme('beach', 'Beach', ['crown', 'bike']),
+      theme('snow', 'Snow', ['beanie', 'hard-hat']),
+      theme('party', 'Party'),
+    ],
+  };
 }

@@ -43,8 +43,6 @@ Feature: The Race
       When the Line-up opens for The Race
       Then every person, the chosen one's look, the tabs, every racer in the open tab, every colour and extra, and both buttons are in view without scrolling
 
-    # Step 1.
-    @pending
     Scenario: Its themes, and the racers that suit each
       When the Line-up opens for The Race
       Then its themes are "Sports field", "Office", "Under the sea" and "Moon", after "Surprise", each a postcard of its track
@@ -212,24 +210,13 @@ Feature: The Race
       When someone races as the garden gnome
       Then its face and hands have the skin tone the kit hands out for the run
 
-  Rule: A track drawn at random
+  Rule: The track is the theme's
 
-    # Old design: replaced by "The race runs on the theme chosen" (step 1).
-    Scenario: Each race draws its track
-      Given 8 people
-      When the show runs with 40 different random seeds
-      Then each run is on the sports field, the office, under the sea or the Moon
-      And each of the four comes up in at least 5 runs
-
-    # Step 1.
-    @pending
     Scenario: The race runs on the theme chosen
       Given "Under the sea" is chosen on the Line-up
       When the show runs with 10 different random seeds
       Then every run is under the sea
 
-    # Step 1.
-    @pending
     Scenario: In the lab, every theme comes up
       Given 8 people
       When the show runs in the lab with 40 different random seeds

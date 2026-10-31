@@ -143,3 +143,14 @@ export function TrashIcon(props: IconProps) {
     </Icon>
   );
 }
+
+export function DieIcon(props: IconProps) {
+  return (
+    <Icon weight={2.5} {...props}>
+      <rect x="3" y="3" width="18" height="18" rx="4" />
+      <circle cx="8" cy="8" r="1.6" fill="currentColor" stroke="none" />
+      <circle cx="12" cy="12" r="1.6" fill="currentColor" stroke="none" />
+      <circle cx="16" cy="16" r="1.6" fill="currentColor" stroke="none" />
+    </Icon>
+  );
+}

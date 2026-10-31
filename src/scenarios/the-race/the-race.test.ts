@@ -225,6 +225,7 @@ async function watch(
   {
     unlucky = team.at(-1)!,
     seed = 1,
+    course = 'field',
     looks,
     cancelAt,
     reducedMotion = false,
@@ -232,6 +233,8 @@ async function watch(
   }: {
     unlucky?: string;
     seed?: number;
+    /** The theme chosen on the Line-up. */
+    course?: Course;
     looks?: ReadonlyMap<string, ChosenLook>;
     cancelAt?: number;
     reducedMotion?: boolean;
@@ -246,6 +249,7 @@ async function watch(
     names: team,
     unlucky,
     seed,
+    theme: course,
     looks: dealt,
     cancelAt,
     reducedMotion,
@@ -330,7 +334,7 @@ async function watch(
       onStage?.(time, scene);
     },
   });
-  const plan = planShow(team, unlucky, createRandom(seed));
+  const plan = planShow(team, unlucky, createRandom(seed), course);
   return { record, frames, plan, team, unlucky, looks: dealt };
 }
 
@@ -393,8 +397,7 @@ const shared = (() => {
       once(`mount ${mount} ${reducedMotion}`, () => {
         const team = ['Kofi', 'Luca', 'Mia', 'Nora', 'Omar'];
         // On the sports field, so both events are the racer's own.
-        let seed = 7;
-        while (planShow(team, team.at(-1)!, createRandom(seed)).course !== 'field') seed++;
+        const seed = 7;
         const plan = planShow(team, team.at(-1)!, createRandom(seed));
         team[team.indexOf(plan.events[0]!.subject)] = name;
         return watch(team, { seed, looks: allOn(team, mount), reducedMotion });
@@ -407,8 +410,7 @@ const shared = (() => {
     thing: (thing: Creature, name: string, reducedMotion = false) =>
       once(`thing ${thing} ${reducedMotion}`, async () => {
         const team = ['Kofi', 'Luca'];
-        let seed = 7;
-        while (planShow(team, team.at(-1)!, createRandom(seed)).course !== 'field') seed++;
+        const seed = 7;
         const plan = planShow(team, team.at(-1)!, createRandom(seed));
         team[team.indexOf(plan.events[0]!.subject)] = name;
         // Until "Phew!" is down, which is up for 1.1 s.
@@ -439,9 +441,7 @@ const shared = (() => {
         const team = ['Dario', 'Elena', 'Fabio', 'Giulia', 'Hana', 'Anna'];
         let seed = 1;
         const fits = (plan: Plan) =>
-          plan.course === 'field' &&
-          plan.ending === 'photo' &&
-          plan.events.every((event) => event.subject !== 'Anna');
+          plan.ending === 'photo' && plan.events.every((event) => event.subject !== 'Anna');
         while (!fits(planShow(team, 'Anna', createRandom(seed)))) seed++;
         const plan = planShow(team, 'Anna', createRandom(seed));
         team[team.indexOf(plan.events[0]!.subject)] = 'Ben';
@@ -521,8 +521,8 @@ function plansOn(
 ): Plan[] {
   const found: Plan[] = [];
   for (let seed = 1; found.length < runs; seed++) {
-    const plan = planShow(team, unlucky, createRandom(seed));
-    if (plan.course === course && fits(plan)) found.push(plan);
+    const plan = planShow(team, unlucky, createRandom(seed), course);
+    if (fits(plan)) found.push(plan);
   }
   return found;
 }
@@ -561,6 +561,7 @@ async function listen(team: readonly string[], unlucky: string, seed = 1): Promi
     names: team,
     unlucky,
     seed,
+    theme: 'field',
     looks: dealLooks(theRace.lineUp!, team, createRandom(seed)),
     onFrame(time) {
       for (const each of [...moves, ...cues]) each.time ??= time;
@@ -701,12 +702,11 @@ function onTrack(course: Course, kind: 'burst' | 'stop' = 'stop'): Promise<OnTra
     const unlucky = team.at(-1)!;
     let seed = 1;
     const fits = (plan: Plan) =>
-      plan.course === course &&
       plan.ending === 'photo' &&
       (course === 'field' || plan.events.some((e) => e.cause === 'track' && e.kind === kind));
-    while (!fits(planShow(team, unlucky, createRandom(seed)))) seed++;
+    while (!fits(planShow(team, unlucky, createRandom(seed), course))) seed++;
     // Names are only labels to the plan: two swapped keep the same race.
-    const own = planShow(team, unlucky, createRandom(seed)).events.find(
+    const own = planShow(team, unlucky, createRandom(seed), course).events.find(
       (event) => event.cause === 'track',
     );
     if (own) {
@@ -727,6 +727,7 @@ function onTrack(course: Course, kind: 'burst' | 'stop' = 'stop'): Promise<OnTra
       key,
       watch(team, {
         seed,
+        course,
         onStage: (time, scene) => {
           if (!track) {
             track = scene.querySelector<HTMLElement>('[data-part="track"]')!;
@@ -770,16 +771,17 @@ function* frames(from: number, to: number, step = 1 / 30) {
   for (let t = from; t <= to + 1e-9; t += step) yield t;
 }
 
-/** Every head count with seeds 1–40, the last of the team unlucky. */
+/** Every head count with seeds 1–40, on each track in turn, the last of the team unlucky. */
 function everyPlan(): { label: string; plan: Plan; team: string[]; unlucky: string }[] {
   const all = [];
   for (let count = 2; count <= 8; count++) {
     for (let seed = 1; seed <= 40; seed++) {
       const team = names(count);
       const unlucky = team.at(-1)!;
+      const course = COURSES[seed % COURSES.length]!;
       all.push({
-        label: `${count} people, seed ${seed}`,
-        plan: planShow(team, unlucky, createRandom(seed)),
+        label: `${count} people, seed ${seed}, ${course}`,
+        plan: planShow(team, unlucky, createRandom(seed), course),
         team,
         unlucky,
       });
@@ -872,6 +874,39 @@ describeSpec(await loadFeature('./the-race.feature'), ({ Rule }) => {
       );
     });
 
+    RuleScenario('Its themes, and the racers that suit each', ({ When, Then, And }) => {
+      const lineUp = theRace.lineUp!;
+      const labelOf = (name: string) =>
+        lineUp.options[0]!.choices.find((choice) => choice.name === name)!.label;
+      When('the Line-up opens for The Race', () => {
+        expect(lineUp.themes).toBeDefined();
+      });
+      Then(
+        'its themes are {any}, after "Surprise", each a postcard of its track',
+        (_, themes: string) => {
+          const labels = [...themes.matchAll(/"([^"]+)"/g)].map(([, label]) => label);
+          expect(lineUp.themes!.map((theme) => theme.label)).toEqual(labels);
+          expect(lineUp.themes!.map((theme) => theme.name)).toEqual([...COURSES]);
+          for (const theme of lineUp.themes!) {
+            const picture = theme.picture() as SVGSVGElement;
+            expect(picture.dataset).toMatchObject({ part: 'postcard', course: theme.name });
+            expect(picture.getAttribute('viewBox')).toBe('0 0 120 46');
+            expect(picture.getAttribute('aria-hidden')).toBe('true');
+          }
+        },
+      );
+      And(
+        "each theme's tab holds, in this order:",
+        (_, table: { theme: string; racers: string }[]) => {
+          expect(table.map((row) => row.theme)).toEqual(lineUp.themes!.map((each) => each.label));
+          for (const row of table) {
+            const theme = lineUp.themes!.find((each) => each.label === row.theme)!;
+            expect(theme.suits!.map(labelOf), row.theme).toEqual(row.racers.split(', '));
+          }
+        },
+      );
+    });
+
     RuleScenario('The Line-up fits the window', ({ Given, When, Then }) => {
       // jsdom has no layout: e2e/line-up.spec.ts measures this Line-up in a
       // real 1280 by 800 window. Here: nothing it shows is more than one row holds.
@@ -911,6 +946,7 @@ describeSpec(await loadFeature('./the-race.feature'), ({ Rule }) => {
         names: team,
         unlucky: team.at(-1)!,
         seed,
+        theme: 'field',
         looks,
         cancelAt: 0.2,
         step: STEP,
@@ -1795,26 +1831,67 @@ describeSpec(await loadFeature('./the-race.feature'), ({ Rule }) => {
     });
   });
 
-  Rule('A track drawn at random', ({ RuleScenario, RuleScenarioOutline }) => {
+  Rule("The track is the theme's", ({ RuleScenario, RuleScenarioOutline }) => {
     const team = names(8);
     const unlucky = team.at(-1)!;
     const own = (plan: Plan) => plan.events.filter((event) => event.cause === 'track');
 
-    RuleScenario('Each race draws its track', ({ Given, When, Then, And }) => {
-      let runs: Plan[];
-      Given('{int} people', () => undefined);
-      When('the show runs with {int} different random seeds', (_, seeds: number) => {
-        runs = plans(team, unlucky, seeds);
+    /** The track each run with seeds 1 to `seeds` is on, as its stage draws it. */
+    async function tracksRun(seeds: number, theme?: string) {
+      const courses: string[] = [];
+      for (let seed = 1; seed <= seeds; seed++) {
+        let course = '';
+        await runShow(theRace, {
+          names: team,
+          unlucky,
+          seed,
+          theme,
+          cancelAt: 0.1,
+          onFrame: (_, stage) => {
+            course ||= stage.querySelector<HTMLElement>('[data-part="track"]')!.dataset.course!;
+          },
+        });
+        courses.push(course);
+      }
+      return courses;
+    }
+
+    RuleScenario('The race runs on the theme chosen', ({ Given, When, Then }) => {
+      let theme: Course;
+      let runs: string[];
+      Given('{string} is chosen on the Line-up', (_, label: string) => {
+        theme = theRace.lineUp!.themes!.find((each) => each.label === label)!.name as Course;
       });
-      Then('each run is on the sports field, the office, under the sea or the Moon', () => {
-        for (const plan of runs) expect(COURSES).toContain(plan.course);
+      When('the show runs with {int} different random seeds', async (_, seeds: number) => {
+        runs = await tracksRun(seeds, theme);
       });
-      And('each of the four comes up in at least {int} runs', (_, least: number) => {
-        for (const course of COURSES) {
-          const on = runs.filter((plan) => plan.course === course);
-          expect(on.length, course).toBeGreaterThanOrEqual(least);
-        }
+      Then('every run is under the sea', () => {
+        expect(runs).toEqual(runs.map(() => 'sea'));
+        expect(theme).toBe('sea');
       });
+    });
+
+    RuleScenario('In the lab, every theme comes up', ({ Given, When, Then }) => {
+      let runs: string[];
+      Given('{int} people', (_, count: number) => expect(team).toHaveLength(count));
+      When(
+        'the show runs in the lab with {int} different random seeds',
+        async (_, seeds: number) => {
+          runs = await tracksRun(seeds);
+        },
+      );
+      Then(
+        'each run is on one of the themes, and each theme comes up in at least {int} runs',
+        (_, least: number) => {
+          const themes = theRace.lineUp!.themes!.map((each) => each.name);
+          for (const course of runs) expect(themes).toContain(course);
+          for (const theme of themes) {
+            expect(runs.filter((course) => course === theme).length, theme).toBeGreaterThanOrEqual(
+              least,
+            );
+          }
+        },
+      );
     });
 
     RuleScenarioOutline(
@@ -2191,7 +2268,7 @@ describeSpec(await loadFeature('./the-race.feature'), ({ Rule }) => {
           const reach = (name: string) =>
             name === unlucky ? { least: -short, most: 0 } : { least: 0, most: past };
           runs = Array.from({ length: seeds }, (_, index) =>
-            planShow(team, unlucky, createRandom(index + 1), reach),
+            planShow(team, unlucky, createRandom(index + 1), 'field', reach),
           );
         });
         Then(

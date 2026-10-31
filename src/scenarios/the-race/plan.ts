@@ -2,8 +2,8 @@
 // pick: the plan is built backwards from the finish, which the unlucky person
 // always crosses first. First the ending and who is beside them at the line,
 // then the front group of the final stretch and its one swap, then the events
-// that lead there and the order everyone set off in. Last, the track, and on
-// any but the sports field which event is the track's own. Every nose's place
+// that lead there and the order everyone set off in. Last, on any track but
+// the sports field, which event is the track's own. Every nose's place
 // on screen follows from the plan alone, at any moment: `noseAt`.
 //
 // Places are stage pixels on screen; the camera follows the leaders at a
@@ -20,7 +20,7 @@ import { shuffle } from '../../scenario-kit';
  */
 export type Ending = 'photo' | 'brake' | 'surge';
 
-/** The tracks a race is drawn on. */
+/** The tracks a race runs on, one per theme. */
 export type Course = 'field' | 'office' | 'sea' | 'moon';
 
 export const COURSES: readonly Course[] = ['field', 'office', 'sea', 'moon'];
@@ -224,6 +224,7 @@ export function planShow(
   names: readonly string[],
   unlucky: string,
   random: () => number,
+  course: Course = 'field',
   reachOf: (name: string) => Reach = () => NOSE,
 ): Plan {
   const count = names.length;
@@ -365,9 +366,8 @@ export function planShow(
 
   const wavers = new Set(others.filter(() => random() < 0.5));
 
-  // The track, drawn last so the race itself is the same on any of them; off
-  // the sports field, one event is the track's own, where and when it was.
-  const course = COURSES[Math.floor(random() * COURSES.length)]!;
+  // Off the sports field, one event is the track's own, where and when it
+  // was: drawn last, so the race itself is the same on any track.
   if (course !== 'field') {
     const own = Math.floor(random() * events.length);
     events[own] = { ...events[own]!, cause: 'track' };

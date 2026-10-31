@@ -41,6 +41,23 @@ export interface LineUp {
    * in. `place` is their place in today's list, from 1.
    */
   draw(look: ChosenLook, person: { readonly name: string; readonly place: number }): Element;
+  /** Where the whole show takes place, one for everyone, shown as postcards (decision 0015). */
+  readonly themes?: readonly LineUpTheme[];
+}
+
+/** One of a line-up's themes. A line-up offers none, or at least two. */
+export interface LineUpTheme {
+  /** What the show is handed; unique in the line-up. */
+  readonly name: string;
+  /** Shown under its postcard. */
+  readonly label: string;
+  /** Draws its postcard's picture, 120 by 46, filling the box it shows in. */
+  picture(): Element;
+  /**
+   * The first option's choices that suit it, by name, in the order its tab
+   * shows them: while it is chosen, they are that option's first tab.
+   */
+  readonly suits?: readonly string[];
 }
 
 export interface LineUpOption {
@@ -90,6 +107,8 @@ export interface Show {
   readonly unlucky: string;
   /** Each person's look from the Line-up, by name; empty for a show without one. Frozen. */
   readonly looks: ReadonlyMap<string, ChosenLook>;
+  /** The theme from the Line-up, by name; null for a show without themes. */
+  readonly theme: string | null;
   /** Seeded, so a run can be replayed. Returns numbers in [0, 1). */
   readonly random: () => number;
   /** Aborted when the show is cancelled or runs out of time. */

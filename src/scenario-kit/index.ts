@@ -16,6 +16,7 @@ export {
   type LineUp,
   type LineUpChoice,
   type LineUpOption,
+  type LineUpTheme,
   type Scenario,
   type ScenarioMeta,
   type Show,

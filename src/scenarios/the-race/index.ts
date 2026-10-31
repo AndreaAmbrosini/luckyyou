@@ -1,9 +1,10 @@
 // Everyone rides a mount or races as a creature, as the host chose on the
-// Line-up, a lane each, on a track drawn at random (a sports field, the
-// office, under the sea or the Moon), the camera following the leaders. Winning is losing: the leader looks scared, pulling on the reins
-// or flailing its arms. One thing happens at a time
-// before the final stretch, which runs at full speed; only the last moment
-// before the line is slow, and the unlucky person crosses first.
+// Line-up, a lane each, on the theme chosen there: a track (a sports field,
+// the office, under the sea or the Moon). The camera follows the leaders.
+// Winning is losing: the leader looks scared, pulling on the reins or
+// flailing its arms. One thing happens at a time before the final stretch,
+// which runs at full speed; only the last moment before the line is slow,
+// and the unlucky person crosses first.
 
 import { defineScenario, handOutLooks, type LineUp } from '../../scenario-kit';
 import { creature } from './creature';
@@ -13,13 +14,16 @@ import {
   extraPicture,
   isCreature,
   MOUNTS,
+  type Kind,
   RACER_COLOURS,
   racer,
   type Creature,
   type RacerLook,
   type RideLook,
 } from './parts';
+import type { Course } from './plan';
 import { playTheRace } from './play';
+import { postcard } from './postcards';
 
 /** What someone races as. */
 const RACERS = {
@@ -81,6 +85,22 @@ const KINDS: Record<Creature, (typeof GROUPS)[number]> = {
   astronaut: 'Space',
   alien: 'Space',
 };
+
+/** The themes, each a track, with the racers that suit it, in the order its tab shows them. */
+const THEMES: readonly { name: Course; label: string; suits: readonly Kind[] }[] = [
+  {
+    name: 'field',
+    label: 'Sports field',
+    suits: ['hopper', 'ostrich', 'duck', 'snail', 'caterpillar', 'cat', 'pigeon', 'dinosaur'],
+  },
+  {
+    name: 'office',
+    label: 'Office',
+    suits: ['chair', 'mug', 'printer', 'sticky', 'sandwich', 'banana', 'robot', 'villain'],
+  },
+  { name: 'sea', label: 'Under the sea', suits: ['shark', 'octopus', 'sushi', 'duck', 'penguin'] },
+  { name: 'moon', label: 'Moon', suits: ['rocket', 'astronaut', 'alien', 'robot', 'hopper'] },
+];
 
 /** Colours and extras: "shark" is a colour here, read out as "Grey". */
 const LABELS = {
@@ -151,6 +171,7 @@ const lineUp: LineUp = {
       })),
     },
   ],
+  themes: THEMES.map((theme) => ({ ...theme, picture: () => postcard(theme.name) })),
   draw: (chosen, { name, place }) => {
     const look = chosen as unknown as RacerLook;
     const drawn = { face: faceOf(name), number: place };

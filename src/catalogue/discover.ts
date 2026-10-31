@@ -76,7 +76,7 @@ const filled = (text: unknown) => typeof text === 'string' && text.trim() !== ''
 /** Every problem with a scenario's line-up (decision 0011). */
 function lineUpProblems(lineUp: unknown): string[] {
   if (typeof lineUp !== 'object' || lineUp === null) return ["its line-up isn't an object"];
-  const { heading, start, options, draw } = lineUp as Record<string, unknown>;
+  const { heading, start, options, draw, themes } = lineUp as Record<string, unknown>;
   const problems: string[] = [];
   if (!filled(heading)) problems.push('its line-up has no heading');
   if (!filled(start)) problems.push('its line-up has no start label');
@@ -116,6 +116,36 @@ function lineUpProblems(lineUp: unknown): string[] {
   }
 
   if (typeof draw !== 'function') problems.push('its line-up has no draw function');
+  if (themes !== undefined) {
+    const first = Array.isArray(options) ? (options[0] as { choices?: unknown } | undefined) : null;
+    problems.push(...themeProblems(themes, first?.choices));
+  }
+  return problems;
+}
+
+/** Every problem with a line-up's themes (decision 0015). */
+function themeProblems(themes: unknown, choices: unknown): string[] {
+  if (!Array.isArray(themes) || themes.length < 2) return ['its line-up has fewer than 2 themes'];
+  const offered = new Set(
+    Array.isArray(choices) ? choices.map((choice) => (choice as { name?: unknown })?.name) : [],
+  );
+  const problems: string[] = [];
+  const seen = new Set<unknown>();
+  for (const theme of themes as unknown[]) {
+    const { name, label, picture, suits } = (theme ?? {}) as Record<string, unknown>;
+    if (!filled(name) || !filled(label)) {
+      problems.push('its line-up has a theme without a name or label');
+      continue;
+    }
+    if (seen.has(name)) problems.push(`its line-up has two themes named "${name}"`);
+    seen.add(name);
+    if (typeof picture !== 'function') problems.push(`its line-up theme "${name}" has no picture`);
+    if (suits === undefined) continue;
+    const odd = Array.isArray(suits) ? suits.find((choice) => !offered.has(choice)) : suits;
+    if (odd !== undefined) {
+      problems.push(`its line-up theme "${name}" suits a choice its first option doesn't offer`);
+    }
+  }
   return problems;
 }
 

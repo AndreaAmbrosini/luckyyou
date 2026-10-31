@@ -1,13 +1,21 @@
-// Everyone's look on each show's Line-up, kept in this browser per show
-// (decision 0011) and read so that storage that is blocked, full or damaged
-// never stops the Line-up (decision 0004).
+// Everyone's look on each show's Line-up, and its theme, kept in this
+// browser per show (decisions 0011 and 0015) and read so that storage that is
+// blocked, full or damaged never stops the Line-up (decision 0004).
 
 import { useCallback, useState } from 'react';
 import type { ChosenLook, Scenario } from '../scenario-kit/contract';
-import { dealLooks, fitLook } from '../scenario-kit/line-up';
+import { dealLooks, drawTheme, fitLook, themeNamed } from '../scenario-kit/line-up';
 import { readJson, writeJson } from '../storage';
 
 export const looksKey = (id: string) => `luckyyou:v1:line-up:${id}`;
+/** The theme chosen by hand, by name; nothing, or null, for "Surprise". */
+export const themeKey = (id: string) => `luckyyou:v1:line-up:${id}:theme`;
+
+/** The theme a Line-up shows, and whether "Surprise" drew it. */
+export interface ThemeChoice {
+  readonly name: string;
+  readonly surprise: boolean;
+}
 
 type Looks = ReadonlyMap<string, ChosenLook>;
 
@@ -32,6 +40,7 @@ function load(id: string): Stored {
  */
 export function useLooks() {
   const [kept, setKept] = useState<ReadonlyMap<string, Stored>>(new Map());
+  const [keptThemes, setKeptThemes] = useState<ReadonlyMap<string, unknown>>(new Map());
 
   const save = useCallback(
     (scenario: Scenario, today: Looks) => {
@@ -66,5 +75,33 @@ export function useLooks() {
     [kept, save],
   );
 
-  return { open, change: save };
+  /**
+   * The theme a show's Line-up opens on: the one kept, while the show still
+   * offers it, or else "Surprise", which draws one afresh. Null without themes.
+   */
+  const openTheme = useCallback(
+    (scenario: Scenario): ThemeChoice | null => {
+      const lineUp = scenario.lineUp!;
+      if (!lineUp.themes) return null;
+      const stored = keptThemes.has(scenario.id)
+        ? keptThemes.get(scenario.id)
+        : readJson(themeKey(scenario.id));
+      const theme = themeNamed(lineUp, stored);
+      return theme
+        ? { name: theme.name, surprise: false }
+        : { name: drawTheme(lineUp, Math.random), surprise: true };
+    },
+    [keptThemes],
+  );
+
+  const changeTheme = useCallback(
+    (scenario: Scenario, theme: ThemeChoice) => {
+      const stored = theme.surprise ? null : theme.name;
+      setKeptThemes(new Map(keptThemes).set(scenario.id, stored));
+      writeJson(themeKey(scenario.id), stored);
+    },
+    [keptThemes],
+  );
+
+  return { open, change: save, openTheme, changeTheme };
 }

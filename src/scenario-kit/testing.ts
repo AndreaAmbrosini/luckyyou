@@ -31,6 +31,8 @@ export interface RunShowOptions {
   readonly unlucky: string;
   /** Everyone's look from the Line-up; dealt from the seed unless given. */
   readonly looks?: ReadonlyMap<string, ChosenLook>;
+  /** The theme from the Line-up; drawn from the seed unless given. */
+  readonly theme?: string;
   readonly seed?: number;
   /** Cancels the show at this many show seconds, as Esc would. */
   readonly cancelAt?: number;
@@ -94,6 +96,7 @@ export async function runShow(scenario: Scenario, options: RunShowOptions): Prom
       names: options.names,
       unlucky: options.unlucky,
       looks: options.looks,
+      theme: options.theme,
       seed: options.seed ?? 1,
       muted: options.muted ?? true,
       music: options.music ?? 0,
