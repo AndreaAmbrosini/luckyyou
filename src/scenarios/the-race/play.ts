@@ -19,7 +19,7 @@ import {
   type Mood,
   type Show,
 } from '../../scenario-kit';
-import { creature, CREATURE_SPEC, TENTACLES, type CreatureRunner } from './creature';
+import { creature, CREATURE_SPEC, FLAIL, REACH, TENTACLES, type CreatureRunner } from './creature';
 import { boxAt, bubbleOffsets, faceAt, lane, tagAt, tagBox, tagSize, type Lane } from './layout';
 import {
   isCreature,
@@ -56,6 +56,7 @@ import {
   type Course,
   type Plan,
   type RaceEvent,
+  type Reach,
 } from './plan';
 import styles from './the-race.module.css';
 
@@ -181,6 +182,10 @@ function drawRacer(look: RacerLook, face: Look, number: number): Runner {
     : racer(look as RideLook, { face, number });
 }
 
+/** How far `look`'s drawing reaches past its nose on its grid: a ride reaches its nose. */
+const reachOf = (look: RacerLook): Reach =>
+  isCreature(look.mount) ? REACH[look.mount] : { least: 0, most: 0 };
+
 /** A track's prop drawn on a racer, hidden until its event shows it. */
 function propOn(el: SVGElement, prop: 'cup' | 'seaweed' | 'swirls'): SVGGElement {
   const g = group(el, prop, TRACK_PROPS[prop]);
@@ -246,12 +251,10 @@ const SPEEDY = 150;
 const FLASH = 0.25;
 /** The photo pops up this long after the freeze. */
 const PHOTO_AFTER = 0.3;
-/** In the photo, the unlucky nose is this far over the line. */
+/** In the photo, all of the unlucky racer is this far over the line. */
 const AHEAD = 16;
 /** Confetti at the win: how many pieces, falling at least this fast to where they settle. */
 const CONFETTI = { count: 26, fall: 520 };
-/** A creature in front flails its arms this far either way, once every so often; so does a short-armed winner. */
-const FLAIL = { degrees: 24, seconds: 0.36 };
 /**
  * A zombie's front shoe flies back from its foot over `fly` s, and it hops
  * back for it, this high and this many times, until "Phew!".
@@ -452,11 +455,16 @@ function sayings(plan: Plan, unlucky: string, mountOf: (name: string) => Kind): 
 }
 
 export async function playTheRace(show: Show): Promise<void> {
-  const plan = planShow(show.names, show.unlucky, show.random);
-  const faces = handOutLooks(show.names, show.random);
   const count = show.names.length;
-  const { times } = plan;
   const lookOf = (name: string) => (show.looks.get(name) as RacerLook | undefined) ?? FALLBACK;
+  // Each racer's reach in stage px, in its lane.
+  const plan = planShow(show.names, show.unlucky, show.random, (name) => {
+    const { k } = lane(show.names.indexOf(name), count);
+    const { least, most } = reachOf(lookOf(name));
+    return { least: least * k, most: most * k };
+  });
+  const faces = handOutLooks(show.names, show.random);
+  const { times } = plan;
 
   const scene = show.stage.appendChild(document.createElement('div'));
   scene.className = styles.scene!;
@@ -682,7 +690,11 @@ export async function playTheRace(show: Show): Promise<void> {
                 drawn.setMood('scared');
                 drawn.setPose('pull');
                 drawn.setSweat(true);
-                const nose = PHOTO.line + (name === show.unlucky ? AHEAD : -2);
+                const { least, most } = reachOf(look);
+                const nose =
+                  name === show.unlucky
+                    ? PHOTO.line + AHEAD - least * PHOTO.scale
+                    : PHOTO.line - 2 - most * PHOTO.scale;
                 return { name, racer: drawn, nose };
               }),
             `${show.unlucky}, by a nose!`,

@@ -120,8 +120,20 @@ const AT_THE_LINE: Record<Ending, { unlucky: number; rival: number; third: numbe
   brake: { unlucky: FINISH + 4, rival: 900, third: 935, ease: 'power2.out' },
   surge: { unlucky: FINISH + 4, rival: 940, third: 925, ease: 'power2.out' },
 };
-/** After a brake or a surge, the unlucky nose sails on to here. */
-const SAILS_ON = 1000;
+/** After a brake or a surge, the unlucky nose sails on this much further. */
+const SAIL_ON = 36;
+
+/**
+ * How far a racer's drawing reaches past its nose, in stage px: `least` as
+ * it leads, leaning back and flailing; `most` in any pose it races in. Hands
+ * out in front reach past it; a body leaning back falls short of it.
+ */
+export interface Reach {
+  readonly least: number;
+  readonly most: number;
+}
+
+const NOSE: Reach = { least: 0, most: 0 };
 
 /** How many things happen before the final stretch. */
 export const eventCount = (count: number) => Math.min(4, Math.max(2, count - 3));
@@ -208,7 +220,12 @@ export function stopping(plan: Plan, name: string, t: number): RaceEvent | null 
   );
 }
 
-export function planShow(names: readonly string[], unlucky: string, random: () => number): Plan {
+export function planShow(
+  names: readonly string[],
+  unlucky: string,
+  random: () => number,
+  reachOf: (name: string) => Reach = () => NOSE,
+): Plan {
   const count = names.length;
   const others = shuffle(
     names.filter((name) => name !== unlucky),
@@ -319,15 +336,23 @@ export function planShow(names: readonly string[], unlucky: string, random: () =
     key(name, slow, formation(rank), 'none');
   });
 
-  // The last moment, and after it.
+  // The last moment, and after it, placed by what reaches furthest: all of
+  // the unlucky racer over the line, and nobody's hands before it.
   const line = AT_THE_LINE[ending];
   for (const name of names) {
     const role =
       name === unlucky ? 'unlucky' : name === rival ? 'rival' : name === third ? 'third' : null;
-    const x = role ? line[role] : xOf(name, slow);
+    const reach = reachOf(name);
+    const x =
+      role === 'unlucky'
+        ? line.unlucky - reach.least
+        : role
+          ? line[role] - reach.most
+          : xOf(name, slow);
     key(name, finish, x, role === 'unlucky' || role === 'rival' ? line.ease : 'sine.inOut');
     if (ending !== 'photo') {
-      const after = name === unlucky ? SAILS_ON : ending === 'brake' && name === rival ? x - 24 : x;
+      const after =
+        name === unlucky ? x + SAIL_ON : ending === 'brake' && name === rival ? x - 24 : x;
       key(name, finish + RUN_OUT, after, 'power2.out');
     }
   }

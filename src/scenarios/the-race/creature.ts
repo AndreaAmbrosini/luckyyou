@@ -22,6 +22,7 @@ import {
   type Runner,
   type Shape,
 } from './parts';
+import type { Reach } from './plan';
 import styles from './the-race.module.css';
 
 type Point = readonly [x: number, y: number];
@@ -1856,6 +1857,39 @@ export const FEET: Record<
 
 /** How far a creature leans back when scared, about its hips. */
 export const LEAN = -10;
+
+/** A creature in front flails its arms this far either way, once every so often; so does a short-armed winner. */
+export const FLAIL = { degrees: 24, seconds: 0.36 };
+
+/**
+ * How far each creature's drawing reaches past its nose on its grid, with
+ * any extra, as the browser draws it: `least` in front, scared, leaning back
+ * and flailing; `most` in any pose it races in, its hands out in front.
+ */
+export const REACH: Readonly<Record<Creature, Reach>> = {
+  zombie: { least: -30, most: 15 },
+  robot: { least: 1, most: 16 },
+  shark: { least: -7, most: 1 },
+  astronaut: { least: -3, most: 12 },
+  monster: { least: -15, most: 12 },
+  villain: { least: 5, most: 17 },
+  alien: { least: 0, most: 10 },
+  dinosaur: { least: -13, most: 6 },
+  mug: { least: 7, most: 28 },
+  printer: { least: 6, most: 31 },
+  sticky: { least: 10, most: 32 },
+  banana: { least: -11, most: 9 },
+  icecream: { least: 0, most: 25 },
+  sushi: { least: -8, most: 14 },
+  cat: { least: -14, most: 5 },
+  octopus: { least: 15, most: 27 },
+  penguin: { least: -1, most: 17 },
+  pigeon: { least: -19, most: 0 },
+  ghost: { least: 1, most: 29 },
+  mummy: { least: 18, most: 32 },
+  yeti: { least: -4, most: 27 },
+  gnome: { least: 8, most: 9 },
+};
 
 /** What a creature's burst or stop brings out, each hidden until then. */
 export type CreatureProp =

@@ -2100,6 +2100,51 @@ describeSpec(await loadFeature('./the-race.feature'), ({ Rule }) => {
       },
     );
 
+    RuleScenario(
+      'Whatever reaches furthest, the unlucky person is over first',
+      ({ Given, When, Then, And }) => {
+        const team = names(8);
+        const unlucky = team.at(-1)!;
+        let short: number;
+        let past: number;
+        let runs: Plan[];
+        Given(
+          "{int} people, the unlucky person's racer leaning back {int} px short of its nose as it leads",
+          (_, __: number, px: number) => {
+            short = px;
+          },
+        );
+        And("everyone else's hands reaching {int} px past their noses", (_, px: number) => {
+          past = px;
+        });
+        When('the show runs with {int} different random seeds', (_, seeds: number) => {
+          const reach = (name: string) =>
+            name === unlucky ? { least: -short, most: 0 } : { least: 0, most: past };
+          runs = Array.from({ length: seeds }, (_, index) =>
+            planShow(team, unlucky, createRandom(index + 1), reach),
+          );
+        });
+        Then(
+          "all of the unlucky person's racer is over the line before anyone else's hands reach it",
+          () => {
+            expect(new Set(runs.map((plan) => plan.ending))).toEqual(new Set(ENDINGS));
+            const step = 1 / 120;
+            for (const plan of runs) {
+              let over: number | null = null;
+              for (let t = plan.times.stretch; t <= plan.times.end && over === null; t += step) {
+                const line = lineAt(plan, t);
+                for (const name of team.filter((each) => each !== unlucky)) {
+                  expect(noseAt(plan, name, t) + past, `${plan.ending} ${name}`).toBeLessThan(line);
+                }
+                if (noseAt(plan, unlucky, t) - short >= line) over = t;
+              }
+              expect(over, plan.ending).not.toBeNull();
+            }
+          },
+        );
+      },
+    );
+
     RuleScenario('Nobody wins out of nowhere', ({ Given, When, Then, And }) => {
       const team = names(8);
       const unlucky = team.at(-1)!;
