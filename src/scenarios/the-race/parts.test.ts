@@ -246,7 +246,7 @@ describe('the office, the sea and the Moon', () => {
     expect(Math.max(...xs)).toBeGreaterThanOrEqual(1280);
   });
 
-  it('sticks the office’s signs to its partitions, and stands the others on posts', () => {
+  it('sticks the office’s signs to its partitions, and stands the others on posts but Christmas’s', () => {
     for (const course of COURSES) {
       const { el } = track({ lanes, start: 426, finish: 6000, course });
       const signs = [...el.querySelectorAll('[data-part="sign"]')];
@@ -258,7 +258,9 @@ describe('the office, the sea and the Moon', () => {
         'Finish',
       ]);
       for (const sign of signs) {
-        expect(!!sign.querySelector(`.${styles.post}`), course).toBe(course !== 'office');
+        expect(!!sign.querySelector(`.${styles.post}`), course).toBe(
+          course !== 'office' && course !== 'christmas',
+        );
       }
     }
   });
@@ -288,6 +290,7 @@ describe('the photo-finish card', () => {
       office: styles.carpet,
       sea: styles.sun,
       moon: styles.shark,
+      christmas: styles.snow,
     };
     for (const course of COURSES) {
       const card = photoCard(

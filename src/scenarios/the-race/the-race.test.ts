@@ -25,6 +25,7 @@ import {
   EXTRAS,
   isCreature,
   MOUNTS,
+  TRACK_PROPS,
   RACER,
   RACER_COLOURS,
   racer,
@@ -685,12 +686,13 @@ const onTracks = new Map<string, Promise<OnTrack>>();
 /** A cup in hand from this far into the coffee-machine stop. */
 const OWN_CUP = 0.3;
 
-/** Who the track's own event happens to, as the feature names them. */
-const SUBJECTS: Readonly<Record<Course, string>> = {
-  field: 'Ben',
-  office: 'Ben',
-  sea: 'Marco',
-  moon: 'Anna',
+/** Who the track's own stop and burst happen to, as the feature names them. */
+const SUBJECTS: Readonly<Record<Course, Readonly<Record<RaceEvent['kind'], string>>>> = {
+  field: { stop: 'Ben', burst: 'Ben' },
+  office: { stop: 'Ben', burst: 'Ben' },
+  sea: { stop: 'Marco', burst: 'Marco' },
+  moon: { stop: 'Anna', burst: 'Anna' },
+  christmas: { stop: 'Ben', burst: 'Carla' },
 };
 
 /**
@@ -715,9 +717,9 @@ function onTrack(course: Course, kind: 'burst' | 'stop' = 'stop'): Promise<OnTra
     );
     if (own) {
       const at = team.indexOf(own.subject);
-      const theirs = team.indexOf(SUBJECTS[course]);
+      const theirs = team.indexOf(SUBJECTS[course][kind]);
       if (theirs >= 0) team[theirs] = own.subject;
-      team[at] = SUBJECTS[course];
+      team[at] = SUBJECTS[course][kind];
     }
     const standing: { time: number; part: string; x: number; y: number }[] = [];
     const shadows: number[] = [];
@@ -746,7 +748,7 @@ function onTrack(course: Course, kind: 'burst' | 'stop' = 'stop'): Promise<OnTra
             if (caption) readText(caption, stickers, loose);
           }
           if (card && !card.hidden) photo = card;
-          for (const part of ['machine', 'wet-floor']) {
+          for (const part of ['machine', 'wet-floor', 'snowdrift', 'sledge']) {
             const prop = scene.querySelector(`[data-part="${part}"]`);
             if (!prop || prop.getAttribute('display') === 'none') continue;
             const [, x, y] = prop.getAttribute('transform')!.match(/translate\((\S+) (\S+)\)/)!;
@@ -768,6 +770,174 @@ function onTrack(course: Course, kind: 'burst' | 'stop' = 'stop'): Promise<OnTra
     );
   }
   return onTracks.get(key)!;
+}
+
+/** A step, as a scenario's step functions take it. */
+type StepOf = (title: string, run: () => void | Promise<void>) => void;
+
+/** Seaweed and snow are shaken off over this many seconds before "Phew!". */
+const OWN_SHAKE = 0.4;
+
+/**
+ * The steps of a track's own `kind` on `course`, from "When someone's event
+ * is …", the `when` step, to what it does, for its caption.
+ */
+function actOutOwnEvent(
+  { When, Then, And }: { When: StepOf; Then: StepOf; And: StepOf },
+  {
+    course,
+    kind,
+    caption,
+    when,
+  }: { course: Course; kind: RaceEvent['kind']; caption: string; when: string },
+) {
+  let run: OnTrack;
+  let event: RaceEvent;
+  /** The racer's frames from `from` to `to` s into the event. */
+  const during = (from: number, to: number) =>
+    between(run.watched, event.at + from, event.at + to).map((frame) => ({
+      ...frame,
+      racer: frame.racers[event.subject]!,
+    }));
+  /** Whether the racer is further back once off again than as the event started. */
+  const furtherBack = () => {
+    const { plan } = run.watched;
+    return (
+      orderAt(plan, event.at + STOP.off).indexOf(event.subject) >
+      orderAt(plan, event.at - 0.01).indexOf(event.subject)
+    );
+  };
+  const says = (text: string) => during(0, 3).some((frame) => saying(frame, event.subject, text));
+  const leads = () => leaderAt(run.watched.plan, event.at + BURST.seconds) === event.subject;
+  /** Each time, aloft or not, a name tag is over another or over a face. */
+  const tagsOver = () =>
+    during(0, 2).flatMap((frame) => {
+      const { team } = run.watched;
+      const drawn = team.map((name, i) => {
+        const at = lane(i, team.length);
+        const kind = kindOf(run.watched, name);
+        const { nose, lift } = frame.racers[name]!;
+        return {
+          name,
+          face: raised(faceAt(kind, at, nose), lift),
+          tag: raised(tagBox(name, kind, at, nose), lift),
+        };
+      });
+      return drawn.flatMap((one) =>
+        drawn
+          .filter(
+            (other) =>
+              (one !== other && overlap(one.tag, other.tag)) || overlap(one.tag, other.face),
+          )
+          .map((other) => `${frame.time.toFixed(1)}: ${one.name}'s tag on ${other.name}`),
+      );
+    });
+  When(when, async () => {
+    run = await onTrack(course, kind);
+    event = run.watched.plan.events.find((each) => each.cause === 'track')!;
+    expect(event.kind).toBe(kind);
+    expect(event.subject).toBe(SUBJECTS[course][kind]);
+  });
+  Then('the caption is "<caption>"', () => {
+    const shown = run.watched.record.captions.find((each) => each.text === caption);
+    expect(shown!.from).toBeCloseTo(event.at, 0);
+  });
+  And('<what>', () => {
+    // Whatever the racer is, its own burst or stop doesn't happen.
+    for (const frame of during(0, STOP.off)) {
+      expect(frame.racer.props).toBe('');
+      expect(frame.racer.leaf).toBe(false);
+    }
+    const key = `${course} ${kind}`;
+    if (key === 'office stop') {
+      const nose = noseAt(run.watched.plan, event.subject, event.at + STOP.seconds);
+      const machine = run.standing.filter(
+        (each) => each.time >= event.at && each.time < event.at + STOP.off,
+      );
+      expect(machine.length).toBeGreaterThan(10);
+      expect(machine.every((each) => each.part === 'machine' && each.y === 0)).toBe(true);
+      const by = machine.find((each) => each.time >= event.at + STOP.seconds)!;
+      expect(by.x).toBeGreaterThan(nose - 400);
+      expect(by.x).toBeLessThan(nose);
+      const holding = during(OWN_CUP + 0.05, STOP.off - 0.05);
+      expect(holding.every((frame) => frame.racer.track === 'cup')).toBe(true);
+    }
+    if (key === 'office burst') {
+      const sign = run.standing.filter((each) => each.part === 'wet-floor');
+      const at = sign.find((each) => each.time >= event.at)!;
+      const index = run.watched.team.indexOf(event.subject);
+      expect(at.y).toBeCloseTo(lane(index, 8).ground, 0);
+      expect(at.x).toBeGreaterThan(noseAt(run.watched.plan, event.subject, event.at));
+      const tilts = during(0, BURST.seconds).map((f) => parseFloat(f.racer.rotate || '0'));
+      expect(Math.min(...tilts)).toBeLessThan(-5);
+    }
+    if (key === 'sea stop') {
+      const wrapped = during(0.05, STOP.phew - 0.05);
+      expect(wrapped.every((frame) => frame.racer.track === 'seaweed')).toBe(true);
+      const free = during(STOP.phew + 0.05, STOP.off);
+      expect(free.every((frame) => frame.racer.track === '')).toBe(true);
+    }
+    if (key === 'sea burst') {
+      const carried = during(0.05, BURST.seconds);
+      expect(carried.every((frame) => frame.racer.track === 'swirls')).toBe(true);
+    }
+    if (key === 'moon stop') {
+      const lifts = during(0, STOP.off + 0.3).map((frame) => frame.racer.lift);
+      expect(Math.max(...lifts)).toBeGreaterThan(5);
+      expect(lifts.at(-1)).toBe(0);
+      const up = during(0, STOP.off).filter((frame) => frame.racer.lift > 0);
+      expect(up.every((frame) => run.shadows.includes(frame.time))).toBe(true);
+      expect(tagsOver()).toEqual([]);
+    }
+    if (key === 'moon burst') {
+      const lifts = during(0, 2).map((frame) => frame.racer.lift);
+      expect(Math.max(...lifts)).toBeGreaterThan(5);
+      // One hop: up, then down, once, over more than a second.
+      const turns = lifts
+        .slice(1)
+        .map((lift, i) => Math.sign(lift - lifts[i]!))
+        .filter((sign, i, all) => sign !== 0 && sign !== all[i - 1]);
+      expect(turns).toEqual([1, -1]);
+      expect(lifts.filter((lift) => lift > 0).length * STEP).toBeGreaterThan(1);
+      expect(tagsOver()).toEqual([]);
+    }
+    if (key === 'christmas stop') {
+      const piled = during(0.05, STOP.phew - 0.05);
+      expect(piled.every((frame) => frame.racer.track === 'snowdrift')).toBe(true);
+      const free = during(STOP.phew + 0.05, STOP.off);
+      expect(free.every((frame) => frame.racer.track === '')).toBe(true);
+      // Piling up: its top comes up from the ground, then stays.
+      const drift = run.standing.filter((each) => each.part === 'snowdrift');
+      expect(drift[0]!.y).toBeGreaterThan(drift.at(-1)!.y + 40);
+      // And the racer wriggles free.
+      const wriggle = during(STOP.phew - OWN_SHAKE, STOP.phew).map((frame) =>
+        Math.abs(parseFloat(frame.racer.rotate || '0')),
+      );
+      expect(Math.max(...wriggle)).toBeGreaterThan(1);
+      expect(TRACK_PROPS.snowdrift[0]![1]).toBe(styles.paper);
+    }
+    if (key === 'christmas burst') {
+      const riding = during(0.05, BURST.seconds);
+      expect(riding.every((frame) => frame.racer.track === 'sledge')).toBe(true);
+      // Up on it: 22 px, or as high as it can go clear of the lanes behind.
+      const lifts = riding.map((frame) => frame.racer.lift);
+      expect(Math.max(...lifts)).toBeGreaterThan(8);
+      expect(Math.max(...lifts)).toBeLessThanOrEqual(22);
+      // It slides in under the racer from behind, and is red.
+      const sledge = run.standing.filter((each) => each.part === 'sledge');
+      expect(sledge[0]!.x).toBeLessThan(sledge.at(-1)!.x - 100);
+      expect(TRACK_PROPS.sledge.map(([, className]) => className)).toContain(styles.tomato);
+      expect(tagsOver()).toEqual([]);
+    }
+    if (kind === 'stop') {
+      expect(during(0.5, STOP.off).some((frame) => frame.racer.pose === 'wave')).toBe(true);
+      expect(says('Phew!')).toBe(true);
+      expect(furtherBack()).toBe(true);
+    } else {
+      expect(leads()).toBe(true);
+      expect(says('Nooo!')).toBe(true);
+    }
+  });
 }
 
 /** Show seconds from `from` to `to`, every frame. */
@@ -889,7 +1059,9 @@ describeSpec(await loadFeature('./the-race.feature'), ({ Rule }) => {
         'its themes are {any}, after "Surprise", each a postcard of its track',
         (_, themes: string) => {
           const labels = [...themes.matchAll(/"([^"]+)"/g)].map(([, label]) => label);
-          expect(lineUp.themes!.map((theme) => theme.label)).toEqual(labels);
+          // The four tracks come first; "Christmas is a theme" says what follows.
+          const tracks = lineUp.themes!.slice(0, labels.length);
+          expect(tracks.map((theme) => theme.label)).toEqual(labels);
           expect(lineUp.themes!.map((theme) => theme.name)).toEqual([...COURSES]);
           for (const theme of lineUp.themes!) {
             const picture = theme.picture() as SVGSVGElement;
@@ -902,7 +1074,9 @@ describeSpec(await loadFeature('./the-race.feature'), ({ Rule }) => {
       And(
         "each theme's tab holds, in this order:",
         (_, table: { theme: string; racers: string }[]) => {
-          expect(table.map((row) => row.theme)).toEqual(lineUp.themes!.map((each) => each.label));
+          expect(table.map((row) => row.theme)).toEqual(
+            lineUp.themes!.slice(0, table.length).map((each) => each.label),
+          );
           for (const row of table) {
             const theme = lineUp.themes!.find((each) => each.label === row.theme)!;
             expect(theme.suits!.map(labelOf), row.theme).toEqual(row.racers.split(', '));
@@ -2075,6 +2249,7 @@ describeSpec(await loadFeature('./the-race.feature'), ({ Rule }) => {
           office: styles.carpet,
           sea: styles.sun,
           moon: styles.dust,
+          christmas: styles.snow,
         };
         expect(ground.querySelector(`.${fill[course]}`)).not.toBeNull();
         expect(!!ground.querySelector('[data-part="craters"]')).toBe(course === 'moon');
@@ -2086,13 +2261,14 @@ describeSpec(await loadFeature('./the-race.feature'), ({ Rule }) => {
         }
       });
       And('behind the track is <backdrop>', () => {
-        const skies = { field: 'sky', office: 'paper', sea: 'sea', moon: 'ink' };
+        const skies = { field: 'sky', office: 'paper', sea: 'sea', moon: 'ink', christmas: 'sea' };
         expect(run.sky).toBe(`var(--color-${skies[course]})`);
         const parts = {
           field: ['flags', 'posts'],
           office: ['wall', 'panels', 'plant'],
           sea: ['surface', 'fish', 'seaweed', 'floats'],
           moon: ['space'],
+          christmas: ['night', 'hills', 'village', 'lights'],
         };
         for (const part of parts[course]) {
           expect(run.track.querySelector(`[data-part="${part}"]`), part).not.toBeNull();
@@ -2107,6 +2283,7 @@ describeSpec(await loadFeature('./the-race.feature'), ({ Rule }) => {
           office: styles.sunFill,
           sea: styles.orangeFill,
           moon: styles.paperFill,
+          christmas: styles.glassFill,
         };
         const lines = [...run.track.querySelectorAll('[data-part="lines"] path')];
         expect(lines.length).toBeGreaterThan(0);
@@ -2118,7 +2295,9 @@ describeSpec(await loadFeature('./the-race.feature'), ({ Rule }) => {
         const signs = [...run.track.querySelectorAll('[data-part="sign"]')];
         expect(signs).toHaveLength(5);
         for (const sign of signs) {
-          expect(!!sign.querySelector(`.${styles.post}`)).toBe(course !== 'office');
+          expect(!!sign.querySelector(`.${styles.post}`)).toBe(
+            ['field', 'sea', 'moon'].includes(course),
+          );
           expect(sign.querySelector('p')!.classList.contains(styles.note!)).toBe(
             course === 'office',
           );
@@ -2179,131 +2358,13 @@ describeSpec(await loadFeature('./the-race.feature'), ({ Rule }) => {
       });
     });
 
-    RuleScenarioOutline(
-      'On <track>, <caption>',
-      ({ When, Then, And }, { track: where, event: kind, caption }) => {
-        const course = COURSE_NAMES[where]!;
-        let run: OnTrack;
-        let event: RaceEvent;
-        /** The racer's frames from `from` to `to` s into the event. */
-        const during = (from: number, to: number) =>
-          between(run.watched, event.at + from, event.at + to).map((frame) => ({
-            ...frame,
-            racer: frame.racers[event.subject]!,
-          }));
-        /** Whether the racer is further back once off again than as the event started. */
-        const furtherBack = () => {
-          const { plan } = run.watched;
-          return (
-            orderAt(plan, event.at + STOP.off).indexOf(event.subject) >
-            orderAt(plan, event.at - 0.01).indexOf(event.subject)
-          );
-        };
-        const says = (text: string) =>
-          during(0, 3).some((frame) => saying(frame, event.subject, text));
-        const leads = () => leaderAt(run.watched.plan, event.at + BURST.seconds) === event.subject;
-        /** Each time, aloft or not, a name tag is over another or over a face. */
-        const tagsOver = () =>
-          during(0, 2).flatMap((frame) => {
-            const { team } = run.watched;
-            const drawn = team.map((name, i) => {
-              const at = lane(i, team.length);
-              const kind = kindOf(run.watched, name);
-              const { nose, lift } = frame.racers[name]!;
-              return {
-                name,
-                face: raised(faceAt(kind, at, nose), lift),
-                tag: raised(tagBox(name, kind, at, nose), lift),
-              };
-            });
-            return drawn.flatMap((one) =>
-              drawn
-                .filter(
-                  (other) =>
-                    (one !== other && overlap(one.tag, other.tag)) || overlap(one.tag, other.face),
-                )
-                .map((other) => `${frame.time.toFixed(1)}: ${one.name}'s tag on ${other.name}`),
-            );
-          });
-        When("someone's event is <track>'s own <event>", async () => {
-          run = await onTrack(course, kind as RaceEvent['kind']);
-          event = run.watched.plan.events.find((each) => each.cause === 'track')!;
-          expect(event.kind).toBe(kind);
-          expect(event.subject).toBe(SUBJECTS[course]);
-        });
-        Then('the caption is "<caption>"', () => {
-          const shown = run.watched.record.captions.find((each) => each.text === caption);
-          expect(shown!.from).toBeCloseTo(event.at, 0);
-        });
-        And('<what>', () => {
-          // Whatever the racer is, its own burst or stop doesn't happen.
-          for (const frame of during(0, STOP.off)) {
-            expect(frame.racer.props).toBe('');
-            expect(frame.racer.leaf).toBe(false);
-          }
-          const key = `${course} ${kind}`;
-          if (key === 'office stop') {
-            const nose = noseAt(run.watched.plan, event.subject, event.at + STOP.seconds);
-            const machine = run.standing.filter(
-              (each) => each.time >= event.at && each.time < event.at + STOP.off,
-            );
-            expect(machine.length).toBeGreaterThan(10);
-            expect(machine.every((each) => each.part === 'machine' && each.y === 0)).toBe(true);
-            const by = machine.find((each) => each.time >= event.at + STOP.seconds)!;
-            expect(by.x).toBeGreaterThan(nose - 400);
-            expect(by.x).toBeLessThan(nose);
-            const holding = during(OWN_CUP + 0.05, STOP.off - 0.05);
-            expect(holding.every((frame) => frame.racer.track === 'cup')).toBe(true);
-          }
-          if (key === 'office burst') {
-            const sign = run.standing.filter((each) => each.part === 'wet-floor');
-            const at = sign.find((each) => each.time >= event.at)!;
-            const index = run.watched.team.indexOf(event.subject);
-            expect(at.y).toBeCloseTo(lane(index, 8).ground, 0);
-            expect(at.x).toBeGreaterThan(noseAt(run.watched.plan, event.subject, event.at));
-            const tilts = during(0, BURST.seconds).map((f) => parseFloat(f.racer.rotate || '0'));
-            expect(Math.min(...tilts)).toBeLessThan(-5);
-          }
-          if (key === 'sea stop') {
-            const wrapped = during(0.05, STOP.phew - 0.05);
-            expect(wrapped.every((frame) => frame.racer.track === 'seaweed')).toBe(true);
-            const free = during(STOP.phew + 0.05, STOP.off);
-            expect(free.every((frame) => frame.racer.track === '')).toBe(true);
-          }
-          if (key === 'sea burst') {
-            const carried = during(0.05, BURST.seconds);
-            expect(carried.every((frame) => frame.racer.track === 'swirls')).toBe(true);
-          }
-          if (key === 'moon stop') {
-            const lifts = during(0, STOP.off + 0.3).map((frame) => frame.racer.lift);
-            expect(Math.max(...lifts)).toBeGreaterThan(5);
-            expect(lifts.at(-1)).toBe(0);
-            const up = during(0, STOP.off).filter((frame) => frame.racer.lift > 0);
-            expect(up.every((frame) => run.shadows.includes(frame.time))).toBe(true);
-            expect(tagsOver()).toEqual([]);
-          }
-          if (key === 'moon burst') {
-            const lifts = during(0, 2).map((frame) => frame.racer.lift);
-            expect(Math.max(...lifts)).toBeGreaterThan(5);
-            // One hop: up, then down, once, over more than a second.
-            const turns = lifts
-              .slice(1)
-              .map((lift, i) => Math.sign(lift - lifts[i]!))
-              .filter((sign, i, all) => sign !== 0 && sign !== all[i - 1]);
-            expect(turns).toEqual([1, -1]);
-            expect(lifts.filter((lift) => lift > 0).length * STEP).toBeGreaterThan(1);
-            expect(tagsOver()).toEqual([]);
-          }
-          if (kind === 'stop') {
-            expect(during(0.5, STOP.off).some((frame) => frame.racer.pose === 'wave')).toBe(true);
-            expect(says('Phew!')).toBe(true);
-            expect(furtherBack()).toBe(true);
-          } else {
-            expect(leads()).toBe(true);
-            expect(says('Nooo!')).toBe(true);
-          }
-        });
-      },
+    RuleScenarioOutline('On <track>, <caption>', (steps, { track: where, event: kind, caption }) =>
+      actOutOwnEvent(steps, {
+        course: COURSE_NAMES[where]!,
+        kind: kind as RaceEvent['kind'],
+        caption,
+        when: "someone's event is <track>'s own <event>",
+      }),
     );
 
     RuleScenario('The sports field keeps the events it has', ({ When, Then }) => {
@@ -2350,13 +2411,374 @@ describeSpec(await loadFeature('./the-race.feature'), ({ Rule }) => {
         );
       });
       Then('each run lasts between {int} and {int} seconds', (_, least: number, most: number) => {
-        expect(runs).toHaveLength(36);
+        expect(runs).toHaveLength(3 * COURSES.length * ENDINGS.length);
         for (const plan of runs) {
           expect(plan.times.end, `${plan.course} ${plan.ending}`).toBeGreaterThanOrEqual(least);
           expect(plan.times.end, `${plan.course} ${plan.ending}`).toBeLessThanOrEqual(most);
         }
       });
     });
+  });
+
+  Rule('Christmas', ({ RuleScenario, RuleScenarioOutline }) => {
+    const lineUp = theRace.lineUp!;
+    const team = names(8);
+    const unlucky = team.at(-1)!;
+    const own = (plan: Plan) => plan.events.filter((event) => event.cause === 'track');
+    const christmas = () => lineUp.themes!.find((each) => each.name === 'christmas')!;
+
+    RuleScenario('Christmas is a theme', ({ When, Then, And }) => {
+      When('the Line-up opens for The Race', () => {
+        expect(lineUp.themes).toBeDefined();
+      });
+      Then('"Christmas" is a theme, after "Moon", its postcard a tree on snow at dusk', () => {
+        const labels = lineUp.themes!.map((theme) => theme.label);
+        expect(labels.indexOf('Christmas')).toBe(labels.indexOf('Moon') + 1);
+        const picture = christmas().picture() as SVGSVGElement;
+        expect(picture.dataset).toMatchObject({ part: 'postcard', course: 'christmas' });
+        const classes = [...picture.querySelectorAll('path')].map((path) =>
+          path.getAttribute('class'),
+        );
+        // Dusk, the tree with its star, and snow on the ground, last.
+        expect(classes[0]).toBe(styles.seaBlue);
+        expect(classes).toContain(styles.leaf);
+        expect(classes).toContain(styles.sun);
+        expect(classes.at(-1)).toBe(styles.snow);
+      });
+      And(
+        `with Christmas chosen, the racer option's first tab is "Christmas", holding "Penguin", "Yeti" and "Garden gnome"`,
+        () => {
+          const labelOf = (name: string) =>
+            read(lineUp.options[0]!.choices.find((choice) => choice.name === name)!.label);
+          // specs/line-up.feature: a theme's suits are its first tab, named for it.
+          expect(christmas().label).toBe('Christmas');
+          expect(christmas().suits!.map(labelOf)).toEqual(['Penguin', 'Yeti', 'Garden gnome']);
+        },
+      );
+    });
+
+    RuleScenario('What Christmas looks like', ({ When, Then, And }) => {
+      let run: OnTrack;
+      When('the show runs on Christmas', async () => {
+        run = await onTrack('christmas');
+      });
+      Then(
+        'the ground is snow, the lanes split by light blue lines, and paper name tags read clearly on it',
+        () => {
+          const ground = run.track.querySelector('[data-part="ground"]')!;
+          expect(ground.querySelector(`.${styles.snow}`)).not.toBeNull();
+          expect(css).toMatch(/\.snow \{\s*fill: var\(--color-paper\);/);
+          const lines = [...run.track.querySelectorAll('[data-part="lines"] path')];
+          expect(lines.length).toBeGreaterThan(0);
+          for (const line of lines) expect(line.getAttribute('class')).toBe(styles.glassFill);
+          expect(css).toMatch(/\.glassFill \{\s*fill: var\(--color-glass\);/);
+          const tags = run.stickers.filter((sticker) => sticker.what === 'tag');
+          expect(tags.length).toBeGreaterThan(0);
+          for (const tag of tags) expect(tag.background).toBe('var(--color-paper)');
+        },
+      );
+      And(
+        'behind the track is a snowy village at dusk: white hills, two houses with lit windows, pines, a big tree with a star, and a crescent moon',
+        () => {
+          expect(run.sky).toBe('var(--color-sea)');
+          const back = run.track.querySelector('[data-part="backdrop"]')!;
+          const first = (part: string) => back.querySelector(`[data-part="${part}"]`);
+          const tile = (part: string) =>
+            [...first(part)!.children[0]!.children].map((shape) => ({
+              part: shape.getAttribute('data-part'),
+              className: shape.getAttribute('class'),
+            }));
+          expect(tile('hills').map((shape) => shape.className)).toEqual([
+            styles.paperFill,
+            styles.line,
+          ]);
+          const village = tile('village');
+          expect(village.filter((shape) => shape.part === 'house').map((s) => s.className)).toEqual(
+            [styles.tomato, styles.mint],
+          );
+          expect(village.filter((shape) => shape.part === 'windows')).toHaveLength(2);
+          for (const part of ['pines', 'tree', 'baubles', 'star']) {
+            expect(village.map((shape) => shape.part)).toContain(part);
+          }
+          expect(tile('night').map((shape) => shape.part)).toContain('moon');
+          // The houses' windows, the star and the moon are lit: sun.
+          expect(village.find((shape) => shape.part === 'star')!.className).toBe(styles.sun);
+        },
+      );
+      And(
+        'fairy lights run along the edge of the track, and each distance is a paper sign by a candy cane',
+        () => {
+          const bulbs = [...run.track.querySelector('[data-part="lights"]')!.children[0]!.children];
+          expect(bulbs.map((bulb) => bulb.getAttribute('class'))).toEqual([
+            styles.tomato,
+            styles.sun,
+            styles.mint,
+            styles.pink,
+          ]);
+          const signs = [...run.track.querySelectorAll<HTMLElement>('[data-part="sign"]')];
+          expect(signs).toHaveLength(5);
+          for (const sign of signs) {
+            const board = sign.querySelector('p')!;
+            const distance = board.textContent!.endsWith(' m');
+            expect(!!sign.querySelector('[data-part="cane"]'), board.textContent!).toBe(distance);
+            expect(board.classList.contains(styles.sunBoard!)).toBe(!distance);
+            expect(sign.querySelector(`.${styles.post}`)).toBeNull();
+          }
+          const cane = signs[1]!.querySelector('[data-part="cane"]')!;
+          expect([...cane.children].map((stroke) => stroke.getAttribute('class'))).toEqual([
+            styles.line,
+            styles.stripe,
+            styles.caneStripe,
+          ]);
+          expect(css).toMatch(/\.caneStripe \{\s*fill: none;\s*stroke: var\(--color-tomato\);/);
+        },
+      );
+    });
+
+    RuleScenario('Christmas has a stop and a burst of its own', ({ Given, When, Then, And }) => {
+      let runs: Plan[];
+      Given('8 people, on Christmas', () => undefined);
+      When('the show runs with {int} different random seeds', (_, seeds: number) => {
+        runs = plansOn(team, unlucky, 'christmas', seeds);
+      });
+      Then(
+        `in every run, one event before "Final stretch!" is Christmas's own stop or burst`,
+        () => {
+          for (const plan of runs) {
+            expect(own(plan)).toHaveLength(1);
+            expect(own(plan)[0]!.at).toBeLessThan(plan.times.stretch);
+          }
+        },
+      );
+      And('both come up across the runs', () => {
+        const kinds = new Set(runs.flatMap((plan) => own(plan).map((event) => event.kind)));
+        expect(kinds).toEqual(new Set(['burst', 'stop']));
+      });
+    });
+
+    RuleScenarioOutline('On Christmas, <caption>', (steps, { event: kind, caption }) =>
+      actOutOwnEvent(steps, {
+        course: 'christmas',
+        kind: kind as RaceEvent['kind'],
+        caption,
+        when: "someone's event is Christmas's own <event>",
+      }),
+    );
+
+    /** Riders with every extra the kit hands out a cap, goggles or a snorkel to, and creatures. */
+    const DRESSED = new Map<string, ChosenLook>([
+      ['Anna', { mount: 'snail', colour: 'tomato', extra: 'number' }],
+      ['Ben', { mount: 'chair', colour: 'mint', extra: 'tophat' }],
+      ['Carla', { mount: 'duck', colour: 'pink', extra: 'scarf' }],
+      ['Dario', { mount: 'shark', colour: 'sea', extra: 'tophat' }],
+      ['Elena', { mount: 'gnome', colour: 'mint', extra: 'number' }],
+      ['Fabio', { mount: 'dinosaur', colour: 'sun', extra: 'bowtie' }],
+      ['Giulia', { mount: 'rocket', colour: 'orange', extra: 'googly' }],
+      ['Hana', { mount: 'robot', colour: 'grape', extra: 'tophat' }],
+    ]);
+    /** Everyone as the show first draws them on `course`. */
+    async function dressedOn(course: Course) {
+      const drawn = new Map<string, SVGSVGElement>();
+      await runShow(theRace, {
+        names: [...DRESSED.keys()],
+        unlucky: 'Hana',
+        seed: 4,
+        theme: course,
+        looks: DRESSED,
+        cancelAt: 0.2,
+        step: STEP,
+        onFrame: (_, stage) => {
+          for (const name of DRESSED.keys()) {
+            const svg = stage.querySelector<SVGSVGElement>(`[data-person="${name}"] svg`)!;
+            if (!drawn.has(name)) drawn.set(name, svg.cloneNode(true) as SVGSVGElement);
+          }
+        },
+      });
+      return [...drawn.values()];
+    }
+    /** Everyone at the start, and in the panel's drawing, on `course`. */
+    function lineUpOn(course: Course) {
+      const people = [...DRESSED].map(([name, look], index) => ({
+        name,
+        place: index + 1,
+        look,
+        chosen: index === 0,
+      }));
+      const start = lineUp.drawStart!({ people, theme: course });
+      return [
+        ...start.el.querySelectorAll<SVGSVGElement>('svg[data-person]'),
+        ...people.map(
+          ({ name, place, look }) =>
+            lineUp.draw(look, { name, place, theme: course }) as SVGSVGElement,
+        ),
+      ];
+    }
+    const accessories = (svg: SVGSVGElement) =>
+      svg.querySelectorAll('[data-part="cap"], [data-part="goggles"], [data-part="snorkel"]');
+
+    RuleScenario('Everyone wears a Santa hat', ({ When, Then, And }) => {
+      let drawn: SVGSVGElement[] = [];
+      When('the show runs on Christmas, or its Line-up shows Christmas', async () => {
+        drawn = [...(await dressedOn('christmas')), ...lineUpOn('christmas')];
+        expect(drawn).toHaveLength(3 * DRESSED.size);
+      });
+      Then(
+        'every rider wears a Santa hat instead of the cap, goggles or snorkel the kit hands out, and a top hat stays on the mount',
+        () => {
+          for (const svg of drawn.filter((each) => each.dataset.part === 'racer')) {
+            const lean = svg.querySelector('[data-part="lean"]')!;
+            expect(
+              lean.querySelector(':scope > [data-part="santa"] [data-part="hat"]'),
+            ).not.toBeNull();
+            expect(accessories(svg)).toHaveLength(0);
+            expect(!!svg.querySelector('[data-part="mount"] [data-part="tophat"]')).toBe(
+              svg.dataset.extra === 'tophat',
+            );
+          }
+        },
+      );
+      And('every creature wears one where its top hat goes, instead of the top hat', () => {
+        for (const svg of drawn.filter((each) => each.dataset.part === 'creature')) {
+          const kind = svg.dataset.mount as Creature;
+          if (kind === 'gnome') continue;
+          const hat = svg.querySelector('[data-part="santa"]')!;
+          const [x, y] = CREATURE_SPEC[kind].hat;
+          expect(hat.getAttribute('transform'), kind).toBe(`translate(${x} ${y})`);
+          expect(hat.querySelector(`.${styles.shade}`)).not.toBeNull();
+          expect(svg.querySelector('[data-part="tophat"]'), kind).toBeNull();
+        }
+      });
+      And("the garden gnome's own hat gets a white brim and a bobble instead", () => {
+        const gnomes = drawn.filter((each) => each.dataset.mount === 'gnome');
+        expect(gnomes).toHaveLength(3);
+        for (const gnome of gnomes) {
+          const brim = gnome.querySelector('[data-part="santa"]')!;
+          expect([...brim.children].map((shape) => shape.getAttribute('class'))).toEqual([
+            styles.paper,
+            styles.paper,
+          ]);
+          expect(brim.querySelector(`.${styles.tomato}`)).toBeNull();
+          expect(gnome.querySelector('[data-part="hat"]')).not.toBeNull();
+        }
+      });
+      And('on any other theme, nobody wears one', async () => {
+        for (const course of COURSES.filter((each) => each !== 'christmas')) {
+          const others = [...(await dressedOn(course)), ...lineUpOn(course)];
+          for (const svg of others) {
+            expect(svg.querySelector('[data-part="santa"]'), course).toBeNull();
+            if (svg.dataset.part === 'racer') expect(accessories(svg), course).toHaveLength(1);
+          }
+        }
+      });
+    });
+
+    RuleScenario('The winner gets a present', ({ Given, When, Then, And }) => {
+      let watched: Watched;
+      let flakes: boolean[] = [];
+      Given('the unlucky person is {string}, on Christmas', async (_, name: string) => {
+        const people = ['Dario', 'Elena', 'Fabio', name];
+        let seed = 1;
+        while (planShow(people, name, createRandom(seed), 'christmas').ending !== 'brake') seed++;
+        const { win } = planShow(people, name, createRandom(seed), 'christmas').times;
+        watched = await watch(people, {
+          unlucky: name,
+          seed,
+          course: 'christmas',
+          onStage: (time, scene) => {
+            if (time < win + 0.5 || flakes.length) return;
+            flakes = [...scene.querySelectorAll<HTMLElement>('[data-part="confetti"]')].map(
+              (piece) => piece.dataset.flake === 'true',
+            );
+          },
+        });
+      });
+      When('she has crossed the line', () => {
+        expect(crossingOf(watched.plan, 'Anna')!).toBeLessThanOrEqual(watched.plan.times.finish);
+      });
+      Then(
+        'the caption is {string}, with a fanfare and confetti with snowflakes in it',
+        (_, caption: string) => {
+          const { win } = watched.plan.times;
+          expect(watched.record.captions.at(-1)).toMatchObject({ text: caption });
+          expect(watched.record.captions.at(-1)!.from).toBeCloseTo(win, 1);
+          // Sound isn't recorded: play.ts cues the fanfare as the caption comes.
+          expect(between(watched, win + 0.5, Infinity).every((f) => f.confetti > 20)).toBe(true);
+          expect(flakes.filter(Boolean).length).toBeGreaterThan(5);
+          expect(flakes.filter((flake) => !flake).length).toBeGreaterThan(5);
+          expect(css).toMatch(/\.flake \{\s*border-radius: var\(--radius-pill\);/);
+        },
+      );
+      And(
+        'Anna holds up a present, red with a gold ribbon and bow, where the trophy would be',
+        () => {
+          for (const frame of between(watched, watched.plan.times.win + STEP, Infinity)) {
+            expect(frame.racers.Anna).toMatchObject({ trophy: true, mood: 'party' });
+          }
+          const face = handOutLooks(['Anna'], createRandom(1)).get('Anna')!;
+          const look = watched.looks.get('Anna') as unknown as Parameters<typeof racer>[0];
+          const dress = { costume: 'santa', prize: 'present' } as const;
+          const drawn = isCreature(look.mount)
+            ? creature(look as never, { face, number: 4, dress })
+            : racer(look, { face, number: 4, dress });
+          const plain = isCreature(look.mount)
+            ? creature(look as never, { face, number: 4 })
+            : racer(look, { face, number: 4 });
+          const present = drawn.el.querySelector('[data-part="present"]')!;
+          const trophy = plain.el.querySelector('[data-part="trophy"]')!;
+          expect(drawn.el.querySelector('[data-part="trophy"]')).toBeNull();
+          expect(present.getAttribute('x')).toBe(trophy.getAttribute('x'));
+          expect(present.getAttribute('y')).toBe(trophy.getAttribute('y'));
+          const classes = [...present.children].map((shape) => shape.getAttribute('class'));
+          expect(classes.slice(0, 2)).toEqual([styles.tomato, styles.tomato]);
+          expect(classes.slice(2, 5)).toEqual([styles.sun, styles.sun, styles.sun]);
+        },
+      );
+      And(
+        'whoever balances the trophy balances the present, the dinosaur and the pigeon on top of their Santa hat',
+        () => {
+          const face = handOutLooks(['Anna'], createRandom(1)).get('Anna')!;
+          const dress = { costume: 'santa', prize: 'present' } as const;
+          for (const kind of CREATURES) {
+            const { reach, cup, hat } = CREATURE_SPEC[kind];
+            const one = creature(
+              { mount: kind, colour: 'sun', extra: 'scarf' },
+              { face, number: 1, dress },
+            );
+            const top = Number(one.el.querySelector('[data-part="present"]')!.getAttribute('y'));
+            if (kind === 'dinosaur' || kind === 'pigeon') {
+              // Its bottom on the hat's cone and tail, which reach 54 and 60 over the brim's bottom.
+              expect(top + 57, kind).toBeGreaterThan(hat[1] - 60);
+              expect(top + 57, kind).toBeLessThan(hat[1] - 15);
+            } else {
+              expect(top, kind).toBe(cup[1]);
+            }
+            if (reach < 1 && reach > 0) expect(['dinosaur', 'pigeon', 'gnome']).toContain(kind);
+          }
+        },
+      );
+    });
+
+    RuleScenario(
+      'On Christmas, the unlucky person still crosses first',
+      ({ Given, When, Then }) => {
+        let runs: Plan[];
+        Given('8 people, on Christmas', () => undefined);
+        When('the show runs with {int} different random seeds', (_, seeds: number) => {
+          runs = plansOn(team, unlucky, 'christmas', seeds);
+        });
+        Then("the first nose over the finish line is always the unlucky person's", () => {
+          for (const plan of runs) {
+            const crossing = crossingOf(plan, unlucky);
+            expect(crossing).not.toBeNull();
+            expect(crossing!).toBeLessThanOrEqual(plan.times.finish + 1e-9);
+            for (const name of team.filter((each) => each !== unlucky)) {
+              const theirs = crossingOf(plan, name);
+              if (theirs !== null) expect(theirs).toBeGreaterThan(crossing!);
+            }
+          }
+        });
+      },
+    );
   });
 
   Rule('The unlucky person crosses first', ({ RuleScenario, RuleScenarioOutline }) => {

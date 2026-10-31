@@ -136,6 +136,62 @@ const BANDS: Readonly<Record<Course, () => Shape[]>> = {
       ),
     ];
   },
+  christmas() {
+    const flakes = [
+      [30, 40],
+      [180, 12],
+      [250, 46],
+      [420, 30],
+      [520, 8],
+      [600, 44],
+      [660, 20],
+      [860, 38],
+      [930, 10],
+      [1080, 30],
+      [1150, 50],
+      [470, 52],
+    ]
+      .map(([x = 0, y = 0]) => O(x, y, 3))
+      .join('');
+    let trees = '';
+    let stars = '';
+    for (const cx of [300, 1000]) {
+      trees +=
+        T(cx - 30, 62, cx + 30, 62, cx, 34) +
+        T(cx - 24, 44, cx + 24, 44, cx, 18) +
+        T(cx - 18, 26, cx + 18, 26, cx, 6);
+      stars += S(cx, 6, 9);
+    }
+    // Fairy lights on a string that dips every 220 px, a bulb at each quarter.
+    let string = 'M-10 10';
+    const bulbs = ['', ''];
+    let n = 0;
+    for (let x = -10; x < 1200; x += 220) {
+      string += ` Q${x + 110} 26 ${x + 220} 10`;
+      for (const t of [0.25, 0.5, 0.75]) {
+        const bx = Math.round(x + 220 * t);
+        const by = Math.round(10 * (1 - t) * (1 - t) + 2 * (1 - t) * t * 26 + 10 * t * t) + 6;
+        bulbs[n % 2] += O(bx, by, 5);
+        n++;
+      }
+    }
+    return [
+      L(flakes, styles.paperFill!),
+      L(R(60, 30, 72, 34), styles.tomato!, 3),
+      L(R(720, 32, 64, 32), styles.mint!, 3),
+      L(T(50, 32, 142, 32, 96, 8) + T(710, 34, 794, 34, 752, 12), styles.paper!, 3),
+      L(
+        R(74, 42, 14, 12) + R(104, 42, 14, 12) + R(732, 44, 14, 12) + R(758, 44, 14, 12),
+        styles.sun!,
+        3,
+      ),
+      L(trees, styles.leaf!, 3),
+      L(stars, styles.sun!, 2),
+      L(string, styles.line!, 3),
+      L(bulbs[0]!, styles.tomato!, 2),
+      L(bulbs[1]!, styles.sun!, 2),
+    ];
+  },
 };
 
 /** Each track's ground and the lines between its lanes, whole or dashed. */
@@ -144,6 +200,7 @@ const GROUNDS: Readonly<Record<Course, { ground: string; lines: string; dashed: 
   office: { ground: styles.carpet!, lines: styles.sunFill!, dashed: false },
   sea: { ground: styles.sun!, lines: styles.orangeFill!, dashed: false },
   moon: { ground: styles.shark!, lines: styles.paperFill!, dashed: true },
+  christmas: { ground: styles.snow!, lines: styles.glassFill!, dashed: false },
 };
 
 /** Draws one racer in their look, as the Line-up does, with a mood and a pose. */

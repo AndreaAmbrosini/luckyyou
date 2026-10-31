@@ -821,6 +821,16 @@ describeSpec(await loadFeature('./line-up.feature'), ({ Rule }) => {
       });
     });
 
+    RuleScenario('Each look is drawn in the theme', ({ Given, When, Then }) => {
+      Given('a show whose line-up offers themes', () => openLineUp(['Anna', 'Ben'], themedShow()));
+      When('a theme is chosen', () => currentUser().click(postcard('Beach')));
+      Then('the show draws every look in it, so it can dress everyone for it', () => {
+        const drawn = [...document.querySelectorAll<HTMLElement>('[data-look]')];
+        expect(drawn.length).toBeGreaterThan(2);
+        for (const each of drawn) expect(each.dataset.theme).toBe('beach');
+      });
+    });
+
     RuleScenario("A theme's own tab", ({ Given, When, Then, And }) => {
       Given("a show whose themes each suit some of its first option's choices", () =>
         openLineUp(['Anna', 'Ben'], themedShow()),

@@ -1,6 +1,6 @@
 // Everyone rides a mount or races as a creature, as the host chose on the
 // Line-up, a lane each, on the theme chosen there: a track (a sports field,
-// the office, under the sea or the Moon). The camera follows the leaders.
+// the office, under the sea, the Moon or Christmas). The camera follows the leaders.
 // Winning is losing: the leader looks scared, pulling on the reins or
 // flailing its arms. One thing happens at a time before the final stretch,
 // which runs at full speed; only the last moment before the line is slow,
@@ -16,6 +16,7 @@ import {
 import { creature } from './creature';
 import {
   CREATURES,
+  dressFor,
   EXTRAS,
   extraPicture,
   isCreature,
@@ -28,7 +29,7 @@ import {
   type RacerLook,
   type RideLook,
 } from './parts';
-import type { Course } from './plan';
+import { COURSES, type Course } from './plan';
 import { playTheRace } from './play';
 import { postcard } from './postcards';
 import { startLine } from './start';
@@ -109,6 +110,7 @@ const THEMES: readonly { name: Course; label: string; suits: readonly Kind[] }[]
   },
   { name: 'sea', label: 'Under the sea', suits: ['shark', 'octopus', 'sushi', 'duck', 'penguin'] },
   { name: 'moon', label: 'Moon', suits: ['rocket', 'astronaut', 'alien', 'robot', 'hopper'] },
+  { name: 'christmas', label: 'Christmas', suits: ['penguin', 'yeti', 'gnome'] },
 ];
 
 /** Colours and extras: "shark" is a colour here, read out as "Grey". */
@@ -141,10 +143,19 @@ function faceOf(name: string) {
   return handOutLooks([name], random).get(name)!;
 }
 
-/** Someone in their look, as the Line-up draws them: calm and holding on, unless told otherwise. */
-function drawRacer(chosen: ChosenLook, name: string, place: number, mood?: Mood, pose?: Pose) {
+/**
+ * Someone in their look, as the Line-up draws them: calm and holding on,
+ * unless told otherwise, in what `theme` dresses everyone in.
+ */
+function drawRacer(
+  chosen: ChosenLook,
+  { name, place, theme }: { name: string; place: number; theme?: string | null },
+  mood?: Mood,
+  pose?: Pose,
+) {
   const look = chosen as unknown as RacerLook;
-  const drawn = { face: faceOf(name), number: place, mood, pose };
+  const dress = dressFor(COURSES.find((each) => each === theme) ?? null);
+  const drawn = { face: faceOf(name), number: place, mood, pose, dress };
   return isCreature(look.mount)
     ? creature(look as RacerLook & { mount: Creature }, drawn)
     : racer(look as RideLook, drawn);
@@ -190,10 +201,10 @@ const lineUp: LineUp = {
     },
   ],
   themes: THEMES.map((theme) => ({ ...theme, picture: () => postcard(theme.name) })),
-  draw: (chosen, { name, place }) => drawRacer(chosen, name, place).el,
+  draw: (chosen, person) => drawRacer(chosen, person).el,
   drawStart: (scene) =>
     startLine(scene, ({ look, name, place }, mood, pose) =>
-      drawRacer(look, name, place, mood, pose),
+      drawRacer(look, { name, place, theme: scene.theme }, mood, pose),
     ),
 };
 

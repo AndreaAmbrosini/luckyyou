@@ -1,5 +1,5 @@
 // Each track's postcard on the Line-up, from the Design canvas: its world in
-// 120 by 46, sky, backdrop and ground. Every colour comes from a class in
+// 120 by 46, sky, backdrop and ground; Christmas's, a tree on snow at dusk. Every colour comes from a class in
 // the-race.module.css; a layer without an outline has a stroke width of 0.
 
 import { drawing, type Shape } from './parts';
@@ -82,6 +82,24 @@ const POSTCARDS: Readonly<Record<Course, readonly Shape[]>> = {
       R(4, 37, 10, 2) + R(28, 37, 10, 2) + R(52, 37, 10, 2) + R(76, 37, 10, 2) + R(100, 37, 10, 2),
       styles.paperFill!,
     ),
+  ],
+  christmas: [
+    L(R(0, 0, 120, 46), styles.seaBlue!),
+    L(
+      O(10, 6, 1.6) +
+        O(30, 14, 1.6) +
+        O(58, 5, 1.6) +
+        O(72, 18, 1.6) +
+        O(110, 6, 1.6) +
+        O(50, 22, 1.6),
+      styles.paperFill!,
+    ),
+    L(R(78, 18, 22, 13), styles.tomato!, 1.5),
+    L(T(75, 19, 103, 19, 89, 10), styles.paper!, 1.5),
+    L(R(85, 22, 8, 6), styles.sun!, 1),
+    L(T(22, 31, 46, 31, 34, 17) + T(25, 22, 43, 22, 34, 8), styles.leaf!, 1.5),
+    L(S(34, 7, 4), styles.sun!, 1),
+    L(R(-2, 30, 124, 18), styles.snow!, 2),
   ],
 };
 
