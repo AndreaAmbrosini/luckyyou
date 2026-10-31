@@ -2,8 +2,8 @@ Feature: The Line-up
   A show can have a line-up: a step between picking the show and starting it,
   where the person sharing their screen chooses how each of today's people
   looks. The show says what can be chosen and draws each look; the app shows
-  the step and keeps everyone's looks in this browser. Looks never change who
-  is picked: specs/pick.feature.
+  the step and keeps everyone's looks in this browser. Looks and themes never
+  change who is picked: specs/pick.feature.
 
   Rule: A show with a line-up opens it first
 
@@ -99,6 +99,115 @@ Feature: The Line-up
       When a show's Line-up is open with 8 people, a 15-character name among them
       Then every name is at least --size-body, wrapping inside its tile
       And every control is at least --target-min across, and shows the keyboard focus
+
+  # Decision 0015. Step 1 of The Race's themes (src/scenarios/the-race/the-race.feature).
+  @pending
+  Rule: A show can offer themes
+
+    Scenario: Themes as postcards, "Surprise" first
+      Given a show whose line-up offers themes
+      When its Line-up opens
+      Then a row of postcards sits above today's people: "Surprise", then each theme as a picture over its name
+      And the chosen one is marked by a check mark as well as by colour
+
+    Scenario: Surprise draws a theme at once
+      Given a show's Line-up with themes is open
+      When I choose "Surprise"
+      Then a theme other than the one showing is drawn at random, and the Line-up shows it at once
+      And "Surprise" is marked as chosen with a die, showing the drawn theme's picture
+      And choosing "Surprise" again draws another
+
+    Scenario: Choosing a theme
+      Given a show's Line-up with themes is open
+      When I choose a theme's postcard
+      Then that theme is chosen, and "Surprise" isn't
+
+    Scenario: The theme is kept
+      Given I chose a theme on a show's Line-up
+      When I reload the page and open that show's Line-up again
+      Then the same theme is chosen
+
+    Scenario: A kept Surprise draws afresh
+      Given I left a show's Line-up on "Surprise"
+      When I open that show's Line-up again
+      Then "Surprise" is chosen, with a theme drawn afresh
+
+    Scenario: The first time, it's Surprise
+      Given no theme was ever chosen for a show in this browser, or the one kept is no longer offered
+      When its Line-up opens
+      Then "Surprise" is chosen, with a theme drawn
+
+    Scenario: A theme's own tab
+      Given a show whose themes each suit some of its first option's choices
+      When a theme is chosen and Ben's look is shown
+      Then the option's first tab is named for the theme, marked with a star, and holds the choices that suit it
+      And each of those choices is still in its own group's tab
+      And with a theme that no choice suits, there is no such tab
+
+    Scenario: The show is handed the theme
+      Given a theme is chosen, by hand or by "Surprise"
+      When I start the show
+      Then the show is handed that theme, and can't change it
+      And "Run again" runs it with the same theme
+
+    Scenario: In the lab, the theme is drawn from the seed, unless I choose one
+      When I run a show with themes in the lab
+      Then its theme is drawn from the run's seed
+      And when I choose a theme in the lab, it runs on that one
+
+  # Decision 0016. Step 2 of The Race's themes.
+  @pending
+  Rule: A show can draw its start
+
+    Scenario: The Line-up shows the show's start
+      Given a show whose line-up draws its start, with 8 people
+      When its Line-up opens
+      Then the show's start, drawn in the chosen theme, takes the place of the row of tiles, with everyone in their look, in today's order
+      And beside each person are a die and a pin
+      And the chosen person's look is in a panel over the start, with their name, their pin, "Surprise me" and the show's options
+
+    Scenario: Choosing someone where they stand
+      When I click Ben where he stands
+      Then Ben is marked as chosen, in sun, and pressed, and his look is in the panel
+
+    Scenario: Another theme redraws the start
+      When I choose another theme
+      Then the start is drawn in it at once, everyone in their look
+
+  # Decision 0016. Step 2 of The Race's themes.
+  @pending
+  Rule: Pinned looks stay
+
+    Scenario: Choosing by hand pins a look
+      Given Ben's look is shown and isn't pinned
+      When I choose any of his choices
+      Then Ben is pinned: his pin is pressed, in sun with a solid outline
+
+    Scenario: A pin can be taken off
+      Given Ben is pinned
+      When I press his pin
+      Then he isn't pinned: his pin is white with a dashed outline
+
+    Scenario: Shuffle everyone leaves pinned looks alone
+      Given Anna and Ben are pinned
+      When I choose "Shuffle everyone"
+      Then everyone else gets a look drawn at random, and Anna and Ben keep theirs
+      And beside the button, a note says how many pinned looks stay
+
+    Scenario: A die deals one look
+      Given Ben is pinned
+      When I press the die beside Ben, or "Surprise me" in his panel
+      Then Ben gets a look drawn at random, unlike the one he had, and isn't pinned
+
+    Scenario: Pins are kept
+      Given Ben is pinned
+      When I reload the page and open that show's Line-up again
+      Then Ben is still pinned
+
+    Scenario: New looks flip in
+      When "Shuffle everyone" deals new looks
+      Then each one flips in like a turned sticker, in 0.4 seconds or more, one after another from the first person down
+      And with reduced motion, the looks change without flipping
 
   Rule: Everyone keeps their look
 
