@@ -65,17 +65,19 @@ This file says how they're used.
   scenario's picture, its name, its description, and either a mint "Last
   time" badge or a dashed badge with the reason it can't run. The whole card
   is the button.
+- **Music panel**: paper with `--shadow-small`, opening under the ♪ button:
+  the "Music" switch, then the "Volume" slider and its value.
 
 ## Screens
 
-**Who's in.** A header with the logo, the step pills, mute and fullscreen.
+**Who's in.** A header with the logo, the step pills, sound, music and
+fullscreen.
 Then "Who's in today?" with the count pill, "Everyone" and "No one". The sheet
 with the tiles fills the middle and scrolls if it must. The footer has the add
 field and "Remove people" on the left, the reason and "Next: pick a show" on
 the right. In remove mode the sheet turns tomato-soft with a dashed outline and
-the footer says "Click × to take someone off the team." beside "Done". On a
-first visit the heading is "Who's on the team?" and the sheet says "Add each
-teammate once, below. They stay in this browser, ready for the next call."
+the footer has its hint beside "Done". A first visit has a heading of its own
+and a note on the sheet.
 
 **Pick a show.** "Who's in" to go back, the heading, then a mint "3 in" pill
 followed by the names. Show cards sit in a grid at least 300px wide. The

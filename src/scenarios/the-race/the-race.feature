@@ -538,6 +538,36 @@ Feature: The Race
       When the show runs at every head count from 2 to 8, with each ending
       Then each run lasts between 14 and 25 seconds
 
+  # Music, built in one go with the music rule in specs/setup.feature. The
+  # galop from Rossini's William Tell Overture, which is public domain,
+  # arranged for the show as lead, oom-pah bass and drums.
+  @pending
+  Rule: Its music follows the race
+
+    Scenario: A drum roll, then the galop from "Go!"
+      When the show runs with music on
+      Then a snare roll swells under "On your marks…" and leads into the galop's first bar on "Go!"
+      And the galop plays at 4.2 to 4.6 beats a second, 4 beats a bar, until "Final stretch!"
+
+    Scenario: The final stretch starts on a bar
+      When the show runs at every head count from 2 to 8, with each ending
+      Then "Final stretch!" comes on the first beat of a bar
+
+    Scenario: The final stretch is faster, and leaves the low end to the heartbeat
+      When "Final stretch!" appears
+      Then the galop's minor strain plays, four bars in the stretch's time
+      And no kick drum plays until the line
+
+    Scenario: The slow last moment slows the music too
+      When the slow moment starts
+      Then the music plays a run down, an octave lower, at a quarter of the stretch's speed, until the line
+
+    Scenario: Silence from the line to the fanfare
+      Given the unlucky person is "Anna"
+      When the slow last moment ends at the line
+      Then the music stops
+      And the fanfare plays with "Anna wins!", as before
+
   Rule: It reads without sound
 
     Scenario: Captions tell the race, a thing at a time
