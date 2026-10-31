@@ -104,6 +104,13 @@
   stroke-linejoin: round;
 }
 
+/* The reindeer, the gingerbread and the Christmas tree's trunk. */
+.bark {
+  fill: var(--color-bark);
+  stroke: var(--color-ink);
+  stroke-linejoin: round;
+}
+
 /* The hat band and the scarf: sun, or tomato on a sun racer. */
 .band {
   fill: var(--band);

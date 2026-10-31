@@ -34,18 +34,18 @@ This file says how they're used.
 
 ## Colour roles
 
-| Token       | Used for                                                       |
-| ----------- | -------------------------------------------------------------- |
-| sky         | the ground of every screen                                     |
-| paper       | sheets, cards, tiles, tags, fields, secondary buttons          |
-| ink         | text, outlines, shadows                                        |
-| ink-soft    | unticked names, disabled text, placeholders                    |
-| sun         | ticked people, the logo, the current step, the result's ribbon |
-| tomato      | the primary button, a count that blocks, remove buttons        |
-| tomato-soft | refused-name notes, remove mode                                |
-| mint        | a count that's fine, "Last time", "Done"                       |
-| grape       | the name on the result, focus                                  |
-| the rest    | shows only: sea, shark, glass, skin tones, extra ring colours  |
+| Token       | Used for                                                            |
+| ----------- | ------------------------------------------------------------------- |
+| sky         | the ground of every screen                                          |
+| paper       | sheets, cards, tiles, tags, fields, secondary buttons               |
+| ink         | text, outlines, shadows                                             |
+| ink-soft    | unticked names, disabled text, placeholders                         |
+| sun         | ticked people, the logo, the current step, the result's ribbon      |
+| tomato      | the primary button, a count that blocks, remove buttons             |
+| tomato-soft | refused-name notes, remove mode                                     |
+| mint        | a count that's fine, "Last time", "Done"                            |
+| grape       | the name on the result, focus                                       |
+| the rest    | shows only: sea, shark, glass, bark, skin tones, extra ring colours |
 
 ## Parts
 

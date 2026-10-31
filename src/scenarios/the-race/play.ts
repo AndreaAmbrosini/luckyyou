@@ -76,6 +76,7 @@ const BURSTS: Record<Kind, string> = {
   ostrich: 'stretches its legs',
   rocket: 'fires its boosters',
   sandwich: 'gets extra spicy',
+  reindeer: 'takes off',
   zombie: 'gets a second wind',
   robot: 'switches to turbo',
   shark: 'finds its sea legs',
@@ -98,6 +99,9 @@ const BURSTS: Record<Kind, string> = {
   mummy: 'unrolls downhill',
   yeti: 'skis ahead',
   gnome: 'sneaks ahead',
+  snowman: 'rides a blizzard',
+  gingerbread: 'runs as fast as it can',
+  tree: 'lights up',
 };
 const STOPS: Record<Kind, string> = {
   snail: 'stops for a snack',
@@ -108,6 +112,7 @@ const STOPS: Record<Kind, string> = {
   ostrich: 'lays an egg',
   rocket: 'runs out of fuel',
   sandwich: 'drops its pickle',
+  reindeer: 'gets tangled in fairy lights',
   zombie: 'loses a shoe',
   robot: 'needs a reboot',
   shark: 'stops to tie its laces',
@@ -130,12 +135,16 @@ const STOPS: Record<Kind, string> = {
   mummy: 'comes unwrapped',
   yeti: 'makes a snow angel',
   gnome: 'freezes like a statue',
+  snowman: 'loses its nose',
+  gingerbread: 'loses a button',
+  tree: 'drops a bauble',
 };
 /** What the commentator calls a racer, where it isn't its kind's name. */
 const CALLED: Partial<Record<Kind, string>> = {
   mug: 'coffee mug',
   sticky: 'sticky note',
   icecream: 'ice cream',
+  tree: 'Christmas tree',
 };
 
 /** What each track does to someone in its own burst and stop. */
@@ -156,6 +165,7 @@ const GAITS: Record<Kind, { px: number; seconds: number }> = {
   ostrich: { px: 5, seconds: 0.32 },
   rocket: { px: 2, seconds: 0.2 },
   sandwich: { px: 4, seconds: 0.36 },
+  reindeer: { px: 6, seconds: 0.4 },
   zombie: { px: 3, seconds: 0.5 },
   robot: { px: 2, seconds: 0.24 },
   shark: { px: 4, seconds: 0.32 },
@@ -178,6 +188,9 @@ const GAITS: Record<Kind, { px: number; seconds: number }> = {
   mummy: { px: 3, seconds: 0.46 },
   yeti: { px: 6, seconds: 0.44 },
   gnome: { px: 3, seconds: 0.3 },
+  snowman: { px: 3, seconds: 0.34 },
+  gingerbread: { px: 5, seconds: 0.28 },
+  tree: { px: 3, seconds: 0.36 },
 };
 
 /** `look` drawn in the theme's `dress`: a rider on its mount, or a creature. */
@@ -230,6 +243,14 @@ const LAY = { drop: 0.2, fall: 0.3, from: [30, 100], to: [10, 142], look: 0.5 };
 const STEAM = { rise: 30 };
 /** A pickle drops out `drop` s into a stop, over `fall` s, to the ground in front, and is picked up at "Phew!". */
 const DROP = { drop: 0.1, fall: 0.35, from: [184, 134], to: [222, 180] };
+/** A reindeer leaps this high, in drawing pixels, over the first `up` s of its burst, glides, and lands over the last `up` s. */
+const LEAP = { px: 34, up: 0.2 };
+/**
+ * Fairy lights tangle round a reindeer's antlers from `from` s into its stop
+ * until "Phew!"; from `shake` s it shakes its head this far either way, this
+ * many times a second, about (x, y) on its grid.
+ */
+const TANGLED = { from: 0.1, shake: 0.8, degrees: 10, rate: 4, pivot: [190, 84] };
 /**
  * A track's own burst shows for `burst` s, past the burst itself, so the
  * moon bounce is one long hop; it skids `skid` degrees on a wet floor. A
@@ -331,6 +352,23 @@ const MELT = { top: 88, long: 2, peak: 0.9, puddle: [168, 189] };
 const BELT = { from: -220, slide: 0.3 };
 /** Wasabi drops from this far above onto the sushi's fish at (x, y) over `fall` s; then its eyes water. */
 const WASABI = { from: -70, at: [150, 34], fall: 0.3 };
+/** A snowman's blizzard spins this many turns over its burst, about the swirl's middle. */
+const BLIZZARD = { turns: 1.5, middle: [130, 110] };
+/** A gingerbread sprints bent this far forward, its crumbs flying back this far over its burst. */
+const SPRINT = { degrees: 12, to: [-50, 8] };
+/** The tree's two sets of lights take turns this many times a second, so each flashes at most twice. */
+const TWINKLE = 2;
+/** What a Christmas thing's stop knocks off it, and from where to where on its grid it falls. */
+const KNOCKED: Partial<Record<Creature, ['carrot' | 'gumdrop' | 'bauble', number[], number[]]>> = {
+  snowman: ['carrot', [149, 71], [198, 182]],
+  gingerbread: ['gumdrop', [131, 126], [178, 184]],
+  tree: ['bauble', [164, 136], [196, 182]],
+};
+/**
+ * It falls off `drop` s into the stop, over `fall` s; the thing bends this
+ * far for it from `reach` s, and has it back on at `back`.
+ */
+const LOSS = { drop: 0.1, fall: 0.35, reach: 0.4, degrees: 30, back: 1.3 };
 /** The animals and spooky creatures that tilt from their feet, as the things on legs do. */
 const CRITTERS: readonly Creature[] = [
   'cat',
@@ -427,10 +465,11 @@ interface Rider {
   readonly tag: HTMLElement;
   readonly speed: SVGPathElement;
   readonly gait: gsap.core.Animation;
-  /** The rocket's flame, the ostrich's legs and its head, where the mount has them. */
+  /** The rocket's flame, the ostrich's legs and its head, the reindeer's head, where the mount has them. */
   readonly flame: SVGElement[];
   readonly legs: SVGElement[];
   readonly head: SVGElement[];
+  readonly antlers: SVGElement[];
   /** What the track's own event brings to this racer: a cup, seaweed, swirls, a shadow, snow, a sledge. */
   readonly own: {
     cup?: SVGGElement;
@@ -643,6 +682,7 @@ export async function playTheRace(show: Show): Promise<void> {
       flame: parts('flame'),
       legs: parts('legs'),
       head: parts('bird-head'),
+      antlers: [...drawn.el.querySelectorAll<SVGElement>('[data-shake="deer-head"]')],
       own: mine,
       state: null,
     };
@@ -899,6 +939,29 @@ export async function playTheRace(show: Show): Promise<void> {
         shown.push('pickle');
       }
     }
+    if (look.mount === 'reindeer') {
+      const leap =
+        burst && !still
+          ? LEAP.px * Math.min(1, burst.since / LEAP.up, (burst.seconds - burst.since) / LEAP.up)
+          : 0;
+      write(drawn.el, '--hop', leap ? `${(-leap).toFixed(1)}px` : '0px');
+      write(drawn.el, '@data-hop', leap.toFixed(1));
+      showPart(props.spray!, !!burst);
+      if (burst) shown.push('spray');
+      const tangle = props.tangle!;
+      const tangled = stopped && since >= TANGLED.from && since < STOP.phew;
+      showPart(tangle, tangled);
+      if (tangled) shown.push('tangle');
+      const shake =
+        tangled && !still && since >= TANGLED.shake
+          ? TANGLED.degrees * Math.sin(2 * Math.PI * TANGLED.rate * (since - TANGLED.shake))
+          : 0;
+      const [x, y] = TANGLED.pivot;
+      for (const part of [...rider.antlers, tangle]) {
+        write(part, '@transform', shake ? `rotate(${shake.toFixed(1)} ${x} ${y})` : '');
+      }
+      write(drawn.el, '@data-shake', Math.abs(shake).toFixed(1));
+    }
     write(drawn.el, '@data-props', shown.join(' '));
   };
 
@@ -1127,6 +1190,45 @@ export async function playTheRace(show: Show): Promise<void> {
       if (showing('steam', until(WASABI.fall, STOP.phew))) {
         steam('steam', still ? 0 : JET.rise * (((since - WASABI.fall) / JET.loop) % 1));
       }
+    }
+    if (kind === 'snowman') {
+      const spin = burst && !still ? 360 * BLIZZARD.turns * done : 0;
+      if (showing('blizzard', !!burst)) {
+        const [x, y] = BLIZZARD.middle;
+        write(props.blizzard!, '@transform', `rotate(${spin.toFixed(1)} ${x} ${y})`);
+      }
+      write(drawn.el, '@data-spin', spin.toFixed(1));
+    }
+    if (kind === 'gingerbread' && showing('crumbs', !!burst)) {
+      move(props.crumbs!, [0, 0], SPRINT.to, still ? 0 : done);
+    }
+    if (kind === 'tree') {
+      // Its lights on, one set glowing and then the other; together, with reduced motion.
+      const lit = !burst
+        ? ''
+        : still
+          ? 'ab'
+          : Math.floor(2 * TWINKLE * burst.since) % 2
+            ? 'b'
+            : 'a';
+      if (showing('lights', !!burst)) {
+        for (const glow of props.lights!.querySelectorAll<SVGElement>('[data-glow]')) {
+          showPart(glow, lit.includes(glow.dataset.set!));
+        }
+      }
+      write(drawn.el, '@data-twinkle', lit);
+    }
+    const knocked = KNOCKED[kind];
+    if (knocked) {
+      const [prop, from, to] = knocked;
+      const off = until(LOSS.drop, LOSS.back);
+      for (const part of drawn.lost) showPart(part, !off);
+      if (showing(prop, off)) {
+        const fallen = still ? 1 : Math.min(1, (since - LOSS.drop) / LOSS.fall);
+        move(props[prop]!, from, to, fallen, ` rotate(${still ? 0 : Math.round(160 * fallen)})`);
+      }
+      const sprinting = kind === 'gingerbread' && !!burst;
+      drawn.setBend(sprinting ? SPRINT.degrees : until(LOSS.reach, LOSS.back) ? LOSS.degrees : 0);
     }
     return tilt;
   };
