@@ -100,7 +100,7 @@ Feature: The Line-up
       Then every name is at least --size-body, wrapping inside its tile
       And every control is at least --target-min across, and shows the keyboard focus
 
-  # Decision 0015.
+  # Decision 0017.
   Rule: A show can offer themes
 
     Scenario: Themes as postcards, "Surprise" first

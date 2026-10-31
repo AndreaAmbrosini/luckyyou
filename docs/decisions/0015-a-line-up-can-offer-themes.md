@@ -1,6 +1,6 @@
 # 0015 A line-up can offer themes
 
-Accepted 2026-10-31
+Superseded by 0017
 
 The host wants to choose where The Race runs, Christmas in December say, or
 leave it to chance, and to find the racers that suit it. Until now the show
