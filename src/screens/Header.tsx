@@ -1,17 +1,18 @@
 import { useFullscreen } from '../ui/fullscreen';
 import { FullscreenIcon, SoundIcon } from '../ui/icons';
 import styles from './Header.module.css';
+import { MusicControl, type MusicControlProps } from './MusicControl';
 
 /** The third step shows only on a show's Line-up. */
 const STEPS = ["1 · Who's in", '2 · Pick a show', '3 · Line-up'];
 
-export interface HeaderProps {
+export interface HeaderProps extends MusicControlProps {
   step: 1 | 2 | 3;
-  muted: boolean;
   onMutedChange(muted: boolean): void;
 }
 
-export function Header({ step, muted, onMutedChange }: HeaderProps) {
+export function Header({ step, onMutedChange, ...music }: HeaderProps) {
+  const { muted } = music;
   const fullscreen = useFullscreen();
 
   return (
@@ -39,6 +40,7 @@ export function Header({ step, muted, onMutedChange }: HeaderProps) {
         >
           <SoundIcon on={!muted} />
         </button>
+        <MusicControl {...music} />
         {fullscreen.supported && (
           <button
             type="button"

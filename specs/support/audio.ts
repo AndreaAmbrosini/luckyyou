@@ -4,9 +4,10 @@ export interface FakeAudio {
   /** Sources started on every output opened, and those cut off before they ended. */
   started: number;
   stopped: number;
-  /** Outputs opened. */
+  /** Outputs opened, and closed. */
   opened: number;
-  /** The level each gain straight into an output was first set to. */
+  closed: number;
+  /** The level each gain straight into an output is set to now. */
   readonly outputLevels: number[];
 }
 
@@ -15,15 +16,24 @@ export interface FakeAudio {
  * stopped, and note what feeds the speakers at what level.
  */
 export function fakeAudio(): FakeAudio {
-  const audio: FakeAudio = { started: 0, stopped: 0, opened: 0, outputLevels: [] };
+  const outputs: { readonly level: number | null }[] = [];
+  const audio: FakeAudio = {
+    started: 0,
+    stopped: 0,
+    opened: 0,
+    closed: 0,
+    get outputLevels() {
+      return outputs.map((gain) => gain.level ?? 1);
+    },
+  };
   const destination = {};
   const param = () => {
-    let first: number | null = null;
+    let level: number | null = null;
     const self = {
-      get first() {
-        return first;
+      get level() {
+        return level;
       },
-      setValueAtTime: (value: number) => ((first ??= value), self),
+      setValueAtTime: (value: number) => ((level = value), self),
       linearRampToValueAtTime: () => self,
       exponentialRampToValueAtTime: () => self,
     };
@@ -37,7 +47,7 @@ export function fakeAudio(): FakeAudio {
       detune: param(),
       Q: param(),
       connect: <T>(next: T) => {
-        if (next === destination) audio.outputLevels.push(gain.first ?? 1);
+        if (next === destination) outputs.push(gain);
         return next;
       },
       start: () => void audio.started++,
@@ -60,7 +70,7 @@ export function fakeAudio(): FakeAudio {
     createBuffer = (_channels: number, length: number) => ({
       getChannelData: () => new Float32Array(length),
     });
-    close = () => Promise.resolve();
+    close = () => (audio.closed++, Promise.resolve());
   }
   vi.stubGlobal('AudioContext', FakeContext);
   return audio;

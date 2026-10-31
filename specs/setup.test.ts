@@ -1,5 +1,5 @@
 import { loadFeature } from '@amiceli/vitest-cucumber';
-import { screen, waitFor, within } from '@testing-library/react';
+import { fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { expect } from 'vitest';
 import {
   choose,
@@ -15,12 +15,26 @@ import {
   TEAM,
   tickedNames,
 } from './support/app';
+import { FULL_LEVEL } from '../src/scenario-kit/music';
+import { fakeAudio, type FakeAudio } from './support/audio';
 import { fakeScenario } from './support/fake-scenarios';
 import { describeSpec } from './support/spec';
 
 const heading = () => screen.getByRole('heading', { level: 1 }).textContent;
 const nextButton = () => screen.getByRole('button', { name: 'Next: pick a show' });
 const soundSwitch = () => screen.getByRole('switch', { name: 'Sound' });
+const musicButton = () => screen.getByRole('button', { name: /^Music/ });
+const musicSwitch = () => screen.getByRole('switch', { name: 'Music' });
+const volumeSlider = () => screen.getByRole('slider', { name: 'Volume' });
+const openMusic = () => currentUser().click(musicButton());
+/** Moves the volume slider to `percent`, as dragging it would. */
+const moveVolume = (percent: number) =>
+  fireEvent.change(volumeSlider(), { target: { value: String(percent) } });
+/** The music's state as the open panel shows it. */
+const musicShown = () => ({
+  on: musicSwitch().getAttribute('aria-checked') === 'true',
+  volume: Number((volumeSlider() as HTMLInputElement).value),
+});
 
 describeSpec(await loadFeature('./setup.feature'), ({ Rule }) => {
   Rule('Moving on needs 2 to 12 ticked people', ({ RuleScenario, RuleScenarioOutline }) => {
@@ -276,6 +290,127 @@ describeSpec(await loadFeature('./setup.feature'), ({ Rule }) => {
       });
       Then('no fullscreen control is shown', () => {
         expect(screen.queryByRole('button', { name: 'Fullscreen' })).not.toBeInTheDocument();
+      });
+    });
+  });
+  Rule('Music has its own switch and volume', ({ RuleScenario }) => {
+    RuleScenario('The music button opens the music panel', ({ When, Then, And }) => {
+      When('I click the music button in the header', async () => {
+        renderApp();
+        expect(musicButton()).toHaveAttribute('aria-expanded', 'false');
+        await openMusic();
+      });
+      Then(
+        'a panel opens under it with a "Music" switch and a "Volume" slider showing its value',
+        () => {
+          expect(musicButton()).toHaveAttribute('aria-expanded', 'true');
+          const panel = document.getElementById(musicButton().getAttribute('aria-controls')!)!;
+          expect(panel).toBeVisible();
+          expect(musicButton().parentElement).toContainElement(panel);
+          expect(within(panel).getByRole('switch', { name: 'Music' })).toBeVisible();
+          expect(within(panel).getByRole('slider', { name: 'Volume' })).toHaveValue('70');
+          expect(within(panel).getByRole('status')).toHaveTextContent('70%');
+        },
+      );
+      And(
+        'Esc or a click outside closes the panel, and the focus goes back to the button',
+        async () => {
+          await currentUser().click(musicSwitch());
+          await currentUser().keyboard('{Escape}');
+          expect(musicButton()).toHaveAttribute('aria-expanded', 'false');
+          expect(musicButton()).toHaveFocus();
+          await openMusic();
+          await currentUser().click(screen.getByRole('heading', { level: 1 }));
+          expect(musicButton()).toHaveAttribute('aria-expanded', 'false');
+          expect(musicButton()).toHaveFocus();
+        },
+      );
+    });
+
+    RuleScenario('Music starts on, at 70%', ({ Given, Then }) => {
+      Given('a first visit', async () => {
+        renderApp();
+        await openMusic();
+      });
+      Then('the music is on, at {int}%', (_, volume: number) => {
+        expect(musicShown()).toEqual({ on: true, volume });
+        expect(musicButton()).toHaveAccessibleName('Music');
+      });
+    });
+
+    RuleScenario('Music and its volume are remembered in this browser', ({ Given, When, Then }) => {
+      Given('I turned the music off and set its volume to {int}%', async (_, volume: number) => {
+        renderApp();
+        await openMusic();
+        await currentUser().click(musicSwitch());
+        moveVolume(volume);
+      });
+      When('I reload the page', async () => {
+        reload();
+        await openMusic();
+      });
+      Then('the music is still off, at {int}%', (_, volume: number) => {
+        expect(musicShown()).toEqual({ on: false, volume });
+      });
+    });
+
+    RuleScenario('Sound off silences the music too', ({ Given, Then, And, When }) => {
+      Given('the sound is off', async () => {
+        storeSettings({ muted: false, music: false, musicVolume: 40, lastScenario: null });
+        renderApp();
+        await currentUser().click(soundSwitch());
+        await openMusic();
+      });
+      Then('the music button shows the music as off', () => {
+        expect(musicButton()).toHaveAccessibleName('Music, off');
+      });
+      And(
+        "the panel's switch and slider are disabled, with the reason {string}",
+        (_, reason: string) => {
+          for (const control of [musicSwitch(), volumeSlider()]) {
+            expect(control).toBeDisabled();
+            expect(control).toHaveAccessibleDescription(reason);
+          }
+        },
+      );
+      When('I turn the sound back on', async () => {
+        await currentUser().click(soundSwitch());
+        await openMusic();
+      });
+      Then('the music is on or off, at the volume, as I left it', () => {
+        expect(musicShown()).toEqual({ on: false, volume: 40 });
+        expect(musicSwitch()).toBeEnabled();
+        expect(volumeSlider()).not.toHaveAccessibleDescription();
+      });
+    });
+
+    RuleScenario('Moving the volume plays a sample', ({ When, Then, And }) => {
+      let audio: FakeAudio;
+      const level = () => audio.outputLevels.at(-1)! / FULL_LEVEL;
+      When('I move the volume slider', async () => {
+        audio = fakeAudio();
+        renderApp();
+        await openMusic();
+        moveVolume(40);
+      });
+      Then('a short sample of music plays at the new volume', () => {
+        expect(audio.opened).toBe(1);
+        expect(audio.started).toBeGreaterThan(0);
+        expect(level()).toBeCloseTo(0.4, 6);
+      });
+      And(
+        'moving it again while the sample plays changes its volume without starting it over',
+        () => {
+          const started = audio.started;
+          moveVolume(60);
+          expect(audio.opened).toBe(1);
+          expect(audio.started).toBe(started);
+          expect(level()).toBeCloseTo(0.6, 6);
+        },
+      );
+      And('the sample stops when the panel closes', async () => {
+        await currentUser().keyboard('{Escape}');
+        expect(audio.closed).toBe(1);
       });
     });
   });

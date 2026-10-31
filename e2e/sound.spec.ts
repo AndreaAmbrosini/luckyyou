@@ -76,23 +76,18 @@ test('every sound can be heard', async ({ page }) => {
   }
 });
 
-// "Music sits under the sounds" (specs/kit.feature): a song at 70%, moved
+// "Music sits under the sounds" (specs/kit.feature): the kit's sample at 70%, moved
 // along frame by frame as a show would, rendered offline and its peak read.
 test('music sits under the sounds', async ({ page }) => {
   await page.goto('./');
   await page.addScriptTag({ content: `window.importSound = ${importSound.toString()}` });
   const peak = await page.evaluate(
     async (source) => {
-      const { createSound, drums, melody, oomPah } = await (window as unknown as Kit).importSound(
-        source,
-      );
-      const song = [
-        ...melody('G4:.5 G4:.5 C5 D5 E5 | G5:2.5 F5:.5 E5:.5 D5:.5 C5', 0),
-        ...oomPah(['C', 'G7'], 0),
-        ...drums(2, 0),
-      ];
+      const { createSound, SAMPLE } = await (window as unknown as Kit).importSound(source);
+      // The kit's own sample, at the galop's speed.
+      const song = SAMPLE;
       const speed = 4.4;
-      const seconds = 8 / speed + 0.5;
+      const seconds = 9 / speed + 0.5;
       const opened: OfflineAudioContext[] = [];
       window.AudioContext = class extends OfflineAudioContext {
         constructor() {

@@ -93,6 +93,9 @@ export default function App({ scenarios = catalogue }: AppProps) {
         step={STEP[screen.name]}
         muted={settings.muted}
         onMutedChange={(muted) => changeSettings({ muted })}
+        music={settings.music}
+        musicVolume={settings.musicVolume}
+        onMusicChange={changeSettings}
       />
       {screen.name === 'whos-in' ? (
         <WhosIn people={people} onNext={() => setScreen({ name: 'shows' })} />

@@ -96,9 +96,6 @@ Feature: Setting up a pick
       Given the browser doesn't support fullscreen
       Then no fullscreen control is shown
 
-  # Music, built in one go with its rules in specs/show.feature,
-  # specs/kit.feature and The Race's feature (decision 0014).
-  @pending
   Rule: Music has its own switch and volume
 
     Scenario: The music button opens the music panel

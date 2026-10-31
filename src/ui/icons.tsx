@@ -93,6 +93,16 @@ export function SoundIcon({ on, ...props }: IconProps & { on: boolean }) {
   );
 }
 
+export function MusicIcon({ on, ...props }: IconProps & { on: boolean }) {
+  return (
+    <Icon weight={2.6} {...props}>
+      <circle cx="9" cy="17" r="3" />
+      <path d="M12 17V4c1.5 2.5 6 3 6 7.5" />
+      {!on && <path d="M4 4l16 16" />}
+    </Icon>
+  );
+}
+
 export function FullscreenIcon({ active, ...props }: IconProps & { active: boolean }) {
   return (
     <Icon weight={2.6} {...props}>

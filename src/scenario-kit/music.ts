@@ -142,6 +142,55 @@ export function musicBus(context: BaseAudioContext, volume: number): GainNode {
   return bus;
 }
 
+/** Two bars of oom-pah and a short tune of the kit's own, to hear a volume by. */
+export const SAMPLE: readonly Note[] = [
+  ...melody('G4:.5 C5:.5 E5 G5 E5 | F5:.5 D5:.5 B4 G4 r | C5', 0),
+  ...oomPah(['C', 'G7'], 0),
+  ...drums(2, 0),
+  { at: 8, beats: 1, voice: 'bass', pitch: pitchOf('C3') },
+];
+const SAMPLE_SPEED = 4.4;
+
+/**
+ * Plays the sample at a volume. Asked again while it plays, it changes the
+ * volume and plays on; asked after it has ended, it plays it again.
+ */
+export function createSample(): { play(volume: number): void; stop(): void } {
+  let context: AudioContext | null = null;
+  let bus: GainNode | null = null;
+  let endsAt = 0;
+  const stop = () => {
+    void context?.close();
+    context = null;
+    bus = null;
+  };
+  return {
+    play(volume) {
+      if (typeof AudioContext === 'undefined') return;
+      try {
+        if (context && bus && context.currentTime < endsAt) {
+          bus.gain.setValueAtTime(volume * FULL_LEVEL, context.currentTime);
+          return;
+        }
+        stop();
+        context = new AudioContext();
+        // Safari can hand one back suspended, and it plays nothing until resumed.
+        if (context.state === 'suspended') context.resume().catch(() => undefined);
+        bus = musicBus(context, volume);
+        const start = context.currentTime;
+        for (const note of SAMPLE) {
+          const seconds = note.beats / SAMPLE_SPEED;
+          playNote(context, bus, note, start + note.at / SAMPLE_SPEED, seconds);
+        }
+        endsAt = start + Math.max(...SAMPLE.map((note) => note.at + note.beats)) / SAMPLE_SPEED;
+      } catch {
+        // A sample that can't play leaves the volume set all the same.
+      }
+    },
+    stop,
+  };
+}
+
 /** Starts `note` at `when`, lasting `seconds`, and returns its sources. */
 export function playNote(
   context: BaseAudioContext,
