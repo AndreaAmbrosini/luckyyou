@@ -38,9 +38,13 @@ export interface LineUp {
   readonly options: readonly LineUpOption[];
   /**
    * Draws `person` in `look`, calm, filling the element the Line-up puts it
-   * in. `place` is their place in today's list, from 1.
+   * in. `place` is their place in today's list, from 1; `theme` is the one
+   * chosen, by name, null for a line-up without themes.
    */
-  draw(look: ChosenLook, person: { readonly name: string; readonly place: number }): Element;
+  draw(
+    look: ChosenLook,
+    person: { readonly name: string; readonly place: number; readonly theme?: string | null },
+  ): Element;
   /** Where the whole show takes place, one for everyone, shown as postcards (decision 0015). */
   readonly themes?: readonly LineUpTheme[];
   /**

@@ -365,6 +365,11 @@
   background-color: var(--confetti);
 }
 
+/* A snowflake in Christmas's confetti. */
+.flake {
+  border-radius: var(--radius-pill);
+}
+
 /* The flash as a photo finish freezes. */
 .flash {
   position: absolute;
@@ -429,6 +434,42 @@
 
 .moon {
   background-color: var(--color-ink);
+}
+
+.christmas {
+  background-color: var(--color-sea);
+}
+
+/* Christmas's snow, and the light blue lines between its lanes. */
+.snow {
+  fill: var(--color-paper);
+  stroke: var(--color-ink);
+}
+
+.glassFill {
+  fill: var(--color-glass);
+}
+
+/* A candy cane by a sign, drawn in px from the sign's middle: ink, then paper, then tomato stripes. */
+.cane {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 1px;
+  height: 1px;
+}
+
+.caneStripe {
+  fill: none;
+  stroke: var(--color-tomato);
+  stroke-dasharray: 8 8;
+}
+
+/* The sledge's gold trim. */
+.sunLine {
+  fill: none;
+  stroke: var(--color-sun);
+  stroke-linecap: round;
 }
 
 /* A sign as a sticky note on the office's partitions. */

@@ -136,6 +136,11 @@ Feature: The Line-up
       When its Line-up opens
       Then "Surprise" is chosen, with a theme drawn
 
+    Scenario: Each look is drawn in the theme
+      Given a show whose line-up offers themes
+      When a theme is chosen
+      Then the show draws every look in it, so it can dress everyone for it
+
     Scenario: A theme's own tab
       Given a show whose themes each suit some of its first option's choices
       When a theme is chosen and Ben's look is shown

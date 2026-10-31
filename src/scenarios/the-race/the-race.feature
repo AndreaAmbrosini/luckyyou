@@ -281,8 +281,6 @@ Feature: The Race
       Then every caption, sign and name tag is ink text on a paper or sun sticker with an ink outline
       And on the Moon's dark sky, nothing but those stickers carries text
 
-  # Step 3.
-  @pending
   Rule: Christmas
 
     Scenario: Christmas is a theme

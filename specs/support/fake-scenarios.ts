@@ -92,6 +92,7 @@ export function fakeLineUp(options: Partial<LineUp> = {}): LineUp {
       const drawn = document.createElement('div');
       drawn.dataset.look = lookText(look);
       drawn.dataset.person = `${person.place} ${person.name}`;
+      if (person.theme) drawn.dataset.theme = person.theme;
       return drawn;
     },
     ...options,

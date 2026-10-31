@@ -1,7 +1,7 @@
 // The Race's drawings, from the Design canvas: the racer on each mount, with
 // its extra, the rider's mood and pose, and the trophy (a creature, racing on
-// its own feet, is in creature.ts); the four tracks, each with its backdrop,
-// ground, signs and lines; and the photo-finish card.
+// its own feet, is in creature.ts); a theme's costume and prize; the tracks,
+// each with its backdrop, ground, signs and lines; and the photo-finish card.
 // Every colour comes from a class in the-race.module.css; the racer's colour
 // comes in as --racer, and the contrast for the hat band, the scarf, the
 // cape and the bow tie as --band.
@@ -552,10 +552,15 @@ const BOW_TIE: readonly Shape[] = [
  * office's coffee machine, on the stage from its left edge, standing on the
  * floor in front of the partitions, below the caption; the paper cup, on its 40 by 44 grid; the wet-floor sign, standing on
  * its middle at (0, 0); the seaweed that wraps round a racer, on its 160 by
- * 120 grid; and the current's swirls behind a racer, on the racer's grid.
+ * 120 grid; the current's swirls behind a racer, on the racer's grid; the
+ * snowdrift that piles up round a racer, on its 200 by 84 grid; and the
+ * sledge that slides in under one, on its 160 by 50 grid.
  */
 export const TRACK_PROPS: Readonly<
-  Record<'machine' | 'cup' | 'wetFloor' | 'seaweed' | 'swirls', readonly Shape[]>
+  Record<
+    'machine' | 'cup' | 'wetFloor' | 'seaweed' | 'swirls' | 'snowdrift' | 'sledge',
+    readonly Shape[]
+  >
 > = {
   machine: [
     ['rect', styles.tomato!, { x: 0, y: 118, width: 70, height: 96, rx: 8, 'stroke-width': 4 }],
@@ -608,6 +613,41 @@ export const TRACK_PROPS: Readonly<
       },
     ],
   ],
+  snowdrift: [
+    [
+      'path',
+      styles.paper!,
+      {
+        d: 'M0 84 Q4 44 40 44 Q54 8 100 18 Q142 0 162 38 Q196 38 200 84 Z',
+        'stroke-width': 5,
+      },
+    ],
+    [
+      'path',
+      styles.glassLine!,
+      { d: 'M28 70 Q58 56 88 64 M118 66 Q144 52 172 62', 'stroke-width': 5 },
+    ],
+    [
+      'path',
+      styles.paper!,
+      {
+        d:
+          'M60 4 a6 6 0 1 0 12 0 a6 6 0 1 0 -12 0 Z M150 -6 a5 5 0 1 0 10 0 a5 5 0 1 0 -10 0 Z ' +
+          'M118 -18 a4 4 0 1 0 8 0 a4 4 0 1 0 -8 0 Z',
+        'stroke-width': 3,
+      },
+    ],
+  ],
+  sledge: [
+    ['path', styles.line!, { d: 'M30 42 V26 M112 42 V26', 'stroke-width': 5 }],
+    ['path', styles.line!, { d: 'M4 42 H130 Q150 42 154 20', 'stroke-width': 6 }],
+    [
+      'path',
+      styles.tomato!,
+      { d: 'M8 12 H128 Q142 12 142 22 V28 H8 Z', 'stroke-width': 4, 'stroke-linejoin': 'round' },
+    ],
+    ['path', styles.sunLine!, { d: 'M16 20 H132', 'stroke-width': 4 }],
+  ],
 };
 
 /** The trophy, on its 72 by 60 grid. */
@@ -621,6 +661,71 @@ export const TROPHY: readonly Shape[] = [
   ['rect', styles.sun!, { x: 31, y: 39, width: 10, height: 9, 'stroke-width': 3 }],
   ['rect', styles.board!, { x: 20, y: 47, width: 32, height: 10, rx: 3, 'stroke-width': 3 }],
 ];
+
+/** The present, on the trophy's 72 by 60 grid: tomato, with a sun ribbon and bow. */
+export const PRESENT: readonly Shape[] = [
+  ['rect', styles.tomato!, { x: 12, y: 24, width: 48, height: 33, rx: 3, 'stroke-width': 4 }],
+  ['rect', styles.tomato!, { x: 8, y: 16, width: 56, height: 12, rx: 3, 'stroke-width': 4 }],
+  ['rect', styles.sun!, { x: 31, y: 16, width: 10, height: 41, 'stroke-width': 3 }],
+  [
+    'path',
+    styles.sun!,
+    { d: 'M36 16 Q20 0 18 10 Q20 20 36 16 Z M36 16 Q52 0 54 10 Q52 20 36 16 Z', 'stroke-width': 3 },
+  ],
+  ['circle', styles.sun!, { cx: 36, cy: 16, r: 5, 'stroke-width': 3 }],
+];
+
+/**
+ * The Santa hat, round the middle of its brim's bottom: its tail and bobble
+ * hang back. `shaded`, it has a creature's flat shadow and shine.
+ */
+export function santaHat(shaded = false): Shape[] {
+  const cone = 'M-24 -12 C-22 -38 -4 -54 14 -50 C24 -46 26 -30 24 -12 Z';
+  return [
+    [
+      'path',
+      styles.tomato!,
+      {
+        d: 'M12 -50 C-6 -60 -30 -56 -42 -36 L-34 -30 C-26 -42 -10 -46 4 -42 Z',
+        'stroke-width': 4,
+        'stroke-linejoin': 'round',
+      },
+    ],
+    ['path', styles.tomato!, { d: cone, 'stroke-width': 4, 'stroke-linejoin': 'round' }],
+    ...(shaded
+      ? ([
+          [
+            'path',
+            styles.shade!,
+            { d: 'M-23 -13 C-22 -30 -15 -42 -6 -48 C-11 -36 -13 -24 -11 -13 Z' },
+          ],
+          [
+            'path',
+            styles.stripe!,
+            { d: 'M15 -42 Q20 -33 20 -20', 'stroke-width': 4, opacity: 0.8 },
+          ],
+        ] as Shape[])
+      : []),
+    [
+      'path',
+      styles.paper!,
+      { d: 'M-22 -15 H22 A7.5 7.5 0 0 1 22 0 H-22 A7.5 7.5 0 0 1 -22 -15 Z', 'stroke-width': 4 },
+    ],
+    ['circle', styles.paper!, { cx: -40, cy: -32, r: 8.5, 'stroke-width': 4 }],
+  ];
+}
+
+/** What a theme dresses everyone in, and what the winner holds up. */
+export interface Dress {
+  readonly costume: 'santa' | null;
+  readonly prize: 'trophy' | 'present';
+}
+
+/** Christmas puts everyone in a Santa hat and gives the winner a present; other themes, the trophy. */
+export const dressFor = (course: Course | null): Dress =>
+  course === 'christmas'
+    ? { costume: 'santa', prize: 'present' }
+    : { costume: null, prize: 'trophy' };
 
 /** A racer, a rider on a mount or a creature, as the race moves it. */
 export interface Runner {
@@ -652,7 +757,7 @@ export interface Racer extends Runner {
 /**
  * A racer on their mount, from the canvas's Racer: the mount in the
  * racer's colour, their extra, and the rider, the kit's head on land with a
- * shirt in the racer's colour, holding on in `pose`.
+ * shirt in the racer's colour, holding on in `pose`, in the theme's `dress`.
  */
 export function racer(
   look: RideLook,
@@ -661,7 +766,8 @@ export function racer(
     number,
     mood = 'calm',
     pose = 'hold',
-  }: { face: Look; number: number; mood?: Mood; pose?: Pose },
+    dress = dressFor(null),
+  }: { face: Look; number: number; mood?: Mood; pose?: Pose; dress?: Dress },
 ): Racer {
   const spec = SPEC[look.mount];
   const [sx, sy] = spec.saddle;
@@ -724,10 +830,16 @@ export function racer(
     extra.dataset.part = name;
     extra.setAttribute('width', String(RIDER.size));
     extra.setAttribute('height', String(RIDER.size));
+    return extra;
   };
   // The cape goes behind the rider; the scarf and the bow tie over the shirt.
   if (look.extra === 'cape') wear('cape', CAPE);
   lean.append(face.el);
+  if (dress.costume === 'santa') {
+    // Instead of the cap, the goggles or the snorkel the kit hands out.
+    face.el.querySelector(`[data-part="${faceLook.accessory}"]`)?.remove();
+    group(wear('santa', []), 'hat', santaHat()).setAttribute('transform', 'translate(50 24)');
+  }
   if (look.extra === 'scarf') wear('scarf', SCARF);
   if (look.extra === 'bowtie') wear('bowtie', BOW_TIE);
 
@@ -760,8 +872,8 @@ export function racer(
   leaf.setAttribute('transform', 'translate(214 138)');
   show(leaf, false);
 
-  const trophy = drawing(72, 60, TROPHY);
-  trophy.dataset.part = 'trophy';
+  const trophy = drawing(72, 60, dress.prize === 'present' ? PRESENT : TROPHY);
+  trophy.dataset.part = dress.prize;
   trophy.setAttribute('x', String(sx - 36));
   trophy.setAttribute('y', String(sy - 132));
   trophy.setAttribute('width', '72');
@@ -881,8 +993,14 @@ function chequer(x: number, y: number, rows: number, size: number): string {
   return squares.join(' ');
 }
 
-/** How a track's signs stand: on a post by the rail, or stuck to a partition. */
-type Stands = 'post' | 'note';
+/**
+ * How a track's signs stand: on a post by the rail, stuck to a partition,
+ * by a candy cane, or on their own.
+ */
+type Stands = 'post' | 'note' | 'cane' | 'bare';
+
+/** A candy cane standing on the ground's edge, its hook over to the right, 30 px left of a 150 px sign. */
+const CANE = 'M-105 214 V126 Q-105 106 -87 106 Q-69 106 -69 124';
 
 /** A sign saying `text`, its post or its middle at x 0 of its holder. */
 function sign(text: string, colour: 'paper' | 'sun', stands: Stands): HTMLElement {
@@ -892,6 +1010,17 @@ function sign(text: string, colour: 'paper' | 'sun', stands: Stands): HTMLElemen
   if (stands === 'post') {
     const post = holder.appendChild(document.createElement('div'));
     post.className = styles.post!;
+  }
+  if (stands === 'cane') {
+    const cane = holder.appendChild(
+      drawing(1, 1, [
+        ['path', styles.line!, { d: CANE, 'stroke-width': 16 }],
+        ['path', styles.stripe!, { d: CANE, 'stroke-width': 8 }],
+        ['path', styles.caneStripe!, { d: CANE, 'stroke-width': 8 }],
+      ]),
+    );
+    cane.classList.add(styles.cane!);
+    cane.dataset.part = 'cane';
   }
   const board = holder.appendChild(document.createElement('p'));
   board.className = [
@@ -1114,11 +1243,168 @@ function field(back: SVGSVGElement, ground: SVGSVGElement): Strip[] {
   return [{ el: flags, period: BUNTING.dip, parallax: BUNTING.parallax }, posts];
 }
 
+/** A circle round (x, y) as a path. */
+const dot = (x: number, y: number, r: number) =>
+  `M${x - r} ${y} a${r} ${r} 0 1 0 ${2 * r} 0 a${r} ${r} 0 1 0 ${-2 * r} 0 Z `;
+const triangle = (a: number, b: number, c: number, d: number, e: number, f: number) =>
+  `M${a} ${b} L${c} ${d} L${e} ${f} Z `;
+
+/** Christmas's snowflakes in the dusk sky. */
+const FLAKES = [
+  [40, 30],
+  [150, 70],
+  [260, 24],
+  [330, 110],
+  [420, 50],
+  [500, 130],
+  [620, 20],
+  [700, 96],
+  [780, 40],
+  [860, 120],
+  [900, 30],
+  [1040, 70],
+  [1100, 140],
+  [1250, 120],
+  [210, 150],
+  [460, 170],
+  [1010, 20],
+]
+  .map(([x = 0, y = 0]) => dot(x, y, 4))
+  .join('');
+
+/** The village's hills stand on y `HILLS`; its fairy lights hang along y `LIGHTS`, a bulb every 64 px. */
+const HILLS = 194;
+const LIGHTS = 198;
+const BULBS: readonly string[] = [styles.tomato!, styles.sun!, styles.mint!, styles.pink!];
+
+/**
+ * Christmas: a snowy village at dusk, with snowflakes and a crescent moon,
+ * white hills, a tomato house and a mint house with snowy roofs and lit
+ * windows, pines, and a big tree with baubles and a star; fairy lights along
+ * the snow.
+ */
+function christmas(back: SVGSVGElement, ground: SVGSVGElement): Strip[] {
+  const y = HILLS;
+  const sky = strip(back, 'night', 1500, 0.1, [
+    ['path', styles.paperFill!, { d: FLAKES }],
+    [
+      'path',
+      styles.sun!,
+      {
+        d: 'M70 22 A46 46 0 1 0 104 104 A38 38 0 1 1 70 22 Z',
+        'stroke-width': 4,
+        'data-part': 'moon',
+      },
+    ],
+  ]);
+  // The hills' edge drawn apart from the snow under it, so no tile shows a seam.
+  const hill = `M-10 ${y} Q170 ${y - 40} 350 ${y} Q530 ${y + 40} 710 ${y}`;
+  const hills = strip(back, 'hills', 720, 0.5, [
+    ['path', styles.paperFill!, { d: `${hill} V216 H-10 Z` }],
+    ['path', styles.line!, { d: hill, 'stroke-width': 4 }],
+  ]);
+  let pines = '';
+  for (const [x, s] of [
+    [380, 0.7],
+    [800, 0.75],
+    [1230, 0.6],
+  ] as const) {
+    pines +=
+      triangle(x - 50 * s, y, x + 50 * s, y, x, y - 70 * s) +
+      triangle(x - 40 * s, y - 40 * s, x + 40 * s, y - 40 * s, x, y - 110 * s);
+  }
+  // The big tree, right of the caption at the start.
+  const bx = 1110;
+  const tree =
+    triangle(bx - 60, y + 4, bx + 60, y + 4, bx, y - 76) +
+    triangle(bx - 48, y - 44, bx + 48, y - 44, bx, y - 116) +
+    triangle(bx - 34, y - 88, bx + 34, y - 88, bx, y - 150);
+  const sy = y - 158;
+  const star =
+    `M${bx} ${sy - 16} L${bx + 4.5} ${sy - 5} L${bx + 16} ${sy - 5} L${bx + 7} ${sy + 2} ` +
+    `L${bx + 10} ${sy + 14} L${bx} ${sy + 7} L${bx - 10} ${sy + 14} L${bx - 7} ${sy + 2} ` +
+    `L${bx - 16} ${sy - 5} L${bx - 4.5} ${sy - 5} Z`;
+  const village = strip(back, 'village', 1440, 0.5, [
+    [
+      'rect',
+      styles.tomato!,
+      { x: 120, y: y - 60, width: 90, height: 64, 'stroke-width': 4, 'data-part': 'house' },
+    ],
+    [
+      'path',
+      styles.paper!,
+      { d: triangle(106, y - 56, 165, y - 104, 224, y - 56), 'stroke-width': 4 },
+    ],
+    [
+      'path',
+      styles.sun!,
+      {
+        d: `M134 ${y - 44} h20 v18 h-20 Z M176 ${y - 44} h20 v18 h-20 Z`,
+        'stroke-width': 3,
+        'data-part': 'windows',
+      },
+    ],
+    [
+      'rect',
+      styles.mint!,
+      { x: 940, y: y - 54, width: 80, height: 58, 'stroke-width': 4, 'data-part': 'house' },
+    ],
+    [
+      'path',
+      styles.paper!,
+      { d: triangle(928, y - 50, 980, y - 92, 1032, y - 50), 'stroke-width': 4 },
+    ],
+    [
+      'path',
+      styles.sun!,
+      {
+        d: `M952 ${y - 40} h18 v16 h-18 Z M990 ${y - 40} h18 v16 h-18 Z`,
+        'stroke-width': 3,
+        'data-part': 'windows',
+      },
+    ],
+    ['path', styles.leaf!, { d: pines, 'stroke-width': 4, 'data-part': 'pines' }],
+    ['path', styles.leaf!, { d: tree, 'stroke-width': 4, 'data-part': 'tree' }],
+    [
+      'path',
+      styles.tomato!,
+      {
+        d:
+          dot(bx - 26, y - 14, 7) +
+          dot(bx + 24, y - 22, 7) +
+          dot(bx - 4, y - 60, 6) +
+          dot(bx + 16, y - 100, 5) +
+          dot(bx - 16, y - 96, 5),
+        'stroke-width': 3,
+        'data-part': 'baubles',
+      },
+    ],
+    ['path', styles.sun!, { d: star, 'stroke-width': 3, 'data-part': 'star' }],
+  ]);
+  draw(ground, [
+    ['rect', styles.snow!, { x: -10, y: 214, width: 1300, height: 520, 'stroke-width': 4 }],
+    ['path', styles.line!, { d: `M-10 ${LIGHTS} H1290`, 'stroke-width': 4 }],
+  ]);
+  const lights = strip(
+    ground,
+    'lights',
+    64 * BULBS.length,
+    1,
+    BULBS.map((bulb, i) => [
+      'rect',
+      bulb,
+      { x: 21.5 + 64 * i, y: LIGHTS - 0.5, width: 15, height: 19, rx: 7.5, 'stroke-width': 3 },
+    ]),
+  );
+  return [sky, hills, village, lights];
+}
+
 const BACKDROPS: Record<Course, (back: SVGSVGElement, ground: SVGSVGElement) => Strip[]> = {
   field,
   office,
   sea,
   moon,
+  christmas,
 };
 
 /**
@@ -1133,6 +1419,7 @@ const LOOKS: Record<
   office: { lines: styles.sunFill!, dashed: false, stands: 'note', distance: 'sun' },
   sea: { lines: styles.orangeFill!, dashed: false, stands: 'post', distance: 'paper' },
   moon: { lines: styles.paperFill!, dashed: true, stands: 'post', distance: 'paper' },
+  christmas: { lines: styles.glassFill!, dashed: false, stands: 'cane', distance: 'paper' },
 };
 
 /** Dashed lines: a dash this long every `every` px. */
@@ -1147,8 +1434,8 @@ export interface Track {
 
 /**
  * Track `course`, from the canvas: the sports field (sky with two clouds,
- * bunting, the rail with its posts, grass), the office, under the sea or the
- * Moon. On each, lines between the lanes, the Start line at `start` and the
+ * bunting, the rail with its posts, grass), the office, under the sea, the
+ * Moon or Christmas. On each, lines between the lanes, the Start line at `start` and the
  * chequered Finish at `finish`, in px along the track, and distance signs
  * counting down to it over a race of 200 m. `lanes` are the lanes' tops,
  * back to front.
@@ -1211,15 +1498,18 @@ export function track({
 
   const length = finish - start;
   const ends: 'paper' | 'sun' = look.distance === 'sun' ? 'paper' : 'sun';
+  // A candy cane only by a distance.
+  const endsStand = look.stands === 'cane' ? 'bare' : look.stands;
   const signs = [
-    { text: 'Start', at: start + 8, colour: ends },
+    { text: 'Start', at: start + 8, colour: ends, stands: endsStand },
     ...[150, 100, 50].map((metres) => ({
       text: `${metres} m`,
       at: finish - (metres / 200) * length,
       colour: look.distance,
+      stands: look.stands,
     })),
-    { text: 'Finish', at: finish + 12, colour: ends },
-  ].map((each) => ({ ...each, el: el.appendChild(sign(each.text, each.colour, look.stands)) }));
+    { text: 'Finish', at: finish + 12, colour: ends, stands: endsStand },
+  ].map((each) => ({ ...each, el: el.appendChild(sign(each.text, each.colour, each.stands)) }));
 
   /** Shows `target` at `x` while it is anywhere near the stage. */
   const near = (x: number) => x > -300 && x < 1580;
@@ -1273,6 +1563,7 @@ const PHOTO_GROUND: Record<Course, { ground: string; on: readonly Shape[] }> = {
     on: [['path', styles.seam!, { d: 'M120 152 V370 M280 152 V370', 'stroke-width': 4 }]],
   },
   sea: { ground: styles.sun!, on: [] },
+  christmas: { ground: styles.snow!, on: [] },
   moon: {
     ground: styles.shark!,
     on: [

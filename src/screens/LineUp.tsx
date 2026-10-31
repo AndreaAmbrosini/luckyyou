@@ -138,6 +138,7 @@ export function LineUp({
           look={look}
           name={name}
           place={chosen + 1}
+          theme={theme?.name ?? null}
           themeTab={option === first ? themeTab : null}
           open={open[option.name]}
           inPanel={inPanel}
@@ -242,6 +243,7 @@ export function LineUp({
                       look={looks.get(each)!}
                       name={each}
                       place={index + 1}
+                      theme={theme?.name ?? null}
                     />
                     <span className={styles.name} dir="auto">
                       {each}
@@ -262,6 +264,7 @@ export function LineUp({
                     look={look}
                     name={name}
                     place={chosen + 1}
+                    theme={theme?.name ?? null}
                   />
                   <div className={styles.whoText}>
                     <h2 id={`${id}-name`} className={styles.chosenName} dir="auto">
@@ -307,6 +310,7 @@ interface OptionProps {
   look: ChosenLook;
   name: string;
   place: number;
+  theme: string | null;
   /** The chosen theme's own tab, ahead of the groups' (decision 0015). */
   themeTab: { label: string; choices: readonly LineUpChoice[] } | null;
   /** The open tab's key, when one was clicked. */
@@ -322,8 +326,8 @@ interface OptionProps {
  * pictures, under a tab per group when they come in groups (decision 0013).
  */
 function Option(props: OptionProps) {
-  const { id, option, lineUp, look, name, place, themeTab, open, inPanel, onOpen, onChange } =
-    props;
+  const { id, option, lineUp, look, name, place, theme, themeTab, open, inPanel } = props;
+  const { onOpen, onChange } = props;
   const groups = groupsOf(option.choices);
   const tabbed = groups.some((group) => group.label !== undefined);
   const mine = option.choices.find((choice) => choice.name === look[option.name]);
@@ -404,6 +408,7 @@ function Option(props: OptionProps) {
             look={{ ...look, [option.name]: choice.name }}
             name={name}
             place={place}
+            theme={theme}
           />
           <span className={styles.choiceName}>{choice.label}</span>
           {mark}
@@ -722,16 +727,18 @@ interface DrawingProps {
   look: ChosenLook;
   name: string;
   place: number;
+  /** The chosen theme, which the show may dress everyone for. */
+  theme: string | null;
 }
 
-/** The show's own drawing of one person's look, redrawn when the look changes. */
-function Drawing({ className, lineUp, look, name, place }: DrawingProps) {
+/** The show's own drawing of one person's look, redrawn when the look or the theme changes. */
+function Drawing({ className, lineUp, look, name, place, theme }: DrawingProps) {
   const box = useRef<HTMLSpanElement>(null);
   useLayoutEffect(() => {
-    const drawn = lineUp.draw(look, { name, place });
+    const drawn = lineUp.draw(look, { name, place, theme });
     box.current?.replaceChildren(drawn);
     return () => drawn.remove();
-  }, [lineUp, look, name, place]);
+  }, [lineUp, look, name, place, theme]);
   return <span ref={box} className={`${styles.drawing} ${className}`} aria-hidden="true" />;
 }
 

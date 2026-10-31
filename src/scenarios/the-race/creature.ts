@@ -12,11 +12,15 @@ import type { Look, Mood } from '../../scenario-kit';
 import {
   draw,
   drawing,
+  dressFor,
   group,
+  PRESENT,
   RACER,
+  santaHat,
   show,
   TROPHY,
   type Creature,
+  type Dress,
   type Pose,
   type RacerLook,
   type Runner,
@@ -2375,6 +2379,9 @@ const SVG = 'http://www.w3.org/2000/svg';
 /** Everything off the grid's edges, so a clip of it less a shape is the rest. */
 const OUTSIDE = 'M-200 -200 H440 V400 H-200 Z';
 
+/** How far a present balanced on the head rises, to sit on top of a Santa hat. */
+const PRESENT_LIFT = 50;
+
 /** How many creatures have been drawn, so each drawing's clip ids are its own. */
 let drawings = 0;
 
@@ -2384,7 +2391,9 @@ let drawings = 0;
  * its front leg and foot, its front arm, and the scarf, bow tie, number, top
  * hat and trophy. Everything but the legs leans from its hips. `face` is the
  * kit's look for the run, for the astronaut's and the villain's skin, and
- * the shark's legs.
+ * the shark's legs. In the theme's `dress`, a Santa hat takes the top hat's
+ * place, and the gnome's own hat gets a brim and a bobble instead; a
+ * present takes the trophy's.
  */
 export function creature(
   look: RacerLook & { readonly mount: Creature },
@@ -2393,7 +2402,8 @@ export function creature(
     number,
     mood = 'calm',
     pose = 'hold',
-  }: { face: Look; number: number; mood?: Mood; pose?: Pose },
+    dress = dressFor(null),
+  }: { face: Look; number: number; mood?: Mood; pose?: Pose; dress?: Dress },
 ): CreatureRunner {
   const kind = look.mount;
   const spec = CREATURE_SPEC[kind];
@@ -2591,7 +2601,8 @@ export function creature(
     text.setAttribute('y', String(y));
     text.textContent = String(number);
   }
-  if (look.extra === 'tophat') {
+  const santa = dress.costume === 'santa';
+  if (look.extra === 'tophat' && !santa) {
     const [x, y] = spec.hat;
     const hat = group(front, 'tophat', [
       ['rect', styles.inkFill!, { x: 7, y: 2, width: 22, height: 24, rx: 2 }],
@@ -2602,11 +2613,28 @@ export function creature(
     hat.setAttribute('transform', `translate(${x - 23} ${y - 40}) scale(1.3)`);
   }
 
-  // Held overhead, or balanced on the head or the fin by short arms.
-  const trophy = drawing(72, 60, TROPHY);
-  trophy.dataset.part = 'trophy';
+  if (santa && kind === 'gnome') {
+    group(front, 'santa', [
+      [
+        'path',
+        styles.paper!,
+        { d: 'M91 46 Q130 36 169 46 L171 57 Q130 47 89 57 Z', 'stroke-width': 4 },
+      ],
+      ['circle', styles.paper!, { cx: 130, cy: -26, r: 9, 'stroke-width': 4 }],
+    ]);
+  } else if (santa) {
+    const [x, y] = spec.hat;
+    group(front, 'santa', santaHat(true)).setAttribute('transform', `translate(${x} ${y})`);
+  }
+
+  // Held overhead, or balanced on the head or the fin by short arms: on top
+  // of a Santa hat, a present balanced on the head is lifted clear of it.
+  const present = dress.prize === 'present';
+  const balanced = spec.reach > 0 && spec.reach < 1 && santa && kind !== 'gnome';
+  const trophy = drawing(72, 60, present ? [...PRESENT, shine('M53 32 V50', 4, 0.6)] : TROPHY);
+  trophy.dataset.part = dress.prize;
   trophy.setAttribute('x', String(spec.cup[0] - 36));
-  trophy.setAttribute('y', String(spec.cup[1]));
+  trophy.setAttribute('y', String(spec.cup[1] - (balanced ? PRESENT_LIFT : 0)));
   trophy.setAttribute('width', '72');
   trophy.setAttribute('height', '60');
   front.append(trophy);
