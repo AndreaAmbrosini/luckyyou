@@ -7,7 +7,7 @@ export interface MusicControlProps {
   /** The sound switch is off: that silences the music too. */
   muted: boolean;
   music: boolean;
-  /** In percent, 0 to 100 in steps of 10. */
+  /** In percent, 0 to 100, a whole number. */
   musicVolume: number;
   onMusicChange(change: { music?: boolean; musicVolume?: number }): void;
 }
@@ -80,7 +80,7 @@ export function MusicControl({ muted, music, musicVolume, onMusicChange }: Music
             type="range"
             min={0}
             max={100}
-            step={10}
+            step={1}
             value={musicVolume}
             aria-valuetext={`${musicVolume}%`}
             aria-describedby={muted ? `${id}-reason` : undefined}
