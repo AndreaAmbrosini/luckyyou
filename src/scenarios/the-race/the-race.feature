@@ -344,15 +344,6 @@ Feature: The Race
       And the group "Things on legs" also holds "Snowman", "Gingerbread" and "Christmas tree", after "Sushi"
       And with Christmas chosen, its tab holds "Reindeer", "Snowman", "Gingerbread" and "Christmas tree", then "Penguin", "Yeti" and "Garden gnome"
 
-    # Old design: replaced by "The reindeer, reins up its neck" (step 1).
-    Scenario: The reindeer
-      Given Ivo chose the reindeer in grape
-      When the show runs
-      Then Ivo rides a brown reindeer with cream antlers, a red nose, a gold collar with a bell, and a grape blanket under him
-      And he holds reins tied to its collar, in a grape shirt, his head at the same height as every rider's
-
-    # Step 1.
-    @pending
     Scenario: The reindeer, reins up its neck
       Given Ivo chose the reindeer in grape
       When the show runs
@@ -402,21 +393,11 @@ Feature: The Race
         | gingerbread    | Marco  | loses a button               | a gumdrop pops off and it stops to stick it back on     |
         | Christmas tree | Jonas  | drops a bauble               | a bauble falls off and it stops to hang it back         |
 
-    # Old design: replaced by "The Christmas tree's lights stay on" and "With
-    # reduced motion, the blizzard keeps still" (step 1).
-    Scenario: With reduced motion, the Christmas racers keep still too
-      Given reduced motion is on
-      When the show runs
-      Then the blizzard's swirl doesn't spin, and the tree's lights come on without twinkling
-
-    # Step 1. PRODUCT.md rules out flashing lights.
-    @pending
+    # PRODUCT.md rules out flashing lights.
     Scenario: The Christmas tree's lights stay on
       When someone's Christmas tree lights up
       Then all its lights come on at once and stay on until its burst ends, none of them blinking
 
-    # Step 1.
-    @pending
     Scenario: With reduced motion, the blizzard keeps still
       Given reduced motion is on
       When the show runs

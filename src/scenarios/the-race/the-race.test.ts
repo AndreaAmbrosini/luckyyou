@@ -157,7 +157,8 @@ interface Drawn {
   /** How far the reindeer shakes its head, the blizzard's turn, and which of the tree's lights glow. */
   readonly shake: number;
   readonly spin: number;
-  readonly twinkle: string;
+  /** How many of a Christmas tree's lights are on. */
+  readonly lit: number;
 }
 
 /** What the stage showed in one frame. */
@@ -309,7 +310,8 @@ async function watch(
           legs: svg.querySelector('[data-part="front-leg"]')?.getAttribute('display') !== 'none',
           shake: Number(svg.dataset.shake ?? 0),
           spin: Number(svg.dataset.spin ?? 0),
-          twinkle: svg.dataset.twinkle ?? '',
+          lit: svg.querySelectorAll('[data-part="lights"]:not([display]) circle:not([display])')
+            .length,
         };
       }
       const says = found.bubbles
@@ -2845,7 +2847,7 @@ describeSpec(await loadFeature('./the-race.feature'), ({ Rule }) => {
       });
     });
 
-    RuleScenario('The reindeer', ({ Given, When, Then, And }) => {
+    RuleScenario('The reindeer, reins up its neck', ({ Given, When, Then, And }) => {
       const looks = new Map<string, ChosenLook>();
       let ivo: SVGSVGElement;
       Given('Ivo chose the reindeer in grape', () => {
@@ -2882,14 +2884,16 @@ describeSpec(await loadFeature('./the-race.feature'), ({ Rule }) => {
         },
       );
       And(
-        "he holds reins tied to its collar, in a grape shirt, his head at the same height as every rider's",
+        "he holds reins tied on up its neck, above the collar, in a grape shirt, his head at the same height as every rider's",
         () => {
           expect(reined(ivo)).toBe(true);
           const [x, y] = SPEC.reindeer.reins!;
           expect(ends(ivo.querySelector('[data-part="reins"]'))).toBe(`${x} ${y}`);
-          // Where the canvas ties them: up the neck from the collar, under the head.
-          expect(x).toBeGreaterThan(178);
-          expect(y).toBeLessThan(114);
+          // Where the canvas ties them: up the neck past the collar, under the head.
+          const mount = ivo.querySelector('[data-part="mount"]')!;
+          const collar = bounds(partsOf(mount, 'collar')[0]!.getAttribute('d')!);
+          expect(x).toBeGreaterThan(collar.right);
+          expect(y).toBeLessThan(collar.top);
           expect(y).toBeGreaterThan(90);
           expect(headOf(ivo).style.getPropertyValue('--shirt')).toBe('var(--color-grape)');
           expect(SPEC.reindeer.saddle[1]).toBe(SPEC.snail.saddle[1]);
@@ -3084,8 +3088,7 @@ describeSpec(await loadFeature('./the-race.feature'), ({ Rule }) => {
             case 'gingerbread':
               break;
             case 'tree':
-              // Both sets of lights glow in turn.
-              expect(new Set(during.map((racer) => racer.twinkle))).toEqual(new Set(['a', 'b']));
+              expect(during.every((racer) => racer.lit > 0)).toBe(true);
               break;
           }
           // Gone once the burst is over.
@@ -3165,38 +3168,43 @@ describeSpec(await loadFeature('./the-race.feature'), ({ Rule }) => {
       });
     });
 
-    RuleScenario(
-      'With reduced motion, the Christmas racers keep still too',
-      ({ Given, When, Then }) => {
-        const watched: Record<string, Watched> = {};
-        Given('reduced motion is on', () => undefined);
-        When('the show runs', async () => {
-          watched.Giulia = await run('snowman', 'Giulia', true);
-          watched.Jonas = await run('Christmas tree', 'Jonas', true);
-        });
-        Then(
-          "the blizzard's swirl doesn't spin, and the tree's lights come on without twinkling",
-          () => {
-            /** `name` through their burst. */
-            const bursting = (name: string) => {
-              const { at } = watched[name]!.plan.events[0]!;
-              return between(watched[name]!, at, at + BURST.seconds).map(
-                (frame) => frame.racers[name]!,
-              );
-            };
-            const giulia = bursting('Giulia');
-            expect(giulia.every((racer) => racer.props.includes('blizzard'))).toBe(true);
-            for (const racer of watched.Giulia!.frames.map((frame) => frame.racers.Giulia!)) {
-              expect(racer.spin).toBe(0);
-            }
-            // Every light glowing at once, all through the burst.
-            const jonas = bursting('Jonas');
-            expect(jonas.every((racer) => racer.props.includes('lights'))).toBe(true);
-            expect(new Set(jonas.map((racer) => racer.twinkle))).toEqual(new Set(['ab']));
-          },
+    RuleScenario("The Christmas tree's lights stay on", ({ When, Then }) => {
+      let watched: Watched;
+      When("someone's Christmas tree lights up", async () => {
+        watched = await run('Christmas tree', 'Jonas');
+      });
+      Then(
+        'all its lights come on at once and stay on until its burst ends, none of them blinking',
+        () => {
+          const { at } = watched.plan.events[0]!;
+          const lit = (from: number, to: number) =>
+            new Set(between(watched, from, to).map((frame) => frame.racers.Jonas!.lit));
+          const all = drawnAs('tree').el.querySelectorAll('[data-part="lights"] circle').length;
+          expect(all).toBeGreaterThan(0);
+          expect(lit(at - 0.5, at)).toEqual(new Set([0]));
+          expect(lit(at, at + BURST.seconds)).toEqual(new Set([all]));
+          expect(lit(at + BURST.seconds + 0.1, at + BURST.seconds + 0.5)).toEqual(new Set([0]));
+        },
+      );
+    });
+
+    RuleScenario('With reduced motion, the blizzard keeps still', ({ Given, When, Then }) => {
+      let watched: Watched;
+      Given('reduced motion is on', () => undefined);
+      When('the show runs', async () => {
+        watched = await run('snowman', 'Giulia', true);
+      });
+      Then("the blizzard's swirl doesn't spin", () => {
+        const { at } = watched.plan.events[0]!;
+        const bursting = between(watched, at, at + BURST.seconds).map(
+          (frame) => frame.racers.Giulia!,
         );
-      },
-    );
+        expect(bursting.every((racer) => racer.props.includes('blizzard'))).toBe(true);
+        for (const racer of watched.frames.map((frame) => frame.racers.Giulia!)) {
+          expect(racer.spin).toBe(0);
+        }
+      });
+    });
   });
 
   Rule('The unlucky person crosses first', ({ RuleScenario, RuleScenarioOutline }) => {

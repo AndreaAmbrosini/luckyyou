@@ -1,6 +1,6 @@
 // Looks for a show's Line-up (decision 0011): dealt at random, fitted to
 // what the show offers now, and handed to the show where it can't change them.
-// Its theme (decision 0015): drawn at random, or found among those offered.
+// Its theme (decision 0017): drawn at random, or found among those offered.
 
 import type { ChosenLook, LineUp } from './contract';
 import { pickOne, shuffle } from './random';

@@ -2605,23 +2605,23 @@ const GUMDROP: readonly Shape[] = [
 
 /**
  * The Christmas tree's lights, along its garland and up its top tier: each
- * a sun bulb with a glow, in two sets, `data-set` a and b, to twinkle in turn.
+ * a sun bulb with a glow.
  */
 const LIGHTS: readonly Shape[] = (
   [
-    [96, 128, 'a'],
-    [116, 134, 'b'],
-    [136, 136, 'a'],
-    [156, 132, 'b'],
-    [172, 126, 'a'],
-    [112, 74, 'b'],
-    [148, 62, 'a'],
-    [124, 46, 'b'],
-    [152, 84, 'b'],
+    [96, 128],
+    [116, 134],
+    [136, 136],
+    [156, 132],
+    [172, 126],
+    [112, 74],
+    [148, 62],
+    [124, 46],
+    [152, 84],
   ] as const
-).flatMap(([cx, cy, set]): Shape[] => [
-  ['circle', styles.sunFill!, { cx, cy, r: 11, opacity: 0.5, 'data-set': set, 'data-glow': 1 }],
-  ['circle', styles.sun!, { cx, cy, r: 5, 'stroke-width': 2.5, 'data-set': set }],
+).flatMap(([cx, cy]): Shape[] => [
+  ['circle', styles.sunFill!, { cx, cy, r: 11, opacity: 0.5 }],
+  ['circle', styles.sun!, { cx, cy, r: 5, 'stroke-width': 2.5 }],
 ]);
 
 /** A bauble, round (0, 0), in the creature's colour, with its hook. */

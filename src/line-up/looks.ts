@@ -1,5 +1,5 @@
 // Everyone's look on each show's Line-up, its theme and who is pinned, kept
-// in this browser per show (decisions 0011, 0015 and 0016) and read so that
+// in this browser per show (decisions 0011, 0016 and 0017) and read so that
 // storage that is blocked, full or damaged never stops the Line-up (decision 0004).
 
 import { useCallback, useState } from 'react';
