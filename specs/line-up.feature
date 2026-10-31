@@ -154,8 +154,7 @@ Feature: The Line-up
       Then its theme is drawn from the run's seed
       And when I choose a theme in the lab, it runs on that one
 
-  # Decision 0016. Step 2 of The Race's themes.
-  @pending
+  # Decision 0016.
   Rule: A show can draw its start
 
     Scenario: The Line-up shows the show's start
@@ -173,8 +172,7 @@ Feature: The Line-up
       When I choose another theme
       Then the start is drawn in it at once, everyone in their look
 
-  # Decision 0016. Step 2 of The Race's themes.
-  @pending
+  # Decision 0016.
   Rule: Pinned looks stay
 
     Scenario: Choosing by hand pins a look

@@ -1,6 +1,6 @@
-// Everyone's look on each show's Line-up, and its theme, kept in this
-// browser per show (decisions 0011 and 0015) and read so that storage that is
-// blocked, full or damaged never stops the Line-up (decision 0004).
+// Everyone's look on each show's Line-up, its theme and who is pinned, kept
+// in this browser per show (decisions 0011, 0015 and 0016) and read so that
+// storage that is blocked, full or damaged never stops the Line-up (decision 0004).
 
 import { useCallback, useState } from 'react';
 import type { ChosenLook, Scenario } from '../scenario-kit/contract';
@@ -10,6 +10,8 @@ import { readJson, writeJson } from '../storage';
 export const looksKey = (id: string) => `luckyyou:v1:line-up:${id}`;
 /** The theme chosen by hand, by name; nothing, or null, for "Surprise". */
 export const themeKey = (id: string) => `luckyyou:v1:line-up:${id}:theme`;
+/** The names of everyone whose look is pinned, today's people or not. */
+export const pinsKey = (id: string) => `luckyyou:v1:line-up:${id}:pins`;
 
 /** The theme a Line-up shows, and whether "Surprise" drew it. */
 export interface ThemeChoice {
@@ -41,6 +43,7 @@ function load(id: string): Stored {
 export function useLooks() {
   const [kept, setKept] = useState<ReadonlyMap<string, Stored>>(new Map());
   const [keptThemes, setKeptThemes] = useState<ReadonlyMap<string, unknown>>(new Map());
+  const [keptPins, setKeptPins] = useState<ReadonlyMap<string, ReadonlySet<string>>>(new Map());
 
   const save = useCallback(
     (scenario: Scenario, today: Looks) => {
@@ -103,5 +106,37 @@ export function useLooks() {
     [keptThemes],
   );
 
-  return { open, change: save, openTheme, changeTheme };
+  const pinsOf = useCallback(
+    (scenario: Scenario): ReadonlySet<string> => {
+      const kept = keptPins.get(scenario.id);
+      if (kept) return kept;
+      const stored = readJson(pinsKey(scenario.id));
+      return new Set(
+        Array.isArray(stored) ? stored.filter((name) => typeof name === 'string') : [],
+      );
+    },
+    [keptPins],
+  );
+
+  /** Who of `names` is pinned on a show's Line-up. */
+  const openPins = useCallback(
+    (scenario: Scenario, names: readonly string[]): ReadonlySet<string> => {
+      const pinned = pinsOf(scenario);
+      return new Set(names.filter((name) => pinned.has(name)));
+    },
+    [pinsOf],
+  );
+
+  /** Pins today's `pinned` of `names`, and keeps everyone else's pins as they were. */
+  const changePins = useCallback(
+    (scenario: Scenario, names: readonly string[], pinned: ReadonlySet<string>) => {
+      const others = [...pinsOf(scenario)].filter((name) => !names.includes(name));
+      const stored = new Set([...others, ...names.filter((name) => pinned.has(name))]);
+      setKeptPins(new Map(keptPins).set(scenario.id, stored));
+      writeJson(pinsKey(scenario.id), [...stored]);
+    },
+    [keptPins, pinsOf],
+  );
+
+  return { open, change: save, openTheme, changeTheme, openPins, changePins };
 }

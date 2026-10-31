@@ -144,13 +144,37 @@ export function TrashIcon(props: IconProps) {
   );
 }
 
-export function DieIcon(props: IconProps) {
+/** A die showing three, or five for dealing everyone. */
+export function DieIcon({ five = false, ...props }: IconProps & { five?: boolean }) {
+  const dots = five
+    ? [
+        [8, 8],
+        [16, 8],
+        [12, 12],
+        [8, 16],
+        [16, 16],
+      ]
+    : [
+        [8, 8],
+        [12, 12],
+        [16, 16],
+      ];
   return (
     <Icon weight={2.5} {...props}>
       <rect x="3" y="3" width="18" height="18" rx="4" />
-      <circle cx="8" cy="8" r="1.6" fill="currentColor" stroke="none" />
-      <circle cx="12" cy="12" r="1.6" fill="currentColor" stroke="none" />
-      <circle cx="16" cy="16" r="1.6" fill="currentColor" stroke="none" />
+      {dots.map(([cx, cy]) => (
+        <circle key={`${cx} ${cy}`} cx={cx} cy={cy} r="1.6" fill="currentColor" stroke="none" />
+      ))}
+    </Icon>
+  );
+}
+
+/** A push pin, filled when it is in. */
+export function PinIcon({ on, ...props }: IconProps & { on: boolean }) {
+  return (
+    <Icon weight={2.5} {...props}>
+      <path d="M9 3h6l-1 6 3 3v2H7v-2l3-3z" fill={on ? 'currentColor' : 'none'} />
+      <path d="M12 14v7" />
     </Icon>
   );
 }

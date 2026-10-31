@@ -18,7 +18,13 @@ type Looks = ReadonlyMap<string, ChosenLook>;
 type Screen =
   | { name: 'whos-in' }
   | { name: 'shows' }
-  | { name: 'line-up'; scenario: Scenario; looks: Looks; theme: ThemeChoice | null }
+  | {
+      name: 'line-up';
+      scenario: Scenario;
+      looks: Looks;
+      theme: ThemeChoice | null;
+      pinned: ReadonlySet<string>;
+    }
   | { name: 'show'; run: Run }
   | { name: 'result'; run: Run };
 
@@ -60,6 +66,7 @@ export default function App({ scenarios = catalogue }: AppProps) {
         scenario,
         looks: looks.open(scenario, ticked),
         theme: looks.openTheme(scenario),
+        pinned: looks.openPins(scenario, ticked),
       });
     } else {
       start(scenario, ticked);
@@ -114,13 +121,15 @@ export default function App({ scenarios = catalogue }: AppProps) {
           names={ticked}
           looks={screen.looks}
           theme={screen.theme}
+          pinned={screen.pinned}
           onThemeChange={(theme) => {
             looks.changeTheme(screen.scenario, theme);
             setScreen({ ...screen, theme });
           }}
-          onLooksChange={(next) => {
+          onLooksChange={(next, pinned) => {
             looks.change(screen.scenario, next);
-            setScreen({ ...screen, looks: next });
+            if (pinned !== screen.pinned) looks.changePins(screen.scenario, ticked, pinned);
+            setScreen({ ...screen, looks: next, pinned });
           }}
           onBack={() => setScreen({ name: 'shows' })}
           onStart={() => start(screen.scenario, ticked, screen.looks, screen.theme?.name)}

@@ -24,9 +24,25 @@ export interface Lane {
 export const pitchOf = (count: number) => Math.min(TRACK.pitch, (TRACK.bottom - TRACK.top) / count);
 
 /** Lane `index` of `count`, from the back. */
-export function lane(index: number, count: number): Lane {
-  const pitch = pitchOf(count);
-  const top = TRACK.top + (TRACK.bottom - TRACK.top - pitch * count) / 2 + pitch * index;
+export const lane = (index: number, count: number) => laneOn(TRACK, index, count);
+
+/**
+ * The Line-up's start, on its 1194 by 440 grid: lanes under a backdrop band
+ * 64 px tall, noses at x 432 and the start line from x 444, 12 px wide.
+ */
+export const START_TRACK = { top: 64, bottom: 440, pitch: 94, nose: 432, line: 444 } as const;
+
+/** Lane `index` of `count` at the Line-up's start, from the back. */
+export const startLane = (index: number, count: number) => laneOn(START_TRACK, index, count);
+
+/** Lane `index` of `count` between `top` and `bottom`, none taller than `pitch`, centred. */
+function laneOn(
+  track: { readonly top: number; readonly bottom: number; readonly pitch: number },
+  index: number,
+  count: number,
+): Lane {
+  const pitch = Math.min(track.pitch, (track.bottom - track.top) / count);
+  const top = track.top + (track.bottom - track.top - pitch * count) / 2 + pitch * index;
   const depth = count === 1 ? 1 : 0.92 + (0.16 * index) / (count - 1);
   return {
     index,
