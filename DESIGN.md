@@ -16,8 +16,8 @@ This file says how they're used.
 - Solid fills only: no gradients, glows, blur or thin lines.
 - Outlines are `--line` in ink. Surfaces on the ground get a hard ink shadow.
 - On and off look different without colour: a ticked person has a check
-  mark and a solid outline; an unticked or disabled one is white with a
-  dashed outline.
+  mark and a solid outline, a pinned look a solid outline; anything off or
+  disabled is white with a dashed outline.
 - One primary button per screen, in tomato.
 - Only the logo and the stickers on the result and in shows are tilted,
   between −2° and 2°.
@@ -53,7 +53,7 @@ This file says how they're used.
 - **Person tile**: a grid of equal tiles at least 250px wide. Ticked: sun,
   `--shadow-small`, a check in a paper box. Unticked: paper, an empty box. A
   long name wraps inside its tile. In remove mode: paper, solid outline, and a
-  round tomato × labelled "Remove" and the name.
+  round tomato ×.
 - **Count pill**: "8 of 10 in", mint from 2 to 12 ticked, tomato otherwise.
 - **Notes**: a refused name's note in tomato-soft beside the add field; the
   reason a button is disabled in paper beside or under it.
@@ -65,29 +65,31 @@ This file says how they're used.
   scenario's picture, its name, its description, and either a mint "Last
   time" badge or a dashed badge with the reason it can't run. The whole card
   is the button.
-- **Music panel**: paper with `--shadow-small`, opening under the ♪ button:
-  the "Music" switch, then the "Volume" slider and its value.
+- **Postcard**: a theme's picture over its name, on paper; the chosen one in
+  sun with a check, or a die on "Surprise".
+- **Music panel**: paper with `--shadow-small`, under the ♪ button.
 
 ## Screens
 
 **Who's in.** A header with the logo, the step pills, sound, music and
 fullscreen.
 Then "Who's in today?" with the count pill, "Everyone" and "No one". The sheet
-with the tiles fills the middle and scrolls if it must. The footer has the add
-field and "Remove people" on the left, the reason and "Next: pick a show" on
-the right. In remove mode the sheet turns tomato-soft with a dashed outline and
-the footer has its hint beside "Done". A first visit has a heading of its own
+fills the middle and scrolls if it must. The footer has the add field and
+"Remove people" on the left, the reason and "Next: pick a show" on the right.
+In remove mode the sheet turns tomato-soft with a dashed outline and the
+footer has its hint beside "Done". A first visit has a heading of its own
 and a note on the sheet.
 
 **Pick a show.** "Who's in" to go back, the heading, then a mint "3 in" pill
 followed by the names. Show cards sit in a grid at least 300px wide.
 
-**Line-up.** "Pick a show" to go back, the heading, today's people in a row,
-then the chosen one bigger with the show's options, each heading naming the
-choice. An option shown as pictures has a sheet of its own, groups as tabs.
+**Line-up.** "Pick a show" to go back, the heading, the themes' postcards,
+then the show's start with a die and a pin by each person, and a panel over
+it with the chosen one's options. Without a start: today's people in a row,
+the chosen one bigger under it.
 
-**Show.** The scenario owns the window ([show.feature](specs/show.feature)).
-↑, ↓ and M set the music; a paper pill shows its volume for a second.
+**Show.** The scenario owns the window ([show.feature](specs/show.feature));
+the volume pill is paper.
 
 **Result.** The sky with a few clouds and star stickers. A paper card tilted
 −1.5° with `--shadow-big`: "Lucky you," over the name, then the sun ribbon
@@ -108,12 +110,12 @@ Every scenario follows these:
   hands can hold things overhead; on a mount or a creature, beside the face,
   behind it.
 - Captions are one at a time, top centre, in the display font at
-  `--size-stage-caption` on a paper sticker, each for at least a second.
+  `--size-stage-caption` on a paper sticker.
 - People are cartoon heads with a mood and a cap, goggles or snorkel, handed
-  out per run. On land they wear a shirt and raise their arms from the
-  shoulders, and sweat when nervous. A show may cast people as creatures:
-  modern cartoons whose own faces carry the mood, shaded with ink at 18% on
-  each part's lower left, the one see-through fill.
+  out per run, or their theme's costume. On land they wear a shirt and raise
+  their arms from the shoulders, and sweat when nervous. A show may cast
+  people as creatures: modern cartoons whose own faces carry the mood, shaded
+  with ink at 18% on each part's lower left, the one see-through fill.
 - Movement that matters lasts at least 0.4 seconds, and nothing flashes more
   than three times a second. With `prefers-reduced-motion`, a show keeps its
   story and drops shaking and speed lines.

@@ -1,13 +1,20 @@
 Feature: The Race
   Everyone races as the host chose on the Line-up (specs/line-up.feature):
   riding a mount, or as a creature on its own feet. They race a lane each, on
-  a track drawn at random, the camera following the leaders. Winning is
+  the theme the host chose, the camera following the leaders. Winning is
   losing: whoever is in front looks scared, and the mount or the creature's
   legs don't listen. One thing happens at a time, a racer bursting ahead or
   stopping. The final stretch runs at full speed, only the last moment before
   the line is slow, and the unlucky person crosses first: by a nose in a photo
   finish, past a rival who brakes, or in a surge from behind. The contract in
   specs/scenarios.feature applies as well.
+
+  # Themes, in five build steps, in this order: 1. themes on the Line-up, the
+  # four tracks as themes (with specs/line-up.feature); 2. the Line-up as the
+  # start line, with pins and dice; 3. Christmas; 4. Christmas's four racers;
+  # 5. Christmas's music. Each pending scenario says its step. Scenarios marked
+  # "Old design" describe the race before a step; the build deletes each one,
+  # with its steps, when the scenario that replaces it passes.
 
   Rule: Its card
 
@@ -30,10 +37,41 @@ Feature: The Race
       And each racer is shown as the chosen person racing as it, in their colour and extra, calm, its name under it
       And "Colour" offers the same swatches as before, and "Extra" a picture of each extra, each named for screen readers
 
+    # Old design: replaced by "The start line fits the window" (step 2).
     Scenario: The Line-up fits the window
       Given 8 people, a 15-character name among them, in a 1280 by 800 window
       When the Line-up opens for The Race
       Then every person, the chosen one's look, the tabs, every racer in the open tab, every colour and extra, and both buttons are in view without scrolling
+
+    # Step 1.
+    @pending
+    Scenario: Its themes, and the racers that suit each
+      When the Line-up opens for The Race
+      Then its themes are "Sports field", "Office", "Under the sea" and "Moon", after "Surprise", each a postcard of its track
+      And each theme's tab holds, in this order:
+        | theme         | racers                                                                          |
+        | Sports field  | Space hopper, Ostrich, Duck, Snail, Caterpillar, Cat, Pigeon, Dinosaur          |
+        | Office        | Office chair, Coffee mug, Printer, Sticky note, Sandwich, Banana, Robot, Villain |
+        | Under the sea | Shark with feet, Octopus, Sushi, Duck, Penguin                                  |
+        | Moon          | Rocket, Astronaut, Alien, Robot, Space hopper                                   |
+
+    # Step 2.
+    @pending
+    Scenario: The Line-up is the start line
+      Given 8 people, with "Office" chosen
+      When the Line-up opens for The Race
+      Then everyone waits at the start line, a lane each, in today's order, noses on the line, on the office track with its backdrop above the lanes
+      And each lane has its die and pin at the left, and its racer's name tag beside the face
+      And the chosen person's lane and name tag are sun, and they wave
+      And the panel sits over the track ahead of the line
+
+    # Step 2.
+    @pending
+    Scenario: The start line fits the window
+      Given 8 people, a 15-character name among them, in a 1280 by 800 window
+      When the Line-up opens for The Race
+      Then the postcards, every lane, the panel's tabs, every colour and extra, and both buttons are in view without scrolling
+      And the open tab's first eight racers are in view, and any more scroll inside the panel
 
     Scenario: Each racer looks as chosen
       Given Anna chose the duck, sun and the scarf, and Ben the office chair, grape and googly eyes
@@ -176,11 +214,26 @@ Feature: The Race
 
   Rule: A track drawn at random
 
+    # Old design: replaced by "The race runs on the theme chosen" (step 1).
     Scenario: Each race draws its track
       Given 8 people
       When the show runs with 40 different random seeds
       Then each run is on the sports field, the office, under the sea or the Moon
       And each of the four comes up in at least 5 runs
+
+    # Step 1.
+    @pending
+    Scenario: The race runs on the theme chosen
+      Given "Under the sea" is chosen on the Line-up
+      When the show runs with 10 different random seeds
+      Then every run is under the sea
+
+    # Step 1.
+    @pending
+    Scenario: In the lab, every theme comes up
+      Given 8 people
+      When the show runs in the lab with 40 different random seeds
+      Then each run is on one of the themes, and each theme comes up in at least 5 runs
 
     Scenario Outline: What <track> looks like
       When the show runs on <track>
@@ -250,6 +303,120 @@ Feature: The Race
       When the show runs on each track at 8 people
       Then every caption, sign and name tag is ink text on a paper or sun sticker with an ink outline
       And on the Moon's dark sky, nothing but those stickers carries text
+
+  # Step 3.
+  @pending
+  Rule: Christmas
+
+    Scenario: Christmas is a theme
+      When the Line-up opens for The Race
+      Then "Christmas" is a theme, after "Moon", its postcard a tree on snow at dusk
+      And with Christmas chosen, the racer option's first tab is "Christmas", holding "Penguin", "Yeti" and "Garden gnome"
+
+    Scenario: What Christmas looks like
+      When the show runs on Christmas
+      Then the ground is snow, the lanes split by light blue lines, and paper name tags read clearly on it
+      And behind the track is a snowy village at dusk: white hills, two houses with lit windows, pines, a big tree with a star, and a crescent moon
+      And fairy lights run along the edge of the track, and each distance is a paper sign by a candy cane
+
+    Scenario: Christmas has a stop and a burst of its own
+      Given 8 people, on Christmas
+      When the show runs with 20 different random seeds
+      Then in every run, one event before "Final stretch!" is Christmas's own stop or burst
+      And both come up across the runs
+
+    Scenario Outline: On Christmas, <caption>
+      When someone's event is Christmas's own <event>
+      Then the caption is "<caption>"
+      And <what>
+
+      Examples:
+        | event | caption                        | what                                                                                                 |
+        | stop  | Ben gets stuck in a snowdrift! | snow piles up round Ben's racer until it wriggles free, says "Phew!" and sets off again further back |
+        | burst | Carla jumps on a sledge!       | a red sledge slides in under Carla's racer and whooshes it into the lead, shouting "Nooo!"           |
+
+    Scenario: Everyone wears a Santa hat
+      When the show runs on Christmas, or its Line-up shows Christmas
+      Then every rider wears a Santa hat instead of the cap, goggles or snorkel the kit hands out, and a top hat stays on the mount
+      And every creature wears one where its top hat goes, instead of the top hat
+      And the garden gnome's own hat gets a white brim and a bobble instead
+      And on any other theme, nobody wears one
+
+    Scenario: The winner gets a present
+      Given the unlucky person is "Anna", on Christmas
+      When she has crossed the line
+      Then the caption is "Anna wins!", with a fanfare and confetti with snowflakes in it
+      And Anna holds up a present, red with a gold ribbon and bow, where the trophy would be
+      And whoever balances the trophy balances the present, the dinosaur and the pigeon on top of their Santa hat
+
+    Scenario: On Christmas, the unlucky person still crosses first
+      Given 8 people, on Christmas
+      When the show runs with 20 different random seeds
+      Then the first nose over the finish line is always the unlucky person's
+
+  # Step 4.
+  @pending
+  Rule: Christmas's own racers
+
+    Scenario: Four racers for Christmas
+      When the Line-up opens for The Race
+      Then the group "Rides" also holds "Reindeer", after "Sandwich"
+      And the group "Things on legs" also holds "Snowman", "Gingerbread" and "Christmas tree", after "Sushi"
+      And with Christmas chosen, its tab holds "Reindeer", "Snowman", "Gingerbread" and "Christmas tree", then "Penguin", "Yeti" and "Garden gnome"
+
+    Scenario: The reindeer
+      Given Ivo chose the reindeer in grape
+      When the show runs
+      Then Ivo rides a brown reindeer with cream antlers, a red nose, a gold collar with a bell, and a grape blanket under him
+      And he holds reins tied to its collar, in a grape shirt, his head at the same height as every rider's
+
+    Scenario: Three things on legs for Christmas
+      When someone races as a snowman, a gingerbread or a Christmas tree
+      Then the snowman is two snowballs with a carrot nose, on dark legs in white sneakers
+      And the gingerbread is a cookie with white icing, on cookie legs and feet, its hands cookie too
+      And the Christmas tree is two green tiers with a gold garland and a star on top, on dark legs in white sneakers
+      And at Christmas, the tree wears its Santa hat instead of its star
+
+    Scenario Outline: Where a <racer> wears its colour
+      When someone races as a <racer> in tomato
+      Then <where> is tomato
+
+      Examples:
+        | racer          | where                                |
+        | reindeer       | its blanket                          |
+        | snowman        | its buttons and its mittens          |
+        | gingerbread    | its gumdrop buttons                  |
+        | Christmas tree | its baubles                          |
+
+    Scenario Outline: A <racer> bursts ahead
+      When someone's <racer> bursts ahead
+      Then the caption is "<name>'s <racer> <burst>!"
+      And <what>, and it shoots into the lead, shouting "Nooo!", or its rider does
+
+      Examples:
+        | racer          | name   | burst                  | what                                       |
+        | reindeer       | Ivo    | takes off              | it leaps up and glides ahead over the snow |
+        | snowman        | Giulia | rides a blizzard       | a swirl of snow whirls it ahead            |
+        | gingerbread    | Marco  | runs as fast as it can | it sprints in a blur of crumbs             |
+        | Christmas tree | Jonas  | lights up              | its lights come on and it zooms ahead      |
+
+    Scenario Outline: A <racer> stops
+      When someone's <racer> stops
+      Then the caption is "<name>'s <racer> <stop>!"
+      And <what>, and it drops back while the camera goes on
+      And it waves, says "Phew!", and sets off again further back, or its rider does
+
+      Examples:
+        | racer          | name   | stop                         | what                                                    |
+        | reindeer       | Ivo    | gets tangled in fairy lights | a string of lights wraps round its antlers and it shakes them off |
+        | snowman        | Giulia | loses its nose               | its carrot nose pops off and it bends to pick it up     |
+        | gingerbread    | Marco  | loses a button               | a gumdrop pops off and it stops to stick it back on     |
+        | Christmas tree | Jonas  | drops a bauble               | a bauble falls off and it stops to hang it back         |
+
+    Scenario: With reduced motion, the Christmas racers keep still too
+      Given reduced motion is on
+      When the show runs
+      Then the blizzard's swirl doesn't spin, and the tree's lights come on without twinkling
 
   Rule: The unlucky person crosses first
 
@@ -565,6 +732,14 @@ Feature: The Race
       When the slow last moment ends at the line
       Then the music stops
       And the fanfare plays with "Anna wins!", as before
+
+    # Step 5. Jingle Bells (James Lord Pierpont, 1857) is public domain. This
+    # passes only once the user has heard it in the Lab and said so.
+    @pending
+    Scenario: Jingle Bells at Christmas
+      When the show runs on Christmas with music on
+      Then Jingle Bells plays instead of the galop, with sleigh bells, on the galop's beats: a roll under "On your marks…", the chorus from "Go!", a faster strain from "Final stretch!", a run down at a quarter of the speed in the slow moment, and silence from the line to the fanfare
+      And every other theme keeps the galop
 
   Rule: It reads without sound
 
