@@ -22,8 +22,11 @@ export interface RunOptions {
   readonly looks?: ReadonlyMap<string, ChosenLook>;
   readonly seed: number;
   readonly muted: boolean;
-  /** The music's volume, 0 to 1; 0 when the music is off. */
-  readonly music: number;
+  /**
+   * The music's volume, 0 to 1; 0 when the music is off. Given as a function,
+   * it is read as the music plays, so the volume can change during the show.
+   */
+  readonly music: number | (() => number);
   /** Aborting it stops the show at once. */
   readonly signal: AbortSignal;
   /** Warns on the console when a show leaves 10–30 s. On in the dev server. */

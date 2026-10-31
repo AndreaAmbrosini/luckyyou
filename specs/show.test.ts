@@ -2,7 +2,8 @@ import { loadFeature } from '@amiceli/vitest-cucumber';
 import { act, fireEvent, screen, waitFor } from '@testing-library/react';
 import { expect, vi } from 'vitest';
 import type { Show } from '../src/scenario-kit/contract';
-import { FULL_LEVEL, melody } from '../src/scenario-kit/music';
+import { FULL_LEVEL, melody, type Music } from '../src/scenario-kit/music';
+import { loadSettings } from '../src/settings/settings';
 import {
   currentUser,
   fakeFullscreen,
@@ -34,6 +35,34 @@ function endlessShow() {
 
 /** A bar of tune. */
 const TUNE = melody('C4 D4 E4 F4', 0);
+
+/**
+ * A show that plays the tune and keeps playing until it is cancelled. The
+ * test moves the song on, as the show's frames would.
+ */
+async function startMusicShow() {
+  let music: Music | null = null;
+  const scenario = fakeScenario({
+    play: (show) => {
+      music = show.sound.music(TUNE);
+      return new Promise<void>(() => undefined);
+    },
+  });
+  await startShow(PEOPLE, scenario);
+  await waitFor(() => expect(music).not.toBeNull());
+  let beat = 0;
+  const song = {
+    /** Moves the song on a beat. */
+    next: () => music!.to(beat++, 4),
+  };
+  song.next();
+  return song;
+}
+
+/** The music's level now, as a share of its full level. */
+const musicLevel = (audio: FakeAudio) => audio.outputLevels[0]! / FULL_LEVEL;
+
+const press = (key: string) => fireEvent.keyDown(window, { key });
 
 const onShowsStep = () =>
   expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('Pick a show');
@@ -143,6 +172,65 @@ describeSpec(await loadFeature('./show.feature'), ({ Rule }) => {
         expect(audio.started).toBeGreaterThan(0);
         expect(audio.outputLevels).toHaveLength(1);
         expect(audio.outputLevels[0]).toBeCloseTo((volume / 100) * FULL_LEVEL, 6);
+      });
+    });
+
+    RuleScenario(
+      "The arrow keys change the music's volume during the show",
+      ({ Given, When, Then, And }) => {
+        let audio: FakeAudio;
+        let song: Awaited<ReturnType<typeof startMusicShow>>;
+        Given('the music is on, at {int}%', (_, volume: number) => {
+          storeSettings({ muted: false, music: true, musicVolume: volume, lastScenario: null });
+          audio = fakeAudio();
+        });
+        When('I press the up arrow during the show', async () => {
+          song = await startMusicShow();
+          vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+          press('ArrowUp');
+        });
+        Then('the music plays at {int}% from then on', (_, volume: number) => {
+          song.next();
+          expect(musicLevel(audio)).toBeCloseTo(volume / 100, 6);
+        });
+        And('"♪ 75%" shows for a second, then goes', async () => {
+          expect(screen.getByText('♪ 75%')).toBeVisible();
+          await act(async () => vi.advanceTimersByTime(999));
+          expect(screen.getByText('♪ 75%')).toBeVisible();
+          await act(async () => vi.advanceTimersByTime(1));
+          expect(screen.queryByText('♪ 75%')).not.toBeInTheDocument();
+        });
+        And('the music is still at {int}% after the show', async (_, volume: number) => {
+          vi.useRealTimers();
+          press('Escape');
+          await waitFor(onShowsStep);
+          expect(loadSettings()).toMatchObject({ music: true, musicVolume: volume });
+        });
+      },
+    );
+
+    RuleScenario('M turns the music off and on during the show', ({ Given, When, Then }) => {
+      let audio: FakeAudio;
+      let song: Awaited<ReturnType<typeof startMusicShow>>;
+      Given('the music is on, at {int}%', (_, volume: number) => {
+        storeSettings({ muted: false, music: true, musicVolume: volume, lastScenario: null });
+        audio = fakeAudio();
+      });
+      When('I press M during the show', async () => {
+        song = await startMusicShow();
+        press('m');
+      });
+      Then('the music goes quiet, and "♪ off" shows', () => {
+        song.next();
+        expect(musicLevel(audio)).toBe(0);
+        expect(screen.getByText('♪ off')).toBeVisible();
+      });
+      When('I press M again', () => {
+        press('M');
+      });
+      Then('the music plays at {int}% again', (_, volume: number) => {
+        song.next();
+        expect(musicLevel(audio)).toBeCloseTo(volume / 100, 6);
       });
     });
   });

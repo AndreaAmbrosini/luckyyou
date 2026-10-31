@@ -30,6 +30,20 @@ Feature: The show
       When the show plays music
       Then the music plays at 40% of its full level
 
+    Scenario: The arrow keys change the music's volume during the show
+      Given the music is on, at 70%
+      When I press the up arrow during the show
+      Then the music plays at 75% from then on
+      And "♪ 75%" shows for a second, then goes
+      And the music is still at 75% after the show
+
+    Scenario: M turns the music off and on during the show
+      Given the music is on, at 70%
+      When I press M during the show
+      Then the music goes quiet, and "♪ off" shows
+      When I press M again
+      Then the music plays at 70% again
+
   Rule: Esc or leaving fullscreen cancels
 
     Scenario: Esc cancels the show

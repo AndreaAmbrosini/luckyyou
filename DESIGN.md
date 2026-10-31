@@ -80,15 +80,14 @@ the footer has its hint beside "Done". A first visit has a heading of its own
 and a note on the sheet.
 
 **Pick a show.** "Who's in" to go back, the heading, then a mint "3 in" pill
-followed by the names. Show cards sit in a grid at least 300px wide. The
-footer says "Click a show to start it."
+followed by the names. Show cards sit in a grid at least 300px wide.
 
 **Line-up.** "Pick a show" to go back, the heading, today's people in a row,
 then the chosen one bigger with the show's options, each heading naming the
 choice. An option shown as pictures has a sheet of its own, groups as tabs.
-The footer has "Shuffle everyone" and the primary button.
 
 **Show.** The scenario owns the window ([show.feature](specs/show.feature)).
+↑, ↓ and M set the music; a paper pill shows its volume for a second.
 
 **Result.** The sky with a few clouds and star stickers. A paper card tilted
 −1.5° with `--shadow-big`: "Lucky you," over the name, then the sun ribbon

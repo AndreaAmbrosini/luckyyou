@@ -67,6 +67,8 @@ export default function App({ scenarios = catalogue }: AppProps) {
         run={run}
         onFinish={() => setScreen({ name: 'result', run })}
         onCancel={() => setScreen({ name: 'shows' })}
+        music={settings}
+        onMusicChange={changeSettings}
       />
     );
   }
