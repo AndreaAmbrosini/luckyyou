@@ -8,3 +8,20 @@
   background-color: var(--color-ink);
   cursor: none;
 }
+
+/* Up for a second after a key changes the music. */
+.badge {
+  position: absolute;
+  top: 1.5rem;
+  right: 1.5rem;
+  z-index: 1;
+  margin: 0;
+  padding: 0.25rem 1.25rem 0.375rem;
+  border: var(--line) solid var(--color-ink);
+  border-radius: var(--radius-pill);
+  background-color: var(--color-paper);
+  box-shadow: var(--shadow-small);
+  color: var(--color-ink);
+  font-family: var(--font-display);
+  font-size: var(--size-button);
+}

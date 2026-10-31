@@ -2,7 +2,7 @@
 // audio files and no licences to track. Every show must also read with the
 // sound off (DESIGN.md).
 
-import { follow, musicBus, playNote, type Music, type Note } from './music';
+import { follow, FULL_LEVEL, musicBus, playNote, type Music, type Note } from './music';
 
 /** The sounds a show can ask for. */
 export type Cue =
@@ -37,16 +37,26 @@ export interface SoundPlayer {
 }
 
 /**
- * A show's sound, with its music at `music` (0 to 1, 0 when off). While muted
- * it never opens an audio output; otherwise it opens one on the first cue or
- * note and closes it when the show is over. After that it plays nothing.
+ * A show's sound, with its music at `music` (0 to 1, 0 when off), or at what
+ * `music` returns each time the song moves on, so it can change mid-show.
+ * While muted it never opens an audio output; otherwise it opens one on the
+ * first cue or note and closes it when the show is over. After that it plays
+ * nothing.
  */
-export function createSound({ muted, music = 0 }: { muted: boolean; music?: number }): {
+export function createSound({
+  muted,
+  music = 0,
+}: {
+  muted: boolean;
+  music?: number | (() => number);
+}): {
   player: SoundPlayer;
   stop(): void;
 } {
+  const level = typeof music === 'function' ? music : () => music;
   let context: AudioContext | null = null;
   let bus: GainNode | null = null;
+  let busLevel = 0;
   let over = false;
   const playing = new Set<AudioScheduledSourceNode>();
   const silent = () => muted || over || typeof AudioContext === 'undefined';
@@ -90,11 +100,23 @@ export function createSound({ muted, music = 0 }: { muted: boolean; music?: numb
       const song = follow(notes);
       return {
         to(beat, speed) {
-          if (silent() || !(music > 0)) return;
-          for (const { note, delay, seconds } of song.to(beat, speed)) {
+          if (silent()) return;
+          const volume = level();
+          if (bus && context && volume !== busLevel) {
+            // Notes already handed to the audio clock follow the new volume too.
+            bus.gain.setValueAtTime(volume * FULL_LEVEL, context.currentTime);
+            busLevel = volume;
+          }
+          const due = song.to(beat, speed);
+          // While the music is off the song still moves on, so nothing piles up.
+          if (!(volume > 0)) return;
+          for (const { note, delay, seconds } of due) {
             try {
               const audio = open();
-              bus ??= musicBus(audio, music);
+              if (!bus) {
+                bus = musicBus(audio, volume);
+                busLevel = volume;
+              }
               track(playNote(audio, bus, note, audio.currentTime + delay, seconds));
             } catch {
               // A note that can't play is skipped; the song and the show go on.
