@@ -45,6 +45,7 @@ const RACERS = {
   ostrich: 'Ostrich',
   rocket: 'Rocket',
   sandwich: 'Sandwich',
+  reindeer: 'Reindeer',
   zombie: 'Zombie',
   robot: 'Robot',
   shark: 'Shark with feet',
@@ -67,6 +68,9 @@ const RACERS = {
   mummy: 'Mummy',
   yeti: 'Yeti',
   gnome: 'Garden gnome',
+  snowman: 'Snowman',
+  gingerbread: 'Ginger\u00ADbread',
+  tree: 'Christ\u00ADmas tree',
 } as const;
 
 /** The creatures' tabs on the Line-up, after the rides', and each creature's tab. */
@@ -84,6 +88,9 @@ const KINDS: Record<Creature, (typeof GROUPS)[number]> = {
   banana: 'Things on legs',
   icecream: 'Things on legs',
   sushi: 'Things on legs',
+  snowman: 'Things on legs',
+  gingerbread: 'Things on legs',
+  tree: 'Things on legs',
   zombie: 'Spooky',
   monster: 'Spooky',
   villain: 'Spooky',
@@ -110,7 +117,11 @@ const THEMES: readonly { name: Course; label: string; suits: readonly Kind[] }[]
   },
   { name: 'sea', label: 'Under the sea', suits: ['shark', 'octopus', 'sushi', 'duck', 'penguin'] },
   { name: 'moon', label: 'Moon', suits: ['rocket', 'astronaut', 'alien', 'robot', 'hopper'] },
-  { name: 'christmas', label: 'Christmas', suits: ['penguin', 'yeti', 'gnome'] },
+  {
+    name: 'christmas',
+    label: 'Christmas',
+    suits: ['reindeer', 'snowman', 'gingerbread', 'tree', 'penguin', 'yeti', 'gnome'],
+  },
 ];
 
 /** Colours and extras: "shark" is a colour here, read out as "Grey". */

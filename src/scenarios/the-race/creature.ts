@@ -43,7 +43,9 @@ type Paint =
   | 'mint-soft'
   | 'orange'
   | 'pink'
-  | 'sea';
+  | 'sea'
+  | 'mint'
+  | 'bark';
 
 /** Sneakers, boots, big bare feet, flat paddles, bird's toes or a curled tentacle tip. */
 export type Foot = 'sneaker' | 'boot' | 'bare' | 'paddle' | 'toes' | 'tip';
@@ -110,7 +112,7 @@ const thing = (
     Spec,
     'legW' | 'legs' | 'foot' | 'shoes' | 'armW' | 'arms' | 'hands' | 'lid' | 'reach'
   > &
-    Partial<Pick<Spec, 'legW' | 'armW' | 'lid'>>,
+    Partial<Pick<Spec, 'legW' | 'armW' | 'lid' | 'hands'>>,
 ): Spec => ({
   legW: 7,
   legs: 'ink-soft',
@@ -851,6 +853,98 @@ export const CREATURE_SPEC: Readonly<Record<Creature, Spec>> = {
     cup: [130, -86],
     reach: 0.45,
   },
+  // Christmas. The snowman wears mittens in its colour; the gingerbread is all cookie.
+  snowman: thing({
+    face: 131,
+    nose: 163,
+    hips: [
+      [118, 152],
+      [142, 152],
+    ],
+    shoulders: [
+      [98, 106],
+      [162, 106],
+    ],
+    hands: 'colour',
+    dots: true,
+    eyes: [
+      [121, 54, 4.5],
+      [141, 54, 4.5],
+    ],
+    lid: 'paper',
+    mouth: [131, 82, 14],
+    sweat: [
+      [94, 38],
+      [168, 38],
+    ],
+    neck: [131, 92],
+    chest: [130, 132],
+    hat: [131, 40],
+    cup: [131, -36],
+  }),
+  gingerbread: {
+    face: 131,
+    nose: 160,
+    hips: [
+      [118, 148],
+      [142, 148],
+    ],
+    legW: 16,
+    legs: 'bark',
+    foot: 'bare',
+    footK: 1.1,
+    shoes: 'bark',
+    shoulders: [
+      [106, 100],
+      [156, 100],
+    ],
+    armW: 14,
+    arms: 'bark',
+    hands: 'bark',
+    noThumb: true,
+    dots: true,
+    eyes: [
+      [120, 56, 4.5],
+      [142, 56, 4.5],
+    ],
+    lid: 'bark',
+    mouth: [131, 72, 16],
+    sweat: [
+      [92, 36],
+      [170, 36],
+    ],
+    neck: [131, 90],
+    chest: [131, 128],
+    hat: [131, 36],
+    cup: [131, -40],
+    reach: 1,
+  },
+  tree: thing({
+    face: 130,
+    nose: 182,
+    hips: [
+      [118, 152],
+      [142, 152],
+    ],
+    shoulders: [
+      [96, 108],
+      [164, 108],
+    ],
+    eyes: [
+      [120, 60, 8],
+      [142, 60, 8],
+    ],
+    lid: 'mint',
+    mouth: [131, 78, 14],
+    sweat: [
+      [98, 34],
+      [164, 34],
+    ],
+    neck: [130, 96],
+    chest: [130, 132],
+    hat: [130, 26],
+    cup: [130, -44],
+  }),
 };
 
 /** A paint as a fill class, and as a line's colour. */
@@ -866,6 +960,8 @@ const FILLS: Record<Paint, string> = {
   orange: styles.orange!,
   pink: styles.pink!,
   sea: styles.seaBlue!,
+  mint: styles.mint!,
+  bark: styles.bark!,
 };
 const LINES: Record<Paint, string> = {
   colour: 'var(--racer)',
@@ -879,6 +975,8 @@ const LINES: Record<Paint, string> = {
   orange: 'var(--color-orange)',
   pink: 'var(--color-pink)',
   sea: 'var(--color-sea)',
+  mint: 'var(--color-mint)',
+  bark: 'var(--color-bark)',
 };
 
 const paint = (el: Element, p: Paint) => (el as SVGElement).style.setProperty('--paint', LINES[p]);
@@ -962,6 +1060,18 @@ const GHOST_SHEET =
 
 /** The band over the yeti's head, between its earmuffs. */
 const EARMUFF_BAND = 'M94 52 Q94 6 130 6 Q166 6 166 52';
+
+/** The snowman's two snowballs. */
+const SNOWBALLS = {
+  body: 'M92 120 A38 38 0 1 0 168 120 A38 38 0 1 0 92 120 Z',
+  head: 'M103 62 A28 28 0 1 0 159 62 A28 28 0 1 0 103 62 Z',
+} as const;
+
+/** The Christmas tree's two tiers. */
+const TIERS = {
+  low: 'M78 150 Q86 104 112 88 H148 Q174 104 182 150 Q130 162 78 150 Z',
+  top: 'M92 92 Q96 40 130 12 Q164 40 168 92 Q130 102 92 92 Z',
+} as const;
 
 /** The gnome's pointy hat, its tip at (130, -28). */
 const GNOME_HAT = 'M92 48 L124 -22 Q130 -30 136 -22 L168 48 Q130 38 92 48 Z';
@@ -1761,6 +1871,136 @@ const BODIES: Record<Creature, readonly (Shape | Shaded)[]> = {
     ['circle', styles.skin!, { cx: 130, cy: 69, r: 9, 'stroke-width': 3, 'data-part': 'skin' }],
     ['circle', styles.paperFill!, { cx: 133, cy: 66, r: 2.2, opacity: 0.8 }],
   ],
+  // What a stop knocks off is marked `data-lost`: the carrot, a gumdrop, a bauble.
+  snowman: [
+    { paint: styles.paper!, d: SNOWBALLS.body, shadow: [9, -7] },
+    ...(
+      [
+        [130, 106],
+        [131, 122],
+        [130, 138],
+      ] as const
+    ).map(([cx, cy]): Shape => [
+      'circle',
+      styles.racer!,
+      { cx, cy, r: 5, 'stroke-width': 2.5, 'data-part': 'buttons' },
+    ]),
+    { paint: styles.paper!, d: SNOWBALLS.head, shadow: [7, -6] },
+    ['circle', styles.pinkFill!, { cx: 113, cy: 70, r: 5, opacity: 0.6 }],
+    ['circle', styles.pinkFill!, { cx: 150, cy: 72, r: 5, opacity: 0.6 }],
+    [
+      'path',
+      styles.orange!,
+      { d: 'M134 65 L163 71 L134 76 Z', 'stroke-width': 3, 'data-part': 'carrot', 'data-lost': 1 },
+    ],
+    ['path', styles.line!, { d: 'M143 67 l1.5 6 M151 69 l1 4', 'stroke-width': 2, 'data-lost': 1 }],
+  ],
+  gingerbread: [
+    {
+      paint: styles.bark!,
+      d: 'M108 100 Q108 88 120 88 H142 Q154 88 154 100 L156 146 Q156 154 146 154 H116 Q106 154 106 146 Z',
+      shadow: [8, -5],
+      part: 'cookie',
+      on: [
+        [
+          'path',
+          styles.stripe!,
+          {
+            d: 'M112 146 q4 -5 8 0 q4 5 8 0 q4 -5 8 0 q4 5 8 0 q4 -5 8 0',
+            'stroke-width': 3.5,
+            'stroke-linejoin': 'round',
+            'data-part': 'icing',
+          },
+        ],
+      ],
+    },
+    [
+      'circle',
+      styles.racer!,
+      { cx: 131, cy: 108, r: 6, 'stroke-width': 2.5, 'data-part': 'buttons' },
+    ],
+    [
+      'circle',
+      styles.racer!,
+      { cx: 131, cy: 126, r: 6, 'stroke-width': 2.5, 'data-part': 'buttons', 'data-lost': 1 },
+    ],
+    // A shine down its body's right, below the head's highlight.
+    ['path', styles.stripe!, { d: 'M148 98 Q151 110 151 124', 'stroke-width': 4, opacity: 0.7 }],
+    {
+      paint: styles.bark!,
+      d: 'M102 60 A29 29 0 1 0 160 60 A29 29 0 1 0 102 60 Z',
+      shadow: [7, -6],
+      part: 'cookie',
+    },
+    [
+      'path',
+      styles.stripe!,
+      {
+        d: 'M108 46 q5 -6 10 -4 q5 -8 13 -6 q8 -2 13 6 q5 -2 10 4',
+        'stroke-width': 3.5,
+        'stroke-linejoin': 'round',
+        'data-part': 'icing',
+      },
+    ],
+    ['circle', styles.pinkFill!, { cx: 113, cy: 68, r: 5, opacity: 0.7 }],
+    ['circle', styles.pinkFill!, { cx: 149, cy: 68, r: 5, opacity: 0.7 }],
+    shine('M149 40 Q156 48 157 58', 4),
+  ],
+  tree: [
+    [
+      'path',
+      styles.bark!,
+      { d: 'M122 146 H138 V158 H122 Z', 'stroke-width': 3, 'data-part': 'trunk' },
+    ],
+    {
+      paint: styles.leaf!,
+      d: TIERS.low,
+      shadow: [10, -6],
+      on: inkUnder('M86 124 Q130 142 176 122', 9, 4, styles.sunLine!).map(
+        ([tag, className, attributes]): Shape => [
+          tag,
+          className,
+          { ...attributes, 'data-part': 'garland' },
+        ],
+      ),
+    },
+    ...(
+      [
+        [100, 142, 7, false],
+        [140, 148, 7, false],
+        [164, 136, 7, true],
+        [150, 108, 6, false],
+      ] as const
+    ).map(([cx, cy, r, lost]): Shape => [
+      'circle',
+      styles.racer!,
+      { cx, cy, r, 'stroke-width': 2.5, 'data-part': 'baubles', ...(lost && { 'data-lost': 1 }) },
+    ]),
+    {
+      paint: styles.leaf!,
+      d: TIERS.top,
+      shadow: [9, -6],
+      on: [
+        [
+          'circle',
+          styles.racer!,
+          { cx: 104, cy: 84, r: 5.5, 'stroke-width': 2.5, 'data-part': 'baubles' },
+        ],
+      ],
+    },
+    shine('M144 30 Q156 46 160 70', 4),
+    [
+      'path',
+      styles.sun!,
+      {
+        d:
+          'M130 -3 L133.2 5.6 L142.4 6 L135.2 11.7 L137.6 20.5 L130 15.5 L122.4 20.5 ' +
+          'L124.8 11.7 L117.6 6 L126.8 5.6 Z',
+        'stroke-width': 3,
+        'data-part': 'star',
+      },
+    ],
+  ],
 };
 
 /**
@@ -1893,6 +2133,9 @@ export const REACH: Readonly<Record<Creature, Reach>> = {
   mummy: { least: 18, most: 32 },
   yeti: { least: -4, most: 27 },
   gnome: { least: 8, most: 9 },
+  snowman: { least: 12, most: 35 },
+  gingerbread: { least: 15, most: 38 },
+  tree: { least: -2, most: 18 },
 };
 
 /** What a creature's burst or stop brings out, each hidden until then. */
@@ -1928,7 +2171,13 @@ export type CreatureProp =
   | 'trail'
   | 'unwrap'
   | 'skis'
-  | 'snow';
+  | 'snow'
+  | 'blizzard'
+  | 'carrot'
+  | 'crumbs'
+  | 'gumdrop'
+  | 'lights'
+  | 'bauble';
 
 /**
  * Where a prop goes: on the ground, behind everything; under the body,
@@ -1962,6 +2211,8 @@ const LAYERS: Partial<Record<CreatureProp, 'ground' | 'under' | 'front'>> = {
   unwrap: 'ground',
   skis: 'ground',
   snow: 'ground',
+  blizzard: 'ground',
+  lights: 'front',
 };
 
 /** Two puffs of steam shooting up from (0, 0). */
@@ -2304,6 +2555,82 @@ const SNOW: readonly Shape[] = [
   ['path', styles.glass!, { d: 'M80 184 Q104 181 126 185 Q104 188 80 184 Z', 'stroke-width': 2 }],
 ];
 
+/** A swirl of snow round the snowman, its middle at (130, 110), to spin. */
+const BLIZZARD: readonly Shape[] = [
+  ...[styles.line!, styles.swirl!].map((className, i): Shape => [
+    'path',
+    className,
+    {
+      d: 'M44 138 Q34 40 130 24 Q196 18 214 66 M216 84 Q226 180 130 196 Q70 200 50 160',
+      'stroke-width': i ? 6 : 11,
+    },
+  ]),
+  ...(
+    [
+      [62, 70, 6],
+      [204, 46, 5],
+      [222, 140, 6],
+      [40, 176, 5],
+      [150, 8, 5],
+      [112, 206, 4],
+    ] as const
+  ).map(([cx, cy, r]): Shape => ['circle', styles.paper!, { cx, cy, r, 'stroke-width': 2.5 }]),
+];
+
+/** The snowman's carrot nose, round (0, 0), pointing right. */
+const CARROT: readonly Shape[] = [
+  ['path', styles.orange!, { d: 'M-14 -5 L15 0 L-14 6 Z', 'stroke-width': 3 }],
+  ['path', styles.line!, { d: 'M-5 -3 l1.5 6 M3 -1 l1 4', 'stroke-width': 2 }],
+];
+
+/** Crumbs flying off the gingerbread, and the blur lines of its sprint. */
+const CRUMBS: readonly Shape[] = [
+  ['path', styles.line!, { d: 'M76 74 H36 M66 112 H20 M76 150 H40', 'stroke-width': 4 }],
+  ...(
+    [
+      [86, 92, 4],
+      [64, 128, 3.5],
+      [92, 138, 3],
+      [50, 96, 3],
+      [80, 166, 3.5],
+    ] as const
+  ).map(([cx, cy, r]): Shape => ['circle', styles.bark!, { cx, cy, r, 'stroke-width': 2 }]),
+];
+
+/** A gumdrop button, round (0, 0), in the creature's colour. */
+const GUMDROP: readonly Shape[] = [
+  ['circle', styles.racer!, { cx: 0, cy: 0, r: 6, 'stroke-width': 2.5 }],
+  ['circle', styles.paperFill!, { cx: 2, cy: -2, r: 1.6, opacity: 0.8 }],
+];
+
+/**
+ * The Christmas tree's lights, along its garland and up its top tier: each
+ * a sun bulb with a glow, in two sets, `data-set` a and b, to twinkle in turn.
+ */
+const LIGHTS: readonly Shape[] = (
+  [
+    [96, 128, 'a'],
+    [116, 134, 'b'],
+    [136, 136, 'a'],
+    [156, 132, 'b'],
+    [172, 126, 'a'],
+    [112, 74, 'b'],
+    [148, 62, 'a'],
+    [124, 46, 'b'],
+    [152, 84, 'b'],
+  ] as const
+).flatMap(([cx, cy, set]): Shape[] => [
+  ['circle', styles.sunFill!, { cx, cy, r: 11, opacity: 0.5, 'data-set': set, 'data-glow': 1 }],
+  ['circle', styles.sun!, { cx, cy, r: 5, 'stroke-width': 2.5, 'data-set': set }],
+]);
+
+/** A bauble, round (0, 0), in the creature's colour, with its hook. */
+const BAUBLE: readonly Shape[] = [
+  ['path', styles.line!, { d: 'M0 -7 V-11', 'stroke-width': 2.5 }],
+  ['circle', styles.racer!, { cx: 0, cy: 0, r: 7, 'stroke-width': 2.5 }],
+  ['circle', styles.paperFill!, { cx: 2.5, cy: -2.5, r: 1.8, opacity: 0.8 }],
+];
+
 /** The paints of a creature's feet, as `FEET` takes them. */
 const footPaints = (spec: Spec) => ({
   shoe: FILLS[spec.shoes],
@@ -2348,6 +2675,9 @@ const PROPS: Partial<Record<Creature, Partial<Record<CreatureProp, (spec: Spec) 
   gnome: { plinth: () => [...PLINTH] },
   mummy: { trail: () => [...TRAIL], unwrap: () => [...UNWRAP] },
   yeti: { skis: () => [...SKIS], snow: () => [...SNOW] },
+  snowman: { blizzard: () => [...BLIZZARD], carrot: () => [...CARROT] },
+  gingerbread: { crumbs: () => [...CRUMBS], gumdrop: () => [...GUMDROP] },
+  tree: { lights: () => [...LIGHTS], bauble: () => [...BAUBLE] },
 };
 
 export interface CreatureRunner extends Runner {
@@ -2368,6 +2698,8 @@ export interface CreatureRunner extends Runner {
   readonly wisps: readonly SVGElement[];
   /** The octopus's hanging tentacles, each its parts, back to front, to whirl or hide. */
   readonly tentacles: readonly (readonly SVGElement[])[];
+  /** What its stop knocks off it, to hide until it's put back: the carrot, a gumdrop, a bauble. */
+  readonly lost: readonly SVGElement[];
   /** Stretches both arms forward, for what's out of reach. */
   setStretch(on: boolean): void;
   /** Bends forward from its hips by `degrees`, unless it leans back scared. */
@@ -2602,6 +2934,8 @@ export function creature(
     text.textContent = String(number);
   }
   const santa = dress.costume === 'santa';
+  // The tree wears its Santa hat instead of its star.
+  if (santa) own.querySelector('[data-part="star"]')?.remove();
   if (look.extra === 'tophat' && !santa) {
     const [x, y] = spec.hat;
     const hat = group(front, 'tophat', [
@@ -2996,6 +3330,7 @@ export function creature(
     props,
     light: own.querySelector<SVGElement>('[data-part="light"]'),
     wisps: [...own.querySelectorAll<SVGElement>('[data-part="wisps"]')],
+    lost: [...own.querySelectorAll<SVGElement>('[data-lost]')],
     tentacles:
       kind === 'octopus'
         ? TENTACLES.map((_, i) => [...own.querySelectorAll<SVGElement>(`[data-tentacle="${i}"]`)])

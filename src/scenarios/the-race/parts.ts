@@ -11,7 +11,15 @@ import type { Course } from './plan';
 import styles from './the-race.module.css';
 
 export type Mount =
-  'snail' | 'duck' | 'chair' | 'caterpillar' | 'hopper' | 'ostrich' | 'rocket' | 'sandwich';
+  | 'snail'
+  | 'duck'
+  | 'chair'
+  | 'caterpillar'
+  | 'hopper'
+  | 'ostrich'
+  | 'rocket'
+  | 'sandwich'
+  | 'reindeer';
 export type Creature =
   | 'zombie'
   | 'robot'
@@ -34,7 +42,10 @@ export type Creature =
   | 'ghost'
   | 'mummy'
   | 'yeti'
-  | 'gnome';
+  | 'gnome'
+  | 'snowman'
+  | 'gingerbread'
+  | 'tree';
 export type RacerColour = 'tomato' | 'sun' | 'mint' | 'grape' | 'pink' | 'orange' | 'sea' | 'shark';
 export type Extra = 'googly' | 'tophat' | 'number' | 'scarf' | 'cape' | 'bowtie';
 /** `hold`, the reins or the backrest; `pull`, leaning back on them; `wave`; `party`, arms up. */
@@ -49,6 +60,7 @@ export const MOUNTS: readonly Mount[] = [
   'ostrich',
   'rocket',
   'sandwich',
+  'reindeer',
 ];
 export const CREATURES: readonly Creature[] = [
   'zombie',
@@ -73,6 +85,9 @@ export const CREATURES: readonly Creature[] = [
   'mummy',
   'yeti',
   'gnome',
+  'snowman',
+  'gingerbread',
+  'tree',
 ];
 /** The creatures that are things on legs, which tilt from their feet. */
 export const THINGS: readonly Creature[] = [
@@ -82,6 +97,9 @@ export const THINGS: readonly Creature[] = [
   'banana',
   'icecream',
   'sushi',
+  'snowman',
+  'gingerbread',
+  'tree',
 ];
 export const RACER_COLOURS: readonly RacerColour[] = [
   'tomato',
@@ -221,6 +239,14 @@ export const SPEC: Readonly<
     ],
     roundel: [120, 154],
   },
+  reindeer: {
+    saddle: [100, 110],
+    nose: 231,
+    reins: [190, 94],
+    hat: [192, 68],
+    googly: [[198, 78, 8, 3, 2]],
+    roundel: [108, 127],
+  },
 };
 
 /** The rider's head holder: 72 px, its foot 81 px down, where it leans from. */
@@ -311,6 +337,26 @@ export function show(el: Element, on: boolean) {
   if (on) el.removeAttribute('display');
   else el.setAttribute('display', 'none');
 }
+
+/** A line in the colour token `colour`, over a thicker ink one. */
+const overInk = (d: string, ink: number, width: number, colour: string, part?: string): Shape[] =>
+  [styles.line!, styles.limb!].map((className, i) => [
+    'path',
+    className,
+    {
+      d,
+      'stroke-width': i ? width : ink,
+      ...(i === 1 && { style: `--paint: var(--color-${colour})` }),
+      ...(part && { 'data-part': part }),
+    },
+  ]);
+
+/** The reindeer's legs, neck and antlers. */
+const REINDEER = {
+  legs: 'M80 146 L72 186 M100 150 L96 186 M146 148 L152 186 M164 144 L174 184',
+  neck: 'M152 130 Q170 112 184 90',
+  antlers: 'M184 68 L176 44 L166 38 M176 44 L180 30 M200 66 L206 42 L216 36 M206 42 L202 28',
+} as const;
 
 /** The hopper's horns, and the ostrich's legs and neck: an ink line under a coloured one. */
 const HORNS = 'M140 112 Q134 94 146 84 M156 118 Q156 102 170 94';
@@ -487,6 +533,54 @@ const MOUNT_SHAPES: Record<Mount, (eyes: boolean) => Shape[]> = {
     ['path', styles.line!, { d: 'M196 110 L200 82', 'stroke-width': 4 }],
     ['circle', styles.lettuce!, { cx: 201, cy: 78, r: 8, 'stroke-width': 3 }],
   ],
+  // Its head, antlers and nose shake as one, to shake off fairy lights.
+  reindeer: (eyes) => [
+    ['path', styles.paper!, { d: 'M58 124 Q42 118 44 104 Q58 106 64 120 Z', 'stroke-width': 4 }],
+    ...overInk(REINDEER.legs, 12, 5, 'bark', 'legs'),
+    [
+      'path',
+      styles.line!,
+      { d: 'M64 188 H80 M88 188 H104 M144 188 H160 M166 186 H182', 'stroke-width': 7 },
+    ],
+    ...overInk(REINDEER.neck, 24, 16, 'bark'),
+    ['ellipse', styles.bark!, { cx: 114, cy: 132, rx: 58, ry: 24, 'stroke-width': 4 }],
+    [
+      'path',
+      styles.racer!,
+      {
+        d: 'M78 112 Q108 104 140 110 L136 144 Q108 150 80 144 Z',
+        'stroke-width': 4,
+        'data-part': 'blanket',
+      },
+    ],
+    ['path', styles.stripe!, { d: 'M82 138 Q108 144 134 138', 'stroke-width': 4 }],
+    ['path', styles.line!, { d: 'M156 114 Q166 128 178 114', 'stroke-width': 10 }],
+    [
+      'path',
+      styles.sunLine!,
+      { d: 'M156 114 Q166 128 178 114', 'stroke-width': 5, 'data-part': 'collar' },
+    ],
+    ['circle', styles.sun!, { cx: 167, cy: 126, r: 5, 'stroke-width': 3, 'data-part': 'bell' }],
+    ...(
+      [
+        ...overInk(REINDEER.antlers, 10, 4, 'tomato-soft', 'antlers'),
+        ['path', styles.bark!, { d: 'M180 74 Q166 68 160 78 Q170 84 182 80 Z', 'stroke-width': 3 }],
+        ['ellipse', styles.bark!, { cx: 192, cy: 82, rx: 20, ry: 16, 'stroke-width': 4 }],
+        ['ellipse', styles.bark!, { cx: 212, cy: 90, rx: 14, ry: 10, 'stroke-width': 4 }],
+        [
+          'circle',
+          styles.tomato!,
+          { cx: 224, cy: 87, r: 7.5, 'stroke-width': 3, 'data-part': 'nose' },
+        ],
+        ['circle', styles.paperFill!, { cx: 226, cy: 84, r: 2 }],
+        ...(eyes ? ([['circle', styles.inkFill!, { cx: 198, cy: 78, r: 4 }]] as Shape[]) : []),
+      ] as Shape[]
+    ).map(([tag, className, attributes]): Shape => [
+      tag,
+      className,
+      { 'data-shake': 'deer-head', ...attributes },
+    ]),
+  ],
 };
 
 /** The egg an ostrich lays, from the canvas, on its 40 by 48 grid. */
@@ -521,12 +615,42 @@ const PICKLE: readonly Shape[] = [
   ['path', styles.line!, { d: 'M-8 -2 h1 M0 2 h1 M8 -2 h1', 'stroke-width': 3 }],
 ];
 
+/** Snow sprayed up behind a reindeer's hooves as it glides, on its grid. */
+const SPRAY: readonly Shape[] = [
+  ['circle', styles.paper!, { cx: 50, cy: 182, r: 12, 'stroke-width': 3 }],
+  ['circle', styles.paper!, { cx: 28, cy: 174, r: 9, 'stroke-width': 3 }],
+  ['circle', styles.paper!, { cx: 10, cy: 184, r: 7, 'stroke-width': 3 }],
+  ['path', styles.line!, { d: 'M40 160 H14 M30 150 H8', 'stroke-width': 4 }],
+];
+
+/** A string of fairy lights tangled round a reindeer's antlers, a bulb in each of the track's colours. */
+const TANGLE: readonly Shape[] = [
+  [
+    'path',
+    styles.line!,
+    { d: 'M160 46 Q172 28 184 42 Q196 56 206 38 Q214 26 224 40', 'stroke-width': 3 },
+  ],
+  ...(
+    [
+      [167, 37, styles.tomato!],
+      [184, 42, styles.sun!],
+      [200, 48, styles.mint!],
+      [214, 30, styles.pink!],
+    ] as const
+  ).map(([cx, cy, bulb]): Shape => [
+    'rect',
+    bulb,
+    { x: cx - 5, y: cy - 1, width: 10, height: 13, rx: 5, 'stroke-width': 2.5 },
+  ]),
+];
+
 /** What a burst or a stop brings out, per mount, each hidden until then. */
-export type Prop = 'egg' | 'smoke' | 'steam' | 'pickle';
+export type Prop = 'egg' | 'smoke' | 'steam' | 'pickle' | 'spray' | 'tangle';
 const PROPS: Partial<Record<Mount, Partial<Record<Prop, readonly Shape[]>>>> = {
   ostrich: { egg: EGG },
   rocket: { smoke: SMOKE },
   sandwich: { steam: STEAM, pickle: PICKLE },
+  reindeer: { spray: SPRAY, tangle: TANGLE },
 };
 
 /** The rider's scarf, on the head's 100 grid, under the chin and out behind. */

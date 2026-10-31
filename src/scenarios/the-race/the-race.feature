@@ -286,7 +286,7 @@ Feature: The Race
     Scenario: Christmas is a theme
       When the Line-up opens for The Race
       Then "Christmas" is a theme, after "Moon", its postcard a tree on snow at dusk
-      And with Christmas chosen, the racer option's first tab is "Christmas", holding "Penguin", "Yeti" and "Garden gnome"
+      And with Christmas chosen, the racer option's first tab is "Christmas"
 
     Scenario: What Christmas looks like
       When the show runs on Christmas
@@ -329,8 +329,6 @@ Feature: The Race
       When the show runs with 20 different random seeds
       Then the first nose over the finish line is always the unlucky person's
 
-  # Step 4.
-  @pending
   Rule: Christmas's own racers
 
     Scenario: Four racers for Christmas
