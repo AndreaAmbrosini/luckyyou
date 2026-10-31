@@ -22,6 +22,8 @@ export interface RunOptions {
   readonly looks?: ReadonlyMap<string, ChosenLook>;
   readonly seed: number;
   readonly muted: boolean;
+  /** The music's volume, 0 to 1; 0 when the music is off. */
+  readonly music: number;
   /** Aborting it stops the show at once. */
   readonly signal: AbortSignal;
   /** Warns on the console when a show leaves 10–30 s. On in the dev server. */
@@ -39,7 +41,7 @@ export async function runScenario(scenario: Scenario, options: RunOptions): Prom
   } = options;
   const animations = claimAnimations();
   const frame = buildStage(options.host);
-  const sound = createSound({ muted: options.muted });
+  const sound = createSound({ muted: options.muted, music: options.music });
 
   const show: Show = {
     stage: frame.stage,

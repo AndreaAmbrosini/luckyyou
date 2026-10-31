@@ -25,6 +25,7 @@ function runIn(host: HTMLElement, during: (show: Show) => void) {
     unlucky: 'Ben',
     seed: 1,
     muted: true,
+    music: 0,
     signal: new AbortController().signal,
   });
 }

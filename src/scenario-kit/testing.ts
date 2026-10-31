@@ -38,6 +38,10 @@ export interface RunShowOptions {
   readonly step?: number;
   /** A show still running after this many show seconds is cancelled: 35 unless given. */
   readonly limit?: number;
+  /** Off unless given: a test that listens fakes the audio output. */
+  readonly muted?: boolean;
+  /** The music's volume, 0 to 1: 0 unless given. */
+  readonly music?: number;
   /** Runs the show as the dev server would, with its warnings. */
   readonly development?: boolean;
   /** Less motion; the browser's prefers-reduced-motion unless given. */
@@ -91,7 +95,8 @@ export async function runShow(scenario: Scenario, options: RunShowOptions): Prom
       unlucky: options.unlucky,
       looks: options.looks,
       seed: options.seed ?? 1,
-      muted: true,
+      muted: options.muted ?? true,
+      music: options.music ?? 0,
       signal: controller.signal,
       development: options.development,
       reducedMotion: options.reducedMotion,

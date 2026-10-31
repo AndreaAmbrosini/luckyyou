@@ -2,6 +2,7 @@ import { loadFeature } from '@amiceli/vitest-cucumber';
 import { act, fireEvent, screen, waitFor } from '@testing-library/react';
 import { expect, vi } from 'vitest';
 import type { Show } from '../src/scenario-kit/contract';
+import { FULL_LEVEL, melody } from '../src/scenario-kit/music';
 import {
   currentUser,
   fakeFullscreen,
@@ -13,6 +14,7 @@ import {
   storeSettings,
   storeTicked,
 } from './support/app';
+import { fakeAudio, type FakeAudio } from './support/audio';
 import { fakeScenario } from './support/fake-scenarios';
 import { describeSpec } from './support/spec';
 
@@ -29,6 +31,9 @@ function endlessShow() {
   });
   return { scenario, show: () => handed };
 }
+
+/** A bar of tune. */
+const TUNE = melody('C4 D4 E4 F4', 0);
 
 const onShowsStep = () =>
   expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('Pick a show');
@@ -87,6 +92,57 @@ describeSpec(await loadFeature('./show.feature'), ({ Rule }) => {
       Then('nothing is heard', () => {
         expect(played).toBe(true);
         expect(outputs).not.toHaveBeenCalled();
+      });
+    });
+  });
+
+  Rule('Music follows the music switch and volume', ({ RuleScenario }) => {
+    RuleScenario(
+      'With the music off, the show plays its sounds without music',
+      ({ Given, When, Then, And }) => {
+        let audio: FakeAudio;
+        const heard = { music: 0, sound: 0 };
+        Given('the sound is on and the music is off', () => {
+          storeSettings({ muted: false, music: false, musicVolume: 70, lastScenario: null });
+          audio = fakeAudio();
+        });
+        When('the show plays music and a sound', async () => {
+          const scenario = fakeScenario({
+            play: (show) => {
+              const music = show.sound.music(TUNE);
+              for (let beat = 0; beat <= 4; beat += 0.25) music.to(beat, 4);
+              heard.music = audio.started;
+              show.sound.play('splash');
+              heard.sound = audio.started - heard.music;
+            },
+          });
+          await startShow(PEOPLE, scenario);
+          await resultHeading();
+        });
+        Then('the sound is heard', () => {
+          expect(heard.sound).toBeGreaterThan(0);
+        });
+        And("the music isn't", () => {
+          expect(heard.music).toBe(0);
+        });
+      },
+    );
+
+    RuleScenario('Music plays at the chosen volume', ({ Given, When, Then }) => {
+      let audio: FakeAudio;
+      Given('the music volume is {int}%', (_, volume: number) => {
+        storeSettings({ muted: false, music: true, musicVolume: volume, lastScenario: null });
+        audio = fakeAudio();
+      });
+      When('the show plays music', async () => {
+        const scenario = fakeScenario({ play: (show) => show.sound.music(TUNE).to(0, 4) });
+        await startShow(PEOPLE, scenario);
+        await resultHeading();
+      });
+      Then('the music plays at {int}% of its full level', (_, volume: number) => {
+        expect(audio.started).toBeGreaterThan(0);
+        expect(audio.outputLevels).toHaveLength(1);
+        expect(audio.outputLevels[0]).toBeCloseTo((volume / 100) * FULL_LEVEL, 6);
       });
     });
   });

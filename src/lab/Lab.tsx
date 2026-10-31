@@ -105,6 +105,8 @@ export function Lab({ scenarios }: { scenarios: readonly Scenario[] }) {
       unlucky: position === 'first' ? names[0]! : names.at(-1)!,
       seed: Number.parseInt(seed, 10) || 0,
       muted: !sound,
+      // The level music starts at in the app.
+      music: sound ? 0.7 : 0,
     });
   }
 

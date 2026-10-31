@@ -2,6 +2,8 @@
 // audio files and no licences to track. Every show must also read with the
 // sound off (DESIGN.md).
 
+import { follow, musicBus, playNote, type Music, type Note } from './music';
+
 /** The sounds a show can ask for. */
 export type Cue =
   | 'splash'
@@ -27,15 +29,39 @@ export interface SoundPlayer {
   play(cue: Cue): () => void;
   /** Stops every sound still playing. */
   stopAll(): void;
+  /**
+   * A song the show moves along from its own time, silent unless the sound
+   * and the music are both on. It stops with the show.
+   */
+  music(notes: readonly Note[]): Music;
 }
 
 /**
- * A show's sound. While muted it never opens an audio output; otherwise it
- * opens one on the first cue and closes it when the show is over.
+ * A show's sound, with its music at `music` (0 to 1, 0 when off). While muted
+ * it never opens an audio output; otherwise it opens one on the first cue or
+ * note and closes it when the show is over. After that it plays nothing.
  */
-export function createSound({ muted }: { muted: boolean }): { player: SoundPlayer; stop(): void } {
+export function createSound({ muted, music = 0 }: { muted: boolean; music?: number }): {
+  player: SoundPlayer;
+  stop(): void;
+} {
   let context: AudioContext | null = null;
+  let bus: GainNode | null = null;
+  let over = false;
   const playing = new Set<AudioScheduledSourceNode>();
+  const silent = () => muted || over || typeof AudioContext === 'undefined';
+  const open = () => {
+    context ??= new AudioContext();
+    // Safari can hand one back suspended, and it plays nothing until resumed.
+    if (context.state === 'suspended') context.resume().catch(() => undefined);
+    return context;
+  };
+  const track = (sources: AudioScheduledSourceNode[]) => {
+    for (const source of sources) {
+      playing.add(source);
+      source.onended = () => playing.delete(source);
+    }
+  };
   const end = (source: AudioScheduledSourceNode) => {
     playing.delete(source);
     try {
@@ -47,16 +73,10 @@ export function createSound({ muted }: { muted: boolean }): { player: SoundPlaye
 
   const player: SoundPlayer = {
     play(cue) {
-      if (muted || typeof AudioContext === 'undefined') return () => undefined;
+      if (silent()) return () => undefined;
       try {
-        context ??= new AudioContext();
-        // Safari can hand one back suspended, and it plays nothing until resumed.
-        if (context.state === 'suspended') context.resume().catch(() => undefined);
-        const sources = CUES[cue](context);
-        for (const source of sources) {
-          playing.add(source);
-          source.onended = () => playing.delete(source);
-        }
+        const sources = CUES[cue](open());
+        track(sources);
         return () => sources.forEach(end);
       } catch {
         // A sound that can't play never stops the show.
@@ -66,14 +86,33 @@ export function createSound({ muted }: { muted: boolean }): { player: SoundPlaye
     stopAll() {
       playing.forEach(end);
     },
+    music(notes) {
+      const song = follow(notes);
+      return {
+        to(beat, speed) {
+          if (silent() || !(music > 0)) return;
+          for (const { note, delay, seconds } of song.to(beat, speed)) {
+            try {
+              const audio = open();
+              bus ??= musicBus(audio, music);
+              track(playNote(audio, bus, note, audio.currentTime + delay, seconds));
+            } catch {
+              // A note that can't play is skipped; the song and the show go on.
+            }
+          }
+        },
+      };
+    },
   };
 
   return {
     player,
     stop() {
+      over = true;
       player.stopAll();
       void context?.close();
       context = null;
+      bus = null;
     },
   };
 }

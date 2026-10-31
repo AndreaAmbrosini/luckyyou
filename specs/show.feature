@@ -17,8 +17,6 @@ Feature: The show
       When the show plays a sound
       Then nothing is heard
 
-  # Music, built in one go with the music rule in specs/setup.feature.
-  @pending
   Rule: Music follows the music switch and volume
 
     Scenario: With the music off, the show plays its sounds without music

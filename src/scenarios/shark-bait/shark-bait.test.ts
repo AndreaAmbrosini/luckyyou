@@ -1030,6 +1030,7 @@ describe('Shark Bait, beyond its feature', () => {
               return () => void (cue === 'rotor' && (rotorStopped = true));
             },
             stopAll() {},
+            music: () => ({ to: () => undefined }),
           },
         }),
     };

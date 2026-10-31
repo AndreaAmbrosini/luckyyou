@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
+import { melody, type Voice } from './music';
 import { createSound, type Cue } from './sound';
 
 const CUES: Cue[] = [
@@ -52,6 +53,7 @@ function fakeAudio({ state = 'running' }: { state?: AudioContextState } = {}) {
       return {
         gain: new FakeParam(),
         frequency: new FakeParam(),
+        detune: new FakeParam(),
         Q: new FakeParam(),
         type: '',
         buffer: null as unknown,
@@ -149,5 +151,32 @@ describe('createSound', () => {
   it('stays quiet where the browser has no Web Audio', () => {
     vi.stubGlobal('AudioContext', undefined);
     expect(() => createSound({ muted: false }).player.play('splash')).not.toThrow();
+  });
+  it('plays no music, and opens no output for it, while the music is off', () => {
+    const contexts = fakeAudio();
+    createSound({ muted: false, music: 0 }).player.music(melody('C4 D4', 0)).to(0, 4);
+    expect(contexts).toHaveLength(0);
+  });
+
+  it('skips a note that fails to play, and the song goes on', () => {
+    const contexts = fakeAudio();
+    const { player } = createSound({ muted: false, music: 0.7 });
+    // A voice the kit doesn't have fails every time it is played.
+    const broken = { at: 0, beats: 1, voice: 'kazoo' as Voice };
+    const music = player.music([broken, ...melody('C4', 1)]);
+    music.to(0, 4);
+    const before = contexts[0]!.started;
+    music.to(1, 4);
+    expect(contexts[0]!.started).toBeGreaterThan(before);
+  });
+
+  it('plays nothing once the show is over', () => {
+    const contexts = fakeAudio();
+    const sound = createSound({ muted: false, music: 0.7 });
+    const music = sound.player.music(melody('C4 D4', 0));
+    sound.stop();
+    sound.player.play('splash');
+    music.to(0, 4);
+    expect(contexts).toHaveLength(0);
   });
 });

@@ -11,7 +11,7 @@ import { PickAShow } from './screens/PickAShow';
 import { Result } from './screens/Result';
 import { ShowScreen, type Run } from './screens/ShowScreen';
 import { WhosIn } from './screens/WhosIn';
-import { useSettings } from './settings/settings';
+import { musicLevel, useSettings } from './settings/settings';
 
 type Looks = ReadonlyMap<string, ChosenLook>;
 
@@ -46,6 +46,7 @@ export default function App({ scenarios = catalogue }: AppProps) {
         looks,
         seed: newSeed(),
         muted: settings.muted,
+        music: musicLevel(settings),
       },
     });
   }

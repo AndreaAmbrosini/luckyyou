@@ -13,6 +13,7 @@ import { bob, shake } from '../src/scenario-kit/motion';
 import { eliminationOrder } from '../src/scenario-kit/order';
 import { createRandom } from '../src/scenario-kit/random';
 import { spread } from '../src/scenario-kit/stage';
+import { drums, follow, melody, oomPah, type Music, type Note } from '../src/scenario-kit/music';
 import { createSound, type Cue } from '../src/scenario-kit/sound';
 import { runShow, type ShowRecord } from '../src/scenario-kit/testing';
 import { bubble, leanRoom, nameTag, speechAt, speechBox, type Box } from '../src/scenario-kit/text';
@@ -20,6 +21,7 @@ import { fitBeats } from '../src/scenario-kit/time';
 import { onReset } from '../src/test/reset';
 import { TEAM } from './support/app';
 import { fakeScenario } from './support/fake-scenarios';
+import { fakeAudio } from './support/audio';
 import { describeSpec } from './support/spec';
 
 /** One frame of the harness's clock. */
@@ -935,36 +937,6 @@ describeSpec(await loadFeature('./kit.feature'), ({ Rule }) => {
   });
 
   Rule('Sounds', ({ RuleScenario }) => {
-    // An audio output that only counts what was started and stopped.
-    const fakeAudio = () => {
-      const counts = { started: 0, stopped: 0 };
-      const param = { setValueAtTime: () => param, exponentialRampToValueAtTime: () => param };
-      const node = () => ({
-        gain: param,
-        frequency: param,
-        Q: param,
-        connect: <T>(next: T) => next,
-        start: () => void counts.started++,
-        stop: () => void counts.stopped++,
-      });
-      class FakeContext {
-        currentTime = 0;
-        sampleRate = 8000;
-        state = 'running';
-        destination = node();
-        createGain = node;
-        createOscillator = node;
-        createBiquadFilter = node;
-        createBufferSource = node;
-        createBuffer = (_channels: number, length: number) => ({
-          getChannelData: () => new Float32Array(length),
-        });
-        close = () => Promise.resolve();
-      }
-      vi.stubGlobal('AudioContext', FakeContext);
-      return counts;
-    };
-
     RuleScenario('A show can ask for every sound', ({ Then }) => {
       Then(
         'a show can play splash, rotor, whoosh, heartbeat, fanfare, sizzle, pop, thunk, creak, tumble, sniff, grumble, bark and latch',
@@ -1017,6 +989,150 @@ describeSpec(await loadFeature('./kit.feature'), ({ Rule }) => {
         expect(counts.stopped).toBe(0);
         stop();
         expect(counts.stopped).toBe(counts.started);
+      });
+    });
+  });
+
+  Rule('Music', ({ RuleScenario, RuleScenarioOutline }) => {
+    /** One lead note a beat, C4 upwards, for `bars` bars. */
+    const scale = (bars: number): Note[] =>
+      Array.from({ length: bars * 4 }, (_, beat) => ({
+        at: beat,
+        beats: 1,
+        voice: 'lead',
+        pitch: 60 + beat,
+      }));
+
+    RuleScenario('A show can play a song', ({ Then }) => {
+      Then(
+        'a show can hand the kit a song, as notes on a beat grid, and move it along as it plays',
+        () => {
+          const audio = fakeAudio();
+          const song = [
+            ...melody('G4:.5 G4:.5 C5 D5 E5', 0),
+            ...oomPah(['C', 'G7', 'Am'], 0),
+            ...drums(3, 0),
+          ];
+          const { player } = createSound({ muted: false, music: 0.7 });
+          const music = player.music(song);
+          for (let frame = 0; frame <= 3 * 30; frame++) music.to((frame / 30) * 4, 4);
+          // Every voice, and so every note: no note starts fewer than one source.
+          expect(audio.started).toBeGreaterThanOrEqual(song.length);
+        },
+      );
+    });
+
+    RuleScenario("A song follows the show's time", ({ Given, When, Then, And }) => {
+      type Heard = { pitch: number; at: number; seconds: number };
+      /** The first bar's notes, and when they start, as the song moves through it frame by frame. */
+      const playBar = (speed: number) => {
+        const song = follow(scale(2));
+        const heard: Heard[] = [];
+        for (let time = 0; time * speed <= 4; time += FRAME) {
+          for (const { note, delay, seconds } of song.to(time * speed, speed)) {
+            if (note.at < 4) heard.push({ pitch: note.pitch!, at: time + delay, seconds });
+          }
+        }
+        return heard;
+      };
+      let speed: number;
+      let bar: Heard[];
+      Given('a show playing a song at {int} beats a second', (_, beats: number) => {
+        speed = beats;
+      });
+      When('the show moves the song on by a bar', () => {
+        bar = playBar(speed);
+      });
+      Then("the bar's notes play in order, each at its place on the grid", () => {
+        expect(bar.map(({ pitch }) => pitch)).toEqual([60, 61, 62, 63]);
+        bar.forEach(({ at, seconds }, beat) => {
+          expect(at).toBeCloseTo(beat / speed, 6);
+          expect(seconds).toBeCloseTo(1 / speed, 6);
+        });
+      });
+      And(
+        'at a quarter of that speed, they come {int} times further apart and last {int} times longer',
+        (_, apart: number, longer: number) => {
+          const slow = playBar(speed / 4);
+          expect(slow.map(({ pitch }) => pitch)).toEqual([60, 61, 62, 63]);
+          slow.forEach(({ at, seconds }, beat) => {
+            expect(at).toBeCloseTo(bar[beat]!.at * apart, 6);
+            expect(seconds).toBeCloseTo(bar[beat]!.seconds * longer, 6);
+          });
+        },
+      );
+    });
+
+    RuleScenario('Notes the show has passed stay unplayed', ({ Given, When, Then }) => {
+      let song: ReturnType<typeof follow>;
+      const heard: number[] = [];
+      Given('a show playing a song', () => {
+        song = follow(scale(3));
+        heard.push(...song.to(0, 4).map(({ note }) => note.at));
+      });
+      When('the show jumps a bar ahead', () => {
+        heard.push(...song.to(4, 4).map(({ note }) => note.at));
+        heard.push(...song.to(4 + 4 * FRAME, 4).map(({ note }) => note.at));
+      });
+      Then("the notes in the bar it jumped over don't play", () => {
+        expect(heard).toEqual([0, 4]);
+      });
+    });
+
+    RuleScenario('Music sits under the sounds', ({ When, Then }) => {
+      // jsdom has no audio: e2e/sound.spec.ts renders a song at 70% in a real
+      // browser and measures its peak. Here: the song plays at that level.
+      let audio: ReturnType<typeof fakeAudio>;
+      When('a show plays a song at {int}%', (_, volume: number) => {
+        audio = fakeAudio();
+        createSound({ muted: false, music: volume / 100 })
+          .player.music(scale(1))
+          .to(0, 4);
+      });
+      Then('the music peaks between 0.2 and 0.5', () => {
+        expect(audio.started).toBeGreaterThan(0);
+        // The music bus, at 0.5: the level e2e/sound.spec.ts measures.
+        expect(audio.outputLevels).toHaveLength(1);
+        expect(audio.outputLevels[0]).toBeCloseTo(0.5, 6);
+      });
+    });
+
+    RuleScenarioOutline('A show that <ends> stops its music', ({ Given, When, Then }, { ends }) => {
+      let audio: ReturnType<typeof fakeAudio>;
+      let scenario: ReturnType<typeof fakeScenario>;
+      let music: Music;
+      Given('a show playing a song', () => {
+        audio = fakeAudio();
+        scenario = fakeScenario({
+          play: async (show) => {
+            music = show.sound.music(scale(10));
+            const clock = { beat: 0 };
+            await show.play(
+              gsap.to(clock, {
+                beat: 8,
+                duration: 2,
+                ease: 'none',
+                onUpdate: () => music.to(clock.beat, 4),
+              }),
+            );
+          },
+        });
+      });
+      When('the show <ends>', async () => {
+        const record = await runShow(scenario, {
+          ...PICK,
+          muted: false,
+          music: 0.7,
+          cancelAt: ends === 'is cancelled' ? 1 : undefined,
+        });
+        expect(record.outcome).toBe(ends === 'is cancelled' ? 'cancelled' : 'finished');
+      });
+      Then('no note plays after it', () => {
+        expect(audio.started).toBeGreaterThan(0);
+        // Whatever was handed to the audio clock ahead of time is stopped too.
+        expect(audio.stopped).toBe(audio.started);
+        music.to(12, 4);
+        expect(audio.started).toBe(audio.stopped);
       });
     });
   });

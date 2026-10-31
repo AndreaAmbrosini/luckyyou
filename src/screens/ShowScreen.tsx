@@ -16,6 +16,8 @@ export interface Run {
   readonly looks?: ReadonlyMap<string, ChosenLook>;
   readonly seed: number;
   readonly muted: boolean;
+  /** The music's volume, 0 to 1; 0 when the music is off. */
+  readonly music: number;
 }
 
 export interface ShowScreenProps {
@@ -62,6 +64,7 @@ export function ShowScreen({ run, onFinish, onCancel }: ShowScreenProps) {
       looks: run.looks,
       seed: run.seed,
       muted: run.muted,
+      music: run.music,
       signal: controller.signal,
     }).then(() => {
       if (gone) return;

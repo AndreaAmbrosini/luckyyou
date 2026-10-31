@@ -225,8 +225,6 @@ Feature: The scenario kit
       When a show plays the sizzle
       Then it keeps playing until it is stopped
 
-  # Music, built in one go with the music rule in specs/setup.feature.
-  @pending
   Rule: Music
 
     Scenario: A show can play a song
