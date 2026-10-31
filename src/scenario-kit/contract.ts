@@ -45,7 +45,7 @@ export interface LineUp {
     look: ChosenLook,
     person: { readonly name: string; readonly place: number; readonly theme?: string | null },
   ): Element;
-  /** Where the whole show takes place, one for everyone, shown as postcards (decision 0015). */
+  /** Where the whole show takes place, one for everyone, shown as postcards (decision 0017). */
   readonly themes?: readonly LineUpTheme[];
   /**
    * Draws the show's start on the START grid, in `theme`, everyone in their

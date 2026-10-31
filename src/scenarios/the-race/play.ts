@@ -356,8 +356,6 @@ const WASABI = { from: -70, at: [150, 34], fall: 0.3 };
 const BLIZZARD = { turns: 1.5, middle: [130, 110] };
 /** A gingerbread sprints bent this far forward, its crumbs flying back this far over its burst. */
 const SPRINT = { degrees: 12, to: [-50, 8] };
-/** The tree's two sets of lights take turns this many times a second, so each flashes at most twice. */
-const TWINKLE = 2;
 /** What a Christmas thing's stop knocks off it, and from where to where on its grid it falls. */
 const KNOCKED: Partial<Record<Creature, ['carrot' | 'gumdrop' | 'bauble', number[], number[]]>> = {
   snowman: ['carrot', [149, 71], [198, 182]],
@@ -1202,22 +1200,8 @@ export async function playTheRace(show: Show): Promise<void> {
     if (kind === 'gingerbread' && showing('crumbs', !!burst)) {
       move(props.crumbs!, [0, 0], SPRINT.to, still ? 0 : done);
     }
-    if (kind === 'tree') {
-      // Its lights on, one set glowing and then the other; together, with reduced motion.
-      const lit = !burst
-        ? ''
-        : still
-          ? 'ab'
-          : Math.floor(2 * TWINKLE * burst.since) % 2
-            ? 'b'
-            : 'a';
-      if (showing('lights', !!burst)) {
-        for (const glow of props.lights!.querySelectorAll<SVGElement>('[data-glow]')) {
-          showPart(glow, lit.includes(glow.dataset.set!));
-        }
-      }
-      write(drawn.el, '@data-twinkle', lit);
-    }
+    // Its lights all on through its burst, none of them blinking.
+    if (kind === 'tree') showing('lights', !!burst);
     const knocked = KNOCKED[kind];
     if (knocked) {
       const [prop, from, to] = knocked;
