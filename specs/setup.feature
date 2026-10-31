@@ -95,3 +95,35 @@ Feature: Setting up a pick
     Scenario: No fullscreen control where the browser can't do it
       Given the browser doesn't support fullscreen
       Then no fullscreen control is shown
+
+  # Music, built in one go with its rules in specs/show.feature,
+  # specs/kit.feature and The Race's feature (decision 0014).
+  @pending
+  Rule: Music has its own switch and volume
+
+    Scenario: The music button opens the music panel
+      When I click the music button in the header
+      Then a panel opens under it with a "Music" switch and a "Volume" slider showing its value
+      And Esc or a click outside closes the panel, and the focus goes back to the button
+
+    Scenario: Music starts on, at 70%
+      Given a first visit
+      Then the music is on, at 70%
+
+    Scenario: Music and its volume are remembered in this browser
+      Given I turned the music off and set its volume to 40%
+      When I reload the page
+      Then the music is still off, at 40%
+
+    Scenario: Sound off silences the music too
+      Given the sound is off
+      Then the music button shows the music as off
+      And the panel's switch and slider are disabled, with the reason "Sound is off."
+      When I turn the sound back on
+      Then the music is on or off, at the volume, as I left it
+
+    Scenario: Moving the volume plays a sample
+      When I move the volume slider
+      Then a short sample of music plays at the new volume
+      And moving it again while the sample plays changes its volume without starting it over
+      And the sample stops when the panel closes

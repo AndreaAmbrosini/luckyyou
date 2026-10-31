@@ -17,6 +17,21 @@ Feature: The show
       When the show plays a sound
       Then nothing is heard
 
+  # Music, built in one go with the music rule in specs/setup.feature.
+  @pending
+  Rule: Music follows the music switch and volume
+
+    Scenario: With the music off, the show plays its sounds without music
+      Given the sound is on and the music is off
+      When the show plays music and a sound
+      Then the sound is heard
+      And the music isn't
+
+    Scenario: Music plays at the chosen volume
+      Given the music volume is 40%
+      When the show plays music
+      Then the music plays at 40% of its full level
+
   Rule: Esc or leaving fullscreen cancels
 
     Scenario: Esc cancels the show

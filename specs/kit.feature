@@ -225,6 +225,38 @@ Feature: The scenario kit
       When a show plays the sizzle
       Then it keeps playing until it is stopped
 
+  # Music, built in one go with the music rule in specs/setup.feature.
+  @pending
+  Rule: Music
+
+    Scenario: A show can play a song
+      Then a show can hand the kit a song, as notes on a beat grid, and move it along as it plays
+
+    Scenario: A song follows the show's time
+      Given a show playing a song at 4 beats a second
+      When the show moves the song on by a bar
+      Then the bar's notes play in order, each at its place on the grid
+      And at a quarter of that speed, they come 4 times further apart and last 4 times longer
+
+    Scenario: Notes the show has passed stay unplayed
+      Given a show playing a song
+      When the show jumps a bar ahead
+      Then the notes in the bar it jumped over don't play
+
+    Scenario: Music sits under the sounds
+      When a show plays a song at 70%
+      Then the music peaks between 0.2 and 0.5
+
+    Scenario Outline: A show that <ends> stops its music
+      Given a show playing a song
+      When the show <ends>
+      Then no note plays after it
+
+      Examples:
+        | ends         |
+        | ends         |
+        | is cancelled |
+
   Rule: Nothing is left after a show
 
     Scenario Outline: A show that <ends> leaves nothing behind
