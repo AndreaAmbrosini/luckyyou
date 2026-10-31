@@ -7,7 +7,7 @@ export interface Settings {
   readonly muted: boolean;
   /** Music under the shows; the sound switch still silences it. */
   readonly music: boolean;
-  /** The music's volume in percent, 0 to 100 in steps of 10. */
+  /** The music's volume in percent, 0 to 100, a whole number. */
   readonly musicVolume: number;
   /** The id of the show played last, ready to play again. */
   readonly lastScenario: string | null;
@@ -46,7 +46,7 @@ export function useSettings(): [Settings, (change: Partial<Settings>) => void] {
 }
 
 const isVolume = (value: unknown): value is number =>
-  typeof value === 'number' && Number.isInteger(value / 10) && value >= 0 && value <= 100;
+  typeof value === 'number' && Number.isInteger(value) && value >= 0 && value <= 100;
 
 /** What a show plays its music at, 0 to 1: 0 when the music is off. */
 export const musicLevel = ({ music, musicVolume }: Settings) => (music ? musicVolume / 100 : 0);
