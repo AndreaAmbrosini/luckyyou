@@ -188,7 +188,7 @@ Feature: The Line-up
     Scenario: Choosing by hand pins a look
       Given Ben's look is shown and isn't pinned
       When I choose any of his choices
-      Then Ben is pinned: his pin is pressed, in sun with a solid outline
+      Then Ben is pinned: his pin is pressed, in marigold with a solid outline
 
     Scenario: A pin can be taken off
       Given Ben is pinned

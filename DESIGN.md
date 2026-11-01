@@ -3,21 +3,20 @@
 LuckyYou's look is **Backstage**: dark screens around a bright show. Flat
 panels with thin outlines, marigold for what's chosen, tomato for the button
 that goes on. Every value is in [tokens.css](src/styles/tokens.css); this
-file says how they're used. The Line-up, its sheet, the Result and the show
-screen's chrome keep the earlier look, Sticker Pop, until they are restyled.
+file says how they're used.
 
 ## Every screen
 
 - Body text is `--size-body`; nothing is smaller than `--size-small`.
-- Text is text or text-soft on ground, panel or raised, and ground on
-  marigold, tomato, mint and white. Every pair is at least 4.5:1.
+- Text is text or text-soft on ground, panel or raised, and ground or ink
+  on marigold, tomato, mint and white. Every pair is at least 4.5:1.
 - Flat fills only: no gradients, glows or blur. Panels have a `--line-thin`
   edge and no shadow. The only shadow is the main button's `--shadow-press`.
 - On and off differ without colour: ticked, done and chosen things have a
   check; anything off or disabled has a dashed outline.
 - One main button per screen, in tomato.
 - Click targets are at least `--target-min`. Keyboard focus shows as
-  `--focus`, offset 3px.
+  `--focus`, offset 3px; on the white sheet, in grape.
 
 ## Type
 
@@ -25,7 +24,7 @@ screen's chrome keep the earlier look, Sticker Pop, until they are restyled.
   −1px letter-spacing at heading size: the logo, headings and show names.
 - **Figtree** (`--font-text`) at weight 600 to 900: everything else.
 - **Lilita One** (`--font-display`) and **Nunito** (`--font-body`): the
-  shows, and the screens not yet restyled.
+  shows only.
 
 ## Colour roles
 
@@ -39,11 +38,13 @@ screen's chrome keep the earlier look, Sticker Pop, until they are restyled.
 | edge-strong | dashed outlines, the way back                                |
 | text-soft   | help lines, descriptions, unticked names, a step's choice    |
 | text-faint  | placeholders, disabled text                                  |
-| marigold    | the current step, ticked people, the chosen show, "You"      |
+| marigold    | the current step, what's ticked, chosen or pinned, "You"     |
 | tomato      | the main button, a count that blocks, remove buttons         |
 | tomato-text | a reason that blocks, a refused name                         |
 | mint        | a count that's fine, "Last time", "Done", a done step        |
-| the rest    | shows, and the screens not yet restyled                      |
+| paper-…     | stickers and the sheet, their wells, edges and soft text     |
+| grape       | the winner's name, focus on white                            |
+| the rest    | shows only                                                   |
 
 ## Parts
 
@@ -69,6 +70,8 @@ screen's chrome keep the earlier look, Sticker Pop, until they are restyled.
   run. Chosen: a marigold ring and check badge.
 - **Chosen-show panel**: the show's name and line, what it takes and what
   comes next.
+- **Sticker**: white on the ground, unoutlined. Its controls have an ink
+  outline; pressed, marigold.
 
 ## Screens
 
@@ -81,14 +84,20 @@ and scroll; the add tile is last. Remove mode puts its hint in the bar beside
 in one row; under them, the chosen-show panel. A show with a line-up adds
 "Start with last line-up" to the bar.
 
-**Line-up.** "1 · Track: Autumn" over paper postcards; "2 · Racers", "Deal
-from" and "Shuffle everyone"; everyone in one row on the theme's ground, over
-paper cards. A look opens in a paper sheet.
+**Line-up.** A smaller heading; step names in text-soft, the theme in
+marigold. Postcards are stickers, the chosen one ringed. "Deal from" is a
+raised track, its side that's on marigold; "Shuffle everyone" a white pill.
+Everyone stands on the theme's ground over sticker cards.
 
-**Show.** The scenario owns the window ([show.feature](specs/show.feature)).
+**Sheet.** White from the right over the dimmed Line-up. An open view tab is
+ground, an open group marigold; chosen tiles marigold.
 
-**Result.** Sky, clouds and stars; a tilted paper card: "Lucky you," over the
-name, the sun ribbon "Sorry for your win"; the buttons under it.
+**Show.** The scenario owns the window ([show.feature](specs/show.feature));
+ground round its stage.
+
+**Result.** Stars and sparkles round a tilted sticker card: "Lucky you," over
+the name in grape, the marigold ribbon "Sorry for your win"; the buttons
+under it.
 
 ## Shows
 

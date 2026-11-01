@@ -13,6 +13,8 @@ export interface ResultProps {
 }
 
 const STAR = 'M12 1.5l2.6 7.1 7.4.3-5.8 4.6 2 7.2L12 16.6l-6.2 4.1 2-7.2L2 8.9l7.4-.3z';
+/** The logo's four-point sparkle. */
+const SPARKLE = 'M12 1.5l2.6 7.9 7.9 2.6-7.9 2.6-2.6 7.9-2.6-7.9-7.9-2.6 7.9-2.6z';
 
 /** Winning is losing: the person picked gets the job, and a congratulation. */
 export function Result({ run, onRunAgain, onRunWithout, onChangeWhosIn }: ResultProps) {
@@ -31,12 +33,14 @@ export function Result({ run, onRunAgain, onRunWithout, onChangeWhosIn }: Result
   return (
     <main className={styles.result}>
       <div className={styles.sky} aria-hidden="true">
-        {['c1', 'c2', 'c3', 'c4', 'c5'].map((cloud) => (
-          <span key={cloud} className={`${styles.cloud} ${styles[cloud]}`} />
-        ))}
         {['s1', 's2', 's3'].map((star) => (
           <svg key={star} className={`${styles.star} ${styles[star]}`} viewBox="0 0 24 24">
             <path d={STAR} />
+          </svg>
+        ))}
+        {['k1', 'k2', 'k3', 'k4'].map((sparkle) => (
+          <svg key={sparkle} className={`${styles.sparkle} ${styles[sparkle]}`} viewBox="0 0 24 24">
+            <path d={SPARKLE} />
           </svg>
         ))}
       </div>
@@ -57,9 +61,9 @@ export function Result({ run, onRunAgain, onRunWithout, onChangeWhosIn }: Result
           Run again
         </Button>
         <Button
+          variant="outline"
           aria-disabled={tooFew ? true : undefined}
           aria-describedby={tooFew ? reasonId : undefined}
-          className={styles.big}
           onClick={() => {
             if (!tooFew) onRunWithout();
           }}

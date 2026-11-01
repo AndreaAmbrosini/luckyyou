@@ -168,7 +168,7 @@ export function LineUp({
       <main className={`${layout.main} ${styles.main}`} inert={open !== null}>
         <div className={layout.titleRow}>
           <div className={layout.group}>
-            <h1 className={layout.heading}>{lineUp.heading}</h1>
+            <h1 className={`${layout.heading} ${styles.heading}`}>{lineUp.heading}</h1>
             <p className={layout.say}>
               {words && themed
                 ? `Pick a ${words.theme.toLowerCase()}, then dress the ${words.choices}. Or just start.`
@@ -180,7 +180,7 @@ export function LineUp({
         {lineUp.themes && theme && themed && words && (
           <section className={styles.step} aria-labelledby={`${id}-themes`}>
             <h2 id={`${id}-themes`} className={styles.stepName}>
-              1 · {words.theme}: {themed.label}
+              1 · {words.theme}: <span className={styles.chosen}>{themed.label}</span>
               {suiting!.choices.length > 0 && ' '}
               {suiting!.choices.length > 0 && (
                 <span className={styles.soft}>
@@ -243,7 +243,7 @@ export function LineUp({
                 </div>
               </>
             )}
-            <Button onClick={shuffleEveryone}>
+            <Button className={styles.shuffle} onClick={shuffleEveryone}>
               <DieIcon five size={24} />
               Shuffle everyone
             </Button>
@@ -395,7 +395,7 @@ interface SheetProps {
 }
 
 /**
- * One person's look, in paper from the right over the dimmed Line-up: their
+ * One person's look, in white from the right over the dimmed Line-up: their
  * portrait on the theme's ground, "Surprise me", their pin, then the show's
  * options, the first one's choices that suit the theme first.
  */
@@ -496,7 +496,12 @@ function Sheet(props: SheetProps) {
             <ArrowRightIcon size={22} />
           </button>
           <span className={layout.spacer} />
-          <button type="button" className={styles.round} aria-label="Close" onClick={onClose}>
+          <button
+            type="button"
+            className={`${styles.round} ${styles.close}`}
+            aria-label="Close"
+            onClick={onClose}
+          >
             <CrossIcon size={22} />
           </button>
         </div>
@@ -522,7 +527,7 @@ function Sheet(props: SheetProps) {
                 ].join(' · ')}
               </p>
               <div className={styles.portraitButtons}>
-                <Button onClick={onDeal}>
+                <Button className={styles.surprise} onClick={onDeal}>
                   <DieIcon size={22} />
                   Surprise me
                 </Button>
@@ -544,7 +549,7 @@ function Sheet(props: SheetProps) {
 
         <div className={styles.sheetFoot}>
           <p className={styles.pinNote}>Changes show on the line-up at once.</p>
-          <Button variant="done" onClick={onClose}>
+          <Button variant="primary" onClick={onClose}>
             Done
           </Button>
         </div>
@@ -751,7 +756,7 @@ interface TabsProps {
   small?: boolean;
 }
 
-/** A row of tabs, the open one in sun; the arrow keys move along them, opening each. */
+/** A row of tabs, the open one filled; the arrow keys move along them, opening each. */
 function Tabs({ id, label, tabs, open, onOpen, small = false }: TabsProps) {
   function onKey(event: KeyboardEvent<HTMLButtonElement>, index: number) {
     const step = { ArrowRight: 1, ArrowLeft: -1 }[event.key];
@@ -787,7 +792,7 @@ function Tabs({ id, label, tabs, open, onOpen, small = false }: TabsProps) {
   );
 }
 
-/** A pin: pressed in sun with a solid outline, or white with a dashed one. */
+/** A pin: pressed in marigold with a solid outline, or white with a dashed one. */
 function PinButton({
   on,
   children,
@@ -815,7 +820,7 @@ function Star() {
   );
 }
 
-/** A star on a sun badge. */
+/** A star on a marigold badge. */
 function Badge() {
   return (
     <span className={styles.badge} aria-hidden="true">
@@ -833,7 +838,7 @@ interface PostcardsProps {
 }
 
 /**
- * The themes as postcards, "Surprise" first: the chosen one in sun, with a
+ * The themes as postcards, "Surprise" first: the chosen one in a marigold ring, with a
  * check, or with a die on "Surprise", which shows the theme it drew.
  */
 function Postcards({ themes, theme, surprise, onChange }: PostcardsProps) {
@@ -875,7 +880,7 @@ function Postcards({ themes, theme, surprise, onChange }: PostcardsProps) {
   );
 }
 
-/** "Surprise" before it has drawn a theme: a die on sun. */
+/** "Surprise" before it has drawn a theme: a die on marigold. */
 function SurprisePicture() {
   const dots = [
     [51, 14],

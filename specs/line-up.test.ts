@@ -628,7 +628,7 @@ describeSpec(await loadFeature('./line-up.feature'), ({ Rule }) => {
             }
           }
           expect(getComputedStyle(pressed('Ben', 'Hat')[0]!).backgroundColor).toBe(
-            'var(--color-sun)',
+            'var(--color-marigold)',
           );
         },
       );
@@ -699,7 +699,7 @@ describeSpec(await loadFeature('./line-up.feature'), ({ Rule }) => {
       And("it opens on the tab holding Ben's choice, showing only that group's choices", () => {
         const open = tabs().filter((tab) => tab.getAttribute('aria-selected') === 'true');
         expect(open.map((tab) => tab.textContent)).toEqual([mine.group]);
-        expect(getComputedStyle(open[0]!).backgroundColor).toBe('var(--color-sun)');
+        expect(getComputedStyle(open[0]!).backgroundColor).toBe('var(--color-ground)');
         expect(shownChoices()).toEqual(
           labelsIn(mine.group!).map((label) => expect.stringContaining(label)),
         );
@@ -865,10 +865,10 @@ describeSpec(await loadFeature('./line-up.feature'), ({ Rule }) => {
       And('the chosen one is marked by a check mark as well as by colour', () => {
         expect(chosenCards()).toEqual([postcard('Snow')]);
         expect(markOn(postcard('Snow'))).toBe('check');
-        expect(getComputedStyle(postcard('Snow')).backgroundColor).toBe('var(--color-sun)');
+        expect(getComputedStyle(postcard('Snow')).boxShadow).toContain('var(--color-marigold)');
         for (const card of postcards().filter((each) => each !== postcard('Snow'))) {
           expect(markOn(card)).toBeNull();
-          expect(getComputedStyle(card).backgroundColor).toBe('var(--color-paper)');
+          expect(getComputedStyle(card).boxShadow).not.toContain('marigold');
         }
       });
     });
@@ -934,7 +934,7 @@ describeSpec(await loadFeature('./line-up.feature'), ({ Rule }) => {
           expect(starred.map(nameOf)).toEqual(suiting);
           for (const each of starred) {
             const star = within(each).getByRole('img', { name: label });
-            expect(getComputedStyle(star).backgroundColor).toBe('var(--color-sun)');
+            expect(getComputedStyle(star).backgroundColor).toBe('var(--color-marigold)');
           }
         },
       );
@@ -1022,7 +1022,7 @@ describeSpec(await loadFeature('./line-up.feature'), ({ Rule }) => {
       And(`"Surprise" is marked as chosen with a die, showing the drawn theme's picture`, () => {
         expect(chosenCards()).toEqual([postcard('Surprise')]);
         expect(markOn(postcard('Surprise'))).toBe('die');
-        expect(getComputedStyle(postcard('Surprise')).backgroundColor).toBe('var(--color-sun)');
+        expect(getComputedStyle(postcard('Surprise')).boxShadow).toContain('var(--color-marigold)');
       });
       And('choosing "Surprise" again draws another', async () => {
         for (let turn = 0; turn < 5; turn++) {
@@ -1287,20 +1287,22 @@ describeSpec(await loadFeature('./line-up.feature'), ({ Rule }) => {
           colours.find((button) => button.getAttribute('aria-pressed') === 'false')!,
         );
       });
-      Then('Ben is pinned: his pin is pressed, in sun with a solid outline', () => {
+      Then('Ben is pinned: his pin is pressed, in marigold with a solid outline', () => {
         for (const button of [pin('Ben'), sheetPin('Ben')]) {
           expect(pinLook(button)).toEqual({
             pressed: 'true',
-            fill: 'var(--color-sun)',
+            fill: 'var(--color-marigold)',
             outline: 'solid',
           });
         }
         expect(sheetPin('Ben')).toHaveTextContent('Pinned');
         expect(pin('Anna')).toHaveAttribute('aria-pressed', 'false');
-        // And his card keeps a sun ring inside its outline.
+        // And his card keeps a marigold ring.
         const paper = card('Ben').lastElementChild!;
-        expect(getComputedStyle(paper).boxShadow).toContain('var(--color-sun)');
-        expect(getComputedStyle(card('Anna').lastElementChild!).boxShadow).not.toContain('sun');
+        expect(getComputedStyle(paper).boxShadow).toContain('var(--color-marigold)');
+        expect(getComputedStyle(card('Anna').lastElementChild!).boxShadow).not.toContain(
+          'marigold',
+        );
       });
     });
 
@@ -1477,8 +1479,8 @@ describeSpec(await loadFeature('./line-up.feature'), ({ Rule }) => {
           expect(sides().map((side) => side.textContent)).toEqual([theirs, any]);
           expect(onSide()).toEqual([theirs]);
           expect(dealFrom().nextElementSibling).toBe(screen.getByRole('button', { name: shuffle }));
-          expect(getComputedStyle(sides()[0]!).backgroundColor).toBe('var(--color-sun)');
-          expect(getComputedStyle(sides()[1]!).backgroundColor).toBe('var(--color-paper)');
+          expect(getComputedStyle(sides()[0]!).backgroundColor).toBe('var(--color-marigold)');
+          expect(getComputedStyle(sides()[1]!).backgroundColor).not.toContain('marigold');
         },
       );
       When('I choose {string}', (_, label: string) => choose(label));

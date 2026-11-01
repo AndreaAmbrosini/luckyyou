@@ -18,7 +18,13 @@
   --color-tomato-text: #ff9c86;
   --color-focus: #a99bff;
 
-  /* Colour: shows, and the screens step 2 hasn't restyled yet */
+  /* Colour: Backstage, the white stickers on it (with paper and ink) */
+  --color-paper-tint: #f1effa;
+  --color-paper-edge: #e3e0f2;
+  --color-paper-edge-strong: #c9c4e4;
+  --color-paper-text-soft: #57527a;
+
+  /* Colour: shows, and Backstage's stickers, stars and focus on paper */
   --color-sky: #8fd8f7;
   --color-paper: #fff;
   --color-ink: #17142b;
@@ -50,6 +56,7 @@
   --font-display: 'Lilita One', 'Arial Black', sans-serif;
   --font-body: 'Nunito', system-ui, sans-serif;
   --size-small: 1.125rem;
+  --size-chip: 1.1875rem;
   --size-button: 1.25rem;
   --size-body: 1.375rem;
   --size-lead: 1.5rem;
@@ -57,6 +64,7 @@
   --size-card-title: 1.875rem;
   --size-logo: 2.25rem;
   --size-panel-title: 2.875rem;
+  --size-heading-small: 3.25rem;
   --size-heading: 4rem;
   --size-sorry: 2.25rem;
   --size-lucky: 4rem;
@@ -78,6 +86,7 @@
   --radius-box: 10px;
   --radius-person: 18px;
   --radius-panel: 22px;
+  --radius-sheet: 28px;
   --radius-pill: 999px;
   --shadow-small: 3px 3px 0 var(--color-ink);
   --shadow: 6px 6px 0 var(--color-ink);
