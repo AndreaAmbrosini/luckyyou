@@ -1,6 +1,6 @@
 # 0009 Self-hosted fonts
 
-Accepted 2026-10-21
+Superseded by 0020
 
 The look needs two web fonts, Lilita One and Nunito. They come from the
 `@fontsource` packages and are bundled with the site, not loaded from Google

@@ -1,3 +1,5 @@
+import '@fontsource-variable/bricolage-grotesque/wdth.css';
+import '@fontsource-variable/figtree/wght.css';
 import '@fontsource/lilita-one/400.css';
 import '@fontsource/nunito/700.css';
 import '@fontsource/nunito/800.css';

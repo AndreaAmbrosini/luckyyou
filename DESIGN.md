@@ -1,102 +1,94 @@
 # Design
 
-LuckyYou's look is **Sticker Pop**: a cartoon sticker book. Flat colours,
-thick ink outlines, hard shadows and chunky type on a sky-blue ground. Every
-value is in [tokens.css](src/styles/tokens.css); this file says how they're
-used.
+LuckyYou's look is **Backstage**: dark screens around a bright show. Flat
+panels with thin outlines, marigold for what's chosen, tomato for the button
+that goes on. Every value is in [tokens.css](src/styles/tokens.css); this
+file says how they're used. The Line-up, its sheet, the Result and the show
+screen's chrome keep the earlier look, Sticker Pop, until they are restyled.
 
 ## Every screen
 
 - Body text is `--size-body`; nothing is smaller than `--size-small`.
-- Text is ink or ink-soft on paper, sky, sun, mint, tomato or tomato-soft.
-  White text is never used.
-- Solid fills only: no gradients, glows, blur or thin lines.
-- Outlines are `--line` in ink. Surfaces on the ground get a hard ink shadow.
-- On and off look different without colour: a ticked person has a check
-  mark and a solid outline, a pinned look a solid outline; anything off or
-  disabled is white with a dashed outline.
-- One primary button per screen, in tomato.
-- Only the logo and the stickers on the result and in shows are tilted,
-  between −2° and 2°.
+- Text is text or text-soft on ground, panel or raised, and ground on
+  marigold, tomato, mint and white. Every pair is at least 4.5:1.
+- Flat fills only: no gradients, glows or blur. Panels have a `--line-thin`
+  edge and no shadow. The only shadow is the main button's `--shadow-press`.
+- On and off differ without colour: ticked, done and chosen things have a
+  check; anything off or disabled has a dashed outline.
+- One main button per screen, in tomato.
 - Click targets are at least `--target-min`. Keyboard focus shows as
   `--focus`, offset 3px.
 
 ## Type
 
-- **Lilita One** (`--font-display`): the logo, headings, show names,
-  captions and the name on the result.
-- **Nunito** (`--font-body`) at weight 700 to 900: everything else.
-- The name on the result starts at `--size-name-max` and shrinks to fit, down
-  to `--size-name-min`, then wraps onto a second line.
+- **Bricolage Grotesque** (`--font-title`), weight 800, `font-stretch: 88%`,
+  −1px letter-spacing at heading size: the logo, headings and show names.
+- **Figtree** (`--font-text`) at weight 600 to 900: everything else.
+- **Lilita One** (`--font-display`) and **Nunito** (`--font-body`): the
+  shows, and the screens not yet restyled.
 
 ## Colour roles
 
-| Token       | Used for                                                           |
-| ----------- | ------------------------------------------------------------------ |
-| sky         | the ground of every screen                                         |
-| paper       | sheets, cards, tiles, tags, fields, secondary buttons              |
-| ink         | text, outlines, shadows                                            |
-| ink-soft    | unticked names, disabled text, placeholders                        |
-| sun         | ticked people, the chosen show, the current step, the logo, ribbon |
-| tomato      | the primary button, a count that blocks, remove buttons            |
-| tomato-soft | refused-name notes, remove mode                                    |
-| mint        | a count that's fine, "Last time", "Done", a done step              |
-| grape       | the name on the result, focus                                      |
-| the rest    | shows, and the ground a theme names for the Line-up                |
+| Token       | Used for                                                     |
+| ----------- | ------------------------------------------------------------ |
+| ground      | every screen's ground; text on marigold, tomato, mint, white |
+| panel       | the bar, cards, panels, icon and secondary buttons           |
+| raised      | a done step, chips and marks on a panel                      |
+| edge        | panel edges, the bar's top line, the line between steps      |
+| edge-mid    | secondary buttons, the add tile                              |
+| edge-strong | dashed outlines, the way back                                |
+| text-soft   | help lines, descriptions, unticked names, a step's choice    |
+| text-faint  | placeholders, disabled text                                  |
+| marigold    | the current step, ticked people, the chosen show, "You"      |
+| tomato      | the main button, a count that blocks, remove buttons         |
+| tomato-text | a reason that blocks, a refused name                         |
+| mint        | a count that's fine, "Last time", "Done", a done step        |
+| the rest    | shows, and the screens not yet restyled                      |
 
 ## Parts
 
-- **Sheet**: paper, ink outline, `--radius-card`, `--shadow`. Holds the team.
-- **Person tile**: four equal tiles across. Ticked: sun, `--shadow-small`, a
-  check in a paper box. Unticked: paper, an empty box. A long name wraps inside
-  its tile. In remove mode: paper, solid outline, and a round tomato ×.
+- **Header**: the logo (a marigold star, "Lucky", "You" in marigold), the
+  step pills, then sound, music and fullscreen as round panel buttons; the
+  music panel under ♪.
+- **Step pills**: numbered, joined by an edge line. The current one marigold;
+  a done one raised, with a mint check and what was chosen; the rest dashed.
+- **Person tile**: four across, `--radius-person`. Ticked: marigold, a
+  marigold check in a ground box. Unticked: no fill, dashed, an empty box. A
+  long name wraps inside its tile. In remove mode: raised, solid, and a round
+  tomato ×.
+- **Add tile**: panel: a plus, the field and a white "Add".
 - **Count pill**: "8 of 10 in", mint from 2 to 12 ticked, tomato otherwise.
-- **Notes**: paper; tomato-soft for a refused name.
-- **Buttons**: primary in tomato with `--shadow`; secondary in paper with
-  `--shadow-small`; quiet as underlined text; disabled in paper with a
-  dashed ink-soft outline, no shadow, and its reason.
-- **Step pills**: numbered; the current one in sun with a shadow; a done one
-  with a mint check and what was chosen there; the rest dashed.
-- **Bar**: paper along the bottom of every step before the show: the way back
-  left, the main button right, a status or reason between.
-- **Show card**: paper, `--radius-card`, `--shadow`: a round sticker with the
-  picture, "Last time", the name, the description, how many it takes, "+
-  Line-up" or why it can't run. Clicking chooses it: a sun band inside its
-  outline and a check.
-- **Postcard**: a theme's picture over its name, on paper; the chosen one in
-  sun with a check, or a die on "Surprise".
-- **Person card**: paper under each person on the ground: name, look in
-  words, die, pin; a sun ring inside when pinned; a sun star badge when they
-  suit the theme.
-- **Look sheet**: paper from the right over the Line-up, dimmed by ink at 45%:
-  the portrait on the theme's ground, "Surprise me", pin and options;
-  mint "Done".
-- **Music panel**: paper with `--shadow-small`, under the ♪ button.
+- **Buttons**: main in tomato with `--shadow-press`; secondary on panel;
+  outline (the bar's others) unfilled; quiet as underlined text; "Done" in
+  mint; disabled unfilled and dashed, with its reason beside it.
+- **Bar**: a panel along the bottom of every step before the show: the way
+  back left, the main button right, a status between, tomato-text when it
+  blocks, marigold for a hint.
+- **Show card**: panel: the show's round sticker, "Last time", the name, the
+  description, chips for how many it takes and "+ Line-up", or why it can't
+  run. Chosen: a marigold ring and check badge.
+- **Chosen-show panel**: the show's name and line, what it takes and what
+  comes next.
 
 ## Screens
 
-**Who's in.** The header: logo, step pills, sound, music, fullscreen. Then
-"Who's in today?", the count pill and a line under it; "Everyone", "No one"
-and "Remove people" right. The sheet scrolls; the add field is its last tile.
-Remove mode turns the sheet tomato-soft and dashed, its hint beside "Done". A
-first visit has its own heading and a note.
+**Who's in.** "Who's in today?", the count pill and a line under it;
+"Everyone", "No one" and "Remove people" right. The tiles sit on the ground
+and scroll; the add tile is last. Remove mode puts its hint in the bar beside
+"Done". A first visit has its own heading and a note.
 
 **Pick a show.** The heading, a mint "3 in" pill and the names. Show cards
-in one row; under them, a paper panel: the chosen show, what it takes, what
-comes next. A show with a line-up adds "Start with last line-up" to the bar.
+in one row; under them, the chosen-show panel. A show with a line-up adds
+"Start with last line-up" to the bar.
 
-**Line-up.** The heading; "1 · Track: Autumn" over the postcards; "2 ·
-Racers", "Deal from" (paper pills, sun when on) and "Shuffle
-everyone"; everyone in one row on the theme's ground, sky over an ink-topped
-floor, over their cards. The bar names the theme and pins.
+**Line-up.** "1 · Track: Autumn" over paper postcards; "2 · Racers", "Deal
+from" and "Shuffle everyone"; everyone in one row on the theme's ground, over
+paper cards. A look opens in a paper sheet.
 
-**Show.** The scenario owns the window ([show.feature](specs/show.feature));
-the volume pill is paper.
+**Show.** The scenario owns the window ([show.feature](specs/show.feature)).
 
-**Result.** The sky with a few clouds and star stickers. A paper card tilted
-−1.5° with `--shadow-big`: "Lucky you," over the name, then the sun ribbon
-"Sorry for your win". Under the card: the primary, secondary and quiet
-buttons, and a disabled button's reason under the row.
+**Result.** Sky, clouds and stars; a tilted paper card: "Lucky you," over the
+name, the sun ribbon "Sorry for your win"; the buttons under it.
 
 ## Shows
 

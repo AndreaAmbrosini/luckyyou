@@ -82,6 +82,29 @@ export function PlayIcon(props: IconProps) {
   );
 }
 
+/** The logo's four-point star, filled. */
+export function SparkleIcon({ size = 24 }: IconProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+      <path
+        d="M12 1.5l2.6 7.9 7.9 2.6-7.9 2.6-2.6 7.9-2.6-7.9-7.9-2.6 7.9-2.6z"
+        fill="currentColor"
+      />
+    </svg>
+  );
+}
+
+export function PeopleIcon(props: IconProps) {
+  return (
+    <Icon weight={2.6} {...props}>
+      <circle cx="9" cy="9" r="3" />
+      <path d="M3.5 19c.8-3 3-4.5 5.5-4.5s4.7 1.5 5.5 4.5" />
+      <circle cx="17" cy="8" r="2.5" />
+      <path d="M15.5 13.5c2.2 0 4 1.3 4.8 4" />
+    </Icon>
+  );
+}
+
 export function SoundIcon({ on, ...props }: IconProps & { on: boolean }) {
   return (
     <Icon weight={2.6} {...props}>

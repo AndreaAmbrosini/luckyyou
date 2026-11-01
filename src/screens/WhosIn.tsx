@@ -107,7 +107,7 @@ export function WhosIn({ people, onNext }: { people: People; onNext(): void }) {
               <Button onClick={() => people.tickAll(true)}>Everyone</Button>
               <Button onClick={() => people.tickAll(false)}>No one</Button>
               <Button ref={removePeople} onClick={startRemoving}>
-                <TrashIcon size={18} />
+                <TrashIcon size={22} />
                 Remove people
               </Button>
             </div>
@@ -146,7 +146,7 @@ export function WhosIn({ people, onNext }: { people: People; onNext(): void }) {
                       data-remove={person.name}
                       onClick={() => remove(person.name)}
                     >
-                      <CrossIcon size={18} />
+                      <CrossIcon size={22} />
                     </button>
                   </div>
                 ) : (
@@ -161,7 +161,7 @@ export function WhosIn({ people, onNext }: { people: People; onNext(): void }) {
                       }}
                     />
                     <span className={styles.box} aria-hidden="true">
-                      {person.ticked && <CheckIcon size={20} />}
+                      {person.ticked && <CheckIcon size={24} />}
                     </span>
                     <span className={styles.name} dir="auto">
                       {person.name}
@@ -173,7 +173,7 @@ export function WhosIn({ people, onNext }: { people: People; onNext(): void }) {
             {!inRemoveMode && (
               <li className={styles.item}>
                 <form className={styles.add} onSubmit={add}>
-                  <PlusIcon size={20} />
+                  <PlusIcon size={24} />
                   <label htmlFor={fieldId} className="visually-hidden">
                     Add a name
                   </label>
@@ -203,7 +203,7 @@ export function WhosIn({ people, onNext }: { people: People; onNext(): void }) {
       <Bar>
         {inRemoveMode ? (
           <>
-            <p className={layout.say}>Click × to take someone off the team.</p>
+            <p className={`${layout.say} ${styles.hint}`}>Click × to take someone off the team.</p>
             <span className={layout.spacer} />
             <Button variant="done" onClick={stopRemoving}>
               Done
@@ -214,7 +214,7 @@ export function WhosIn({ people, onNext }: { people: People; onNext(): void }) {
             {/* Not live: the count pill already says each change. */}
             {!blocked && <p className={layout.say}>Ready: {ticked} people. Next, pick a show.</p>}
             {refusal && (
-              <p className={`${layout.note} ${layout.warning}`} role="alert">
+              <p className={layout.note} role="alert">
                 {refusal}
               </p>
             )}
