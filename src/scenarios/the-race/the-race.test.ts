@@ -71,7 +71,6 @@ describeSpec(await loadFeature('./the-race.feature'), ({ Rule }) => {
       And('its description is {string}', (_, text: string) =>
         expect(theRace.description).toBe(text),
       );
-      And('its picture is 🏁', () => expect(theRace.card).toEqual({ emoji: '🏁' }));
       And('it takes {int} to {int} people', (_, min: number, max: number) =>
         expect(theRace.people).toEqual({ min, max }),
       );

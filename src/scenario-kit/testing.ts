@@ -4,6 +4,7 @@
 import { gsap } from 'gsap';
 import type { ChosenLook, Scenario, Show } from './contract';
 import { runScenario, type RunOutcome } from './run';
+import { driveClockByHand } from './time';
 
 export { describeSpec } from '../../specs/support/spec';
 
@@ -152,33 +153,6 @@ const settle = () =>
   new Promise<void>((resolve) =>
     (globalThis as unknown as { setImmediate(callback: () => void): void }).setImmediate(resolve),
   );
-
-/**
- * Takes GSAP's clock off the browser's frames, so only `moveTo` moves it, as
- * https://gsap.com/docs/v3/GSAP/gsap.updateRoot()/ shows.
- */
-function driveClockByHand() {
-  const { ticker, globalTimeline } = gsap;
-  const wake = ticker.wake;
-  ticker.remove(gsap.updateRoot);
-  ticker.sleep();
-  // Making an animation wakes the ticker, which would ask for frames again.
-  ticker.wake = () => undefined;
-  // updateRoot takes the time before the root's start time is taken off. A
-  // seek that gives an animation a negative start moves that start time, so
-  // the root's own time can't stand in for it.
-  const start = globalTimeline.startTime() + globalTimeline.time() / globalTimeline.timeScale();
-  return {
-    moveTo(seconds: number) {
-      gsap.updateRoot(start + seconds);
-    },
-    release() {
-      ticker.wake = wake;
-      gsap.updateRoot(ticker.time);
-      ticker.add(gsap.updateRoot);
-    },
-  };
-}
 
 interface Listening {
   readonly target: EventTarget;

@@ -65,9 +65,10 @@ file says how they're used.
 - **Bar**: a panel along the bottom of every step before the show: the way
   back left, the main button right, a status between, tomato-text when it
   blocks, marigold for a hint.
-- **Show card**: panel: the show's round sticker, "Last time", the name, the
-  description, chips for how many it takes and "+ Line-up", or why it can't
-  run. Chosen: a marigold ring and check badge.
+- **Show card**: panel: a 16 : 9 still from the show, `--radius-picture`,
+  "Last time" over its top left; the name, the description, chips for how
+  many it takes and "+ Line-up", or why it can't run. Chosen: a marigold ring
+  and check badge. Can't run: dashed, the still dimmed.
 - **Chosen-show panel**: the show's name and line, what it takes and what
   comes next.
 - **Sticker**: white on the ground, unoutlined. Its controls have an ink

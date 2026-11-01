@@ -16,7 +16,6 @@ Feature: The Race
     Scenario: The picker shows The Race
       Then its name is "The Race"
       And its description is "Whoever crosses the line first gets the job."
-      And its picture is 🏁
       And it takes 2 to 8 people
       And it has a line-up
 

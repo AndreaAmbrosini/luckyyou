@@ -12,7 +12,6 @@ Feature: Don't Wake the Dog
     Scenario: The picker shows Don't Wake the Dog
       Then its name is "Don't Wake the Dog"
       And its description is "Whoever wakes the dog gets the job."
-      And its picture is 🐶
       And it takes 2 to 12 people
 
   Rule: It wakes on the unlucky person's turn

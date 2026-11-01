@@ -7,12 +7,14 @@
 
 import { defineScenario } from '../../scenario-kit';
 import { playDontWakeTheDog } from './play';
+// Made with `npm run still -- dont-wake-the-dog 6 1.7 50 62`.
+import still from './still.webp';
 
 export default defineScenario({
   id: 'dont-wake-the-dog',
   name: "Don't Wake the Dog",
   description: 'Whoever wakes the dog gets the job.',
-  card: { emoji: '🐶' },
+  still,
   people: { min: 2, max: 12 },
   play: playDontWakeTheDog,
 });

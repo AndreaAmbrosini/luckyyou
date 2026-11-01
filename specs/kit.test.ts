@@ -13,6 +13,7 @@ import { bob, shake } from '../src/scenario-kit/motion';
 import { eliminationOrder } from '../src/scenario-kit/order';
 import { createRandom } from '../src/scenario-kit/random';
 import { spread } from '../src/scenario-kit/stage';
+import { STILL, stillCrop } from '../src/scenario-kit/still';
 import { drums, follow, melody, oomPah, type Music, type Note } from '../src/scenario-kit/music';
 import { createSound, type Cue } from '../src/scenario-kit/sound';
 import { runShow, type ShowRecord } from '../src/scenario-kit/testing';
@@ -216,6 +217,33 @@ describeSpec(await loadFeature('./kit.feature'), ({ Rule }) => {
         for (const [, text] of asked) {
           for (const name of PICK.names) expect(text).toContain(name);
         }
+      });
+    });
+  });
+
+  Rule('A show brings a still for its card', ({ RuleScenario }) => {
+    RuleScenario('A still is cut from the stage', ({ When, Then, And }) => {
+      let crop: ReturnType<typeof stillCrop>;
+      When(
+        'a still is cut {number} times closer, at {int}% across and {int}% down',
+        (_, zoom: number, across: number, down: number) => {
+          crop = stillCrop({ zoom, focus: { x: across / 100, y: down / 100 } });
+        },
+      );
+      Then("it shows 1/1.35 of the stage's width and height", () => {
+        expect(crop.width).toBeCloseTo(1280 / 1.35, 6);
+        expect(crop.height).toBeCloseTo(720 / 1.35, 6);
+      });
+      And(
+        'the point {int}% across and {int}% down is at the same place in the still as on the stage',
+        (_, across: number, down: number) => {
+          const [x, y] = [(across / 100) * 1280, (down / 100) * 720];
+          expect((x - crop.x) / crop.width).toBeCloseTo(across / 100, 6);
+          expect((y - crop.y) / crop.height).toBeCloseTo(down / 100, 6);
+        },
+      );
+      And('it is saved at {int} by {int} pixels', (_, width: number, height: number) => {
+        expect(STILL).toEqual({ width, height });
       });
     });
   });

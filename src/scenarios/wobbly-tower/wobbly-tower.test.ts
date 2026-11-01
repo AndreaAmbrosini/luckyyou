@@ -93,9 +93,6 @@ describeSpec(await loadFeature('./wobbly-tower.feature'), ({ Rule }) => {
       And('its description is {string}', (_, description: string) => {
         expect(wobblyTower.description).toBe(description);
       });
-      And('its picture is 🧱', () => {
-        expect(wobblyTower.card).toEqual({ emoji: '🧱' });
-      });
       And('it takes 2 to 12 people', () => {
         expect(wobblyTower.people).toEqual({ min: 2, max: 12 });
       });

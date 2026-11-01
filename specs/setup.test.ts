@@ -369,22 +369,40 @@ describeSpec(await loadFeature('./setup.feature'), ({ Rule }) => {
   });
 
   Rule('Scenario cards show whether they can run', ({ RuleScenario }) => {
-    RuleScenario("A card shows the scenario's name, description and picture", ({ Given, Then }) => {
-      Given(
-        'a scenario named {string}, described as {string}, pictured as {any}',
-        async (_, name: string, description: string, emoji: string) => {
-          storeTicked(TEAM.slice(0, 3));
-          renderApp({ scenarios: [fakeScenario({ name, description, card: { emoji } })] });
-          await moveOnToShows();
-        },
-      );
-      Then('its card shows the name, the description and the picture', () => {
-        const card = within(showCard('Hot Potato'));
-        expect(card.getByText('Hot Potato')).toBeInTheDocument();
-        expect(card.getByText('A bomb goes round the circle.')).toBeInTheDocument();
-        expect(card.getByText('💣')).toBeInTheDocument();
-      });
-    });
+    RuleScenario(
+      "A card opens with the show's still, then its name and description",
+      ({ Given, Then, And }) => {
+        const potato = fakeScenario({
+          name: 'Hot Potato',
+          description: 'A bomb goes round the circle.',
+          still: '/stills/hot-potato.webp',
+        });
+        Given(
+          'a scenario named {string}, described as {string}',
+          async (_, name: string, description: string) => {
+            expect([potato.name, potato.description]).toEqual([name, description]);
+            storeTicked(TEAM.slice(0, 3));
+            renderApp({ scenarios: [potato] });
+            await moveOnToShows();
+          },
+        );
+        Then("its card opens with the show's still, 16 : 9", () => {
+          const still = showCard('Hot Potato').querySelector('img')!;
+          expect(still).toHaveAttribute('src', potato.still);
+          // The card is named by the show's name; the still adds nothing to read out.
+          expect(still).toHaveAttribute('alt', '');
+          expect(getComputedStyle(still.parentElement!).aspectRatio).toBe('16 / 9');
+        });
+        And('the name and the description follow it', () => {
+          const card = within(showCard('Hot Potato'));
+          const still = showCard('Hot Potato').querySelector('img')!;
+          for (const text of ['Hot Potato', 'A bomb goes round the circle.']) {
+            const follows = still.compareDocumentPosition(card.getByText(text));
+            expect(follows & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+          }
+        });
+      },
+    );
 
     RuleScenario(
       "A card that can't run with today's count is disabled, with the reason",

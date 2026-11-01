@@ -39,7 +39,7 @@ Feature: Scenarios
         | a name over 30 characters                 |
         | a description over 90 characters          |
         | a description on two lines                |
-        | no card emoji or image                    |
+        | no still                                  |
         | a minimum below 2 people                  |
         | a maximum above 12 people                 |
         | a minimum above its maximum               |
@@ -49,6 +49,10 @@ Feature: Scenarios
 
     Scenario: Its metadata is valid
       Then the scenario's metadata has none of the problems above
+
+    Scenario: Its card has a still from the show
+      Then the scenario's still is a WebP picture in its own folder
+      And it is 16 : 9 and under 100 KB
 
     Scenario Outline: At its <size> head count, unlucky person <position>, the show ends within 30 seconds and cleans up
       Given the scenario's <size> head count, with the unlucky person <position> in the list

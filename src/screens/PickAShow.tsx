@@ -22,8 +22,6 @@ export interface PickAShowProps {
   onStartWithLastLineUp(scenario: Scenario): void;
 }
 
-const ART = [styles.art0, styles.art1, styles.art2];
-
 /** Step 2: clicking a show chooses it; the bar's main button starts it, or opens its Line-up. */
 export function PickAShow(props: PickAShowProps) {
   const { names, scenarios, lastScenario, chosen, onChoose, onBack } = props;
@@ -48,7 +46,7 @@ export function PickAShow(props: PickAShowProps) {
       <main className={layout.main}>
         <div className={layout.titleRow}>
           <div className={layout.group}>
-            <h1 className={layout.heading}>Pick a show</h1>
+            <h1 className={`${layout.heading} ${styles.heading}`}>Pick a show</h1>
             <p className={styles.whoIsIn}>
               <span className={`${layout.pill} ${styles.count}`}>{count} in</span>{' '}
               {names.map((name, index) => (
@@ -62,7 +60,7 @@ export function PickAShow(props: PickAShowProps) {
         </div>
 
         <ul className={styles.cards} aria-label="Shows">
-          {scenarios.map((scenario, index) => {
+          {scenarios.map((scenario) => {
             const runs = canRun(scenario);
             const nameId = `${id}-${scenario.id}-name`;
             const aboutId = `${id}-${scenario.id}-about`;
@@ -88,25 +86,21 @@ export function PickAShow(props: PickAShowProps) {
                       <CheckIcon size={26} />
                     </span>
                   )}
-                  <span className={styles.top}>
-                    <span className={`${styles.art} ${ART[index % ART.length]}`} aria-hidden="true">
-                      {'emoji' in scenario.card ? (
-                        scenario.card.emoji
-                      ) : (
-                        <img src={scenario.card.image} alt="" />
-                      )}
+                  <span className={styles.still}>
+                    <img src={scenario.still} alt="" />
+                  </span>
+                  {last && (
+                    <span id={badgeId} className={`${styles.badge} ${styles.last}`}>
+                      Last time
                     </span>
-                    {last && (
-                      <span id={badgeId} className={`${styles.badge} ${styles.last}`}>
-                        Last time
-                      </span>
-                    )}
-                  </span>
-                  <span id={nameId} className={styles.name}>
-                    {scenario.name}
-                  </span>
-                  <span id={aboutId} className={styles.about}>
-                    {scenario.description}
+                  )}
+                  <span className={styles.words}>
+                    <span id={nameId} className={styles.name}>
+                      {scenario.name}
+                    </span>
+                    <span id={aboutId} className={styles.about}>
+                      {scenario.description}
+                    </span>
                   </span>
                   <span className={styles.tags}>
                     {!runs && (

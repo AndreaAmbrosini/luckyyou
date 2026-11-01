@@ -88,9 +88,10 @@ Feature: Setting up a pick
 
   Rule: Scenario cards show whether they can run
 
-    Scenario: A card shows the scenario's name, description and picture
-      Given a scenario named "Hot Potato", described as "A bomb goes round the circle.", pictured as 💣
-      Then its card shows the name, the description and the picture
+    Scenario: A card opens with the show's still, then its name and description
+      Given a scenario named "Hot Potato", described as "A bomb goes round the circle."
+      Then its card opens with the show's still, 16 : 9
+      And the name and the description follow it
 
     Scenario: A card that can't run with today's count is disabled, with the reason
       Given a scenario that takes 3 to 6 people

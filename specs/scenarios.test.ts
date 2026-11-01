@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import { loadFeature } from '@amiceli/vitest-cucumber';
 import { expect, vi } from 'vitest';
 import { catalogue, scenarioModules } from '../src/catalogue/catalogue';
@@ -95,10 +96,10 @@ const PROBLEMS: Record<string, { folder: string; scenario: object; why: string }
     scenario: fakeScenario({ name: 'Hot Potato', description: 'Pass it on.\nQuickly.' }),
     why: 'its description is on more than one line',
   },
-  'no card emoji or image': {
+  'no still': {
     folder: 'hot-potato',
-    scenario: fakeScenario({ name: 'Hot Potato', card: {} as { emoji: string } }),
-    why: 'its card has no emoji or image',
+    scenario: { ...fakeScenario({ name: 'Hot Potato' }), still: undefined },
+    why: 'it has no still',
   },
   'a minimum below 2 people': {
     folder: 'hot-potato',
@@ -124,6 +125,19 @@ const PROBLEMS: Record<string, { folder: string; scenario: object; why: string }
     why: `its development-only flag isn't true or false`,
   },
 };
+
+/** A WebP file's width and height, from its first chunk: lossy, lossless or extended. */
+function webpSize(file: Buffer) {
+  const chunk = file.subarray(12, 16).toString('latin1');
+  if (chunk === 'VP8 ') {
+    return { width: file.readUInt16LE(26) & 0x3fff, height: file.readUInt16LE(28) & 0x3fff };
+  }
+  if (chunk === 'VP8L') {
+    const bits = file.readUInt32LE(21);
+    return { width: (bits & 0x3fff) + 1, height: ((bits >> 14) & 0x3fff) + 1 };
+  }
+  return { width: file.readUIntLE(24, 3) + 1, height: file.readUIntLE(27, 3) + 1 };
+}
 
 const XSS = '<img src=x onerror=alert(1)>';
 const LONGEST = 'Maria Giulia Bianchi-Rossi Jr.';
@@ -234,6 +248,28 @@ describeSpec(await loadFeature('./scenarios.feature'), ({ Rule }) => {
           expect(validateScenario(value, folderOf(path)), path).toEqual([]);
         }
         expect(validateScenario(template, 'template')).toEqual([]);
+      });
+    });
+
+    RuleScenario('Its card has a still from the show', ({ Then, And }) => {
+      /** Each folder's still, as the file its URL points at. */
+      const stills = Object.entries(folders).map(([path, value]) => ({
+        folder: folderOf(path),
+        url: (value as Scenario).still,
+      }));
+      Then("the scenario's still is a WebP picture in its own folder", () => {
+        for (const { folder, url } of stills) {
+          expect(url, folder).toMatch(new RegExp(`^/src/scenarios/${folder}/[^/]+\\.webp$`));
+          expect(readFileSync(`.${url}`).subarray(8, 12).toString('latin1'), folder).toBe('WEBP');
+        }
+      });
+      And('it is 16 : 9 and under 100 KB', () => {
+        for (const { folder, url } of stills) {
+          const file = readFileSync(`.${url}`);
+          const { width, height } = webpSize(file);
+          expect(width * 9, folder).toBe(height * 16);
+          expect(file.length, folder).toBeLessThan(100 * 1024);
+        }
       });
     });
 
