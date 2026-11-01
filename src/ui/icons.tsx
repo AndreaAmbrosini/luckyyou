@@ -74,6 +74,14 @@ export function ArrowRightIcon(props: IconProps) {
   );
 }
 
+export function PlayIcon(props: IconProps) {
+  return (
+    <Icon weight={3} {...props}>
+      <path d="M7 4.5v15l12-7.5z" />
+    </Icon>
+  );
+}
+
 export function SoundIcon({ on, ...props }: IconProps & { on: boolean }) {
   return (
     <Icon weight={2.6} {...props}>

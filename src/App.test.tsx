@@ -3,7 +3,9 @@ import { describe, expect, it } from 'vitest';
 import {
   choose,
   currentUser,
+  mainButton,
   moveOnToShows,
+  pickShow,
   renderApp,
   resultHeading,
   showCard,
@@ -14,13 +16,13 @@ import { fakeScenario } from '../specs/support/fake-scenarios';
 const PEOPLE = ['Anna', 'Ben', 'Carla'];
 
 describe('starting a show', () => {
-  it('starts one show with one pick when a card is double-clicked', async () => {
+  it('starts one show with one pick when Start is double-clicked', async () => {
     const scenario = fakeScenario({ name: 'Shark Bait' });
     storeTicked(PEOPLE);
     renderApp({ scenarios: [scenario] });
     await moveOnToShows();
 
-    await currentUser().dblClick(showCard('Shark Bait'));
+    await currentUser().dblClick(mainButton());
     await resultHeading();
 
     expect(scenario.runs).toHaveLength(1);
@@ -28,24 +30,26 @@ describe('starting a show', () => {
 });
 
 describe('the keyboard focus', () => {
-  it('is back on the played card after Esc cancels the show', async () => {
+  it('is back on Start, with the played show chosen, after Esc cancels the show', async () => {
     const endless = fakeScenario({ name: 'Snail Race', play: () => new Promise(() => undefined) });
     storeTicked(PEOPLE);
     renderApp({ scenarios: [fakeScenario({ name: 'Hot Potato' }), endless] });
     await moveOnToShows();
-    await currentUser().click(showCard('Snail Race'));
+    await pickShow('Snail Race');
     await waitFor(() => expect(endless.runs).toHaveLength(1));
 
     await currentUser().keyboard('{Escape}');
 
-    expect(showCard('Snail Race')).toHaveFocus();
+    expect(showCard('Snail Race')).toHaveAttribute('aria-pressed', 'true');
+    expect(mainButton()).toHaveAccessibleName('Start Snail Race');
+    expect(mainButton()).toHaveFocus();
   });
 
   it('is on the new heading after Run again', async () => {
     storeTicked(PEOPLE);
     renderApp({ scenarios: [fakeScenario()] });
     await moveOnToShows();
-    await currentUser().click(showCard('Fake Show'));
+    await pickShow('Fake Show');
     await resultHeading();
 
     await choose('Run again');

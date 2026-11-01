@@ -36,9 +36,21 @@ export default function App({ scenarios = catalogue }: AppProps) {
   const people = usePeople();
   const [settings, changeSettings] = useSettings();
   const [screen, setScreen] = useState<Screen>({ name: 'whos-in' });
+  // The show clicked on Pick a show, by id, kept while the app is open.
+  const [picked, setPicked] = useState<string | null>(null);
   const looks = useLooks();
 
   const ticked = people.list.filter((person) => person.ticked).map((person) => person.name);
+  // The show clicked, else the one played last time, else the first: of those that take today's count.
+  const runnable = scenarios.filter(
+    ({ people }) => ticked.length >= people.min && ticked.length <= people.max,
+  );
+  const chosen =
+    screen.name === 'line-up'
+      ? screen.scenario
+      : (runnable.find(({ id }) => id === picked) ??
+        runnable.find(({ id }) => id === settings.lastScenario) ??
+        runnable[0]);
 
   /** Picks the unlucky person, then hands the show the window (decision 0005). */
   function start(scenario: Scenario, names: readonly string[], looks?: Looks, theme?: string) {
@@ -59,7 +71,8 @@ export default function App({ scenarios = catalogue }: AppProps) {
   }
 
   /** A show with a line-up opens it first; any other starts at once. */
-  function choose(scenario: Scenario) {
+  function next(scenario: Scenario) {
+    setPicked(scenario.id);
     if (scenario.lineUp) {
       setScreen({
         name: 'line-up',
@@ -71,6 +84,11 @@ export default function App({ scenarios = catalogue }: AppProps) {
     } else {
       start(scenario, ticked);
     }
+  }
+
+  /** Skips a show's Line-up: everyone in their kept look, on the kept theme or one drawn afresh. */
+  function startWithLastLineUp(scenario: Scenario) {
+    start(scenario, ticked, looks.open(scenario, ticked), looks.openTheme(scenario)?.name);
   }
 
   if (screen.name === 'show') {
@@ -106,7 +124,12 @@ export default function App({ scenarios = catalogue }: AppProps) {
   return (
     <div className={layout.page}>
       <Header
-        step={STEP[screen.name]}
+        steps={[
+          { label: "Who's in", chosen: String(ticked.length) },
+          { label: 'Show', chosen: chosen?.name },
+          ...(chosen?.lineUp ? [{ label: 'Line-up' }] : []),
+        ]}
+        current={STEP[screen.name]}
         muted={settings.muted}
         onMutedChange={(muted) => changeSettings({ muted })}
         music={settings.music}
@@ -139,15 +162,19 @@ export default function App({ scenarios = catalogue }: AppProps) {
           names={ticked}
           scenarios={scenarios}
           lastScenario={settings.lastScenario}
+          chosen={chosen}
+          onChoose={(scenario) => setPicked(scenario.id)}
           onBack={() => setScreen({ name: 'whos-in' })}
-          onStart={choose}
+          onNext={next}
+          onStartWithLastLineUp={startWithLastLineUp}
         />
       )}
     </div>
   );
 }
 
-const STEP = { 'whos-in': 1, shows: 2, 'line-up': 3 } as const;
+/** Each step's index in the header's steps. */
+const STEP = { 'whos-in': 0, shows: 1, 'line-up': 2 } as const;
 
 function withoutLooks(looks: Looks, name: string): Looks {
   const left = new Map(looks);

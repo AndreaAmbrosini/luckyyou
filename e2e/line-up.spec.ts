@@ -12,7 +12,8 @@ test("The Race's start line fits 1280 by 800 with 8 people", async ({ page }) =>
   }, team);
   await page.reload();
   await page.getByRole('button', { name: 'Next: pick a show' }).click();
-  await page.getByRole('button', { name: 'The Race' }).click();
+  await page.getByRole('button', { name: 'The Race', exact: true }).click();
+  await page.getByRole('button', { name: 'Next: line up the racers' }).click();
 
   /** True when all of `locator` is inside `box`, the window unless given. */
   const inView = async (locator: Locator, box = { x: 0, y: 0, width: 1280, height: 800 }) => {

@@ -6,10 +6,10 @@ import {
   choose,
   currentUser,
   moveOnToShows,
+  pickShow,
   quoted,
   renderApp,
   resultHeading,
-  showCard,
   startShow,
   storeTicked,
   stubDraws,
@@ -142,7 +142,7 @@ describeSpec(await loadFeature('./pick.feature'), ({ Rule }) => {
           storeTicked(quoted(ticked), ['Zoe']);
           renderApp({ scenarios: [scenario] });
           await moveOnToShows();
-          await currentUser().click(showCard('Hat Show'));
+          await pickShow('Hat Show');
         });
         And('each of them has a different look', async () => {
           const colours = ['Tomato', 'Sun', 'Mint'];

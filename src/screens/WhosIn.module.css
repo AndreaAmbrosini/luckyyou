@@ -25,7 +25,7 @@
 
 .grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(15.625rem, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   align-content: start;
   gap: 0.875rem;
   margin: 0;
@@ -38,8 +38,8 @@
   align-items: center;
   gap: 0.75rem;
   height: 100%;
-  min-height: 4rem;
-  padding: 0.5rem 1rem 0.5rem 0.75rem;
+  min-height: 5.75rem;
+  padding: 0.5rem 1rem 0.5rem 0.875rem;
   border: var(--line) dashed var(--color-ink-soft);
   border-radius: var(--radius-tile);
   background-color: var(--color-paper);
@@ -105,13 +105,14 @@
 }
 
 .add {
-  display: inline-flex;
+  display: flex;
   align-items: center;
   gap: 0.5rem;
-  min-height: 3.5rem;
-  padding: 0 0.375rem 0 1rem;
+  height: 100%;
+  min-height: 5.75rem;
+  padding: 0 0.75rem 0 1rem;
   border: var(--line) solid var(--color-ink);
-  border-radius: var(--radius-pill);
+  border-radius: var(--radius-tile);
   background-color: var(--color-paper);
   color: var(--color-ink-soft);
 }
@@ -127,7 +128,8 @@
 }
 
 .field {
-  width: 10rem;
+  flex-grow: 1;
+  width: 0;
   border: none;
   background-color: transparent;
   color: var(--color-ink);

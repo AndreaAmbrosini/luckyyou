@@ -16,6 +16,7 @@ import {
   currentUser,
   fillStorage,
   moveOnToShows,
+  pickShow,
   pickerNames,
   quoted,
   reload,
@@ -62,7 +63,7 @@ async function openLineUp(names: readonly string[], scenario: FakeScenario) {
   storeTicked(names, ['Zoe']);
   renderApp({ scenarios: [scenario] });
   await moveOnToShows();
-  await currentUser().click(showCard(scenario.name));
+  await pickShow(scenario.name);
 }
 
 const tileList = () => screen.getByRole('list', { name: "Today's people" });
@@ -195,64 +196,28 @@ const PROBLEMS: Record<string, { lineUp: Partial<LineUp>; why: string }> = {
 
 describeSpec(await loadFeature('./line-up.feature'), ({ Rule }) => {
   Rule('A show with a line-up opens it first', ({ RuleScenario }) => {
-    RuleScenario(
-      'Clicking a show with a line-up opens its Line-up',
-      ({ Given, And, When, Then }) => {
-        const scenario = hatShow();
-        let names: string[] = [];
-        Given('{any} are ticked', (_, ticked: string) => {
-          names = quoted(ticked);
-          storeTicked(names, ['Zoe']);
-          renderApp({ scenarios: [scenario] });
-        });
-        And('I moved on to the shows', moveOnToShows);
-        When('I click a show with a line-up', () => currentUser().click(showCard('Hat Show')));
-        Then(
-          "its Line-up shows a tile for each of {any}, in today's order, each drawn in their look",
-          () => {
-            expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('Line up the hats');
-            expect(tiles().map((each) => each.textContent)).toEqual(names);
-            tiles().forEach((each, index) => {
-              expect(fits(fakeLineUp(), lookOf(each))).toBe(true);
-              const drawn = each.querySelector<HTMLElement>('[data-person]')!;
-              expect(drawn.dataset.person).toBe(`${index + 1} ${names[index]}`);
-            });
-          },
-        );
-        And("the show hasn't started", () => {
-          expect(scenario.runs).toHaveLength(0);
-        });
-      },
-    );
-
-    RuleScenario('A show without a line-up still starts at once', ({ Given, When, Then }) => {
-      const plain = fakeScenario({ name: 'Plain Show' });
-      Given('I moved on to the shows', async () => {
-        storeTicked(['Anna', 'Ben']);
-        renderApp({ scenarios: [hatShow(), plain] });
+    RuleScenario("Next opens the chosen show's Line-up", ({ Given, When, Then, And }) => {
+      const scenario = hatShow();
+      let names: string[] = [];
+      Given('{any} are ticked, and a show with a line-up is chosen', async (_, ticked: string) => {
+        names = quoted(ticked);
+        storeTicked(names, ['Zoe']);
+        renderApp({ scenarios: [fakeScenario({ name: 'Plain Show' }), scenario] });
         await moveOnToShows();
+        await currentUser().click(showCard('Hat Show'));
       });
-      When('I click a show without a line-up', () => currentUser().click(showCard('Plain Show')));
-      Then('it starts', async () => {
-        await waitFor(() => expect(plain.runs).toHaveLength(1));
+      When('I press its "Next" button', () => choose('Next: line up the hats'));
+      Then("its Line-up shows {any}, in today's order, each drawn in their look", () => {
+        expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('Line up the hats');
+        expect(tiles().map((each) => each.textContent)).toEqual(names);
+        tiles().forEach((each, index) => {
+          expect(fits(fakeLineUp(), lookOf(each))).toBe(true);
+          const drawn = each.querySelector<HTMLElement>('[data-person]')!;
+          expect(drawn.dataset.person).toBe(`${index + 1} ${names[index]}`);
+        });
       });
-    });
-
-    RuleScenario('The steps show the third step', ({ When, Then, And }) => {
-      const steps = () =>
-        within(screen.getByRole('list', { name: 'Steps' }))
-          .getAllByRole('listitem')
-          .map((step) => step.textContent);
-      When("a show's Line-up is open", () => openLineUp(['Anna', 'Ben'], hatShow()));
-      Then('the steps read {any}, the last one current', (_, labels: string) => {
-        expect(steps()).toEqual(quoted(labels));
-        expect(screen.getByText('3 · Line-up')).toHaveAttribute('aria-current', 'step');
-      });
-      And('on the other screens there are only the first two', async () => {
-        await choose('Pick a show');
-        expect(steps()).toEqual(["1 · Who's in", '2 · Pick a show']);
-        await choose("Who's in");
-        expect(steps()).toEqual(["1 · Who's in", '2 · Pick a show']);
+      And("the show hasn't started", () => {
+        expect(scenario.runs).toHaveLength(0);
       });
     });
 
@@ -297,7 +262,7 @@ describeSpec(await loadFeature('./line-up.feature'), ({ Rule }) => {
       });
     });
 
-    RuleScenario('Going back keeps the looks', ({ Given, When, Then }) => {
+    RuleScenario('Going back keeps the looks, there and back', ({ Given, When, Then }) => {
       const scenario = hatShow();
       let chosen: ChosenLook;
       Given("I changed Anna's look on a show's Line-up", async () => {
@@ -309,9 +274,10 @@ describeSpec(await loadFeature('./line-up.feature'), ({ Rule }) => {
         );
         chosen = { ...before, hat: hat.name };
       });
-      When('I go back to the shows, then click that show again', async () => {
+      When('I go back to the shows, then press "Next" to its Line-up again', async () => {
         await choose('Pick a show');
-        await currentUser().click(showCard('Hat Show'));
+        expect(showCard('Hat Show')).toHaveAttribute('aria-pressed', 'true');
+        await choose('Next: line up the hats');
       });
       Then('Anna has the look I chose', () => {
         expect(lookOf(tile('Anna'))).toEqual(chosen);
@@ -673,7 +639,7 @@ describeSpec(await loadFeature('./line-up.feature'), ({ Rule }) => {
     /** Opens Hat Show's Line-up again after going back to the shows. */
     async function goBackAndReopen() {
       await choose('Pick a show');
-      await currentUser().click(showCard('Hat Show'));
+      await pickShow('Hat Show');
     }
 
     RuleScenario('Themes as postcards, "Surprise" first', ({ Given, When, Then, And }) => {
@@ -761,7 +727,7 @@ describeSpec(await loadFeature('./line-up.feature'), ({ Rule }) => {
       When("I reload the page and open that show's Line-up again", async () => {
         reload();
         await moveOnToShows();
-        await currentUser().click(showCard('Hat Show'));
+        await pickShow('Hat Show');
       });
       Then('the same theme is chosen', () => {
         expect(chosenCards()).toEqual([postcard('Party')]);
@@ -877,7 +843,7 @@ describeSpec(await loadFeature('./line-up.feature'), ({ Rule }) => {
         // And once more, on what "Surprise" drew.
         await choose("Change who's in");
         await moveOnToShows();
-        await currentUser().click(showCard('Hat Show'));
+        await pickShow('Hat Show');
         await currentUser().click(postcard('Surprise'));
         shown.push(pictured(postcard('Surprise'))!);
         await currentUser().click(startButton());
@@ -1201,7 +1167,7 @@ describeSpec(await loadFeature('./line-up.feature'), ({ Rule }) => {
       When("I reload the page and open that show's Line-up again", async () => {
         reload();
         await moveOnToShows();
-        await currentUser().click(showCard('Hat Show'));
+        await pickShow('Hat Show');
       });
       Then('Ben is still pinned', () => {
         expect(pin('Ben')).toHaveAttribute('aria-pressed', 'true');
@@ -1261,7 +1227,7 @@ describeSpec(await loadFeature('./line-up.feature'), ({ Rule }) => {
     async function reopen(name = 'Hat Show') {
       reload();
       await moveOnToShows();
-      await currentUser().click(showCard(name));
+      await pickShow(name);
     }
 
     RuleScenario('A look survives a reload', ({ Given, When, Then }) => {
@@ -1303,12 +1269,12 @@ describeSpec(await loadFeature('./line-up.feature'), ({ Rule }) => {
         storeTicked(['Anna', 'Ben']);
         renderApp({ scenarios: [hatShow(), other] });
         await moveOnToShows();
-        await currentUser().click(showCard('Other Show'));
+        await pickShow('Other Show');
         before = lookOf(tile('Anna'));
         await choose('Pick a show');
       });
       When("I change Anna's look in one of them", async () => {
-        await currentUser().click(showCard('Hat Show'));
+        await pickShow('Hat Show');
         await changeAnnasHat();
       });
       Then("her look in the other doesn't change", async () => {
@@ -1352,7 +1318,7 @@ describeSpec(await loadFeature('./line-up.feature'), ({ Rule }) => {
           // Blocked storage reads no team, so it is typed in for the visit.
           if (problem === 'blocked') for (const name of ['Anna', 'Ben']) await addName(name);
           await moveOnToShows();
-          await currentUser().click(showCard('Hat Show'));
+          await pickShow('Hat Show');
           chosen = await changeAnnasHat();
         });
         Then('Anna is drawn with the new look', () => {

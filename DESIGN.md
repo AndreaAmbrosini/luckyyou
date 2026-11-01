@@ -40,53 +40,52 @@ This file says how they're used.
 | paper       | sheets, cards, tiles, tags, fields, secondary buttons               |
 | ink         | text, outlines, shadows                                             |
 | ink-soft    | unticked names, disabled text, placeholders                         |
-| sun         | ticked people, the logo, the current step, the result's ribbon      |
+| sun         | ticked people, the chosen show, the current step, the logo, ribbon  |
 | tomato      | the primary button, a count that blocks, remove buttons             |
 | tomato-soft | refused-name notes, remove mode                                     |
-| mint        | a count that's fine, "Last time", "Done"                            |
+| mint        | a count that's fine, "Last time", "Done", a done step               |
 | grape       | the name on the result, focus                                       |
 | the rest    | shows only: sea, shark, glass, bark, skin tones, extra ring colours |
 
 ## Parts
 
 - **Sheet**: paper, ink outline, `--radius-card`, `--shadow`. Holds the team.
-- **Person tile**: a grid of equal tiles at least 250px wide. Ticked: sun,
-  `--shadow-small`, a check in a paper box. Unticked: paper, an empty box. A
-  long name wraps inside its tile. In remove mode: paper, solid outline, and a
-  round tomato ×.
+- **Person tile**: four equal tiles across. Ticked: sun, `--shadow-small`, a
+  check in a paper box. Unticked: paper, an empty box. A long name wraps inside
+  its tile. In remove mode: paper, solid outline, and a round tomato ×.
 - **Count pill**: "8 of 10 in", mint from 2 to 12 ticked, tomato otherwise.
-- **Notes**: a refused name's note in tomato-soft beside the add field; the
-  reason a button is disabled in paper beside or under it.
+- **Notes**: paper; tomato-soft for a refused name.
 - **Buttons**: primary in tomato with `--shadow`; secondary in paper with
   `--shadow-small`; quiet as underlined text; disabled in paper with a
   dashed ink-soft outline, no shadow, and its reason.
-- **Step pills**: one per step; the current one in sun with a shadow.
-- **Show card**: paper, `--radius-card`, `--shadow`, a round sticker with the
-  scenario's picture, its name, its description, and either a mint "Last
-  time" badge or a dashed badge with the reason it can't run. The whole card
-  is the button.
+- **Step pills**: numbered; the current one in sun with a shadow; a done one
+  with a mint check and what was chosen there; the rest dashed.
+- **Bar**: paper along the bottom of every step before the show: the way back
+  left, the main button right, a status or reason between.
+- **Show card**: paper, `--radius-card`, `--shadow`: a round sticker with the
+  picture, "Last time", the name, the description, how many it takes, "+
+  Line-up" or why it can't run. Clicking chooses it: a sun band inside its
+  outline and a check.
 - **Postcard**: a theme's picture over its name, on paper; the chosen one in
   sun with a check, or a die on "Surprise".
 - **Music panel**: paper with `--shadow-small`, under the ♪ button.
 
 ## Screens
 
-**Who's in.** A header with the logo, the step pills, sound, music and
-fullscreen.
-Then "Who's in today?" with the count pill, "Everyone" and "No one". The sheet
-fills the middle and scrolls if it must. The footer has the add field and
-"Remove people" on the left, the reason and "Next: pick a show" on the right.
-In remove mode the sheet turns tomato-soft with a dashed outline and the
-footer has its hint beside "Done". A first visit has a heading of its own
-and a note on the sheet.
+**Who's in.** The header: logo, step pills, sound, music, fullscreen. Then
+"Who's in today?", the count pill and a line under it; "Everyone", "No one"
+and "Remove people" right. The sheet scrolls; the add field is its last tile.
+Remove mode turns the sheet tomato-soft and dashed, its hint beside "Done". A
+first visit has its own heading and a note.
 
-**Pick a show.** "Who's in" to go back, the heading, then a mint "3 in" pill
-followed by the names. Show cards sit in a grid at least 300px wide.
+**Pick a show.** The heading, a mint "3 in" pill and the names. Show cards
+in one row; under them, a paper panel: the chosen show, what it takes, what
+comes next. A show with a line-up adds "Start with last line-up" to the bar.
 
-**Line-up.** "Pick a show" to go back, the heading, the themes' postcards,
-then the show's start with a die and a pin by each person, and a panel over
-it with the chosen one's options. Without a start: today's people in a row,
-the chosen one bigger under it.
+**Line-up.** The heading, the themes' postcards, then the show's start with
+a die and a pin by each person, and a panel over it with the chosen one's
+options. Without a start: today's people in a row, the chosen one bigger
+under it.
 
 **Show.** The scenario owns the window ([show.feature](specs/show.feature));
 the volume pill is paper.
