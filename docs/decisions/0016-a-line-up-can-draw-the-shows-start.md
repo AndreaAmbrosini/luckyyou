@@ -1,6 +1,6 @@
 # 0016 A line-up can draw the show's start
 
-Accepted 2026-10-31
+Superseded by 0019
 
 The Line-up read as a form: tiles and grids of options, nothing like the race
 about to start. The host also wants to keep some looks and leave the rest to

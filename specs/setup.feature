@@ -3,6 +3,34 @@ Feature: Setting up a pick
   today, then clicks the show to play. A show with a line-up adds a third:
   specs/line-up.feature.
 
+  # The new setup, in three build steps, in this order: 1. every step's frame,
+  # and choosing a show before starting it; 2. the Line-up's row on the
+  # theme's ground, its stars and its sheet; 3. dealing from the theme's
+  # choices (steps 2 and 3 in specs/line-up.feature). Each pending scenario
+  # says its step. Scenarios marked "Old design" describe the app before a
+  # step; the build deletes each one, with its steps, when the scenario that
+  # replaces it passes.
+
+  # Step 1.
+  @pending
+  Rule: Every step before the show has the same frame
+
+    Scenario: The way back on the left, the one main button on the right
+      When I am on Who's in, Pick a show or a Line-up
+      Then a bar along the bottom holds the way back, where there is one, on the left, and the step's main button on the right
+      And a main button that can't be pressed has its reason beside it
+
+    Scenario: A done step shows what was chosen there
+      Given 8 people are ticked and "The Race" is chosen
+      When its Line-up is open
+      Then the steps read "Who's in · 8", "Show · The Race" and "Line-up", the last one current
+      And each done step has a check mark
+
+    Scenario: The Line-up step shows once a show with a line-up is chosen
+      When I am on Pick a show
+      Then the steps read "Who's in" and "Show" while the chosen show has no line-up
+      And "Line-up" joins them as soon as a show with a line-up is chosen
+
   Rule: Moving on needs 2 to 12 ticked people
 
     Scenario Outline: Moving on with <ticked> ticked
@@ -36,6 +64,8 @@ Feature: Setting up a pick
       When I move on to the shows
       Then "ليلى", "Anna" and "Ben" each read in their own direction
 
+    # Old design: replaced by "Clicking a show chooses it, and nothing starts"
+    # and "Start plays the chosen show" (step 1).
     Scenario: Clicking a show starts it with today's people
       Given "Anna", "Ben" and "Carla" are ticked
       And I moved on to the shows
@@ -47,6 +77,34 @@ Feature: Setting up a pick
       And I moved on to the shows
       When I go back to who's in
       Then "Anna" and "Ben" are still ticked
+
+  # Step 1.
+  @pending
+  Rule: Choosing a show, then starting it
+
+    Scenario: Clicking a show chooses it, and nothing starts
+      Given "Anna", "Ben" and "Carla" are ticked
+      And I moved on to the shows
+      When I click "Shark Bait"
+      Then "Shark Bait" is chosen, marked by a check mark as well as by colour
+      And under the shows, a panel names it, says how many people it takes, and that Start plays it at once
+      And the show hasn't started
+
+    Scenario: Start plays the chosen show
+      Given "Anna", "Ben" and "Carla" are ticked, and "Shark Bait" is chosen
+      When I press "Start Shark Bait"
+      Then Shark Bait starts with "Anna", "Ben" and "Carla"
+
+    Scenario: A show with a line-up leads to it
+      When I choose "The Race"
+      Then the panel says its Line-up comes next
+      And the main button reads "Next: line up the racers", from the line-up's heading
+
+    Scenario: Start with last line-up
+      Given "The Race" is chosen, and its Line-up was last left on "Autumn"
+      When I press "Start with last line-up"
+      Then The Race starts at once, everyone in the look kept for them, on "Autumn"
+      And a Line-up last left on "Surprise" draws its theme afresh
 
   Rule: Scenario cards show whether they can run
 
@@ -62,17 +120,38 @@ Feature: Setting up a pick
 
   Rule: The show played last time is ready to play again
 
+    # Old design: replaced by "The show played last time is chosen, and Enter
+    # goes on with it" (step 1).
     Scenario: The show played last time is marked and has the focus
       Given I played "Hot Potato" on my last visit
       When I move on to the shows
       Then "Hot Potato" is marked "Last time"
       And it has the keyboard focus, so Enter plays it again
 
+    # Step 1.
+    @pending
+    Scenario: The show played last time is chosen, and Enter goes on with it
+      Given I played "Hot Potato" on my last visit
+      When I move on to the shows
+      Then "Hot Potato" is chosen and marked "Last time"
+      And the main button has the keyboard focus, so Enter starts it again
+
+    # Old design: replaced by "If the last show can't run today, the first one
+    # that can is chosen" (step 1).
     Scenario: If the last show can't run today, the first one that can has the focus
       Given I played "Hot Potato" on my last visit, and it takes at most 6 people
       And 8 people are ticked
       When I move on to the shows
       Then the first scenario that takes 8 people has the keyboard focus
+
+    # Step 1.
+    @pending
+    Scenario: If the last show can't run today, the first one that can is chosen
+      Given I played "Hot Potato" on my last visit, and it takes at most 6 people
+      And 8 people are ticked
+      When I move on to the shows
+      Then the first scenario that takes 8 people is chosen
+      And the main button has the keyboard focus
 
     Scenario: If no show can run, the step says why
       Given no scenario takes 11 people

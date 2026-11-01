@@ -5,8 +5,13 @@ Feature: The Line-up
   the step and keeps everyone's looks in this browser. Looks and themes never
   change who is picked: specs/pick.feature.
 
+  # The new setup's build steps are listed in specs/setup.feature. Each
+  # pending scenario here says its step; "Old design" marks what a step
+  # replaces.
+
   Rule: A show with a line-up opens it first
 
+    # Old design: replaced by "Next opens the chosen show's Line-up" (step 1).
     Scenario: Clicking a show with a line-up opens its Line-up
       Given "Anna", "Ben" and "Carla" are ticked
       And I moved on to the shows
@@ -14,11 +19,24 @@ Feature: The Line-up
       Then its Line-up shows a tile for each of "Anna", "Ben" and "Carla", in today's order, each drawn in their look
       And the show hasn't started
 
+    # Step 1.
+    @pending
+    Scenario: Next opens the chosen show's Line-up
+      Given "Anna", "Ben" and "Carla" are ticked, and a show with a line-up is chosen
+      When I press its "Next" button
+      Then its Line-up shows "Anna", "Ben" and "Carla", in today's order, each drawn in their look
+      And the show hasn't started
+
+    # Old design: replaced by "Start plays the chosen show" in
+    # specs/setup.feature (step 1).
     Scenario: A show without a line-up still starts at once
       Given I moved on to the shows
       When I click a show without a line-up
       Then it starts
 
+    # Old design: replaced by "A done step shows what was chosen there" and
+    # "The Line-up step shows once a show with a line-up is chosen" in
+    # specs/setup.feature (step 1).
     Scenario: The steps show the third step
       When a show's Line-up is open
       Then the steps read "1 · Who's in", "2 · Pick a show" and "3 · Line-up", the last one current
@@ -38,13 +56,62 @@ Feature: The Line-up
       When I choose "Run again"
       Then the show starts at once, with everyone's looks as they were
 
+    # Old design: replaced by "Going back keeps the looks, there and back"
+    # (step 1).
     Scenario: Going back keeps the looks
       Given I changed Anna's look on a show's Line-up
       When I go back to the shows, then click that show again
       Then Anna has the look I chose
 
+    # Step 1.
+    @pending
+    Scenario: Going back keeps the looks, there and back
+      Given I changed Anna's look on a show's Line-up
+      When I go back to the shows, then press "Next" to its Line-up again
+      Then Anna has the look I chose
+
+  # Step 2. Decision 0019.
+  @pending
+  Rule: Everyone stands in one row, on the theme's ground
+
+    Scenario: Everyone stands in one row
+      Given a show's Line-up is open with 8 people
+      Then everyone stands in one row, in today's order, drawn in their look
+      And under each is a card with their name, their look in words, a die and a pin
+
+    Scenario: The row stands on the theme's ground
+      Given a show whose themes each name a ground
+      When a theme is chosen
+      Then the row stands on its ground, in the sky and floor colours it names
+      And choosing another theme changes the ground at once
+
+    Scenario: Clicking someone opens their look in a sheet
+      Given a show's Line-up is open with 8 people
+      When I click Ben, or his card
+      Then a sheet opens over the Line-up with Ben drawn bigger, his name, "2 of 8", "Surprise me", his pin and the show's options
+      And its arrows show the previous and the next person
+      And "Done" or Esc closes it, and the focus goes back to Ben's card
+
+    Scenario: A choice shows at once, in the sheet and in the row
+      Given Ben's look is open in the sheet
+      When I choose another choice of an option
+      Then Ben is drawn with it at once, in the sheet and in the row
+
+    Scenario: Readable over a screen share, in a row
+      When a show's Line-up is open with 8 people, a 15-character name among them
+      Then every name is at least --size-body, wrapping inside its card
+      And every control is at least --target-min across, and shows the keyboard focus
+
+    Scenario: Everything in view at 1280 by 800
+      Given 8 people, a 15-character name among them, in a 1280 by 800 window
+      When the Line-up opens
+      Then the themes, everyone and their cards, and the bottom bar are in view without scrolling
+      And with Ben's sheet open, his first option's first eight choices are in view, and any more scroll inside the sheet
+
   Rule: Changing a look
 
+    # Old design: replaced by "Everyone stands in one row" and "Clicking
+    # someone opens their look in a sheet" (step 2).
     Scenario: Today's people in a row, the chosen one under it
       Given a show's Line-up is open with 8 people
       When I click Ben's tile
@@ -58,6 +125,8 @@ Feature: The Line-up
       And each option's heading names his choice, as in "Colour: Orange"
       And a colour option shows its choices as round swatches, each named for screen readers
 
+    # Old design: replaced by "A choice shows at once, in the sheet and in the
+    # row" (step 2).
     Scenario: A choice changes the look at once
       Given Ben's look is shown
       When I choose another choice of an option
@@ -95,6 +164,7 @@ Feature: The Line-up
       Then each of today's people gets a look drawn at random
       And the looks vary as much as the choices allow
 
+    # Old design: replaced by "Readable over a screen share, in a row" (step 2).
     Scenario: Readable over a screen share
       When a show's Line-up is open with 8 people, a 15-character name among them
       Then every name is at least --size-body, wrapping inside its tile
@@ -108,6 +178,30 @@ Feature: The Line-up
       When its Line-up opens
       Then a row of postcards sits above today's people: "Surprise", then each theme as a picture over its name
       And the chosen one is marked by a check mark as well as by colour
+
+    # Step 2. Decision 0019.
+    @pending
+    Scenario: The themes come first, in the show's words
+      Given a show whose line-up offers themes, and calls them tracks and its first option's choices racers
+      When its Line-up opens with Autumn chosen, 9 racers suiting it
+      Then above the postcards, the heading reads "1 · Track: Autumn · 9 racers suit it"
+      And above today's people, "2 · Racers"
+
+    # Step 2. Decision 0019.
+    @pending
+    Scenario: Choices that suit the theme are starred
+      Given a theme is chosen, and 3 of today's 8 people have a first-option choice that suits it
+      Then each of those 3 has a star in the row, read out as "Suits Autumn"
+      And beside "2 · Racers", a star reads "3 of 8 suit Autumn"
+
+    # Step 2. Decision 0019.
+    @pending
+    Scenario: The sheet shows the theme's choices first
+      Given a theme that some of the first option's choices suit is chosen
+      When Ben's look opens in the sheet
+      Then the first option offers "Autumn racers" and "All racers", the first chosen, holding the choices that suit Autumn in its order
+      And with "All racers", its groups are tabs, and each choice that suits Autumn has a star
+      And with a theme that no choice suits, the option shows only its groups' tabs
 
     Scenario: Surprise draws a theme at once
       Given a show's Line-up with themes is open
@@ -141,6 +235,8 @@ Feature: The Line-up
       When a theme is chosen
       Then the show draws every look in it, so it can dress everyone for it
 
+    # Old design: replaced by "The sheet shows the theme's choices first"
+    # (step 2).
     Scenario: A theme's own tab
       Given a show whose themes each suit some of its first option's choices
       When a theme is chosen and Ben's look is shown
@@ -159,6 +255,8 @@ Feature: The Line-up
       Then its theme is drawn from the run's seed
       And when I choose a theme in the lab, it runs on that one
 
+  # Old design, the whole rule: replaced by the rule "Everyone stands in one
+  # row, on the theme's ground" (step 2, decision 0019).
   # Decision 0016.
   Rule: A show can draw its start
 
@@ -210,6 +308,41 @@ Feature: The Line-up
       When "Shuffle everyone" deals new looks
       Then each one flips in like a turned sticker, in 0.4 seconds or more, one after another from the first person down
       And with reduced motion, the looks change without flipping
+
+  # Step 3. Decision 0019.
+  @pending
+  Rule: Dealing from the theme's choices
+
+    Scenario: The theme's choices, by default
+      Given a show whose line-up offers themes, on Autumn, with Anna and Ben pinned
+      Then beside "Shuffle everyone", a switch "Deal from" offers "Autumn racers" and "Any racer", the first on
+      When I choose "Shuffle everyone"
+      Then everyone but Anna and Ben gets a first-option choice that suits Autumn, as different from each other as those choices allow
+      And their other options are drawn from all their choices
+
+    Scenario: A die and Surprise me follow the switch
+      Given the switch is on "Autumn racers"
+      When I press the die beside Ben, or "Surprise me" in his sheet
+      Then Ben gets a choice that suits Autumn, unlike the one he had
+
+    Scenario: Any racer deals from every choice
+      Given the switch is on "Any racer"
+      When I choose "Shuffle everyone"
+      Then the looks are dealt from all of the show's choices
+
+    Scenario: A Surprise theme deals from the theme it drew
+      Given "Surprise" drew "Moon"
+      Then the switch offers "Moon racers", and deals from the choices that suit Moon
+
+    Scenario: A theme that no choice suits has no switch
+      Given a theme that names no choices is chosen
+      Then there is no switch, and every deal draws from all the choices
+
+    Scenario: The switch is kept per show
+      Given I set the switch to "Any racer" on a show's Line-up
+      When I reload the page and open that show's Line-up again
+      Then the switch is still on "Any racer"
+      And another show's switch is as I left it there
 
   Rule: Everyone keeps their look
 
