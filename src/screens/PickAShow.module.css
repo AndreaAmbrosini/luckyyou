@@ -225,10 +225,6 @@
   background-color: var(--color-paper);
 }
 
-.word {
-  white-space: nowrap;
-}
-
 .fine {
   background-color: var(--color-mint);
 }

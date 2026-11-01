@@ -1,67 +1,123 @@
-/* Today's people in one row of tiles; under it the chosen one's look: sheets of drawn options, then their card. */
+/* The themes, then everyone in one row on the theme's ground, each over a card; one person's look in a sheet. */
 /* Tighter than the other steps, so a show's whole Line-up fits 1280×800. */
 .main {
-  gap: 0.875rem;
+  gap: 0.75rem;
 }
 
-/* With a show's start, the start takes every px it can. */
-.main:has(.startBody) {
-  gap: 0.375rem;
-}
-
-.body {
+.step {
   display: flex;
-  flex-grow: 1;
   flex-direction: column;
-  gap: 0.625rem;
-  min-height: 0;
-  padding: 0 0.375rem 0.375rem 0;
-  overflow-y: auto;
+  gap: 0.5rem;
 }
 
-.tiles {
-  display: grid;
-  grid-auto-columns: minmax(0, 1fr);
-  grid-auto-flow: column;
-  gap: 0.625rem;
+.stepName {
   margin: 0;
-  padding: 0;
+  font-size: var(--size-body);
+  font-weight: 900;
+  line-height: 1.2;
+}
+
+.soft {
+  color: var(--color-ink-soft);
+  font-weight: 800;
+}
+
+.peopleHead {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 0.875rem;
+}
+
+/* "★ 3 of 8 suit Autumn" */
+.suitNote {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 0;
+  padding: 0.25rem 0.875rem 0.25rem 0.375rem;
+  border: var(--line) solid var(--color-ink);
+  border-radius: var(--radius-pill);
+  background-color: var(--color-paper);
+  font-size: var(--size-small);
+  font-weight: 900;
+}
+
+/*
+ * Everyone stands on the ground, sky over a floor with an ink line on top,
+ * eight places wide or more, centred. The ground takes the height a 1280×800
+ * window leaves it, and grows with taller ones.
+ */
+.row {
+  --stand: clamp(8rem, 100dvh - 41.5rem, 12rem);
+  --gap: 0.75rem;
+
+  position: relative;
+}
+
+.ground {
+  position: absolute;
+  top: 0;
+  right: 0;
+  left: 0;
+  height: var(--stand);
+  overflow: hidden;
+  border: var(--line) solid var(--color-ink);
+  border-radius: var(--radius-card);
+  background-color: var(--sky);
+  box-shadow: var(--shadow);
+}
+
+.floor {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  height: 1.875rem;
+  border-top: var(--line) solid var(--color-ink);
+  background-color: var(--floor);
+}
+
+.places {
+  position: relative;
+  display: grid;
+  grid-auto-columns: calc((100% - (var(--places) - 1) * var(--gap)) / var(--places));
+  grid-auto-flow: column;
+  justify-content: center;
+  gap: var(--gap);
+  margin: 0;
+  padding: 0 var(--gap);
   list-style: none;
 }
 
-.slot {
+.place {
+  position: relative;
   display: flex;
   min-width: 0;
 }
 
-.tile {
+/* Their drawing and their card: clicking either opens their look. */
+.person {
   display: flex;
   flex-direction: column;
   flex-grow: 1;
-  align-items: center;
-  gap: 0.125rem;
-  min-width: var(--target-min);
+  min-width: 0;
   min-height: var(--target-min);
-  padding: 0.375rem 0.25rem 0.5rem;
-  border: var(--line) solid var(--color-ink);
+  padding: 0;
+  border: 0;
   border-radius: var(--radius-tile);
-  background-color: var(--color-paper);
+  background-color: transparent;
   color: var(--color-ink);
+  text-align: left;
   cursor: pointer;
 }
 
-.tile[aria-pressed='true'] {
-  background-color: var(--color-sun);
-  box-shadow: var(--shadow-small);
-}
-
-.name {
-  max-width: 100%;
-  font-size: var(--size-body);
-  font-weight: 900;
-  line-height: 1.1;
-  text-align: center;
-  overflow-wrap: anywhere;
+.stand {
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  height: var(--stand);
+  padding-bottom: 0.5rem;
 }
 
 /* A show's drawing fills its box, which keeps the 6:5 of a racer's. */
@@ -77,59 +133,197 @@
 }
 
 .small {
-  width: 100%;
-  max-width: 6.875rem;
+  width: min(100%, (var(--stand) - 0.5rem) * 1.2);
 }
 
-.big {
-  flex-shrink: 0;
-  width: 10.5rem;
-}
-
-.look {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: stretch;
-  gap: 1.25rem;
-}
-
-.sheet,
+/* Name and look in words; the die and the pin sit at its foot. */
 .card {
   display: flex;
   flex-direction: column;
-  gap: 0.625rem;
-  min-width: 0;
+  flex-grow: 1;
+  gap: 0.125rem;
+  margin-top: 0.75rem;
+  padding: 0.5rem 0.625rem calc(var(--target-min) + 1rem);
   border: var(--line) solid var(--color-ink);
-  border-radius: var(--radius-card);
+  border-radius: var(--radius-tile);
   background-color: var(--color-paper);
-  box-shadow: var(--shadow);
+  box-shadow: var(--shadow-small);
+}
+
+/* A pinned look keeps its card in a sun ring. */
+.place[data-pinned] .card {
+  box-shadow:
+    inset 0 0 0 var(--line-bold) var(--color-sun),
+    var(--shadow-small);
+}
+
+.name {
+  font-size: var(--size-body);
+  font-weight: 900;
+  line-height: 1.1;
+  overflow-wrap: anywhere;
+}
+
+.lookWords {
+  color: var(--color-ink-soft);
+  font-size: var(--size-small);
+  font-weight: 800;
+  line-height: 1.2;
+}
+
+.suitsBadge {
+  position: absolute;
+  z-index: 1;
+  top: 0.375rem;
+  left: 0.25rem;
+  pointer-events: none;
+}
+
+.tools {
+  position: absolute;
+  bottom: 0.5rem;
+  left: 0.5rem;
+  display: flex;
+  gap: 0.375rem;
+}
+
+.die,
+.pin,
+.pinWide,
+.round {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: var(--line) solid var(--color-ink);
+  border-radius: var(--radius-pill);
+  background-color: var(--color-paper);
+  color: var(--color-ink);
+  box-shadow: var(--shadow-small);
+  cursor: pointer;
+}
+
+.die,
+.pin,
+.round {
+  flex-shrink: 0;
+  width: var(--target-min);
+  height: var(--target-min);
+  padding: 0;
+}
+
+.die {
+  border-radius: var(--radius-tile);
+}
+
+.pinWide {
+  flex-shrink: 0;
+  gap: 0.375rem;
+  min-height: 3rem;
+  padding: 0 1rem;
+  font-size: var(--size-small);
+  font-weight: 900;
+}
+
+.pin[aria-pressed='true'],
+.pinWide[aria-pressed='true'] {
+  border-style: solid;
+  background-color: var(--color-sun);
+}
+
+.pin[aria-pressed='false'],
+.pinWide[aria-pressed='false'] {
+  border-style: dashed;
+  border-color: var(--color-ink-soft);
+  color: var(--color-ink-soft);
+  box-shadow: none;
+}
+
+.status {
+  flex-grow: 1;
+  margin: 0;
+  color: var(--color-ink-soft);
+  font-size: var(--size-small);
+  font-weight: 800;
+  text-align: right;
+}
+
+/* A star, in sun, or ink on a sun badge for what suits the chosen theme. */
+.star {
+  width: 1.125rem;
+  height: 1.125rem;
+  fill: var(--color-sun);
+  stroke: var(--color-ink);
+  stroke-width: 2.5;
+  stroke-linejoin: round;
+}
+
+.badge {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  width: 1.875rem;
+  height: 1.875rem;
+  border: var(--line) solid var(--color-ink);
+  border-radius: var(--radius-pill);
+  background-color: var(--color-sun);
+}
+
+.badge .star {
+  fill: var(--color-ink);
+  stroke-width: 0;
+}
+
+/* The sheet: paper from the right over the Line-up, dimmed by ink. */
+.dim {
+  position: fixed;
+  inset: 0;
+  z-index: 10;
+}
+
+.shade {
+  position: absolute;
+  inset: 0;
+  background-color: var(--color-ink);
+  opacity: 0.45;
 }
 
 .sheet {
-  flex: 999 1 35rem;
-  padding: 0.875rem 1.125rem;
-}
-
-.card {
-  flex: 1 1 27.5rem;
-  padding: 0.875rem 1.25rem 1.125rem;
-}
-
-.who {
-  display: flex;
-  align-items: center;
-  gap: 0.875rem;
-}
-
-.whoText {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
   display: flex;
   flex-direction: column;
-  align-items: flex-start;
-  gap: 0.125rem;
-  min-width: 0;
+  width: min(45rem, 100%);
+  border-left: var(--line) solid var(--color-ink);
+  border-radius: var(--radius-card) 0 0 var(--radius-card);
+  background-color: var(--color-paper);
+  color: var(--color-ink);
+  animation: slide-in 0.25s ease-out;
 }
 
-.chosenName {
+@keyframes slide-in {
+  from {
+    translate: 100% 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sheet {
+    animation: none;
+  }
+}
+
+.sheetHead {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 1.125rem 1.5rem 0.75rem 1.75rem;
+}
+
+.sheetName {
+  min-width: 0;
   margin: 0;
   font-family: var(--font-display);
   font-size: var(--size-card-title);
@@ -138,25 +332,121 @@
   overflow-wrap: anywhere;
 }
 
-.surprise {
-  min-width: var(--target-min);
-  min-height: var(--target-min);
+.ofCount {
+  color: var(--color-ink-soft);
+  font-size: var(--size-small);
+  font-weight: 800;
   white-space: nowrap;
-  padding: 0 0.25rem;
 }
 
-.option {
+/* The first option's first eight choices show; any more scroll in here. */
+.sheetBody {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: 1rem;
+  min-height: 0;
+  padding: 0.5rem 1.75rem 1rem;
+  overflow-y: auto;
+}
+
+.portrait {
+  display: flex;
+  align-items: center;
+  gap: 1.25rem;
+}
+
+.portraitGround {
+  position: relative;
+  display: flex;
+  flex: none;
+  align-items: flex-end;
+  justify-content: center;
+  width: 14rem;
+  height: 10rem;
+  overflow: hidden;
+  border: var(--line) solid var(--color-ink);
+  border-radius: var(--radius-tile);
+  background-color: var(--sky);
+}
+
+.portraitGround .floor {
+  height: 1.5rem;
+}
+
+/* Bigger than anyone in the row, whose place is at most 10rem wide at 1440 px. */
+.big {
+  position: relative;
+  z-index: 1;
+  width: 10.5rem;
+  margin-bottom: 0.25rem;
+}
+
+.portraitText {
   display: flex;
   flex-direction: column;
+  gap: 0.5rem;
+  min-width: 0;
+}
+
+.summary {
+  margin: 0;
+  font-weight: 900;
+  line-height: 1.2;
+}
+
+.portraitButtons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.625rem;
+}
+
+.pinNote {
+  margin: 0;
+  color: var(--color-ink-soft);
+  font-size: var(--size-small);
+  font-weight: 800;
+}
+
+/* The options after the first, side by side. */
+.others {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem 2rem;
+}
+
+/* Swatches in rows of four, pictures in one row. */
+.others .choices {
   gap: 0.375rem;
 }
 
-/* The option's heading, naming the choice, and its tabs. */
-.optionHead {
+.others .choices:has(> .swatch) {
+  display: grid;
+  grid-template-columns: repeat(4, var(--target-min));
+}
+
+.others .picture {
+  width: 3rem;
+  height: 3rem;
+}
+
+.sheetFoot {
   display: flex;
-  flex-wrap: wrap;
   align-items: center;
-  gap: 0.5rem 1rem;
+  gap: 1rem;
+  padding: 0.875rem 1.75rem 1.125rem;
+  border-top: var(--line) solid var(--color-ink);
+}
+
+.sheetFoot .pinNote {
+  flex-grow: 1;
+}
+
+.option,
+.viewPanel {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
 }
 
 .optionName {
@@ -170,7 +460,7 @@
   font-weight: 800;
 }
 
-/* An option's groups, one tab each; the open one is in sun, as a pressed choice. */
+/* An option's views or groups, one tab each; the open one is in sun, as a pressed choice. */
 .tabs {
   display: flex;
   flex-wrap: wrap;
@@ -178,6 +468,9 @@
 }
 
 .tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
   min-height: var(--target-min);
   padding: 0 1rem;
   border: var(--line) solid var(--color-ink);
@@ -189,10 +482,30 @@
   cursor: pointer;
 }
 
+.tab:has(.badge) {
+  padding-left: 0.375rem;
+}
+
 .tab[aria-selected='true'] {
   border-width: var(--line-bold);
   background-color: var(--color-sun);
   box-shadow: var(--shadow-small);
+}
+
+/* Groups under "All racers", a step down from the views above them. */
+.smallTab {
+  padding: 0 0.75rem;
+  border-color: var(--color-ink-soft);
+}
+
+.smallTab[aria-selected='true'] {
+  border-width: var(--line);
+  border-color: var(--color-ink);
+}
+
+.count {
+  color: var(--color-ink-soft);
+  font-weight: 800;
 }
 
 .choices {
@@ -201,12 +514,8 @@
   gap: 0.5rem;
 }
 
-/* Eight swatches fit one row of the card. */
-.choices:has(> .swatch) {
-  gap: 0.3125rem;
-}
-
 .chip {
+  position: relative;
   display: inline-flex;
   align-items: center;
   gap: 0.375rem;
@@ -229,9 +538,9 @@
 
 .swatch {
   display: inline-flex;
+  flex-shrink: 0;
   align-items: center;
   justify-content: center;
-  flex-shrink: 0;
   width: var(--target-min);
   height: var(--target-min);
   border: var(--line) solid var(--color-ink);
@@ -262,6 +571,28 @@
   color: var(--color-ink);
 }
 
+/* A choice that suits the theme, among all of them: a star on its other corner. */
+.choiceStar {
+  position: absolute;
+  top: -0.5rem;
+  left: -0.5rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.625rem;
+  height: 1.625rem;
+  border: var(--line) solid var(--color-ink);
+  border-radius: var(--radius-pill);
+  background-color: var(--color-sun);
+}
+
+.choiceStar .star {
+  width: 0.875rem;
+  height: 0.875rem;
+  fill: var(--color-ink);
+  stroke-width: 0;
+}
+
 /* A choice's own picture, read out by its label and named when hovered. */
 .picture {
   position: relative;
@@ -290,11 +621,12 @@
   height: 100%;
 }
 
-/* The chosen person drawn with each choice, its label under it. */
+/* The person drawn with each choice, its label under it. */
 .drawnChoices {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 0.625rem;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 0.625rem 0.5rem;
+  padding-top: 0.5rem;
 }
 
 .drawnChoice {
@@ -306,8 +638,8 @@
   gap: 0.125rem;
   min-width: 0;
   min-height: var(--target-min);
-  height: 7rem;
-  padding: 0.25rem 0.25rem 0.375rem;
+  height: 6.75rem;
+  padding: 0.25rem 0.125rem 0.375rem;
   border: var(--line) solid var(--color-ink);
   border-radius: var(--radius-tile);
   background-color: var(--color-paper);
@@ -315,17 +647,19 @@
   cursor: pointer;
 }
 
+/* A long name takes a third line from the drawing above it. */
 .inChoice {
-  height: 4.5rem;
+  flex: 1 1 0;
+  min-height: 0;
 }
 
+/* A name breaks between words, or at a soft hyphen, never mid-word. */
 .choiceName {
   max-width: 100%;
   font-size: var(--size-small);
   font-weight: 900;
   line-height: 1.1;
   text-align: center;
-  overflow-wrap: anywhere;
 }
 
 .picture[aria-pressed='true'],
@@ -335,10 +669,11 @@
   box-shadow: var(--shadow-small);
 }
 
-/* The themes, a postcard each in a row of eight, "Surprise" first; the chosen one in sun. */
+/* The themes, a postcard each in one row, "Surprise" first; the chosen one in sun. */
 .postcards {
   display: grid;
-  grid-template-columns: repeat(8, minmax(0, 1fr));
+  grid-auto-columns: minmax(0, 1fr);
+  grid-auto-flow: column;
   gap: 0.625rem;
   /* Room for the chosen one's mark, above its corner. */
   padding-top: 0.5rem;
@@ -405,258 +740,6 @@
 
 .dieDot {
   fill: var(--color-ink);
-}
-
-/* The chosen theme's tab leads with a star. */
-.tab:has(.star) {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.375rem;
-}
-
-.star {
-  width: 1.125rem;
-  height: 1.125rem;
-  fill: var(--color-sun);
-  stroke: var(--color-ink);
-  stroke-width: 2.5;
-  stroke-linejoin: round;
-}
-
-/* A show's start (decision 0016): its scene on a 1194 by 440 grid, scaled to fit the room under the postcards. */
-.startBody {
-  padding: 0;
-  overflow: visible;
-}
-
-.room {
-  display: flex;
-  flex-grow: 1;
-  justify-content: center;
-  align-items: flex-start;
-  min-height: 0;
-}
-
-.start {
-  position: relative;
-  flex-shrink: 0;
-  box-sizing: content-box;
-  width: calc(1194px * var(--start-scale));
-  height: calc(440px * var(--start-scale));
-  overflow: hidden;
-  border: var(--line) solid var(--color-ink);
-  border-radius: var(--radius-card);
-  box-shadow: var(--shadow);
-}
-
-.startGrid {
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: 1194px;
-  height: 440px;
-  transform: scale(var(--start-scale));
-  transform-origin: 0 0;
-}
-
-.scene {
-  position: absolute;
-  inset: 0;
-}
-
-.scene > * {
-  width: 100%;
-  height: 100%;
-}
-
-.places {
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-/* Where a person stands chooses them; the show draws them chosen. */
-.place {
-  position: absolute;
-  padding: 0;
-  border: 0;
-  background-color: transparent;
-  cursor: pointer;
-}
-
-/* A die and a pin, left of where each person stands. */
-.die,
-.pin,
-.pinWide {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  border: var(--line) solid var(--color-ink);
-  border-radius: var(--radius-pill);
-  background-color: var(--color-paper);
-  color: var(--color-ink);
-  box-shadow: var(--shadow-small);
-  cursor: pointer;
-}
-
-.die,
-.pin {
-  position: absolute;
-  width: var(--target-min);
-  height: var(--target-min);
-  padding: 0;
-  translate: 0 -50%;
-}
-
-.pinWide {
-  flex-shrink: 0;
-  gap: 0.375rem;
-  min-height: var(--target-min);
-  padding: 0 0.875rem;
-  font-size: var(--size-small);
-  font-weight: 900;
-}
-
-.pin[aria-pressed='true'],
-.pinWide[aria-pressed='true'] {
-  border-style: solid;
-  background-color: var(--color-sun);
-}
-
-.pin[aria-pressed='false'],
-.pinWide[aria-pressed='false'] {
-  border-style: dashed;
-  border-color: var(--color-ink-soft);
-  color: var(--color-ink-soft);
-  box-shadow: none;
-}
-
-/* The chosen person's look, over the track ahead of the line. */
-.panel {
-  position: absolute;
-  top: 12px;
-  right: 12px;
-  bottom: 12px;
-  display: flex;
-  flex-direction: column;
-  gap: 0.625rem;
-  width: 636px;
-  padding: 0.625rem 0.75rem 0.75rem;
-  border: var(--line) solid var(--color-ink);
-  border-radius: 20px;
-  background-color: var(--color-paper);
-  box-shadow: var(--shadow);
-}
-
-.panelHead {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-}
-
-.panelName {
-  margin: 0;
-  font-family: var(--font-display);
-  font-size: var(--size-card-title);
-  font-weight: 400;
-  line-height: 1.1;
-  white-space: nowrap;
-}
-
-.panelChoice {
-  flex-grow: 1;
-  min-width: 0;
-  margin: 0;
-  overflow: hidden;
-  color: var(--color-ink-soft);
-  font-size: var(--size-small);
-  font-weight: 800;
-  white-space: nowrap;
-  text-overflow: ellipsis;
-}
-
-.panelButton {
-  min-height: var(--target-min);
-  padding: 0 0.875rem;
-  gap: 0.375rem;
-  font-weight: 900;
-}
-
-.panelBody {
-  display: flex;
-  flex-grow: 1;
-  gap: 0.75rem;
-  min-height: 0;
-}
-
-.panelDrawn {
-  display: flex;
-  flex: 1 1 auto;
-  flex-direction: column;
-  min-width: 0;
-  min-height: 0;
-}
-
-.panelDrawn > .option {
-  flex-grow: 1;
-  gap: 0.25rem;
-  min-height: 0;
-}
-
-.panelSide {
-  display: flex;
-  flex: 0 0 11.75rem;
-  flex-direction: column;
-  gap: 0.75rem;
-}
-
-.panel .tabs {
-  gap: 0.375rem;
-}
-
-.panel .tab {
-  padding: 0 0.75rem;
-}
-
-/* Eight swatches in two rows of four. */
-.panelSide .choices:has(> .swatch) {
-  gap: 0.25rem;
-}
-
-/* The open tab's first eight show; any more scroll inside the panel. */
-.panelChoices {
-  flex-grow: 1;
-  align-content: start;
-  gap: 0.375rem 0.3125rem;
-  min-height: 0;
-  padding: 0 0.25rem 0.25rem 0;
-  overflow-y: auto;
-  scrollbar-width: thin;
-}
-
-/* A long name takes a third line from the drawing above it. */
-.panelChoices .inChoice {
-  flex: 1 1 0;
-  width: auto;
-  height: auto;
-  min-height: 0;
-}
-
-/* A name breaks between words, or at a soft hyphen, never mid-word. */
-.panelChoices .choiceName {
-  overflow-wrap: normal;
-}
-
-.panelChoices .drawnChoice {
-  padding-right: 0.125rem;
-  padding-left: 0.125rem;
-}
-
-.pinNote {
-  margin: 0;
-  color: var(--color-ink-soft);
-  font-size: var(--size-small);
-  font-weight: 800;
 }
 
 /* A dealt look flips in like a turned sticker. */

@@ -52,7 +52,6 @@ import {
   actOutOwnEvent,
   DRESSED,
   dressedOn,
-  lineUpOn,
   accessories,
 } from './watching';
 
@@ -86,9 +85,9 @@ describeSpec(await loadFeature('./autumn.feature'), ({ Rule }) => {
           expect(classes.slice(-2)).toEqual([styles.bark, styles.paperFill]);
         },
       );
-      And(`with Autumn chosen, the racer option's first tab is "Autumn"`, () => {
-        // specs/line-up.feature: a theme's suits are its first tab, named for it.
-        expect(autumn().label).toBe('Autumn');
+      And(`with Autumn chosen, the racer option's first tab is "Autumn racers"`, () => {
+        // specs/line-up.feature: the sheet shows a theme's suits first, in its words.
+        expect(`${autumn().label} ${lineUp.words!.choices}`).toBe('Autumn racers');
         expect(autumn().suits!.length).toBeGreaterThan(0);
       });
     });
@@ -218,9 +217,9 @@ describeSpec(await loadFeature('./autumn.feature'), ({ Rule }) => {
 
     RuleScenario('Everyone wears an acorn cap', ({ When, Then, And }) => {
       let drawn: SVGSVGElement[] = [];
-      When('the show runs on Autumn, or its Line-up shows Autumn', async () => {
-        drawn = [...(await dressedOn('autumn')), ...lineUpOn('autumn')];
-        expect(drawn).toHaveLength(3 * DRESSED.size);
+      When('the show runs on Autumn', async () => {
+        drawn = await dressedOn('autumn');
+        expect(drawn).toHaveLength(DRESSED.size);
       });
       Then(
         'every rider wears an acorn cap instead of the cap, goggles or snorkel the kit hands out, and a top hat stays on the mount',
@@ -251,7 +250,7 @@ describeSpec(await loadFeature('./autumn.feature'), ({ Rule }) => {
       });
       And('the garden gnome wears a small one on the tip of its own hat', () => {
         const gnomes = drawn.filter((each) => each.dataset.mount === 'gnome');
-        expect(gnomes).toHaveLength(3);
+        expect(gnomes).toHaveLength(1);
         for (const gnome of gnomes) {
           const cap = gnome.querySelector('[data-part="acorn-cap"]')!;
           expect(cap.getAttribute('transform')).toBe('translate(130 -24) scale(0.55)');
@@ -260,7 +259,7 @@ describeSpec(await loadFeature('./autumn.feature'), ({ Rule }) => {
       });
       And('on any other theme, nobody wears one', async () => {
         for (const course of COURSES.filter((each) => each !== 'autumn')) {
-          const others = [...(await dressedOn(course)), ...lineUpOn(course)];
+          const others = await dressedOn(course);
           for (const svg of others) {
             expect(svg.querySelector('[data-part="acorn-cap"]'), course).toBeNull();
           }

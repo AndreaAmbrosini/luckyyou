@@ -26,15 +26,6 @@ export const pitchOf = (count: number) => Math.min(TRACK.pitch, (TRACK.bottom - 
 /** Lane `index` of `count`, from the back. */
 export const lane = (index: number, count: number) => laneOn(TRACK, index, count);
 
-/**
- * The Line-up's start, on its 1194 by 440 grid: lanes under a backdrop band
- * 64 px tall, noses at x 432 and the start line from x 444, 12 px wide.
- */
-export const START_TRACK = { top: 64, bottom: 440, pitch: 94, nose: 432, line: 444 } as const;
-
-/** Lane `index` of `count` at the Line-up's start, from the back. */
-export const startLane = (index: number, count: number) => laneOn(START_TRACK, index, count);
-
 /** Lane `index` of `count` between `top` and `bottom`, none taller than `pitch`, centred. */
 function laneOn(
   track: { readonly top: number; readonly bottom: number; readonly pitch: number },
@@ -197,17 +188,3 @@ export function tagAt(kind: Kind, at: Lane, nose: number) {
 
 /** The middle of a name tag and its face, in lane `at`. */
 const tagMiddle = (at: Lane) => at.ground - 129 * at.k;
-
-/**
- * Each of `count` people's row at the Line-up's start: level with their name
- * tag and face, which stand above their lane, the rows meeting halfway
- * between one tag and the next.
- */
-export function startRows(count: number): { top: number; height: number }[] {
-  const middles = Array.from({ length: count }, (_, index) => tagMiddle(startLane(index, count)));
-  const edges = middles.slice(1).map((middle, index) => (middles[index]! + middle) / 2);
-  const end = count > 1 ? (middles[1]! - middles[0]!) / 2 : startLane(0, 1).pitch / 2;
-  const tops = [Math.max(0, middles[0]! - end), ...edges];
-  const bottoms = [...edges, middles.at(-1)! + end];
-  return tops.map((top, index) => ({ top, height: bottoms[index]! - top }));
-}

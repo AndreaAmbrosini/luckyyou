@@ -42,19 +42,12 @@ Feature: The Race
         | Under the sea | Shark with feet, Octopus, Sushi, Duck, Penguin                                  |
         | Moon          | Rocket, Astronaut, Alien, Robot, Space hopper                                   |
 
-    Scenario: The Line-up is the start line
-      Given 8 people, with "Office" chosen
+    # Decision 0019.
+    Scenario: Its Line-up's words, and each track's ground
       When the Line-up opens for The Race
-      Then everyone waits at the start line, a lane each, in today's order, noses on the line, on the office track with its backdrop above the lanes
-      And each racer's name tag is beside the face, and their die and pin are at the left, level with the tag
-      And the chosen person's row, level with their name tag, is sun, as is the tag, and they wave
-      And the panel sits over the track ahead of the line
-
-    Scenario: The start line fits the window
-      Given 8 people, a 15-character name among them, in a 1280 by 800 window
-      When the Line-up opens for The Race
-      Then the postcards, every lane, the panel's tabs, every colour and extra, and both buttons are in view without scrolling
-      And the open tab's first eight racers are in view, and any more scroll inside the panel
+      Then its themes are called "Track", and the first option's choices "racers"
+      And each track names a ground, a sky and a floor colour on which every racer's ink outline reads
+      And on Autumn, everyone stands on bark under the sky
 
     Scenario: Each racer looks as chosen
       Given Anna chose the duck, sun and the scarf, and Ben the office chair, grape and googly eyes

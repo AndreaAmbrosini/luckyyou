@@ -6,13 +6,7 @@
 // which runs at full speed; only the last moment before the line is slow,
 // and the unlucky person crosses first.
 
-import {
-  defineScenario,
-  handOutLooks,
-  type ChosenLook,
-  type LineUp,
-  type Mood,
-} from '../../scenario-kit';
+import { defineScenario, handOutLooks, type ChosenLook, type LineUp } from '../../scenario-kit';
 import { creature } from './creature';
 import {
   CREATURES,
@@ -22,7 +16,6 @@ import {
   isCreature,
   MOUNTS,
   type Kind,
-  type Pose,
   RACER_COLOURS,
   racer,
   type Creature,
@@ -32,7 +25,6 @@ import {
 import { COURSES, type Course } from './plan';
 import { playTheRace } from './play';
 import { postcard } from './postcards';
-import { startLine } from './start';
 
 /** What someone races as. */
 const RACERS = {
@@ -112,23 +104,44 @@ const KINDS: Record<Creature, (typeof GROUPS)[number]> = {
   alien: 'Space',
 };
 
-/** The themes, each a track, with the racers that suit it, in the order its tab shows them. */
-const THEMES: readonly { name: Course; label: string; suits: readonly Kind[] }[] = [
+/**
+ * The themes, each a track: the ground the Line-up stands everyone on, sky
+ * over floor, and the racers that suit it, in the order its sheet shows them.
+ */
+const THEMES: readonly {
+  name: Course;
+  label: string;
+  ground: { sky: string; floor: string };
+  suits: readonly Kind[];
+}[] = [
   {
     name: 'field',
     label: 'Sports field',
+    ground: { sky: 'sky', floor: 'mint' },
     suits: ['hopper', 'ostrich', 'duck', 'snail', 'caterpillar', 'cat', 'pigeon', 'dinosaur'],
   },
   {
     name: 'office',
     label: 'Office',
+    ground: { sky: 'mint-soft', floor: 'shark' },
     suits: ['chair', 'mug', 'printer', 'sticky', 'sandwich', 'banana', 'robot', 'villain'],
   },
-  { name: 'sea', label: 'Under the sea', suits: ['shark', 'octopus', 'sushi', 'duck', 'penguin'] },
-  { name: 'moon', label: 'Moon', suits: ['rocket', 'astronaut', 'alien', 'robot', 'hopper'] },
+  {
+    name: 'sea',
+    label: 'Under the sea',
+    ground: { sky: 'sea', floor: 'sun' },
+    suits: ['shark', 'octopus', 'sushi', 'duck', 'penguin'],
+  },
+  {
+    name: 'moon',
+    label: 'Moon',
+    ground: { sky: 'shark', floor: 'paper' },
+    suits: ['rocket', 'astronaut', 'alien', 'robot', 'hopper'],
+  },
   {
     name: 'autumn',
     label: 'Autumn',
+    ground: { sky: 'sky', floor: 'bark' },
     suits: [
       'leaf',
       'squirrel',
@@ -144,6 +157,7 @@ const THEMES: readonly { name: Course; label: string; suits: readonly Kind[] }[]
   {
     name: 'christmas',
     label: 'Christmas',
+    ground: { sky: 'glass', floor: 'paper' },
     suits: ['reindeer', 'snowman', 'gingerbread', 'tree', 'penguin', 'yeti', 'gnome'],
   },
 ];
@@ -179,18 +193,16 @@ function faceOf(name: string) {
 }
 
 /**
- * Someone in their look, as the Line-up draws them: calm and holding on,
- * unless told otherwise, in what `theme` dresses everyone in.
+ * Someone in their look, as the Line-up draws them: calm and holding on, in
+ * what `theme` dresses everyone in.
  */
 function drawRacer(
   chosen: ChosenLook,
   { name, place, theme }: { name: string; place: number; theme?: string | null },
-  mood?: Mood,
-  pose?: Pose,
 ) {
   const look = chosen as unknown as RacerLook;
   const dress = dressFor(COURSES.find((each) => each === theme) ?? null);
-  const drawn = { face: faceOf(name), number: place, mood, pose, dress };
+  const drawn = { face: faceOf(name), number: place, dress };
   return isCreature(look.mount)
     ? creature(look as RacerLook & { mount: Creature }, drawn)
     : racer(look as RideLook, drawn);
@@ -236,11 +248,8 @@ const lineUp: LineUp = {
     },
   ],
   themes: THEMES.map((theme) => ({ ...theme, picture: () => postcard(theme.name) })),
+  words: { theme: 'Track', choices: 'racers' },
   draw: (chosen, person) => drawRacer(chosen, person).el,
-  drawStart: (scene) =>
-    startLine(scene, ({ look, name, place }, mood, pose) =>
-      drawRacer(look, { name, place, theme: scene.theme }, mood, pose),
-    ),
 };
 
 export default defineScenario({

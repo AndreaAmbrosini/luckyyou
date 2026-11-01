@@ -60,13 +60,15 @@ export function lookText(look: ChosenLook): string {
 }
 
 /**
- * A line-up of hats and colours. It draws a look as its text, with the
- * person's name and place, so a test can read what is drawn.
+ * A line-up of hats and colours, whose themes would be called places. It
+ * draws a look as its text, with the person's name and place, so a test can
+ * read what is drawn.
  */
 export function fakeLineUp(options: Partial<LineUp> = {}): LineUp {
   return {
     heading: 'Line up the hats',
     start: 'Start the hats',
+    words: { theme: 'Place', choices: 'hats' },
     options: [
       {
         name: 'hat',
@@ -145,13 +147,15 @@ export function pictureLineUp(): LineUp {
 
 /**
  * The grouped line-up with three themes: "Beach" suits the crown and the
- * bike helmet, in that order; "Snow" the beanie and the hard hat; "Party"
- * none. Each picture reads back its theme.
+ * bike helmet, in that order, and stands everyone on sun under the sky;
+ * "Snow" the beanie and the hard hat, on paper under glass; "Party" none, on
+ * grape under pink. Each picture reads back its theme.
  */
 export function themedLineUp(): LineUp {
-  const theme = (name: string, label: string, suits?: string[]) => ({
+  const theme = (name: string, label: string, sky: string, floor: string, suits?: string[]) => ({
     name,
     label,
+    ground: { sky, floor },
     suits,
     picture() {
       const drawn = document.createElement('div');
@@ -162,32 +166,9 @@ export function themedLineUp(): LineUp {
   return {
     ...groupedLineUp(),
     themes: [
-      theme('beach', 'Beach', ['crown', 'bike']),
-      theme('snow', 'Snow', ['beanie', 'hard-hat']),
-      theme('party', 'Party'),
+      theme('beach', 'Beach', 'sky', 'sun', ['crown', 'bike']),
+      theme('snow', 'Snow', 'glass', 'paper', ['beanie', 'hard-hat']),
+      theme('party', 'Party', 'pink', 'grape'),
     ],
-  };
-}
-
-/**
- * The themed line-up drawing its start: the scene reads back its theme, and
- * each person stands in a lane 40 px tall from y 64, drawn as `draw` does,
- * marked when chosen.
- */
-export function startLineUp(): LineUp {
-  const lineUp = themedLineUp();
-  return {
-    ...lineUp,
-    drawStart({ people, theme }) {
-      const scene = document.createElement('div');
-      scene.dataset.part = 'fake-start';
-      scene.dataset.theme = theme ?? '';
-      const places = people.map(({ name, place, look, chosen }, index) => {
-        const drawn = scene.appendChild(lineUp.draw(look, { name, place }));
-        if (chosen) (drawn as HTMLElement).dataset.chosen = 'true';
-        return { box: { left: 104, top: 64 + 40 * index, width: 340, height: 40 }, drawing: drawn };
-      });
-      return { el: scene, places };
-    },
   };
 }
