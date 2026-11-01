@@ -2,7 +2,8 @@
 // 0014). The show moves the song along from its own time each frame, so a
 // show that slows down slows its music with it.
 
-export type Voice = 'lead' | 'bass' | 'stab' | 'kick' | 'snare' | 'hat' | 'bells';
+export type Voice =
+  'lead' | 'bass' | 'stab' | 'kick' | 'snare' | 'hat' | 'bells' | 'steel' | 'shaker';
 
 export interface Note {
   /** Where it starts, in beats from the song's first bar; negative before it. */
@@ -114,6 +115,39 @@ export function oomPah(chords: readonly string[], from: number): Note[] {
       ...stab(1),
       { at: at + 2, beats: 1, voice: 'bass' as const, pitch: pitchOf(chord.fifth) },
       ...stab(3),
+    ];
+  });
+}
+
+/**
+ * A calypso's bass and strum, one chord a bar of four beats: the root on 1,
+ * then the bass on the off-beats, root, fifth, root, and the strum on 2 and 4.
+ */
+export function calypso(chords: readonly string[], from: number): Note[] {
+  return chords.flatMap((name, bar) => {
+    const chord = CHORDS[name];
+    if (!chord) throw new Error(`No chord ${name}`);
+    const at = from + bar * 4;
+    const bass = (beat: number, beats: number, note: string) => ({
+      at: at + beat,
+      beats,
+      voice: 'bass' as const,
+      pitch: pitchOf(note),
+    });
+    const strum = (beat: number) =>
+      chord.stab.map((note) => ({
+        at: at + beat,
+        beats: 0.5,
+        voice: 'stab' as const,
+        pitch: pitchOf(note),
+      }));
+    return [
+      bass(0, 0.5, chord.root),
+      bass(1.5, 1, chord.root),
+      bass(2.5, 1, chord.fifth),
+      bass(3.5, 0.5, chord.root),
+      ...strum(1),
+      ...strum(3),
     ];
   });
 }
@@ -281,6 +315,38 @@ export function playNote(
         .connect(gain(context, when, 0.12 * level, 0.004, 0.02, 0.14))
         .connect(out);
       return [timed(hiss, when, 0.17)];
+    }
+    case 'steel': {
+      // A steel drum: a struck tone, its octave and twelfth, and a quick clink on top.
+      const ring = Math.min(0.45, Math.max(0.25, seconds * 2));
+      return [
+        [1, 0.22, ring],
+        [2, 0.1, ring * 0.7],
+        [3, 0.04, ring * 0.4],
+        [4.2, 0.03, 0.04],
+      ].map(([partial, peak, decay]) => {
+        const shape = context.createGain();
+        shape.gain.setValueAtTime(0, when);
+        shape.gain.linearRampToValueAtTime(peak! * level, when + 0.003);
+        shape.gain.exponentialRampToValueAtTime(0.0001, when + 0.003 + decay!);
+        shape.connect(out);
+        const tone = oscillator(context, 'sine', hz * partial!);
+        tone.connect(shape);
+        return timed(tone, when, 0.003 + decay!);
+      });
+    }
+    case 'shaker': {
+      // A shaker: a soft-edged rush of high noise, longer than a hat's tick.
+      const hiss = noise(context);
+      const band = context.createBiquadFilter();
+      band.type = 'bandpass';
+      band.frequency.setValueAtTime(6000, context.currentTime);
+      band.Q.setValueAtTime(0.8, context.currentTime);
+      hiss
+        .connect(band)
+        .connect(gain(context, when, 0.14 * level, 0.012, 0.015, 0.05))
+        .connect(out);
+      return [timed(hiss, when, 0.08)];
     }
   }
 }

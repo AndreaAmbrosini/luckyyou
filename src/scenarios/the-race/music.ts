@@ -9,9 +9,12 @@
 // Seasons (1725, public domain) does, arranged from the Mutopia Project's
 // edition, down a fourth from F to C. In the office, Scott Joplin's The
 // Entertainer (1902, public domain) does, arranged from the Mutopia Project's
-// edition of his score, a 2/4 bar to each bar of four beats.
+// edition of his score, a 2/4 bar to each bar of four beats. Under the sea,
+// Mango Walk (traditional Jamaican, public domain) does, on steel drums over a
+// calypso's off-beat bass and a shaker, arranged from the tune in the BBC's
+// Singing Together (Spring 1970), up a fourth from G to C.
 
-import { drums, melody, oomPah, type Note, type Voice } from '../../scenario-kit';
+import { calypso, drums, melody, oomPah, type Note, type Voice } from '../../scenario-kit';
 import type { Course, Plan } from './plan';
 
 /** The galop's beats a second, before it is fitted to whole bars. */
@@ -19,6 +22,8 @@ const GALOP = 4.4;
 
 /** A tune for the race, in C so the fanfare resolves its slow moment. */
 interface Tune {
+  /** What plays the tune: the lead, unless given. */
+  readonly voice?: Voice;
   /** What rolls and swells under "On your marks…". */
   readonly roll: Voice;
   /** The pickup into the first bar, after the roll. */
@@ -34,6 +39,10 @@ interface Tune {
   readonly stretchChords: readonly string[];
   /** Two beats for the slow last moment, over a low G. */
   readonly slow: string;
+  /** The bass and chords under the tune, one chord a bar: an oom-pah, unless given. */
+  readonly backing?: (chords: readonly string[], from: number) => Note[];
+  /** The drums for `bars` bars: the galop's, unless given. */
+  readonly beat?: (bars: number, from: number, options?: { kick?: boolean }) => Note[];
   /** Sleigh bells on every beat from "Go!", slowing and fading through the slow moment. */
   readonly bells?: boolean;
 }
@@ -130,11 +139,48 @@ const ENTERTAINER: Tune = {
   slow: 'B4:.5 A4:.5 Ab4:.5 G4:.5',
 };
 
+const MANGO_WALK: Tune = {
+  voice: 'steel',
+  roll: 'shaker',
+  pickup: 'G5',
+  // The song, sixteen bars: "My brother did-a tell me that you go mango walk"
+  // twice, then "Now tell me, Joe", ending on the pickup into itself.
+  strain: [
+    'G5:.5 A5:.5 G5:.5 F5:.5 E5:.5 F5:.5 E5:.5 D5:.5 | C5:.5 E5 G4:.5 C5 E5',
+    'D5:.5 F5 G4:.5 B4 D5 | C5:.5 E5 G4:.5 C5 G5',
+    'G5:.5 A5:.5 G5:.5 F5:.5 E5:.5 F5:.5 E5:.5 D5:.5 | C5:.5 E5 G4:.5 C5 E5',
+    'D5:.5 F5 G4:.5 B4 D5 | C5 C5 r G4',
+    'G4 G4 A4 C5 | C5:.5 E5 G4:.5 C5 E5 | D5:.5 F5 G4:.5 B4 D5 | C5 E5:2 G4',
+    'G4 G4 A4 B4 | C5:.5 E5 G4:.5 C5 E5 | D5:.5 F5 G4:.5 B4 D5 | C5 C5 r G5',
+  ].join(' | '),
+  chords: ['C', 'C', 'G7', 'C', 'C', 'C', 'G7', 'C', 'C', 'C', 'G7', 'C', 'G7', 'C', 'G7', 'C'],
+  // "Now tell me, Joe, do tell me for true".
+  stretch: 'G4 G4 A4 C5 | C5:.5 E5 G4:.5 C5 E5 | D5:.5 F5 G4:.5 B4 D5 | C5 E5:2 r',
+  stretchChords: ['C', 'C', 'G7', 'C'],
+  // Down G7 to the low G.
+  slow: 'F5:.5 D5:.5 B4:.5 G4:.5',
+  backing: calypso,
+  beat: shakers,
+};
+
 const TUNES: Partial<Record<Course, Tune>> = {
   christmas: JINGLE_BELLS,
   autumn: AUTUMN,
   office: ENTERTAINER,
+  sea: MANGO_WALK,
 };
+
+/** A calypso's beat for `bars` bars: kicks on 1 and 3 unless left out, a shaker on every half beat, leaning on the off-beats. */
+function shakers(bars: number, from: number, { kick = true } = {}): Note[] {
+  const notes: Note[] = [];
+  for (let bar = 0; bar < bars; bar++) {
+    const at = from + bar * 4;
+    for (const beat of [0, 2]) if (kick) notes.push({ at: at + beat, beats: 0.5, voice: 'kick' });
+    for (let half = 0; half < 8; half++)
+      notes.push({ at: at + half / 2, beats: 0.5, voice: 'shaker', level: half % 2 ? 1 : 0.5 });
+  }
+  return notes;
+}
 
 /** Sleigh bells on each beat of `bars` bars, then four shakes fading over the slow moment's two. */
 function bells(bars: number, from: number): Note[] {
@@ -153,6 +199,7 @@ export interface Score {
 
 export function raceMusic({ times, course }: Plan): Score {
   const tune = TUNES[course] ?? WILLIAM_TELL;
+  const { voice = 'lead', backing = oomPah, beat = drums } = tune;
   const racing = times.stretch - times.go;
   const bars = Math.max(1, Math.round((racing * GALOP) / 4));
   const galop = (bars * 4) / racing;
@@ -162,7 +209,7 @@ export function raceMusic({ times, course }: Plan): Score {
   const slow = 2 / (times.finish - times.slow);
 
   // The strain, as many times as the race has bars, cut at the last one.
-  const strain = melody(tune.strain, 0);
+  const strain = melody(tune.strain, 0, voice);
   const length = tune.chords.length;
   const galopNotes = Array.from({ length: Math.ceil(bars / length) }, (_, i) =>
     strain.map((note) => ({ ...note, at: note.at + i * length * 4 })),
@@ -172,7 +219,7 @@ export function raceMusic({ times, course }: Plan): Score {
   const chords = Array.from({ length: bars }, (_, bar) => tune.chords[bar % length]!);
 
   // A roll that swells, then the pickup into the first bar.
-  const pickup = melody(tune.pickup, 0);
+  const pickup = melody(tune.pickup, 0, voice);
   const pickupAt = -Math.max(...pickup.map((note) => note.at + note.beats));
   const roll: Note[] = [];
   for (let at = -4.5; at < pickupAt; at += 0.25) {
@@ -185,14 +232,14 @@ export function raceMusic({ times, course }: Plan): Score {
     ...pickup.map((note) => ({ ...note, at: note.at + pickupAt })),
     ...(tune.pickupBass ? melody(tune.pickupBass, pickupAt, 'bass') : []),
     ...galopNotes,
-    ...oomPah(chords, 0),
-    ...drums(bars, 0),
-    ...melody(tune.stretch, stretchAt),
-    ...oomPah(tune.stretchChords, stretchAt),
+    ...backing(chords, 0),
+    ...beat(bars, 0),
+    ...melody(tune.stretch, stretchAt, voice),
+    ...backing(tune.stretchChords, stretchAt),
     // No kick in the stretch: the heartbeat has the low end.
-    ...drums(4, stretchAt, { kick: false }),
+    ...beat(4, stretchAt, { kick: false }),
     ...(tune.bells ? bells(bars + 4, 0) : []),
-    ...melody(tune.slow, slowAt),
+    ...melody(tune.slow, slowAt, voice),
     ...melody('G2:2', slowAt, 'bass'),
   ];
 

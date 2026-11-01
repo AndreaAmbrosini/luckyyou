@@ -35,7 +35,7 @@ Feature: The Race's sound and motion
     Scenario: Jingle Bells at Christmas, the galop elsewhere
       When the show runs on Christmas with music on
       Then Jingle Bells plays instead of the galop, with sleigh bells, on the galop's beats: a roll under "On your marks…", the chorus from "Go!", a faster strain from "Final stretch!", a run down at a quarter of the speed in the slow moment, and silence from the line to the fanfare
-      And the sports field, under the sea and the Moon keep the galop
+      And the sports field and the Moon keep the galop
 
     # Vivaldi's The Four Seasons (1725) is public domain. The user heard it in
     # the Lab and approved it on 2026-11-01.
@@ -50,13 +50,13 @@ Feature: The Race's sound and motion
       When the show runs in the office with music on
       Then Scott Joplin's The Entertainer plays instead of the galop, on the galop's beats: a roll under "On your marks…", its first strain from "Go!", a faster strain from "Final stretch!", a run down at a quarter of the speed in the slow moment, and silence from the line to the fanfare
 
-    # "Under the Sea" from The Little Mermaid is under copyright, so this
-    # calypso is our own tune, not an echo of it. Passes once the user has
-    # heard it in the Lab.
-    @pending
-    Scenario: A calypso of our own under the sea
+    # Mango Walk is a traditional Jamaican song, public domain, arranged from
+    # the tune in the BBC's Singing Together (1970). The user chose it over a
+    # calypso of our own, as "Under the Sea" is under copyright, heard it in the
+    # Lab and approved it on 2026-11-02.
+    Scenario: Mango Walk under the sea
       When the show runs under the sea with music on
-      Then a calypso of our own plays instead of the galop, its tune on steel drums over an off-beat bass and a shaker, on the galop's beats: a shaker roll under "On your marks…", its tune from "Go!", a faster strain from "Final stretch!", a run down at a quarter of the speed in the slow moment, and silence from the line to the fanfare
+      Then Mango Walk plays instead of the galop, its tune on steel drums over an off-beat bass and a shaker, on the galop's beats: a shaker roll under "On your marks…", its tune from "Go!", a faster strain from "Final stretch!", a run down at a quarter of the speed in the slow moment, and silence from the line to the fanfare
 
     # Richard Strauss's Also sprach Zarathustra (1896) and Johann Strauss II's
     # The Blue Danube (1866) are public domain. Passes once the user has heard
