@@ -1,9 +1,9 @@
-/* The window around the stage: ink bars wherever its shape differs. */
+/* The window around the stage: bars of the ground wherever its shape differs. */
 .frame {
   position: absolute;
   inset: 0;
   overflow: hidden;
-  background-color: var(--color-ink);
+  background-color: var(--color-ground);
 }
 
 /* 1280 by 720 stage pixels, scaled to fit and centred. */
