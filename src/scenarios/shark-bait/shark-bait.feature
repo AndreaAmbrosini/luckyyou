@@ -9,7 +9,6 @@ Feature: Shark Bait
     Scenario: The picker shows Shark Bait
       Then its name is "Shark Bait"
       And its description is "The last one left in the water gets the job."
-      And its picture is 🦈
       And it takes 2 to 12 people
 
   Rule: The unlucky person is the last one left in the water

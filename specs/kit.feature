@@ -30,6 +30,14 @@ Feature: The scenario kit
       When a show is started
       Then it doesn't begin until the name tag and caption fonts are loaded for its names
 
+  Rule: A show brings a still for its card
+
+    Scenario: A still is cut from the stage
+      When a still is cut 1.35 times closer, at 58% across and 60% down
+      Then it shows 1/1.35 of the stage's width and height
+      And the point 58% across and 60% down is at the same place in the still as on the stage
+      And it is saved at 640 by 360 pixels
+
   Rule: Time runs on GSAP's clock
 
     Scenario: A wait lasts its show time

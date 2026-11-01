@@ -8,12 +8,14 @@
 
 import { defineScenario } from '../../scenario-kit';
 import { playWobblyTower } from './play';
+// Made with `npm run still -- wobbly-tower 12 1.5 30 100`.
+import still from './still.webp';
 
 export default defineScenario({
   id: 'wobbly-tower',
   name: 'Wobbly Tower',
   description: 'Whoever topples it gets the job.',
-  card: { emoji: '🧱' },
+  still,
   people: { min: 2, max: 12 },
   play: playWobblyTower,
 });

@@ -74,9 +74,6 @@ describeSpec(await loadFeature('./dont-wake-the-dog.feature'), ({ Rule }) => {
       And('its description is {string}', (_, description: string) => {
         expect(dontWakeTheDog.description).toBe(description);
       });
-      And('its picture is 🐶', () => {
-        expect(dontWakeTheDog.card).toEqual({ emoji: '🐶' });
-      });
       And('it takes 2 to 12 people', () => {
         expect(dontWakeTheDog.people).toEqual({ min: 2, max: 12 });
       });

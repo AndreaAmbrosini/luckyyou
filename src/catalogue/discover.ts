@@ -10,7 +10,7 @@ const KEBAB_CASE = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
  */
 export function validateScenario(value: unknown, folder: string): string[] {
   if (typeof value !== 'object' || value === null) return ["it doesn't export a scenario"];
-  const { id, name, description, card, people, developmentOnly, lineUp, play } = value as Record<
+  const { id, name, description, still, people, developmentOnly, lineUp, play } = value as Record<
     string,
     unknown
   >;
@@ -41,10 +41,7 @@ export function validateScenario(value: unknown, folder: string): string[] {
     }
   }
 
-  const picture = card as { emoji?: unknown; image?: unknown } | null | undefined;
-  if (!filled(picture?.emoji) && !filled(picture?.image)) {
-    problems.push('its card has no emoji or image');
-  }
+  if (!filled(still)) problems.push('it has no still');
 
   const { min, max } = (people ?? {}) as { min?: unknown; max?: unknown };
   if (!Number.isInteger(min) || !Number.isInteger(max)) {

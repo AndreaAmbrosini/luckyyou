@@ -12,7 +12,6 @@ Feature: Hot Potato
     Scenario: The picker shows Hot Potato
       Then its name is "Hot Potato"
       And its description is "Whoever's holding it when it pops gets the job."
-      And its picture is 🥔
       And it takes 2 to 12 people
 
   Rule: It pops in the unlucky person's hands

@@ -18,8 +18,11 @@ export interface ScenarioMeta {
   readonly name: string;
   /** One line, up to 90 characters. */
   readonly description: string;
-  /** The picture on its card: an emoji, or the URL of an image. */
-  readonly card: { readonly emoji: string } | { readonly image: string };
+  /**
+   * The picture its card opens with: a 16 : 9 WebP from the show, in its own
+   * folder, imported by URL (decision 0021). `npm run still` makes it.
+   */
+  readonly still: string;
   /** The head counts it can act out, within 2 to 12. */
   readonly people: { readonly min: number; readonly max: number };
   /** Listed in development and test builds only. */

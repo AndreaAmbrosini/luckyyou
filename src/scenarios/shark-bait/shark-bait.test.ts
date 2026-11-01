@@ -360,9 +360,6 @@ describeSpec(await loadFeature('./shark-bait.feature'), ({ Rule }) => {
       And('its description is {string}', (_, description: string) => {
         expect(sharkBait.description).toBe(description);
       });
-      And('its picture is 🦈', () => {
-        expect(sharkBait.card).toEqual({ emoji: '🦈' });
-      });
       And('it takes 2 to 12 people', () => {
         expect(sharkBait.people).toEqual({ min: 2, max: 12 });
       });

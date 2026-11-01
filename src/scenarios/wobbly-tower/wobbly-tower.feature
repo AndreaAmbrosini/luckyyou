@@ -13,7 +13,6 @@ Feature: Wobbly Tower
     Scenario: The picker shows Wobbly Tower
       Then its name is "Wobbly Tower"
       And its description is "Whoever topples it gets the job."
-      And its picture is 🧱
       And it takes 2 to 12 people
 
   Rule: It falls on the unlucky person's turn

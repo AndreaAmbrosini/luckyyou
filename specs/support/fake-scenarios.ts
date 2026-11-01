@@ -34,7 +34,7 @@ export function fakeScenario(options: FakeOptions = {}): FakeScenario {
     id: options.id ?? name.toLowerCase().replace(/[^a-z0-9]+/g, '-'),
     name,
     description: options.description ?? `${name}, for tests.`,
-    card: options.card ?? { emoji: '🎲' },
+    still: options.still ?? '/stills/fake-show.webp',
     people: options.people ?? { min: 2, max: 12 },
     developmentOnly: options.developmentOnly,
     lineUp: options.lineUp,

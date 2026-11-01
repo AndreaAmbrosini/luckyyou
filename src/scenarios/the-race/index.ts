@@ -25,6 +25,8 @@ import {
 import { COURSES, type Course } from './plan';
 import { playTheRace } from './play';
 import { postcard } from './postcards';
+// Made with `npm run still -- the-race 4 2.4 77 62 field`.
+import still from './still.webp';
 
 /** What someone races as. */
 const RACERS = {
@@ -256,7 +258,7 @@ export default defineScenario({
   id: 'the-race',
   name: 'The Race',
   description: 'Whoever crosses the line first gets the job.',
-  card: { emoji: '🏁' },
+  still,
   people: { min: 2, max: 8 },
   lineUp,
   play: playTheRace,

@@ -5,12 +5,14 @@
 import { gsap } from 'gsap';
 import { defineScenario, eliminationOrder, fitBeats, nameTag } from '../../scenario-kit';
 import styles from './template.module.css';
+// Made with `npm run still -- _template 6 1 50 50`; a new show makes its own.
+import still from './still.webp';
 
 export default defineScenario({
   id: 'template',
   name: 'Template',
   description: 'Everyone leaves one at a time. The last one left gets the job.',
-  card: { emoji: '📋' },
+  still,
   people: { min: 2, max: 12 },
 
   async play(show) {

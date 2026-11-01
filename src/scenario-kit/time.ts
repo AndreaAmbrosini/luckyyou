@@ -65,3 +65,30 @@ export function fitBeats<K extends string>(
     entries.map(([key, beat]) => [key, beat.flexible ? beat.seconds * stretch : beat.seconds]),
   ) as Record<K, number>;
 }
+
+/**
+ * Takes GSAP's clock off the browser's frames, so only `moveTo` moves it, as
+ * https://gsap.com/docs/v3/GSAP/gsap.updateRoot()/ shows.
+ */
+export function driveClockByHand() {
+  const { ticker, globalTimeline } = gsap;
+  const wake = ticker.wake;
+  ticker.remove(gsap.updateRoot);
+  ticker.sleep();
+  // Making an animation wakes the ticker, which would ask for frames again.
+  ticker.wake = () => undefined;
+  // updateRoot takes the time before the root's start time is taken off. A
+  // seek that gives an animation a negative start moves that start time, so
+  // the root's own time can't stand in for it.
+  const start = globalTimeline.startTime() + globalTimeline.time() / globalTimeline.timeScale();
+  return {
+    moveTo(seconds: number) {
+      gsap.updateRoot(start + seconds);
+    },
+    release() {
+      ticker.wake = wake;
+      gsap.updateRoot(ticker.time);
+      ticker.add(gsap.updateRoot);
+    },
+  };
+}
