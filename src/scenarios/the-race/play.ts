@@ -152,6 +152,7 @@ const TRACK_EVENTS: Record<Exclude<Course, 'field'>, Record<RaceEvent['kind'], s
   office: { burst: 'slides on a wet floor', stop: 'stops at the coffee machine' },
   sea: { burst: 'catches a current', stop: 'gets tangled in seaweed' },
   moon: { burst: 'does a moon bounce', stop: 'floats off the ground' },
+  autumn: { burst: 'catches the wind', stop: 'jumps in a pile of leaves' },
   christmas: { burst: 'jumps on a sledge', stop: 'gets stuck in a snowdrift' },
 };
 
@@ -207,7 +208,7 @@ const reachOf = (look: RacerLook): Reach =>
 /** A track's prop drawn on a racer, hidden until its event shows it. */
 function propOn(
   el: SVGElement,
-  prop: 'cup' | 'seaweed' | 'swirls' | 'snowdrift' | 'sledge',
+  prop: 'cup' | 'seaweed' | 'swirls' | 'snowdrift' | 'sledge' | 'umbrella' | 'gust',
 ): SVGGElement {
   const g = group(el, prop, TRACK_PROPS[prop]);
   showPart(g, false);
@@ -277,6 +278,33 @@ const HELD = { cup: [28, 52, 0.95], seaweed: [20, 70, 1.25], swirls: [-50, -150,
  */
 const SNOW = { grow: 0.3, at: [20, 106], wriggle: 6 };
 const SLEDGE = { lift: 22, slide: 0.25, from: -160, at: [30, 178] };
+/**
+ * On Autumn, a racer jumps `hop` stage px, or as high as it can clear of the
+ * lanes behind, and lands `land` s into its stop in a pile of leaves round
+ * it, its foot where the snowdrift's is. Leaves fly up out of it for `fly`
+ * s, from `from` px down in the pile, and fall back. It climbs out over the
+ * last `shake` s of OWN until "Phew!", half as high, wriggling as the snow's
+ * racer does, and leaves the pile where it was along the track.
+ */
+const PILE = { hop: 24, land: 0.35, fly: 0.9, from: 60 };
+/**
+ * An umbrella opens in a racer's waving hand over `open` s, `size` times
+ * its grid, its handle in the hand at `handle` on its own; the wind lifts the
+ * racer `lift` stage px, or as high as it can clear of the lanes behind,
+ * over `rise` s, and lets it down over the burst's last `rise` s, swaying
+ * it `sway` degrees either way `rate` times a second. Leaves blow `blow` px
+ * back behind it.
+ */
+const UMBRELLA = {
+  open: 0.2,
+  size: 1.35,
+  handle: [75, 100],
+  lift: 30,
+  rise: 0.3,
+  sway: 5,
+  rate: 1.5,
+  blow: -60,
+};
 /** The coffee machine stands this far behind the face of whoever stops at it. */
 const MACHINE = 120;
 /** The wet-floor sign, this many times its racer's scale. */
@@ -295,14 +323,32 @@ const PHOTO_AFTER = 0.3;
 const AHEAD = 16;
 /** Confetti at the win: how many pieces, falling at least this fast to where they settle. */
 const CONFETTI = { count: 26, fall: 520 };
-/** Christmas's confetti, in turn: snowflakes, round, among gold and red and green, each its size in px. */
-const FLAKES: readonly { colour: string; round: boolean; size: readonly [number, number] }[] = [
-  { colour: 'paper', round: true, size: [16, 16] },
-  { colour: 'sun', round: false, size: [14, 14] },
-  { colour: 'tomato', round: false, size: [10, 18] },
-  { colour: 'mint', round: false, size: [10, 18] },
-  { colour: 'paper', round: true, size: [12, 12] },
-];
+/**
+ * A theme's confetti, in turn, each piece its size in px: at Christmas,
+ * round snowflakes among gold and red and green; on Autumn, leaves among
+ * gold and green.
+ */
+const PIECES: Readonly<
+  Record<
+    NonNullable<Dress['costume']>,
+    readonly { colour: string; shape?: 'flake' | 'leaf'; size: readonly [number, number] }[]
+  >
+> = {
+  santa: [
+    { colour: 'paper', shape: 'flake', size: [16, 16] },
+    { colour: 'sun', size: [14, 14] },
+    { colour: 'tomato', size: [10, 18] },
+    { colour: 'mint', size: [10, 18] },
+    { colour: 'paper', shape: 'flake', size: [12, 12] },
+  ],
+  acorn: [
+    { colour: 'orange', shape: 'leaf', size: [24, 14] },
+    { colour: 'sun', size: [14, 14] },
+    { colour: 'tomato', shape: 'leaf', size: [22, 13] },
+    { colour: 'mint', size: [10, 18] },
+    { colour: 'sun', shape: 'leaf', size: [22, 13] },
+  ],
+};
 /**
  * A zombie's front shoe flies back from its foot over `fly` s, and it hops
  * back for it, this high and this many times, until "Phew!".
@@ -468,7 +514,11 @@ interface Rider {
   readonly legs: SVGElement[];
   readonly head: SVGElement[];
   readonly antlers: SVGElement[];
-  /** What the track's own event brings to this racer: a cup, seaweed, swirls, a shadow, snow, a sledge. */
+  /**
+   * What the track's own event brings to this racer: a cup, seaweed, swirls,
+   * a shadow, snow, a sledge, a pile of leaves and the leaves flying out of
+   * it, an umbrella and the leaves the wind blows.
+   */
   readonly own: {
     cup?: SVGGElement;
     seaweed?: SVGGElement;
@@ -476,6 +526,10 @@ interface Rider {
     shadow?: HTMLElement;
     snowdrift?: SVGGElement;
     sledge?: SVGGElement;
+    pile?: SVGGElement;
+    flying?: SVGGElement;
+    umbrella?: SVGGElement;
+    gust?: SVGGElement;
   };
   state: { mood: Mood; pose: Pose; sweat: boolean } | null;
 }
@@ -560,17 +614,20 @@ export async function playTheRace(show: Show): Promise<void> {
     const piece = scene.appendChild(document.createElement('span'));
     piece.className = styles.confetti!;
     piece.dataset.part = 'confetti';
-    // At Christmas, snowflakes in among it.
-    const flake = dress.costume === 'santa' ? FLAKES[j % FLAKES.length]! : null;
+    // At Christmas, snowflakes in among it; on Autumn, leaves.
+    const pieces = dress.costume ? PIECES[dress.costume] : null;
+    const theirs = pieces?.[j % pieces.length];
     piece.style.setProperty(
       '--confetti',
-      `var(--color-${flake?.colour ?? RACER_COLOURS[j % RACER_COLOURS.length]})`,
+      `var(--color-${theirs?.colour ?? RACER_COLOURS[j % RACER_COLOURS.length]})`,
     );
-    if (flake) {
-      if (flake.round) piece.classList.add(styles.flake!);
-      piece.style.width = `${flake.size[0]}px`;
-      piece.style.height = `${flake.size[1]}px`;
-      piece.dataset.flake = String(flake.round);
+    if (theirs) {
+      if (theirs.shape) {
+        piece.classList.add(theirs.shape === 'flake' ? styles.flake! : styles.lens!);
+        piece.dataset[theirs.shape] = 'true';
+      }
+      piece.style.width = `${theirs.size[0]}px`;
+      piece.style.height = `${theirs.size[1]}px`;
     }
     piece.style.rotate = `${((j * 37) % 90) - 45}deg`;
     piece.hidden = true;
@@ -658,7 +715,20 @@ export async function playTheRace(show: Show): Promise<void> {
         mine.sledge = propOn(drawn.el, 'sledge');
         drawn.el.prepend(mine.sledge);
       }
-      if (course === 'moon') {
+      // The pile over the racer, the leaves flying out of it; the umbrella
+      // in its waving hand, a creature's on its front, and the wind's leaves
+      // behind it.
+      if (course === 'autumn' && own.kind === 'stop') {
+        mine.pile = group(drawn.el, 'leaf-pile', TRACK_PROPS.leafPile);
+        mine.flying = group(mine.pile, 'flying-leaves', TRACK_PROPS.flyingLeaves);
+      }
+      if (course === 'autumn' && own.kind === 'burst') {
+        mine.umbrella = propOn(drawn.el, 'umbrella');
+        if (isCreature(look.mount)) (drawn as CreatureRunner).arms[1].after(mine.umbrella);
+        mine.gust = propOn(drawn.el, 'gust');
+        drawn.el.prepend(mine.gust);
+      }
+      if (course === 'moon' || (course === 'autumn' && own.kind === 'burst')) {
         mine.shadow = props.appendChild(document.createElement('div'));
         mine.shadow.className = styles.shadow!;
         mine.shadow.dataset.part = 'shadow';
@@ -727,25 +797,34 @@ export async function playTheRace(show: Show): Promise<void> {
   ];
 
   const sledding = course === 'christmas' && own?.kind === 'burst';
+  const blown = course === 'autumn' && own?.kind === 'burst';
+  const jumping = course === 'autumn' && own?.kind === 'stop';
+  /** Whether the track's own event lifts its racer: the Moon's, a sledge, the wind, a jump. */
+  const lifting = course === 'moon' || sledding || blown || jumping;
   /** How much of its highest a racer lifted by the track's own event is, `since` s in. */
   const lifted = (since: number) => {
     const seconds = own!.kind === 'stop' ? STOP.off : OWN.burst;
-    if (sledding) {
-      return show.reducedMotion
-        ? 1
-        : Math.min(1, since / SLEDGE.slide, (seconds - since) / SLEDGE.slide);
+    if (sledding || blown) {
+      const ramp = sledding ? SLEDGE.slide : UMBRELLA.rise;
+      return show.reducedMotion ? 1 : Math.min(1, since / ramp, (seconds - since) / ramp);
+    }
+    if (jumping) {
+      if (show.reducedMotion) return 0;
+      if (since < PILE.land) return Math.sin((Math.PI * since) / PILE.land);
+      const out = since - STOP.phew + OWN.shake;
+      return out > 0 && out < OWN.shake ? 0.5 * Math.sin((Math.PI * out) / OWN.shake) : 0;
     }
     return Math.sin((Math.PI * since) / seconds);
   };
 
-  // How high the Moon's own event, or a sledge, lifts its racer at most: as
-  // high as it can while, at each moment of its rise and fall, nothing of it
-  // touches a tag, or a tag of it touches a face, behind it.
+  // How high the Moon's own event, a sledge, the wind or a jump lifts its
+  // racer at most: as high as it can while, at each moment of its rise and
+  // fall, nothing of it touches a tag, or a tag of it touches a face, behind it.
   const rise = (() => {
-    if ((course !== 'moon' && !sledding) || !own) return 0;
+    if (!lifting || !own) return 0;
     const subject = byName.get(own.subject)!;
     const seconds = own.kind === 'stop' ? STOP.off : OWN.burst;
-    let most = sledding ? SLEDGE.lift : OWN.rise;
+    let most = sledding ? SLEDGE.lift : blown ? UMBRELLA.lift : jumping ? PILE.hop : OWN.rise;
     for (let t = own.at; t <= own.at + seconds; t += SAMPLE / 2) {
       const share = lifted(t - own.at);
       if (share < 0.05) continue;
@@ -766,10 +845,13 @@ export async function playTheRace(show: Show): Promise<void> {
     return Math.max(0, most);
   })();
 
-  /** How high `name` floats or hops on the Moon, or rides a sledge, at show second `t`, in stage px. */
+  /**
+   * How high `name` floats or hops on the Moon, rides a sledge, hangs from
+   * an umbrella or jumps, at show second `t`, in stage px.
+   */
   const liftOf = (name: string, t: number) => {
     const since = ownSince(name, t);
-    if (since < 0 || (course !== 'moon' && !sledding)) return 0;
+    if (since < 0 || !lifting) return 0;
     return rise * lifted(since);
   };
 
@@ -1419,6 +1501,10 @@ export async function playTheRace(show: Show): Promise<void> {
         pose: 'hold',
         sweat: false,
       } as const;
+    // Holding up the umbrella the wind carries it off by.
+    if (blown && ownSince(rider.name, t) >= 0) {
+      return { mood: 'scared', pose: 'wave', sweat: true } as const;
+    }
     const stop = stopOf(rider.name, t);
     if (stop)
       return { mood: 'happy', pose: t - stop.at > 0.3 ? 'wave' : 'hold', sweat: false } as const;
@@ -1435,7 +1521,8 @@ export async function playTheRace(show: Show): Promise<void> {
 
   /** What the track's own event does to `rider`: its props, its skid; `since` is how far in. */
   const undergo = (rider: Rider, t: number, since: number) => {
-    const { cup, seaweed, swirls, shadow, snowdrift, sledge } = rider.own;
+    const { cup, seaweed, swirls, shadow, snowdrift, sledge, pile, flying, umbrella, gust } =
+      rider.own;
     const still = show.reducedMotion;
     const shown: string[] = [];
     if (cup) {
@@ -1483,6 +1570,49 @@ export async function playTheRace(show: Show): Promise<void> {
       const top = y! + (lift - SLEDGE.lift + 2) / rider.at.k;
       write(sledge, '@transform', `translate(${(x! + slid).toFixed(1)} ${top.toFixed(1)})`);
     }
+    if (pile && flying) {
+      const on = since >= 0;
+      showPart(pile, on);
+      if (on) shown.push('leaf-pile');
+      // Round the racer until it climbs out at "Phew!", then where it was along
+      // the track; its foot on the ground however high the racer is.
+      const out = on && since > STOP.phew;
+      const back = out ? alongAt(rider.name, t - since + STOP.phew) - alongAt(rider.name, t) : 0;
+      const [x, y] = SNOW.at;
+      const foot = y! + (6 + lift) / rider.at.k;
+      write(
+        pile,
+        '@transform',
+        `translate(${(x! + back / rider.at.k).toFixed(1)} ${foot.toFixed(1)})`,
+      );
+      const flight = since - PILE.land;
+      const up = on && !still && flight >= 0 && flight < PILE.fly;
+      showPart(flying, up);
+      if (up) {
+        shown.push('flying-leaves');
+        const down = PILE.from * (1 - Math.sin((Math.PI * flight) / PILE.fly));
+        write(flying, '@transform', `translate(0 ${down.toFixed(1)})`);
+      }
+    }
+    if (umbrella && gust) {
+      const on = since >= 0;
+      showPart(umbrella, on);
+      showPart(gust, on);
+      if (on) shown.push('umbrella', 'gust');
+      const [hx, hy] = rider.drawn.waving;
+      const [ux, uy] = UMBRELLA.handle;
+      const open = still ? 1 : Math.max(0.05, Math.min(1, since / UMBRELLA.open));
+      const sway = still || !on ? 0 : UMBRELLA.sway * Math.sin(2 * Math.PI * UMBRELLA.rate * since);
+      write(
+        umbrella,
+        '@transform',
+        `translate(${hx} ${hy}) rotate(${sway.toFixed(1)}) ` +
+          `scale(${(UMBRELLA.size * open).toFixed(3)} ${UMBRELLA.size}) translate(${-ux!} ${-uy!})`,
+      );
+      write(rider.drawn.el, '@data-sway', sway.toFixed(1));
+      const blow = still || !on ? 0 : (UMBRELLA.blow * since) / OWN.burst;
+      write(gust, '@transform', `translate(${blow.toFixed(1)} 0)`);
+    }
     write(rider.drawn.el, '--lift', `${(-lift / rider.at.k).toFixed(1)}px`);
     write(rider.drawn.el, '@data-lift', lift.toFixed(1));
     if (shadow) {
@@ -1504,11 +1634,13 @@ export async function playTheRace(show: Show): Promise<void> {
     if (course === 'office' && own?.kind === 'burst') {
       return OWN.skid * Math.sin((Math.PI * since) / OWN.burst);
     }
-    // Wriggling free of the snow.
-    if (course === 'christmas' && own?.kind === 'stop') {
+    // Wriggling free of the snow, or out of the leaves.
+    if ((course === 'christmas' || course === 'autumn') && own?.kind === 'stop') {
       const wriggling = since < STOP.phew && since > STOP.phew - OWN.shake;
       return wriggling ? SNOW.wriggle * Math.sin(40 * since) : 0;
     }
+    // Swaying under the umbrella.
+    if (blown) return UMBRELLA.sway * Math.sin(2 * Math.PI * UMBRELLA.rate * since);
     if (course === 'moon') {
       return (
         OWN.drift * Math.sin((Math.PI * since) / (own!.kind === 'stop' ? STOP.off : OWN.burst))

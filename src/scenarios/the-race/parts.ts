@@ -672,17 +672,82 @@ const BOW_TIE: readonly Shape[] = [
 ];
 
 /**
+ * A fallen leaf, as a path: a lens 20 long and 10 wide at `size` 1, round
+ * (x, y), its tip turned `angle` degrees.
+ */
+export function lens(x: number, y: number, angle: number, size = 1): string {
+  const turn = (angle * Math.PI) / 180;
+  const [cos, sin] = [Math.cos(turn), Math.sin(turn)];
+  const r = 10 * size;
+  const at = (u: number, w: number) =>
+    `${Math.round((x + u * cos - w * sin) * 10) / 10} ${Math.round((y + u * sin + w * cos) * 10) / 10}`;
+  return `M${at(-r, 0)} Q${at(0, -r)} ${at(r, 0)} Q${at(0, r)} ${at(-r, 0)} Z `;
+}
+
+/** Leaves at [x, y, angle], in turn orange, tomato and sun from the `from`th, as one path each. */
+export function leaves(at: readonly (readonly number[])[], size: number, from = 0) {
+  const paths = ['', '', ''];
+  at.forEach(([x = 0, y = 0, angle = 0], i) => (paths[(from + i) % 3] += lens(x, y, angle, size)));
+  return { orange: paths[0]!, tomato: paths[1]!, sun: paths[2]! };
+}
+
+/** Leaves on an orange pile, its orange ones tomato too, outlined 3 wide. */
+function onPile(at: readonly (readonly number[])[], size: number, from = 0): Shape[] {
+  const { orange, tomato, sun } = leaves(at, size, from);
+  return [
+    ['path', styles.tomato!, { d: orange + tomato, 'stroke-width': 3, 'stroke-linejoin': 'round' }],
+    ['path', styles.sun!, { d: sun, 'stroke-width': 3 }],
+  ];
+}
+
+/** The pile's leaves: four on it, then five over it, flying up. */
+const PILE_LEAVES = [
+  [40, 58, 20],
+  [92, 40, -30],
+  [142, 50, 40],
+  [172, 66, -10],
+  [16, -2, -40],
+  [58, -26, 30],
+  [108, -38, -60],
+  [156, -18, 20],
+  [188, 8, 70],
+];
+
+/** The leaves the wind blows behind a racer, on its grid. */
+const GUST_LEAVES = [
+  [-28, 48, -20],
+  [-97, 96, 30],
+  [-14, 134, 10],
+  [-167, 59, -50],
+  [-83, 93, 60],
+  [-208, 118, 20],
+];
+
+/**
  * What a track's own events bring, from the canvas or in its style: the
  * office's coffee machine, on the stage from its left edge, standing on the
  * floor in front of the partitions, below the caption; the paper cup, on its 40 by 44 grid; the wet-floor sign, standing on
  * its middle at (0, 0); the seaweed that wraps round a racer, on its 160 by
  * 120 grid; the current's swirls behind a racer, on the racer's grid; the
- * snowdrift that piles up round a racer, on its 200 by 84 grid; and the
- * sledge that slides in under one, on its 160 by 50 grid.
+ * snowdrift that piles up round a racer, on its 200 by 84 grid; the
+ * sledge that slides in under one, on its 160 by 50 grid; the pile of
+ * leaves a racer jumps in, on the snowdrift's grid, and the leaves that fly
+ * up out of it; and the umbrella that opens in a racer's hand, on its 150 by
+ * 120 grid, with the leaves the wind blows behind the racer, on its grid.
  */
 export const TRACK_PROPS: Readonly<
   Record<
-    'machine' | 'cup' | 'wetFloor' | 'seaweed' | 'swirls' | 'snowdrift' | 'sledge',
+    | 'machine'
+    | 'cup'
+    | 'wetFloor'
+    | 'seaweed'
+    | 'swirls'
+    | 'snowdrift'
+    | 'sledge'
+    | 'leafPile'
+    | 'flyingLeaves'
+    | 'umbrella'
+    | 'gust',
     readonly Shape[]
   >
 > = {
@@ -772,6 +837,42 @@ export const TRACK_PROPS: Readonly<
     ],
     ['path', styles.sunLine!, { d: 'M16 20 H132', 'stroke-width': 4 }],
   ],
+  leafPile: [
+    [
+      'path',
+      styles.orange!,
+      {
+        d: 'M0 84 Q2 50 30 44 Q40 16 74 18 Q96 0 126 14 Q158 8 168 40 Q198 46 200 84 Z',
+        'stroke-width': 5,
+      },
+    ],
+    ...onPile(PILE_LEAVES.slice(0, 4), 1.1),
+  ],
+  flyingLeaves: onPile(PILE_LEAVES.slice(4), 1.1, 4),
+  umbrella: [
+    ['path', styles.line!, { d: 'M75 50 V108 Q75 118 66 118 Q58 118 58 110', 'stroke-width': 6 }],
+    [
+      'path',
+      styles.tomato!,
+      {
+        d: 'M8 52 Q14 6 75 4 Q136 6 142 52 Q125 42 108 52 Q92 42 75 52 Q58 42 42 52 Q25 42 8 52 Z',
+        'stroke-width': 4,
+        'stroke-linejoin': 'round',
+      },
+    ],
+    [
+      'path',
+      styles.paper!,
+      {
+        d:
+          'M75 4 Q50 14 42 52 Q58 42 75 52 Z ' +
+          'M75 4 Q100 14 108 52 Q125 42 142 52 Q136 6 75 4 Z',
+        'stroke-width': 3,
+      },
+    ],
+    ['circle', styles.inkFill!, { cx: 75, cy: 2, r: 5 }],
+  ],
+  gust: onPile(GUST_LEAVES, 1.5),
 };
 
 /** The trophy, on its 72 by 60 grid. */
@@ -798,6 +899,72 @@ export const PRESENT: readonly Shape[] = [
   ],
   ['circle', styles.sun!, { cx: 36, cy: 16, r: 5, 'stroke-width': 3 }],
 ];
+
+/** The golden acorn, on the trophy's 72 by 60 grid: a sun nut under a bark cap with its stalk. */
+export const GOLDEN_ACORN: readonly Shape[] = [
+  ['path', styles.sun!, { d: 'M18 26 Q16 50 36 58 Q56 50 54 26 Z', 'stroke-width': 4 }],
+  ['path', styles.line!, { d: 'M36 10 Q37 2 44 -2', 'stroke-width': 9 }],
+  ['path', styles.barkLine!, { d: 'M36 10 Q37 2 44 -2', 'stroke-width': 4 }],
+  [
+    'path',
+    styles.bark!,
+    { d: 'M12 30 Q12 10 36 10 Q60 10 60 30 Q36 24 12 30 Z', 'stroke-width': 4 },
+  ],
+  [
+    'path',
+    styles.line!,
+    {
+      d:
+        'M27 15 l4 3 l4 -3 M37 15 l4 3 l4 -3 M18 22 l4 3 l4 -3 M29 21 l4 3 l4 -3 ' +
+        'M40 21 l4 3 l4 -3 M51 22 l3 2 l3 -2',
+      'stroke-width': 2.5,
+    },
+  ],
+];
+
+/** What the winner holds up, by name. */
+export const PRIZES: Readonly<Record<Dress['prize'], readonly Shape[]>> = {
+  trophy: TROPHY,
+  present: PRESENT,
+  'golden-acorn': GOLDEN_ACORN,
+};
+
+/**
+ * The acorn cap, round the middle of its rim: a bark cap with three rows of
+ * ink chevrons, and its stalk. `shaded`, it has a creature's flat shadow.
+ */
+export function acornCap(shaded = false): Shape[] {
+  const stalk = 'M0 -25 Q2 -36 10 -40';
+  return [
+    ['path', styles.line!, { d: stalk, 'stroke-width': 10 }],
+    ['path', styles.barkLine!, { d: stalk, 'stroke-width': 4 }],
+    [
+      'path',
+      styles.bark!,
+      {
+        d: 'M-34 12 C-36 -14 -18 -26 0 -26 C18 -26 36 -14 34 12 C20 5 -20 5 -34 12 Z',
+        'stroke-width': 4,
+      },
+    ],
+    ...(shaded
+      ? ([
+          ['path', styles.shade!, { d: 'M-32 9 C-34 -10 -24 -20 -12 -24 C-20 -14 -22 -2 -20 6 Z' }],
+        ] as Shape[])
+      : []),
+    [
+      'path',
+      styles.line!,
+      {
+        d:
+          'M-14 -17 l4 3 l4 -3 M-4 -17 l4 3 l4 -3 M6 -17 l4 3 l4 -3 ' +
+          'M-26 -7 l4 3 l4 -3 M-15 -7 l4 3 l4 -3 M-4 -7 l4 3 l4 -3 M7 -7 l4 3 l4 -3 ' +
+          'M18 -7 l4 3 l4 -3 M-21 2 l4 3 l4 -3 M-10 2 l4 3 l4 -3 M1 2 l4 3 l4 -3 ' +
+          'M12 2 l4 3 l4 -3',
+        'stroke-width': 2.5,
+      },
+    ],
+  ];
+}
 
 /**
  * The Santa hat, round the middle of its brim's bottom: its tail and bobble
@@ -841,15 +1008,22 @@ export function santaHat(shaded = false): Shape[] {
 
 /** What a theme dresses everyone in, and what the winner holds up. */
 export interface Dress {
-  readonly costume: 'santa' | null;
-  readonly prize: 'trophy' | 'present';
+  readonly costume: 'santa' | 'acorn' | null;
+  readonly prize: 'trophy' | 'present' | 'golden-acorn';
 }
 
-/** Christmas puts everyone in a Santa hat and gives the winner a present; other themes, the trophy. */
+/** Each theme's costume and prize, where it has its own. */
+const DRESSES: Readonly<Partial<Record<Course, Dress>>> = {
+  autumn: { costume: 'acorn', prize: 'golden-acorn' },
+  christmas: { costume: 'santa', prize: 'present' },
+};
+
+/**
+ * Autumn puts everyone in an acorn cap and gives the winner a golden acorn;
+ * Christmas, a Santa hat and a present; other themes, the trophy.
+ */
 export const dressFor = (course: Course | null): Dress =>
-  course === 'christmas'
-    ? { costume: 'santa', prize: 'present' }
-    : { costume: null, prize: 'trophy' };
+  (course && DRESSES[course]) || { costume: null, prize: 'trophy' };
 
 /** A racer, a rider on a mount or a creature, as the race moves it. */
 export interface Runner {
@@ -859,6 +1033,8 @@ export interface Runner {
   /** Its nose's x, and the middle of its face's 72 px box, on its grid. */
   readonly nose: number;
   readonly faceX: number;
+  /** Where its front hand is as it waves, on its grid; a creature's, on its front arm's. */
+  readonly waving: Point;
   setMood(mood: Mood): void;
   setPose(pose: Pose): void;
   setSweat(on: boolean): void;
@@ -959,10 +1135,16 @@ export function racer(
   // The cape goes behind the rider; the scarf and the bow tie over the shirt.
   if (look.extra === 'cape') wear('cape', CAPE);
   lean.append(face.el);
-  if (dress.costume === 'santa') {
+  if (dress.costume) {
     // Instead of the cap, the goggles or the snorkel the kit hands out.
     face.el.querySelector(`[data-part="${faceLook.accessory}"]`)?.remove();
-    group(wear('santa', []), 'hat', santaHat()).setAttribute('transform', 'translate(50 24)');
+    const santa = dress.costume === 'santa';
+    const hat = group(
+      wear(santa ? 'santa' : 'acorn-cap', []),
+      'hat',
+      santa ? santaHat() : acornCap(),
+    );
+    hat.setAttribute('transform', 'translate(50 24)');
   }
   if (look.extra === 'scarf') wear('scarf', SCARF);
   if (look.extra === 'bowtie') wear('bowtie', BOW_TIE);
@@ -996,7 +1178,7 @@ export function racer(
   leaf.setAttribute('transform', 'translate(214 138)');
   show(leaf, false);
 
-  const trophy = drawing(72, 60, dress.prize === 'present' ? PRESENT : TROPHY);
+  const trophy = drawing(72, 60, PRIZES[dress.prize]);
   trophy.dataset.part = dress.prize;
   trophy.setAttribute('x', String(sx - 36));
   trophy.setAttribute('y', String(sy - 132));
@@ -1061,6 +1243,7 @@ export function racer(
     look,
     nose: spec.nose,
     faceX: sx,
+    waving: [sx + 38, sy - 76],
     setMood(next) {
       current = { ...current, mood: next };
       face.setMood(next);
@@ -1119,21 +1302,64 @@ function chequer(x: number, y: number, rows: number, size: number): string {
 
 /**
  * How a track's signs stand: on a post by the rail, stuck to a partition,
- * by a candy cane, or on their own.
+ * by a candy cane, on their own, on a wooden post, or on one with a rake
+ * beside it.
  */
-type Stands = 'post' | 'note' | 'cane' | 'bare';
+type Stands = 'post' | 'note' | 'cane' | 'bare' | 'wood' | 'rake';
 
 /** A candy cane standing on the ground's edge, its hook over to the right, 30 px left of a 150 px sign. */
 const CANE = 'M-105 214 V126 Q-105 106 -87 106 Q-69 106 -69 124';
+
+/**
+ * A rake leaning left of a sign, from its foot on the ground's edge to its
+ * head, with five tines 38 long fanned 36° either way of the handle and a
+ * bar across them; its foot in a pile of leaves.
+ */
+const RAKE = (() => {
+  const foot = [-84, 212] as const;
+  const head = [-110, 98] as const;
+  const handle = Math.atan2(head[1] - foot[1], head[0] - foot[0]);
+  let tines = '';
+  let bar = '';
+  [-36, -18, 0, 18, 36].forEach((degrees, i) => {
+    const turn = handle + (degrees * Math.PI) / 180;
+    const along = (r: number) =>
+      `${Math.round(head[0] + r * Math.cos(turn))} ${Math.round(head[1] + r * Math.sin(turn))}`;
+    tines += `M${head[0]} ${head[1]} L${along(38)} `;
+    bar += `${i ? ' L' : 'M'}${along(18)}`;
+  });
+  return {
+    handle: `M${foot[0]} ${foot[1]} L${head[0]} ${head[1]}`,
+    tines: tines + bar,
+    pile: 'M-122 216 Q-90 172 -58 216 Z',
+    leaves: [
+      [-104, 206, 25],
+      [-82, 204, -30],
+    ],
+  };
+})();
 
 /** A sign saying `text`, its post or its middle at x 0 of its holder. */
 function sign(text: string, colour: 'paper' | 'sun', stands: Stands): HTMLElement {
   const holder = document.createElement('div');
   holder.className = styles.sign!;
   holder.dataset.part = 'sign';
-  if (stands === 'post') {
+  if (stands === 'rake') {
+    const rake = holder.appendChild(
+      drawing(1, 1, [
+        ['path', styles.line!, { d: RAKE.handle, 'stroke-width': 10 }],
+        ['path', styles.barkLine!, { d: RAKE.handle, 'stroke-width': 4 }],
+        ['path', styles.line!, { d: RAKE.tines, 'stroke-width': 4 }],
+        ['path', styles.orange!, { d: RAKE.pile, 'stroke-width': 4 }],
+        ...onPile(RAKE.leaves, 0.9),
+      ]),
+    );
+    rake.classList.add(styles.cane!);
+    rake.dataset.part = 'rake';
+  }
+  if (stands === 'post' || stands === 'wood' || stands === 'rake') {
     const post = holder.appendChild(document.createElement('div'));
-    post.className = styles.post!;
+    post.className = stands === 'post' ? styles.post! : `${styles.post} ${styles.woodPost}`;
   }
   if (stands === 'cane') {
     const cane = holder.appendChild(
@@ -1523,11 +1749,136 @@ function christmas(back: SVGSVGElement, ground: SVGSVGElement): Strip[] {
   return [sky, hills, village, lights];
 }
 
+/** Autumn's lawn stands on y `LAWN`, its fence's rails on `RAILS`, a post every `POSTS` px. */
+const LAWN = 172;
+const RAILS = [170, 190];
+const POSTS = 140;
+
+/** Autumn's trees: each one's x, its crown's radius and its colour. */
+const TREES = [
+  [70, 50, 'orange'],
+  [250, 38, 'tomato'],
+  [520, 26, 'sun'],
+  [760, 28, 'orange'],
+  [1010, 44, 'sun'],
+  [1190, 54, 'tomato'],
+] as const;
+
+/** Leaves falling in Autumn's sky, and lying on its path. */
+const FALLING = [
+  [60, 40, 30],
+  [200, 110, -40],
+  [300, 50, 60],
+  [980, 30, 10],
+  [1080, 120, -20],
+  [1250, 60, 45],
+  [620, 128, 80],
+  [420, 150, -30],
+  [860, 150, 20],
+  [150, 150, 70],
+];
+const FALLEN = [
+  [90, 30, 20],
+  [280, 150, -30],
+  [470, 60, 60],
+  [620, 300, 10],
+  [800, 120, -50],
+  [980, 250, 30],
+  [1150, 80, -10],
+  [200, 380, 45],
+  [1060, 420, -25],
+  [720, 460, 70],
+  [380, 260, 15],
+  [1220, 330, -40],
+].map(([x = 0, y = 0, angle = 0]) => [x, 216 + y, angle]);
+
+/** Leaves, orange, tomato and sun in turn, each colour a path outlined `width` wide. */
+function leafShapes(at: readonly (readonly number[])[], size: number, width: number): Shape[] {
+  const { orange, tomato, sun } = leaves(at, size);
+  return [
+    ['path', styles.orange!, { d: orange, 'stroke-width': width }],
+    ['path', styles.tomato!, { d: tomato, 'stroke-width': width, 'stroke-linejoin': 'round' }],
+    ['path', styles.sun!, { d: sun, 'stroke-width': width }],
+  ];
+}
+
+/**
+ * Autumn: a park on a sunny afternoon, with trees in orange, tomato and sun
+ * on a lawn, leaves falling, and a wooden fence with piles of leaves at its
+ * foot; a bark path strewn with leaves.
+ */
+function autumn(back: SVGSVGElement, ground: SVGSVGElement): Strip[] {
+  const sky = strip(back, 'leaves', 1500, 0.2, leafShapes(FALLING, 1.2, 3));
+  // The lawn's edge drawn apart from the grass under it, so no tile shows a seam.
+  let edge = `M-10 ${LAWN}`;
+  for (let x = -10; x < 1430; x += 720) {
+    edge += ` Q${x + 180} ${LAWN - 22} ${x + 360} ${LAWN} Q${x + 540} ${LAWN + 22} ${x + 720} ${LAWN}`;
+  }
+  let trunks = '';
+  const backs = { orange: '', tomato: '', sun: '' };
+  const crowns = { orange: '', tomato: '', sun: '' };
+  for (const [x, r, colour] of TREES) {
+    const y = LAWN - 26 - r * 0.8;
+    trunks += `M${x - 7} ${LAWN + 4} V${Math.round(y)} H${x + 7} V${LAWN + 4} Z `;
+    backs[colour] +=
+      dot(Math.round(x - r * 0.72), Math.round(y + r * 0.3), Math.round(r * 0.62)) +
+      dot(Math.round(x + r * 0.72), Math.round(y + r * 0.26), Math.round(r * 0.62));
+    crowns[colour] += dot(x, Math.round(y), r);
+  }
+  const tree = (colour: 'orange' | 'tomato' | 'sun', d: string): Shape => [
+    'path',
+    styles[colour]!,
+    { d, 'stroke-width': 4, 'stroke-linejoin': 'round' },
+  ];
+  const park = strip(back, 'park', 1440, 0.5, [
+    ['path', styles.grass!, { d: `${edge} V216 H-10 Z`, 'stroke-width': 0 }],
+    ['path', styles.line!, { d: edge, 'stroke-width': 4 }],
+    ['path', styles.bark!, { d: trunks, 'stroke-width': 4, 'data-part': 'trunks' }],
+    tree('orange', backs.orange),
+    tree('tomato', backs.tomato),
+    tree('sun', backs.sun),
+    tree('orange', crowns.orange),
+    tree('tomato', crowns.tomato),
+    tree('sun', crowns.sun),
+  ]);
+  draw(ground, [
+    [
+      'path',
+      styles.bark!,
+      {
+        d: RAILS.map((y) => `M-10 ${y} h1300 v10 h-1300 Z`).join(' '),
+        'stroke-width': 4,
+        'data-part': 'rails',
+      },
+    ],
+  ]);
+  const fence = strip(ground, 'fence', POSTS, 1, [
+    ['path', styles.bark!, { d: 'M30 160 h14 v56 h-14 Z', 'stroke-width': 4 }],
+  ]);
+  const piles = strip(ground, 'piles', 340, 1, [
+    ['path', styles.orange!, { d: 'M140 216 Q184 164 228 216 Z', 'stroke-width': 4 }],
+    ...onPile(
+      [
+        [168, 206, 25],
+        [198, 204, -30],
+      ],
+      0.9,
+      2,
+    ),
+  ]);
+  draw(ground, [
+    ['rect', styles.bark!, { x: -10, y: 214, width: 1300, height: 520, 'stroke-width': 4 }],
+  ]);
+  const fallen = strip(ground, 'fallen', 1280, 1, leafShapes(FALLEN, 0.9, 3));
+  return [sky, park, fence, piles, fallen];
+}
+
 const BACKDROPS: Record<Course, (back: SVGSVGElement, ground: SVGSVGElement) => Strip[]> = {
   field,
   office,
   sea,
   moon,
+  autumn,
   christmas,
 };
 
@@ -1543,6 +1894,7 @@ const LOOKS: Record<
   office: { lines: styles.sunFill!, dashed: false, stands: 'note', distance: 'sun' },
   sea: { lines: styles.orangeFill!, dashed: false, stands: 'post', distance: 'paper' },
   moon: { lines: styles.paperFill!, dashed: true, stands: 'post', distance: 'paper' },
+  autumn: { lines: styles.paperFill!, dashed: false, stands: 'rake', distance: 'paper' },
   christmas: { lines: styles.glassFill!, dashed: false, stands: 'cane', distance: 'paper' },
 };
 
@@ -1559,7 +1911,7 @@ export interface Track {
 /**
  * Track `course`, from the canvas: the sports field (sky with two clouds,
  * bunting, the rail with its posts, grass), the office, under the sea, the
- * Moon or Christmas. On each, lines between the lanes, the Start line at `start` and the
+ * Moon, Autumn or Christmas. On each, lines between the lanes, the Start line at `start` and the
  * chequered Finish at `finish`, in px along the track, and distance signs
  * counting down to it over a race of 200 m. `lanes` are the lanes' tops,
  * back to front.
@@ -1622,8 +1974,8 @@ export function track({
 
   const length = finish - start;
   const ends: 'paper' | 'sun' = look.distance === 'sun' ? 'paper' : 'sun';
-  // A candy cane only by a distance.
-  const endsStand = look.stands === 'cane' ? 'bare' : look.stands;
+  // A candy cane or a rake only by a distance.
+  const endsStand = look.stands === 'cane' ? 'bare' : look.stands === 'rake' ? 'wood' : look.stands;
   const signs = [
     { text: 'Start', at: start + 8, colour: ends, stands: endsStand },
     ...[150, 100, 50].map((metres) => ({
@@ -1687,6 +2039,21 @@ const PHOTO_GROUND: Record<Course, { ground: string; on: readonly Shape[] }> = {
     on: [['path', styles.seam!, { d: 'M120 152 V370 M280 152 V370', 'stroke-width': 4 }]],
   },
   sea: { ground: styles.sun!, on: [] },
+  autumn: {
+    ground: styles.bark!,
+    on: leafShapes(
+      [
+        [60, 200, 20],
+        [210, 320, -30],
+        [300, 180, 60],
+        [480, 250, 10],
+        [540, 335, -40],
+        [130, 300, 45],
+      ],
+      1.2,
+      3,
+    ),
+  },
   christmas: { ground: styles.snow!, on: [] },
   moon: {
     ground: styles.shark!,

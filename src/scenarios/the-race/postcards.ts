@@ -1,5 +1,6 @@
 // Each track's postcard on the Line-up, from the Design canvas: its world in
-// 120 by 46, sky, backdrop and ground; Christmas's, a tree on snow at dusk. Every colour comes from a class in
+// 120 by 46, sky, backdrop and ground; Autumn's, trees in autumn colours over
+// a path; Christmas's, a tree on snow at dusk. Every colour comes from a class in
 // the-race.module.css; a layer without an outline has a stroke width of 0.
 
 import { drawing, type Shape } from './parts';
@@ -20,6 +21,9 @@ function S(x: number, y: number, r: number) {
     `L${x} ${y + r} L${x - q} ${y + q} L${x - r} ${y} L${x - q} ${y - q} Z `
   );
 }
+/** A diamond: a leaf, small. */
+const D = (x: number, y: number, r: number) =>
+  `M${x} ${y - r} L${x + r} ${y} L${x} ${y + r} L${x - r} ${y} Z `;
 /** One layer: a path in one class, its outline `width` wide. */
 const L = (d: string, className: string, width = 0): Shape => [
   'path',
@@ -82,6 +86,16 @@ const POSTCARDS: Readonly<Record<Course, readonly Shape[]>> = {
       R(4, 37, 10, 2) + R(28, 37, 10, 2) + R(52, 37, 10, 2) + R(76, 37, 10, 2) + R(100, 37, 10, 2),
       styles.paperFill!,
     ),
+  ],
+  autumn: [
+    L(R(0, 0, 120, 46), styles.skyFill!),
+    L('M-2 24 Q30 19 60 24 T122 24 V32 H-2 Z', styles.mint!, 1.5),
+    L(R(21, 12, 4, 14) + R(59, 14, 4, 12) + R(97, 11, 4, 15), styles.bark!, 1.5),
+    L(O(23, 11, 9) + O(99, 10, 10), styles.orange!, 1.5),
+    L(O(61, 13, 8), styles.tomato!, 1.5),
+    L(D(44, 9, 3) + D(82, 22, 3) + D(112, 28, 2.5) + D(8, 30, 2.5), styles.sun!, 1),
+    L(R(-2, 30, 124, 18), styles.bark!, 2),
+    L(R(-2, 39, 124, 2), styles.paperFill!),
   ],
   christmas: [
     L(R(0, 0, 120, 46), styles.seaBlue!),

@@ -1,6 +1,6 @@
 // Everyone rides a mount or races as a creature, as the host chose on the
 // Line-up, a lane each, on the theme chosen there: a track (a sports field,
-// the office, under the sea, the Moon or Christmas). The camera follows the leaders.
+// the office, under the sea, the Moon, Autumn or Christmas). The camera follows the leaders.
 // Winning is losing: the leader looks scared, pulling on the reins or
 // flailing its arms. One thing happens at a time before the final stretch,
 // which runs at full speed; only the last moment before the line is slow,
@@ -117,6 +117,7 @@ const THEMES: readonly { name: Course; label: string; suits: readonly Kind[] }[]
   },
   { name: 'sea', label: 'Under the sea', suits: ['shark', 'octopus', 'sushi', 'duck', 'penguin'] },
   { name: 'moon', label: 'Moon', suits: ['rocket', 'astronaut', 'alien', 'robot', 'hopper'] },
+  { name: 'autumn', label: 'Autumn', suits: ['snail', 'caterpillar', 'pigeon', 'gnome'] },
   {
     name: 'christmas',
     label: 'Christmas',

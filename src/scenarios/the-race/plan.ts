@@ -21,9 +21,9 @@ import { shuffle } from '../../scenario-kit';
 export type Ending = 'photo' | 'brake' | 'surge';
 
 /** The tracks a race runs on, one per theme. */
-export type Course = 'field' | 'office' | 'sea' | 'moon' | 'christmas';
+export type Course = 'field' | 'office' | 'sea' | 'moon' | 'autumn' | 'christmas';
 
-export const COURSES: readonly Course[] = ['field', 'office', 'sea', 'moon', 'christmas'];
+export const COURSES: readonly Course[] = ['field', 'office', 'sea', 'moon', 'autumn', 'christmas'];
 
 /**
  * A racer bursting ahead into the lead, or the leader stopping: by the

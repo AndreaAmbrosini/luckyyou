@@ -17,7 +17,7 @@ import { createRandom } from '../../scenario-kit/random';
 import { describeSpec, runShow, type ShowRecord } from '../../scenario-kit/testing';
 import theRace from './index';
 import { eventCaption } from './play';
-import { faceAt, lane, startLane, START_TRACK, tagAt, tagBox } from './layout';
+import { boxAt, faceAt, lane, startLane, START_TRACK, tagAt, tagBox } from './layout';
 import { raceMusic } from './music';
 import { creature, CREATURE_SPEC } from './creature';
 import {
@@ -35,6 +35,8 @@ import {
   type Kind,
   type Mount,
   type RacerColour,
+  type RacerLook,
+  type RideLook,
 } from './parts';
 import styles from './the-race.module.css';
 import css from './the-race.module.css?raw';
@@ -159,6 +161,8 @@ interface Drawn {
   readonly spin: number;
   /** How many of a Christmas tree's lights are on. */
   readonly lit: number;
+  /** How far an umbrella sways, in degrees. */
+  readonly sway: number;
 }
 
 /** What the stage showed in one frame. */
@@ -312,6 +316,7 @@ async function watch(
           spin: Number(svg.dataset.spin ?? 0),
           lit: svg.querySelectorAll('[data-part="lights"]:not([display]) circle:not([display])')
             .length,
+          sway: Number(svg.dataset.sway ?? 0),
         };
       }
       const says = found.bubbles
@@ -663,7 +668,14 @@ interface OnTrack {
   /** The photo card, if it popped up. */
   readonly photo: HTMLElement | null;
   /** Each frame the coffee machine or the wet-floor sign was up, and where. */
-  readonly standing: readonly { time: number; part: string; x: number; y: number }[];
+  /** Where a track's prop stands or is held, each frame, and the hand holding it. */
+  readonly standing: readonly {
+    time: number;
+    part: string;
+    x: number;
+    y: number;
+    hand?: readonly [number, number];
+  }[];
   /** Each frame a shadow was on the ground. */
   readonly shadows: readonly number[];
 }
@@ -741,6 +753,7 @@ const SUBJECTS: Readonly<Record<Course, Readonly<Record<RaceEvent['kind'], strin
   office: { stop: 'Ben', burst: 'Ben' },
   sea: { stop: 'Marco', burst: 'Marco' },
   moon: { stop: 'Anna', burst: 'Anna' },
+  autumn: { stop: 'Ben', burst: 'Carla' },
   christmas: { stop: 'Ben', burst: 'Carla' },
 };
 
@@ -770,7 +783,13 @@ function onTrack(course: Course, kind: 'burst' | 'stop' = 'stop'): Promise<OnTra
       if (theirs >= 0) team[theirs] = own.subject;
       team[at] = SUBJECTS[course][kind];
     }
-    const standing: { time: number; part: string; x: number; y: number }[] = [];
+    const standing: {
+      time: number;
+      part: string;
+      x: number;
+      y: number;
+      hand?: readonly [number, number];
+    }[] = [];
     const shadows: number[] = [];
     const stickers: Sticker[] = [];
     const loose: string[] = [];
@@ -797,11 +816,27 @@ function onTrack(course: Course, kind: 'burst' | 'stop' = 'stop'): Promise<OnTra
             if (caption) readText(caption, stickers, loose);
           }
           if (card && !card.hidden) photo = card;
-          for (const part of ['machine', 'wet-floor', 'snowdrift', 'sledge']) {
+          for (const part of [
+            'machine',
+            'wet-floor',
+            'snowdrift',
+            'sledge',
+            'leaf-pile',
+            'umbrella',
+          ]) {
             const prop = scene.querySelector(`[data-part="${part}"]`);
             if (!prop || prop.getAttribute('display') === 'none') continue;
             const [, x, y] = prop.getAttribute('transform')!.match(/translate\((\S+) (\S+)\)/)!;
-            standing.push({ time, part, x: Number(x), y: Number(y) });
+            // A rider's hand, or a creature's front one.
+            const fist = prop
+              .closest('svg[data-part]')
+              ?.querySelector(
+                '[data-part="hands"] circle, [data-part="front-arm"] [data-part="hand"]',
+              );
+            const hand = fist?.getAttribute('cx')
+              ? ([Number(fist.getAttribute('cx')), Number(fist.getAttribute('cy'))] as const)
+              : undefined;
+            standing.push({ time, part, x: Number(x), y: Number(y), hand });
           }
           const shadow = scene.querySelector<HTMLElement>('[data-part="shadow"]');
           if (shadow && !shadow.hidden) shadows.push(time);
@@ -824,8 +859,10 @@ function onTrack(course: Course, kind: 'burst' | 'stop' = 'stop'): Promise<OnTra
 /** A step, as a scenario's step functions take it. */
 type StepOf = (title: string, run: () => void | Promise<void>) => void;
 
-/** Seaweed and snow are shaken off over this many seconds before "Phew!". */
+/** Seaweed and snow are shaken off over this many seconds before "Phew!", and leaves climbed out of. */
 const OWN_SHAKE = 0.4;
+/** A racer lands in Autumn's pile of leaves this far into its stop. */
+const OWN_LAND = 0.35;
 
 /**
  * The steps of a track's own `kind` on `course`, from "When someone's event
@@ -978,6 +1015,61 @@ function actOutOwnEvent(
       expect(TRACK_PROPS.sledge.map(([, className]) => className)).toContain(styles.tomato);
       expect(tagsOver()).toEqual([]);
     }
+    if (key === 'autumn stop') {
+      // It jumps, lands in the pile and stays in it until "Phew!".
+      const jump = during(0, OWN_LAND).map((frame) => frame.racer.lift);
+      expect(Math.max(...jump)).toBeGreaterThan(3);
+      const inPile = during(0.05, STOP.phew - 0.05);
+      expect(inPile.every((frame) => frame.racer.track.includes('leaf-pile'))).toBe(true);
+      // The pile is round the racer until it climbs out, then stays where it
+      // was along the track.
+      const pile = run.standing.filter((each) => each.part === 'leaf-pile');
+      const round = pile.filter((each) => each.time < event.at + STOP.phew);
+      expect(round.length).toBeGreaterThan(10);
+      expect(round.every((each) => each.x === 20)).toBe(true);
+      const index = run.watched.team.indexOf(event.subject);
+      const at = lane(index, 8);
+      const kind = kindOf(run.watched, event.subject);
+      const along = pile
+        .filter((each) => each.time > event.at + STOP.phew)
+        .map((each) => {
+          const frame = run.watched.frames.find((f) => Math.abs(f.time - each.time) < 1e-6)!;
+          const nose = frame.racers[event.subject]!.nose;
+          return frame.camera + boxAt(kind, at, nose).left + each.x * at.k;
+        });
+      expect(along.length).toBeGreaterThan(1);
+      expect(Math.max(...along) - Math.min(...along)).toBeLessThan(2);
+      expect(Math.min(...pile.map((each) => each.x))).toBeLessThan(0);
+      // Leaves fly up out of it as it lands.
+      const flying = during(OWN_LAND, OWN_LAND + 0.8);
+      expect(flying.some((frame) => frame.racer.track.includes('flying-leaves'))).toBe(true);
+      expect(during(0, OWN_LAND - 0.05).some((f) => f.racer.track.includes('flying'))).toBe(false);
+      // It climbs out, wriggling.
+      const wriggle = during(STOP.phew - OWN_SHAKE, STOP.phew).map((frame) =>
+        Math.abs(parseFloat(frame.racer.rotate || '0')),
+      );
+      expect(Math.max(...wriggle)).toBeGreaterThan(1);
+      expect(TRACK_PROPS.leafPile[0]![1]).toBe(styles.orange);
+      expect(tagsOver()).toEqual([]);
+    }
+    if (key === 'autumn burst') {
+      const blown = during(0.05, BURST.seconds);
+      expect(blown.every((frame) => frame.racer.track.includes('umbrella'))).toBe(true);
+      // The umbrella in its waving hand.
+      expect(blown.every((frame) => frame.racer.pose === 'wave')).toBe(true);
+      const held = run.standing.filter((each) => each.part === 'umbrella' && each.hand);
+      for (const { x, y, hand } of held) expect([x, y]).toEqual([...hand!]);
+      // Off the ground, over its shadow: 30 px, or as high as it can go clear of the lanes behind.
+      const lifts = blown.map((frame) => frame.racer.lift);
+      expect(Math.max(...lifts)).toBeGreaterThan(8);
+      expect(Math.max(...lifts)).toBeLessThanOrEqual(30);
+      const up = during(0, BURST.seconds).filter((frame) => frame.racer.lift > 0);
+      expect(up.every((frame) => run.shadows.includes(frame.time))).toBe(true);
+      // Swaying in the wind, a tomato umbrella.
+      expect(Math.max(...blown.map((frame) => Math.abs(frame.racer.sway)))).toBeGreaterThan(1);
+      expect(TRACK_PROPS.umbrella.map(([, className]) => className)).toContain(styles.tomato);
+      expect(tagsOver()).toEqual([]);
+    }
     if (kind === 'stop') {
       expect(during(0.5, STOP.off).some((frame) => frame.racer.pose === 'wave')).toBe(true);
       expect(says('Phew!')).toBe(true);
@@ -1012,6 +1104,57 @@ function everyPlan(): { label: string; plan: Plan; team: string[]; unlucky: stri
   }
   return all;
 }
+
+/** Riders with every extra the kit hands out a cap, goggles or a snorkel to, and creatures. */
+const DRESSED = new Map<string, ChosenLook>([
+  ['Anna', { mount: 'snail', colour: 'tomato', extra: 'number' }],
+  ['Ben', { mount: 'chair', colour: 'mint', extra: 'tophat' }],
+  ['Carla', { mount: 'duck', colour: 'pink', extra: 'scarf' }],
+  ['Dario', { mount: 'shark', colour: 'sea', extra: 'tophat' }],
+  ['Elena', { mount: 'gnome', colour: 'mint', extra: 'number' }],
+  ['Fabio', { mount: 'dinosaur', colour: 'sun', extra: 'bowtie' }],
+  ['Giulia', { mount: 'rocket', colour: 'orange', extra: 'googly' }],
+  ['Hana', { mount: 'robot', colour: 'grape', extra: 'tophat' }],
+]);
+/** Everyone as the show first draws them on `course`. */
+async function dressedOn(course: Course) {
+  const drawn = new Map<string, SVGSVGElement>();
+  await runShow(theRace, {
+    names: [...DRESSED.keys()],
+    unlucky: 'Hana',
+    seed: 4,
+    theme: course,
+    looks: DRESSED,
+    cancelAt: 0.2,
+    step: STEP,
+    onFrame: (_, stage) => {
+      for (const name of DRESSED.keys()) {
+        const svg = stage.querySelector<SVGSVGElement>(`[data-person="${name}"] svg`)!;
+        if (!drawn.has(name)) drawn.set(name, svg.cloneNode(true) as SVGSVGElement);
+      }
+    },
+  });
+  return [...drawn.values()];
+}
+/** Everyone at the start, and in the panel's drawing, on `course`. */
+function lineUpOn(course: Course) {
+  const people = [...DRESSED].map(([name, look], index) => ({
+    name,
+    place: index + 1,
+    look,
+    chosen: index === 0,
+  }));
+  const lineUp = theRace.lineUp!;
+  const start = lineUp.drawStart!({ people, theme: course });
+  return [
+    ...start.el.querySelectorAll<SVGSVGElement>('svg[data-person]'),
+    ...people.map(
+      ({ name, place, look }) => lineUp.draw(look, { name, place, theme: course }) as SVGSVGElement,
+    ),
+  ];
+}
+const accessories = (svg: SVGSVGElement) =>
+  svg.querySelectorAll('[data-part="cap"], [data-part="goggles"], [data-part="snorkel"]');
 
 describeSpec(await loadFeature('./the-race.feature'), ({ Rule }) => {
   Rule('Its card', ({ RuleScenario }) => {
@@ -2269,6 +2412,7 @@ describeSpec(await loadFeature('./the-race.feature'), ({ Rule }) => {
           office: styles.carpet,
           sea: styles.sun,
           moon: styles.dust,
+          autumn: styles.bark,
           christmas: styles.snow,
         };
         expect(ground.querySelector(`.${fill[course]}`)).not.toBeNull();
@@ -2281,13 +2425,21 @@ describeSpec(await loadFeature('./the-race.feature'), ({ Rule }) => {
         }
       });
       And('behind the track is <backdrop>', () => {
-        const skies = { field: 'sky', office: 'paper', sea: 'sea', moon: 'ink', christmas: 'sea' };
+        const skies = {
+          field: 'sky',
+          office: 'paper',
+          sea: 'sea',
+          moon: 'ink',
+          autumn: 'sky',
+          christmas: 'sea',
+        };
         expect(run.sky).toBe(`var(--color-${skies[course]})`);
         const parts = {
           field: ['flags', 'posts'],
           office: ['wall', 'panels', 'plant'],
           sea: ['surface', 'fish', 'seaweed', 'floats'],
           moon: ['space'],
+          autumn: ['leaves', 'park', 'fence', 'piles', 'fallen'],
           christmas: ['night', 'hills', 'village', 'lights'],
         };
         for (const part of parts[course]) {
@@ -2303,6 +2455,7 @@ describeSpec(await loadFeature('./the-race.feature'), ({ Rule }) => {
           office: styles.sunFill,
           sea: styles.orangeFill,
           moon: styles.paperFill,
+          autumn: styles.paperFill,
           christmas: styles.glassFill,
         };
         const lines = [...run.track.querySelectorAll('[data-part="lines"] path')];
@@ -2447,13 +2600,13 @@ describeSpec(await loadFeature('./the-race.feature'), ({ Rule }) => {
     const own = (plan: Plan) => plan.events.filter((event) => event.cause === 'track');
     const christmas = () => lineUp.themes!.find((each) => each.name === 'christmas')!;
 
-    RuleScenario('Christmas is a theme', ({ When, Then, And }) => {
+    RuleScenario('Christmas is a theme, after Autumn', ({ When, Then, And }) => {
       When('the Line-up opens for The Race', () => {
         expect(lineUp.themes).toBeDefined();
       });
-      Then('"Christmas" is a theme, after "Moon", its postcard a tree on snow at dusk', () => {
+      Then('"Christmas" is a theme, after "Autumn", its postcard a tree on snow at dusk', () => {
         const labels = lineUp.themes!.map((theme) => theme.label);
-        expect(labels.indexOf('Christmas')).toBe(labels.indexOf('Moon') + 1);
+        expect(labels.indexOf('Christmas')).toBe(labels.indexOf('Autumn') + 1);
         const picture = christmas().picture() as SVGSVGElement;
         expect(picture.dataset).toMatchObject({ part: 'postcard', course: 'christmas' });
         const classes = [...picture.querySelectorAll('path')].map((path) =>
@@ -2580,57 +2733,6 @@ describeSpec(await loadFeature('./the-race.feature'), ({ Rule }) => {
       }),
     );
 
-    /** Riders with every extra the kit hands out a cap, goggles or a snorkel to, and creatures. */
-    const DRESSED = new Map<string, ChosenLook>([
-      ['Anna', { mount: 'snail', colour: 'tomato', extra: 'number' }],
-      ['Ben', { mount: 'chair', colour: 'mint', extra: 'tophat' }],
-      ['Carla', { mount: 'duck', colour: 'pink', extra: 'scarf' }],
-      ['Dario', { mount: 'shark', colour: 'sea', extra: 'tophat' }],
-      ['Elena', { mount: 'gnome', colour: 'mint', extra: 'number' }],
-      ['Fabio', { mount: 'dinosaur', colour: 'sun', extra: 'bowtie' }],
-      ['Giulia', { mount: 'rocket', colour: 'orange', extra: 'googly' }],
-      ['Hana', { mount: 'robot', colour: 'grape', extra: 'tophat' }],
-    ]);
-    /** Everyone as the show first draws them on `course`. */
-    async function dressedOn(course: Course) {
-      const drawn = new Map<string, SVGSVGElement>();
-      await runShow(theRace, {
-        names: [...DRESSED.keys()],
-        unlucky: 'Hana',
-        seed: 4,
-        theme: course,
-        looks: DRESSED,
-        cancelAt: 0.2,
-        step: STEP,
-        onFrame: (_, stage) => {
-          for (const name of DRESSED.keys()) {
-            const svg = stage.querySelector<SVGSVGElement>(`[data-person="${name}"] svg`)!;
-            if (!drawn.has(name)) drawn.set(name, svg.cloneNode(true) as SVGSVGElement);
-          }
-        },
-      });
-      return [...drawn.values()];
-    }
-    /** Everyone at the start, and in the panel's drawing, on `course`. */
-    function lineUpOn(course: Course) {
-      const people = [...DRESSED].map(([name, look], index) => ({
-        name,
-        place: index + 1,
-        look,
-        chosen: index === 0,
-      }));
-      const start = lineUp.drawStart!({ people, theme: course });
-      return [
-        ...start.el.querySelectorAll<SVGSVGElement>('svg[data-person]'),
-        ...people.map(
-          ({ name, place, look }) =>
-            lineUp.draw(look, { name, place, theme: course }) as SVGSVGElement,
-        ),
-      ];
-    }
-    const accessories = (svg: SVGSVGElement) =>
-      svg.querySelectorAll('[data-part="cap"], [data-part="goggles"], [data-part="snorkel"]');
-
     RuleScenario('Everyone wears a Santa hat', ({ When, Then, And }) => {
       let drawn: SVGSVGElement[] = [];
       When('the show runs on Christmas, or its Line-up shows Christmas', async () => {
@@ -2681,7 +2783,9 @@ describeSpec(await loadFeature('./the-race.feature'), ({ Rule }) => {
           const others = [...(await dressedOn(course)), ...lineUpOn(course)];
           for (const svg of others) {
             expect(svg.querySelector('[data-part="santa"]'), course).toBeNull();
-            if (svg.dataset.part === 'racer') expect(accessories(svg), course).toHaveLength(1);
+            if (svg.dataset.part === 'racer') {
+              expect(accessories(svg), course).toHaveLength(course === 'autumn' ? 0 : 1);
+            }
           }
         }
       });
@@ -3204,6 +3308,367 @@ describeSpec(await loadFeature('./the-race.feature'), ({ Rule }) => {
           expect(racer.spin).toBe(0);
         }
       });
+    });
+  });
+
+  Rule('Autumn', ({ RuleScenario, RuleScenarioOutline }) => {
+    const lineUp = theRace.lineUp!;
+    const team = names(8);
+    const unlucky = team.at(-1)!;
+    const own = (plan: Plan) => plan.events.filter((event) => event.cause === 'track');
+    const autumn = () => lineUp.themes!.find((each) => each.name === 'autumn')!;
+
+    RuleScenario('Autumn is a theme', ({ When, Then, And }) => {
+      When('the Line-up opens for The Race', () => {
+        expect(lineUp.themes).toBeDefined();
+      });
+      Then(
+        '"Autumn" is a theme, after "Moon", its postcard trees in autumn colours over a path',
+        () => {
+          const labels = lineUp.themes!.map((theme) => theme.label);
+          expect(labels.indexOf('Autumn')).toBe(labels.indexOf('Moon') + 1);
+          const picture = autumn().picture() as SVGSVGElement;
+          expect(picture.dataset).toMatchObject({ part: 'postcard', course: 'autumn' });
+          const classes = [...picture.querySelectorAll('path')].map((path) =>
+            path.getAttribute('class'),
+          );
+          // A sky, crowns in orange, tomato and sun on bark trunks, then the path with its paper line.
+          expect(classes[0]).toBe(styles.skyFill);
+          for (const colour of [styles.orange, styles.tomato, styles.sun]) {
+            expect(classes).toContain(colour);
+          }
+          expect(classes.slice(-2)).toEqual([styles.bark, styles.paperFill]);
+        },
+      );
+      And(`with Autumn chosen, the racer option's first tab is "Autumn"`, () => {
+        // specs/line-up.feature: a theme's suits are its first tab, named for it.
+        expect(autumn().label).toBe('Autumn');
+        expect(autumn().suits!.length).toBeGreaterThan(0);
+      });
+    });
+
+    RuleScenario('What Autumn looks like', ({ When, Then, And }) => {
+      let run: OnTrack;
+      When('the show runs on Autumn', async () => {
+        run = await onTrack('autumn');
+      });
+      Then(
+        'the ground is a bark path strewn with fallen leaves, the lanes split by paper lines, and paper name tags read clearly on it',
+        () => {
+          const ground = run.track.querySelector('[data-part="ground"]')!;
+          expect(ground.querySelector(`rect.${styles.bark}`)).not.toBeNull();
+          const fallen = [...ground.querySelector('[data-part="fallen"]')!.children[0]!.children];
+          expect(fallen.map((leaf) => leaf.getAttribute('class'))).toEqual([
+            styles.orange,
+            styles.tomato,
+            styles.sun,
+          ]);
+          const lines = [...run.track.querySelectorAll('[data-part="lines"] path')];
+          expect(lines.length).toBeGreaterThan(0);
+          for (const line of lines) expect(line.getAttribute('class')).toBe(styles.paperFill);
+          const tags = run.stickers.filter((sticker) => sticker.what === 'tag');
+          expect(tags.length).toBeGreaterThan(0);
+          for (const tag of tags) expect(tag.background).toBe('var(--color-paper)');
+        },
+      );
+      And(
+        'behind the track is a park on a sunny afternoon: trees in orange, tomato and sun on a lawn, leaves falling, and a wooden fence with piles of leaves',
+        () => {
+          expect(run.sky).toBe('var(--color-sky)');
+          const tile = (part: string) =>
+            [...run.track.querySelector(`[data-part="${part}"]`)!.children[0]!.children].map(
+              (shape) => ({
+                part: shape.getAttribute('data-part'),
+                className: shape.getAttribute('class'),
+              }),
+            );
+          const park = tile('park').map((shape) => shape.className);
+          // The lawn, its edge, the trunks, then each colour's crowns.
+          expect(park.slice(0, 3)).toEqual([styles.grass, styles.line, styles.bark]);
+          expect(park.slice(3)).toEqual([
+            styles.orange,
+            styles.tomato,
+            styles.sun,
+            styles.orange,
+            styles.tomato,
+            styles.sun,
+          ]);
+          expect(tile('leaves').map((shape) => shape.className)).toEqual([
+            styles.orange,
+            styles.tomato,
+            styles.sun,
+          ]);
+          const ground = run.track.querySelector('[data-part="ground"]')!;
+          expect(ground.querySelector('[data-part="rails"]')!.getAttribute('class')).toBe(
+            styles.bark,
+          );
+          expect(tile('fence').map((shape) => shape.className)).toEqual([styles.bark]);
+          expect(tile('piles')[0]!.className).toBe(styles.orange);
+        },
+      );
+      And(
+        'each distance is a paper sign on a wooden post, a rake standing in a pile of leaves beside it',
+        () => {
+          const signs = [...run.track.querySelectorAll<HTMLElement>('[data-part="sign"]')];
+          expect(signs).toHaveLength(5);
+          for (const sign of signs) {
+            const board = sign.querySelector('p')!;
+            const distance = board.textContent!.endsWith(' m');
+            expect(board.classList.contains(styles.sunBoard!)).toBe(!distance);
+            expect(sign.querySelector(`.${styles.post}`)!.classList).toContain(styles.woodPost);
+            expect(!!sign.querySelector('[data-part="rake"]'), board.textContent!).toBe(distance);
+          }
+          expect(css).toMatch(/\.woodPost \{\s*background-color: var\(--color-bark\);/);
+          const rake = [...signs[1]!.querySelector('[data-part="rake"]')!.children].map((shape) =>
+            shape.getAttribute('class'),
+          );
+          // Its handle, its tines, and the pile of leaves round its foot.
+          expect(rake).toEqual([
+            styles.line,
+            styles.barkLine,
+            styles.line,
+            styles.orange,
+            styles.tomato,
+            styles.sun,
+          ]);
+        },
+      );
+      And("a photo finish's photo shows the path and its finish line", () => {
+        const view = run.photo!.firstElementChild as HTMLElement;
+        expect(view.dataset.course).toBe('autumn');
+        expect(view.classList).toContain(styles.autumn);
+        const picture = view.querySelector(':scope > svg')!;
+        expect(picture.querySelector('rect')!.getAttribute('class')).toBe(styles.bark);
+        expect(picture.querySelector(`.${styles.inkFill}`)).not.toBeNull();
+      });
+    });
+
+    RuleScenario('Autumn has a stop and a burst of its own', ({ Given, When, Then, And }) => {
+      let runs: Plan[];
+      Given('8 people, on Autumn', () => undefined);
+      When('the show runs with {int} different random seeds', (_, seeds: number) => {
+        runs = plansOn(team, unlucky, 'autumn', seeds);
+      });
+      Then(`in every run, one event before "Final stretch!" is Autumn's own stop or burst`, () => {
+        for (const plan of runs) {
+          expect(own(plan)).toHaveLength(1);
+          expect(own(plan)[0]!.at).toBeLessThan(plan.times.stretch);
+        }
+      });
+      And('both come up across the runs', () => {
+        const kinds = new Set(runs.flatMap((plan) => own(plan).map((event) => event.kind)));
+        expect(kinds).toEqual(new Set(['burst', 'stop']));
+      });
+    });
+
+    RuleScenarioOutline('On Autumn, <caption>', (steps, { event: kind, caption }) =>
+      actOutOwnEvent(steps, {
+        course: 'autumn',
+        kind: kind as RaceEvent['kind'],
+        caption,
+        when: "someone's event is Autumn's own <event>",
+      }),
+    );
+
+    RuleScenario('Everyone wears an acorn cap', ({ When, Then, And }) => {
+      let drawn: SVGSVGElement[] = [];
+      When('the show runs on Autumn, or its Line-up shows Autumn', async () => {
+        drawn = [...(await dressedOn('autumn')), ...lineUpOn('autumn')];
+        expect(drawn).toHaveLength(3 * DRESSED.size);
+      });
+      Then(
+        'every rider wears an acorn cap instead of the cap, goggles or snorkel the kit hands out, and a top hat stays on the mount',
+        () => {
+          for (const svg of drawn.filter((each) => each.dataset.part === 'racer')) {
+            const lean = svg.querySelector('[data-part="lean"]')!;
+            const cap = lean.querySelector(':scope > [data-part="acorn-cap"] [data-part="hat"]')!;
+            expect(cap.getAttribute('transform')).toBe('translate(50 24)');
+            const classes = [...cap.children].map((shape) => shape.getAttribute('class'));
+            expect(classes).toEqual([styles.line, styles.barkLine, styles.bark, styles.line]);
+            expect(accessories(svg)).toHaveLength(0);
+            expect(!!svg.querySelector('[data-part="mount"] [data-part="tophat"]')).toBe(
+              svg.dataset.extra === 'tophat',
+            );
+          }
+        },
+      );
+      And('every creature wears one where its top hat goes, instead of the top hat', () => {
+        for (const svg of drawn.filter((each) => each.dataset.part === 'creature')) {
+          const kind = svg.dataset.mount as Creature;
+          if (kind === 'gnome') continue;
+          const cap = svg.querySelector('[data-part="acorn-cap"]')!;
+          const [x, y] = CREATURE_SPEC[kind].hat;
+          expect(cap.getAttribute('transform'), kind).toBe(`translate(${x} ${y})`);
+          expect(cap.querySelector(`.${styles.shade}`)).not.toBeNull();
+          expect(svg.querySelector('[data-part="tophat"]'), kind).toBeNull();
+        }
+      });
+      And('the garden gnome wears a small one on the tip of its own hat', () => {
+        const gnomes = drawn.filter((each) => each.dataset.mount === 'gnome');
+        expect(gnomes).toHaveLength(3);
+        for (const gnome of gnomes) {
+          const cap = gnome.querySelector('[data-part="acorn-cap"]')!;
+          expect(cap.getAttribute('transform')).toBe('translate(130 -24) scale(0.55)');
+          expect(gnome.querySelector('[data-part="hat"]')).not.toBeNull();
+        }
+      });
+      And('on any other theme, nobody wears one', async () => {
+        for (const course of COURSES.filter((each) => each !== 'autumn')) {
+          const others = [...(await dressedOn(course)), ...lineUpOn(course)];
+          for (const svg of others) {
+            expect(svg.querySelector('[data-part="acorn-cap"]'), course).toBeNull();
+          }
+        }
+      });
+    });
+
+    RuleScenario('The winner gets a golden acorn', ({ Given, When, Then, And }) => {
+      let watched: Watched;
+      let pieces: boolean[] = [];
+      Given('the unlucky person is {string}, on Autumn', async (_, name: string) => {
+        const people = ['Dario', 'Elena', 'Fabio', name];
+        let seed = 1;
+        while (planShow(people, name, createRandom(seed), 'autumn').ending !== 'brake') seed++;
+        const { win } = planShow(people, name, createRandom(seed), 'autumn').times;
+        watched = await watch(people, {
+          unlucky: name,
+          seed,
+          course: 'autumn',
+          onStage: (time, scene) => {
+            if (time < win + 0.5 || pieces.length) return;
+            pieces = [...scene.querySelectorAll<HTMLElement>('[data-part="confetti"]')].map(
+              (piece) => piece.dataset.leaf === 'true',
+            );
+          },
+        });
+      });
+      When('she has crossed the line', () => {
+        expect(crossingOf(watched.plan, 'Anna')!).toBeLessThanOrEqual(watched.plan.times.finish);
+      });
+      Then(
+        'the caption is {string}, with a fanfare and confetti with leaves in it',
+        (_, caption: string) => {
+          const { win } = watched.plan.times;
+          expect(watched.record.captions.at(-1)).toMatchObject({ text: caption });
+          expect(watched.record.captions.at(-1)!.from).toBeCloseTo(win, 1);
+          // Sound isn't recorded: play.ts cues the fanfare as the caption comes.
+          expect(between(watched, win + 0.5, Infinity).every((f) => f.confetti > 20)).toBe(true);
+          expect(pieces.filter(Boolean).length).toBeGreaterThan(5);
+          expect(pieces.filter((leaf) => !leaf).length).toBeGreaterThan(5);
+          expect(css).toMatch(/\.lens \{\s*border-radius: 0 100%;/);
+        },
+      );
+      And('Anna holds up a golden acorn with a bark cap, where the trophy would be', () => {
+        for (const frame of between(watched, watched.plan.times.win + STEP, Infinity)) {
+          expect(frame.racers.Anna).toMatchObject({ trophy: true, mood: 'party' });
+        }
+        const face = handOutLooks(['Anna'], createRandom(1)).get('Anna')!;
+        const dress = { costume: 'acorn', prize: 'golden-acorn' } as const;
+        // As a rider, and as a creature that holds it overhead.
+        const looks = [
+          watched.looks.get('Anna'),
+          { mount: 'snail', colour: 'mint', extra: 'number' },
+          { mount: 'robot', colour: 'sun', extra: 'number' },
+        ] as unknown as RacerLook[];
+        for (const look of looks) {
+          const balances =
+            isCreature(look.mount) && CREATURE_SPEC[look.mount as Creature].reach < 1;
+          if (balances) continue;
+          const drawn = isCreature(look.mount)
+            ? creature(look as never, { face, number: 4, dress })
+            : racer(look as RideLook, { face, number: 4, dress });
+          const plain = isCreature(look.mount)
+            ? creature(look as never, { face, number: 4 })
+            : racer(look as RideLook, { face, number: 4 });
+          const acorn = drawn.el.querySelector('[data-part="golden-acorn"]')!;
+          const trophy = plain.el.querySelector('[data-part="trophy"]')!;
+          expect(drawn.el.querySelector('[data-part="trophy"]')).toBeNull();
+          expect(acorn.getAttribute('x')).toBe(trophy.getAttribute('x'));
+          expect(acorn.getAttribute('y')).toBe(trophy.getAttribute('y'));
+          const classes = [...acorn.children].map((shape) => shape.getAttribute('class'));
+          // A sun nut, under a bark cap.
+          expect(classes[0]).toBe(styles.sun);
+          expect(classes).toContain(styles.bark);
+          expect(classes.indexOf(styles.bark)).toBeGreaterThan(0);
+        }
+      });
+      And('whoever balances the trophy balances the acorn, on top of their acorn cap', () => {
+        const face = handOutLooks(['Anna'], createRandom(1)).get('Anna')!;
+        const dress = { costume: 'acorn', prize: 'golden-acorn' } as const;
+        for (const kind of CREATURES) {
+          const { reach, cup, hat } = CREATURE_SPEC[kind];
+          const one = creature(
+            { mount: kind, colour: 'sun', extra: 'scarf' },
+            { face, number: 1, dress },
+          );
+          const top = Number(one.el.querySelector('[data-part="golden-acorn"]')!.getAttribute('y'));
+          if (reach > 0 && reach < 1) {
+            // The nut's tip on the cap, between its stalk's top and its rim.
+            const size = kind === 'gnome' ? 0.55 : 1;
+            expect(top + 58, kind).toBeGreaterThanOrEqual(hat[1] - 40 * size);
+            expect(top + 58, kind).toBeLessThan(hat[1]);
+          } else {
+            expect(top, kind).toBe(cup[1]);
+          }
+        }
+      });
+    });
+
+    RuleScenario('On Autumn, the unlucky person still crosses first', ({ Given, When, Then }) => {
+      let runs: Plan[];
+      Given('8 people, on Autumn', () => undefined);
+      When('the show runs with {int} different random seeds', (_, seeds: number) => {
+        runs = plansOn(team, unlucky, 'autumn', seeds);
+      });
+      Then("the first nose over the finish line is always the unlucky person's", () => {
+        for (const plan of runs) {
+          const crossing = crossingOf(plan, unlucky);
+          expect(crossing).not.toBeNull();
+          expect(crossing!).toBeLessThanOrEqual(plan.times.finish + 1e-9);
+          for (const name of team.filter((each) => each !== unlucky)) {
+            const theirs = crossingOf(plan, name);
+            if (theirs !== null) expect(theirs).toBeGreaterThan(crossing!);
+          }
+        }
+      });
+    });
+
+    RuleScenario('With reduced motion, Autumn keeps still too', ({ Given, When, Then }) => {
+      const still: Record<RaceEvent['kind'], { watched: Watched; event: RaceEvent }> = {} as never;
+      Given('reduced motion is on', () => undefined);
+      When('the show runs on Autumn', async () => {
+        for (const kind of ['stop', 'burst'] as const) {
+          let seed = 1;
+          const ownIs = (plan: Plan) => own(plan)[0]!.kind === kind;
+          while (!ownIs(planShow(team, unlucky, createRandom(seed), 'autumn'))) seed++;
+          const watched = await watch(team, { seed, course: 'autumn', reducedMotion: true });
+          still[kind] = { watched, event: own(watched.plan)[0]! };
+        }
+      });
+      Then(
+        'no leaves fly up out of the pile, and the umbrella lifts its racer without swaying',
+        () => {
+          const of = (kind: RaceEvent['kind'], to: number) => {
+            const { watched, event } = still[kind];
+            return between(watched, event.at, event.at + to).map(
+              (frame) => frame.racers[event.subject]!,
+            );
+          };
+          const piled = of('stop', STOP.off);
+          expect(piled.some((racer) => racer.track.includes('leaf-pile'))).toBe(true);
+          for (const racer of piled) {
+            expect(racer.track).not.toContain('flying-leaves');
+            expect(racer.rotate).toBe('');
+          }
+          const blown = of('burst', BURST.seconds);
+          expect(blown.every((racer) => racer.track.includes('umbrella'))).toBe(true);
+          expect(Math.max(...blown.map((racer) => racer.lift))).toBeGreaterThan(8);
+          for (const racer of blown) {
+            expect(racer.sway).toBe(0);
+            expect(racer.rotate).toBe('');
+          }
+        },
+      );
     });
   });
 

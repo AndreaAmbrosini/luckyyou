@@ -104,11 +104,18 @@
   stroke-linejoin: round;
 }
 
-/* The reindeer, the gingerbread and the Christmas tree's trunk. */
+/* The reindeer, the gingerbread, the Christmas tree's trunk, and Autumn's path, fence and acorn caps. */
 .bark {
   fill: var(--color-bark);
   stroke: var(--color-ink);
   stroke-linejoin: round;
+}
+
+/* A rake's handle and an acorn's stalk, over a thicker ink line. */
+.barkLine {
+  fill: none;
+  stroke: var(--color-bark);
+  stroke-linecap: round;
 }
 
 /* The hat band and the scarf: sun, or tomato on a sun racer. */
@@ -377,6 +384,11 @@
   border-radius: var(--radius-pill);
 }
 
+/* A leaf in Autumn's confetti: a lens. */
+.lens {
+  border-radius: 0 100%;
+}
+
 /* The flash as a photo finish freezes. */
 .flash {
   position: absolute;
@@ -443,6 +455,10 @@
   background-color: var(--color-ink);
 }
 
+.autumn {
+  background-color: var(--color-sky);
+}
+
 .christmas {
   background-color: var(--color-sea);
 }
@@ -457,7 +473,10 @@
   fill: var(--color-glass);
 }
 
-/* A candy cane by a sign, drawn in px from the sign's middle: ink, then paper, then tomato stripes. */
+/*
+ * A candy cane by a sign, drawn in px from the sign's middle: ink, then
+ * paper, then tomato stripes; or a rake in a pile of leaves.
+ */
 .cane {
   position: absolute;
   top: 0;
@@ -470,6 +489,11 @@
   fill: none;
   stroke: var(--color-tomato);
   stroke-dasharray: 8 8;
+}
+
+/* Autumn's signs stand on wooden posts. */
+.woodPost {
+  background-color: var(--color-bark);
 }
 
 /* The sledge's gold trim. */
