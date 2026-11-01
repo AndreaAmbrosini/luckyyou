@@ -9,12 +9,6 @@ Feature: The Race
   finish, past a rival who brakes, or in a surge from behind. The contract in
   specs/scenarios.feature applies as well.
 
-  # Autumn, in four build steps, in this order: 1. Christmas's fixes; 2.
-  # Autumn; 3. Autumn's five racers; 4. Autumn's music. Each pending scenario
-  # says its step. Scenarios marked "Old design" describe the race before a
-  # step; the build deletes each one, with its steps, when the scenario that
-  # replaces it passes.
-
   Rule: Its card
 
     Scenario: The picker shows The Race
@@ -834,22 +828,13 @@ Feature: The Race
       And the fanfare plays with "Anna wins!", as before
 
     # Jingle Bells (James Lord Pierpont, 1857) is public domain.
-    # Old design: replaced by "Jingle Bells at Christmas, the galop elsewhere" (step 4).
-    Scenario: Jingle Bells at Christmas
-      When the show runs on Christmas with music on
-      Then Jingle Bells plays instead of the galop, with sleigh bells, on the galop's beats: a roll under "On your marks…", the chorus from "Go!", a faster strain from "Final stretch!", a run down at a quarter of the speed in the slow moment, and silence from the line to the fanfare
-      And every other theme keeps the galop
-
-    # Step 4.
-    @pending
     Scenario: Jingle Bells at Christmas, the galop elsewhere
       When the show runs on Christmas with music on
       Then Jingle Bells plays instead of the galop, with sleigh bells, on the galop's beats: a roll under "On your marks…", the chorus from "Go!", a faster strain from "Final stretch!", a run down at a quarter of the speed in the slow moment, and silence from the line to the fanfare
       And the sports field, the office, under the sea and the Moon keep the galop
 
-    # Step 4. Vivaldi's The Four Seasons (1725) is public domain. This passes
-    # only once the user has heard it in the Lab and said so.
-    @pending
+    # Vivaldi's The Four Seasons (1725) is public domain. The user heard it in
+    # the Lab and approved it on 2026-11-01.
     Scenario: Vivaldi's Autumn on Autumn
       When the show runs on Autumn with music on
       Then the opening of Autumn from Vivaldi's The Four Seasons plays instead of the galop, on the galop's beats: a roll under "On your marks…", its first theme from "Go!", a faster strain from "Final stretch!", a run down at a quarter of the speed in the slow moment, and silence from the line to the fanfare
