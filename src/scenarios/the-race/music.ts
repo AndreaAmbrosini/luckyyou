@@ -5,7 +5,9 @@
 // final stretch; a run down, an octave low, through the slow last moment; and
 // silence from the line until the fanfare. At Christmas, Jingle Bells (James
 // Lord Pierpont, 1857, public domain) takes the galop's place, on its beats,
-// with sleigh bells.
+// with sleigh bells. On Autumn, the opening of Autumn from Vivaldi's The Four
+// Seasons (1725, public domain) does, arranged from the Mutopia Project's
+// edition, down a fourth from F to C.
 
 import { drums, melody, oomPah, type Note, type Voice } from '../../scenario-kit';
 import type { Course, Plan } from './plan';
@@ -72,7 +74,35 @@ const JINGLE_BELLS: Tune = {
   bells: true,
 };
 
-const TUNES: Partial<Record<Course, Tune>> = { christmas: JINGLE_BELLS };
+const AUTUMN: Tune = {
+  roll: 'snare',
+  pickup: 'C5:.5 D5:.5',
+  // The opening ritornello, thirteen bars, down a fourth from F: the dance,
+  // its echo an octave lower, the climb, and the echo of its close.
+  strain: [
+    'E5:.5 E5:.5 E5:.5 F5:.5 E5 E5:.5 F5:.5 | E5:.5 E5:.5 E5:.5 E5:.5 F5 E5:.5 F5:.5',
+    'E5:.5 D5:.25 E5:.25 F5:.5 E5:.5 D5 r',
+    'E4:.5 E4:.5 E4:.5 F4:.5 E4 E4:.5 F4:.5 | E4:.5 E4:.5 E4:.5 F4:.5 E4 E4:.5 F4:.5',
+    'E4:.5 D4:.25 E4:.25 F4:.5 E4:.5 D4 r',
+    'E5:.5 E5:.5 E5:.5 G5:.5 A4 A4:.5 A4:.5 | D5:.5 D5:.5 D5:.5 F5:.5 G4 G4:.5 C5:.5',
+    'E5:.5 E5:.5 E5:.5 F5:.5 E5:.5 E5:.5 E5:.5 F5:.5',
+    'E5:.5 E5:.5 E5:.5 F5:.5 E5:.5 D5:.25 E5:.25 F5:.5 D5:.5',
+    'E5 r E4:.5 E4:.5 E4:.5 F4:.5 | E4:.5 E4:.5 E4:.5 F4:.5 E4:.5 E4:.5 E4:.5 F4:.5',
+    'E4:.5 D4:.25 E4:.25 F4:.5 D4:.5 C4 r',
+  ].join(' | '),
+  chords: ['C', 'C', 'C', 'C', 'C', 'C', 'Am', 'G7', 'C', 'C', 'C', 'C', 'C'],
+  // The theme in the minor, as the ritornello comes back in G minor, here in
+  // A minor: half close, then full close.
+  stretch: [
+    'E5:.5 E5:.5 E5:.5 F5:.5 E5 E5:.5 F5:.5 | E5:.5 E5:.5 E5:.5 F5:.5 D5:.5 D5:.5 D5:.5 E5:.5',
+    'C5:.5 B4:.25 C5:.25 D5:.5 C5:.5 B4 r | C5:.5 B4:.25 C5:.25 D5:.5 B4:.5 A4 r',
+  ].join(' | '),
+  stretchChords: ['Am', 'Am', 'E7', 'Am'],
+  // Down over the low G, its F falling into the fanfare's C chord.
+  slow: 'B4:.5 A4:.5 G4:.5 F4:.5',
+};
+
+const TUNES: Partial<Record<Course, Tune>> = { christmas: JINGLE_BELLS, autumn: AUTUMN };
 
 /** Sleigh bells on each beat of `bars` bars, then four shakes fading over the slow moment's two. */
 function bells(bars: number, from: number): Note[] {
