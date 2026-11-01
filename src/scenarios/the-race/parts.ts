@@ -19,7 +19,8 @@ export type Mount =
   | 'ostrich'
   | 'rocket'
   | 'sandwich'
-  | 'reindeer';
+  | 'reindeer'
+  | 'leaf';
 export type Creature =
   | 'zombie'
   | 'robot'
@@ -45,7 +46,11 @@ export type Creature =
   | 'gnome'
   | 'snowman'
   | 'gingerbread'
-  | 'tree';
+  | 'tree'
+  | 'squirrel'
+  | 'hedgehog'
+  | 'mushroom'
+  | 'acorn';
 export type RacerColour = 'tomato' | 'sun' | 'mint' | 'grape' | 'pink' | 'orange' | 'sea' | 'shark';
 export type Extra = 'googly' | 'tophat' | 'number' | 'scarf' | 'cape' | 'bowtie';
 /** `hold`, the reins or the backrest; `pull`, leaning back on them; `wave`; `party`, arms up. */
@@ -61,6 +66,7 @@ export const MOUNTS: readonly Mount[] = [
   'rocket',
   'sandwich',
   'reindeer',
+  'leaf',
 ];
 export const CREATURES: readonly Creature[] = [
   'zombie',
@@ -88,6 +94,10 @@ export const CREATURES: readonly Creature[] = [
   'snowman',
   'gingerbread',
   'tree',
+  'squirrel',
+  'hedgehog',
+  'mushroom',
+  'acorn',
 ];
 /** The creatures that are things on legs, which tilt from their feet. */
 export const THINGS: readonly Creature[] = [
@@ -100,6 +110,8 @@ export const THINGS: readonly Creature[] = [
   'snowman',
   'gingerbread',
   'tree',
+  'mushroom',
+  'acorn',
 ];
 export const RACER_COLOURS: readonly RacerColour[] = [
   'tomato',
@@ -247,6 +259,18 @@ export const SPEC: Readonly<
     googly: [[198, 78, 8, 3, 2]],
     roundel: [108, 127],
   },
+  leaf: {
+    saddle: [104, 110],
+    nose: 206,
+    reins: null,
+    hold: [180, 92],
+    hat: [196, 82],
+    googly: [
+      [152, 114, 9, 3, 2],
+      [170, 116, 9, -2, 3],
+    ],
+    roundel: [66, 126],
+  },
 };
 
 /** The rider's head holder: 72 px, its foot 81 px down, where it leans from. */
@@ -356,6 +380,16 @@ const REINDEER = {
   legs: 'M80 146 L72 186 M100 150 L96 186 M146 148 L152 186 M164 144 L174 184',
   neck: 'M152 130 Q170 112 184 90',
   antlers: 'M184 68 L176 44 L166 38 M176 44 L180 30 M200 66 L206 42 L216 36 M206 42 L202 28',
+} as const;
+
+/** The giant leaf, its stalk behind and its tip curled up in front, where the rider holds on. */
+const LEAF = {
+  blade: 'M34 124 Q54 100 108 102 Q160 104 190 118 Q160 140 108 146 Q54 148 34 124 Z',
+  veins:
+    'M40 124 Q90 122 136 120 M70 123 L58 108 M70 123 L60 140 M102 122 L92 104 ' +
+    'M102 122 L94 144 M132 121 L124 106 M132 121 L126 141',
+  stalk: 'M36 124 Q22 130 10 144',
+  tip: 'M186 118 Q206 112 202 94 Q198 80 184 84 Q174 88 180 98',
 } as const;
 
 /** The hopper's horns, and the ostrich's legs and neck: an ink line under a coloured one. */
@@ -581,6 +615,35 @@ const MOUNT_SHAPES: Record<Mount, (eyes: boolean) => Shape[]> = {
       { 'data-shake': 'deer-head', ...attributes },
     ]),
   ],
+  // It floats over its shadow and the breeze, which stay put as it lifts or settles.
+  leaf: (eyes) => [
+    [
+      'ellipse',
+      styles.inkSoft!,
+      { cx: 112, cy: 186, rx: 64, ry: 5, 'stroke-width': 0, 'data-part': 'leaf-shadow' },
+    ],
+    [
+      'path',
+      styles.line!,
+      {
+        d: 'M40 168 Q70 158 100 168 M120 174 Q150 164 180 174',
+        'stroke-width': 4,
+        'data-part': 'leaf-shadow',
+      },
+    ],
+    ...overInk(LEAF.stalk, 10, 4, 'bark'),
+    ['path', styles.racer!, { d: LEAF.blade, 'stroke-width': 4, 'data-part': 'blade' }],
+    ['path', styles.line!, { d: LEAF.veins, 'stroke-width': 3 }],
+    ['path', styles.line!, { d: LEAF.tip, 'stroke-width': 13 }],
+    ['path', styles.racerLine!, { d: LEAF.tip, 'stroke-width': 6, 'data-part': 'tip' }],
+    ...(eyes
+      ? ([
+          ['circle', styles.inkFill!, { cx: 152, cy: 114, r: 4.5 }],
+          ['circle', styles.inkFill!, { cx: 168, cy: 116, r: 4.5 }],
+        ] as Shape[])
+      : []),
+    ['path', styles.line!, { d: 'M150 126 Q160 134 172 124', 'stroke-width': 4 }],
+  ],
 };
 
 /** The egg an ostrich lays, from the canvas, on its 40 by 48 grid. */
@@ -644,14 +707,41 @@ const TANGLE: readonly Shape[] = [
   ]),
 ];
 
+/** The breeze a giant leaf catches, swirling under and behind it, with two leaves in it. */
+const BREEZE: readonly Shape[] = [
+  [
+    'path',
+    styles.line!,
+    {
+      d: 'M-6 112 Q20 92 46 110 Q62 122 80 104 M-24 150 Q12 134 44 150 Q60 158 78 146',
+      'stroke-width': 4,
+    },
+  ],
+  ['path', styles.orange!, { d: lens(-14, 92, -30, 0.9), 'stroke-width': 2.5 }],
+  ['path', styles.sun!, { d: lens(-30, 132, 20, 0.8), 'stroke-width': 2.5 }],
+];
+
+/** The puddle a giant leaf settles in, under it, with ripples. */
+const PUDDLE: readonly Shape[] = [
+  ['ellipse', styles.glass!, { cx: 112, cy: 184, rx: 92, ry: 10, 'stroke-width': 3 }],
+  [
+    'path',
+    styles.stripe!,
+    { d: 'M48 182 Q60 179 72 182 M150 186 Q164 183 178 186', 'stroke-width': 3 },
+  ],
+];
+
 /** What a burst or a stop brings out, per mount, each hidden until then. */
-export type Prop = 'egg' | 'smoke' | 'steam' | 'pickle' | 'spray' | 'tangle';
+export type Prop = 'egg' | 'smoke' | 'steam' | 'pickle' | 'spray' | 'tangle' | 'breeze' | 'puddle';
 const PROPS: Partial<Record<Mount, Partial<Record<Prop, readonly Shape[]>>>> = {
   ostrich: { egg: EGG },
   rocket: { smoke: SMOKE },
   sandwich: { steam: STEAM, pickle: PICKLE },
   reindeer: { spray: SPRAY, tangle: TANGLE },
+  leaf: { breeze: BREEZE, puddle: PUDDLE },
 };
+/** The props that go under the mount: the puddle. */
+const UNDER: readonly Prop[] = ['puddle'];
 
 /** The rider's scarf, on the head's 100 grid, under the chin and out behind. */
 const SCARF: readonly Shape[] = [
@@ -1162,10 +1252,11 @@ export function racer(
   ]);
   hands.style.setProperty('--skin', `var(--color-skin-${faceLook.skin})`);
 
-  // What a burst or a stop brings out, over the racer.
+  // What a burst or a stop brings out, over the racer, or under the mount.
   const props: Partial<Record<Prop, SVGGElement>> = {};
   for (const [name, shapes] of Object.entries(PROPS[look.mount] ?? {})) {
     const prop = group(el, name, shapes);
+    if (UNDER.includes(name as Prop)) el.insertBefore(prop, mount);
     show(prop, false);
     props[name as Prop] = prop;
   }

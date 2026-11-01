@@ -451,8 +451,6 @@ Feature: The Race
       When the show runs on Autumn
       Then no leaves fly up out of the pile, and the umbrella lifts its racer without swaying
 
-  # Step 3.
-  @pending
   Rule: Autumn's own racers
 
     Scenario: Five racers for Autumn

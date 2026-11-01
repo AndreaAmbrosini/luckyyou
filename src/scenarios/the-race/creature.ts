@@ -16,6 +16,7 @@ import {
   dressFor,
   GOLDEN_ACORN,
   group,
+  leaves,
   PRESENT,
   RACER,
   santaHat,
@@ -47,7 +48,8 @@ type Paint =
   | 'pink'
   | 'sea'
   | 'mint'
-  | 'bark';
+  | 'bark'
+  | 'tomato-soft';
 
 /** Sneakers, boots, big bare feet, flat paddles, bird's toes or a curled tentacle tip. */
 export type Foot = 'sneaker' | 'boot' | 'bare' | 'paddle' | 'toes' | 'tip';
@@ -947,6 +949,133 @@ export const CREATURE_SPEC: Readonly<Record<Creature, Spec>> = {
     hat: [130, 26],
     cup: [130, -44],
   }),
+  // Autumn. The squirrel runs on bare paws in its colour; the hedgehog on bark ones, its face
+  // and belly tomato-soft; the mushroom's face is on its stalk, the acorn's on its nut.
+  squirrel: {
+    face: 139,
+    nose: 176,
+    hips: [
+      [118, 146],
+      [134, 147],
+    ],
+    legW: 11,
+    legs: 'colour',
+    foot: 'bare',
+    footK: 0.9,
+    shoes: 'colour',
+    shoulders: [
+      [110, 100],
+      [142, 100],
+    ],
+    armW: 9,
+    arms: 'colour',
+    hands: 'colour',
+    noThumb: true,
+    tooth: true,
+    eyes: [
+      [124, 48, 11],
+      [154, 48, 11],
+    ],
+    lid: 'colour',
+    mouth: [156, 82, 14],
+    sweat: [
+      [92, 24],
+      [186, 30],
+    ],
+    neck: [130, 94],
+    chest: [128, 124],
+    hat: [138, 24],
+    cup: [138, -44],
+    reach: 1,
+  },
+  hedgehog: {
+    face: 171,
+    nose: 212,
+    hips: [
+      [112, 152],
+      [138, 152],
+    ],
+    legW: 9,
+    legs: 'bark',
+    foot: 'bare',
+    footK: 0.9,
+    shoes: 'bark',
+    shoulders: [
+      [124, 112],
+      [160, 112],
+    ],
+    armW: 8,
+    arms: 'bark',
+    hands: 'bark',
+    noThumb: true,
+    dots: true,
+    eyes: [
+      [162, 74, 4.5],
+      [180, 77, 4],
+    ],
+    lid: 'tomato-soft',
+    mouth: [186, 92, 12],
+    sweat: [
+      [94, 32],
+      [202, 56],
+    ],
+    neck: [160, 110],
+    chest: [128, 140],
+    hat: [118, 38],
+    cup: [118, -36],
+    reach: 1,
+  },
+  mushroom: thing({
+    face: 131,
+    nose: 190,
+    hips: [
+      [118, 150],
+      [142, 150],
+    ],
+    shoulders: [
+      [108, 100],
+      [152, 100],
+    ],
+    eyes: [
+      [120, 62, 8],
+      [142, 62, 8],
+    ],
+    lid: 'paper',
+    mouth: [131, 84, 14],
+    sweat: [
+      [96, 50],
+      [166, 50],
+    ],
+    neck: [130, 104],
+    chest: [130, 128],
+    hat: [130, -18],
+    cup: [130, -62],
+  }),
+  acorn: thing({
+    face: 131,
+    nose: 188,
+    hips: [
+      [121, 140],
+      [139, 140],
+    ],
+    shoulders: [
+      [92, 82],
+      [168, 82],
+    ],
+    eyes: [
+      [116, 64, 10],
+      [146, 64, 10],
+    ],
+    mouth: [131, 88, 16],
+    sweat: [
+      [78, 50],
+      [182, 50],
+    ],
+    neck: [130, 50],
+    chest: [130, 116],
+    hat: [130, -6],
+    cup: [130, -52],
+  }),
 };
 
 /** A paint as a fill class, and as a line's colour. */
@@ -964,6 +1093,7 @@ const FILLS: Record<Paint, string> = {
   sea: styles.seaBlue!,
   mint: styles.mint!,
   bark: styles.bark!,
+  'tomato-soft': styles.tomatoSoft!,
 };
 const LINES: Record<Paint, string> = {
   colour: 'var(--racer)',
@@ -979,6 +1109,7 @@ const LINES: Record<Paint, string> = {
   sea: 'var(--color-sea)',
   mint: 'var(--color-mint)',
   bark: 'var(--color-bark)',
+  'tomato-soft': 'var(--color-tomato-soft)',
 };
 
 const paint = (el: Element, p: Paint) => (el as SVGElement).style.setProperty('--paint', LINES[p]);
@@ -1002,6 +1133,19 @@ function fur(cx: number, cy: number, rx: number, ry: number): string {
   return `${points.join(' ')} Z`;
 }
 
+/** Spikes round (cx, cy) from angle `a0` to `a1`, `n` tips with a dip between each, unclosed. */
+function spikes(cx: number, cy: number, rx: number, ry: number, a0: number, a1: number, n: number) {
+  const points: string[] = [];
+  for (let i = 0; i <= 2 * n; i++) {
+    const a = ((a0 + ((a1 - a0) * i) / (2 * n)) * Math.PI) / 180;
+    const k = i % 2 ? 1 : 0.8;
+    const x = Math.round(cx + rx * k * Math.cos(a));
+    const y = Math.round(cy + ry * k * Math.sin(a));
+    points.push(`${i ? 'L' : 'M'}${x} ${y}`);
+  }
+  return points.join(' ');
+}
+
 /**
  * A main part of a body: filled with `paint`, then what's drawn on it, then
  * its shadow (the part less itself moved by `shadow`, up and right, so the
@@ -1014,6 +1158,8 @@ interface Shaded {
   readonly shadow: Point;
   readonly on?: readonly Shape[];
   readonly part?: string;
+  /** Attributes for its fill, shadow and outline alike: what a burst turns, or a stop knocks off. */
+  readonly marks?: Readonly<Record<string, string | number>>;
 }
 
 /** A white highlight on the upper right of a head or a body. */
@@ -1073,6 +1219,47 @@ const SNOWBALLS = {
 const TIERS = {
   low: 'M78 150 Q86 104 112 88 H148 Q174 104 182 150 Q130 162 78 150 Z',
   top: 'M92 92 Q96 40 130 12 Q164 40 168 92 Q130 102 92 92 Z',
+} as const;
+
+/** The squirrel: its tail, body and belly, ears and their insides, tufts, head and nose. */
+const SQUIRREL = {
+  tail:
+    'M110 138 C84 150 46 136 44 100 C42 62 60 26 92 20 C114 16 122 40 104 48 ' +
+    'C120 60 118 96 114 116 Z',
+  body: 'M106 110 Q104 90 126 89 Q148 90 148 110 L146 132 Q144 150 126 150 Q108 150 107 132 Z',
+  belly: 'M118 104 Q128 98 138 104 Q142 122 136 140 Q128 146 120 140 Q114 122 118 104 Z',
+  ears: 'M110 34 Q104 12 114 2 Q124 14 126 28 Z M150 26 Q160 8 172 4 Q176 20 170 38 Z',
+  inside: 'M114 28 Q111 16 115 9 Q121 17 122 26 Z M155 26 Q162 15 168 11 Q170 22 166 32 Z',
+  tufts: 'M114 2 L109 -6 M114 2 L115 -8 M172 4 L173 -6 M172 4 L179 -3',
+  head: 'M100 56 A38 34 0 1 0 176 56 A38 34 0 1 0 100 56 Z',
+  nose: 'M150 63 Q156 60 162 63 Q160 68 156 69 Q152 68 150 63 Z',
+} as const;
+/** Where the squirrel's tail joins it, to whirl about. */
+export const TAIL_ROOT = [112, 130] as const;
+
+/** The hedgehog's spines round its back and over its head, and its face and snout. */
+const HEDGEHOG = {
+  spines: `${spikes(122, 96, 60, 62, 115, 345, 15)} L152 136 Z`,
+  face:
+    'M148 60 Q172 54 190 70 Q206 80 206 88 Q200 100 180 100 Q170 116 156 128 ' +
+    'Q140 120 138 98 Q138 74 148 60 Z',
+} as const;
+
+/** The mushroom's stalk and its cap. */
+const MUSHROOM = {
+  stalk: 'M108 40 Q102 96 106 150 Q130 158 154 150 Q158 96 152 40 Z',
+  cap: 'M70 34 Q72 -18 130 -20 Q188 -18 190 34 Q160 46 130 46 Q100 46 70 34 Z',
+} as const;
+
+/** The acorn's nut, its cap, the cap's rows of scales and its stalk. */
+const ACORN = {
+  nut: 'M86 40 Q84 112 130 152 Q176 112 174 40 Z',
+  cap: 'M74 46 Q74 -6 130 -8 Q186 -6 186 46 Q130 34 74 46 Z',
+  scales:
+    'M106 6 l6 5 l6 -5 M124 2 l6 5 l6 -5 M142 6 l6 5 l6 -5 M90 20 l6 5 l6 -5 M108 18 l6 5 l6 -5 ' +
+    'M126 17 l6 5 l6 -5 M144 18 l6 5 l6 -5 M162 20 l6 5 l6 -5 M86 34 l6 4 l6 -4 ' +
+    'M104 31 l6 4 l6 -4 M122 30 l6 4 l6 -4 M140 30 l6 4 l6 -4 M158 31 l6 4 l6 -4',
+  stalk: 'M130 -6 Q132 -20 142 -26',
 } as const;
 
 /** The gnome's pointy hat, its tip at (130, -28). */
@@ -2003,6 +2190,109 @@ const BODIES: Record<Creature, readonly (Shape | Shaded)[]> = {
       },
     ],
   ],
+  // The tail whirls about its root as one: each of its shapes is marked `data-swing`.
+  squirrel: [
+    {
+      paint: styles.racer!,
+      d: SQUIRREL.tail,
+      shadow: [9, -7],
+      part: 'tail',
+      marks: { 'data-swing': 'tail' },
+    },
+    // A shine on its tail, a plain line: highlights are on the upper right.
+    [
+      'path',
+      styles.stripe!,
+      { d: 'M94 30 Q106 30 108 40', 'stroke-width': 5, opacity: 0.8, 'data-swing': 'tail' },
+    ],
+    {
+      paint: styles.racer!,
+      d: SQUIRREL.body,
+      shadow: [9, -6],
+      part: 'fur',
+      on: [['path', styles.paper!, { d: SQUIRREL.belly, 'stroke-width': 3, 'data-part': 'belly' }]],
+    },
+    ['path', styles.racer!, { d: SQUIRREL.ears, 'stroke-width': 4, 'data-part': 'fur' }],
+    ['path', styles.pinkFill!, { d: SQUIRREL.inside }],
+    ['path', styles.line!, { d: SQUIRREL.tufts, 'stroke-width': 3.5 }],
+    { paint: styles.racer!, d: SQUIRREL.head, shadow: [8, -7], part: 'fur' },
+    shine('M154 30 Q166 34 170 46'),
+    ['circle', styles.pinkFill!, { cx: 116, cy: 70, r: 5, opacity: 0.6 }],
+    ['ellipse', styles.paper!, { cx: 156, cy: 72, rx: 16, ry: 12, 'stroke-width': 3 }],
+    ['path', styles.pink!, { d: SQUIRREL.nose, 'stroke-width': 2.5 }],
+  ],
+  hedgehog: [
+    { paint: styles.racer!, d: HEDGEHOG.spines, shadow: [10, -8], part: 'spines' },
+    [
+      'path',
+      styles.line!,
+      {
+        d: 'M80 100 l-10 -6 M88 76 l-8 -10 M100 112 l-10 -8 M80 128 l-12 -2 M108 70 l-3 -11',
+        'stroke-width': 3,
+      },
+    ],
+    shine('M96 60 Q110 52 126 52'),
+    { paint: styles.tomatoSoft!, d: HEDGEHOG.face, shadow: [8, -6], part: 'snout' },
+    [
+      'path',
+      styles.tomatoSoft!,
+      {
+        d: 'M100 142 Q126 128 156 126 Q166 140 158 152 Q128 160 104 156 Q94 150 100 142 Z',
+        'stroke-width': 3,
+        'data-part': 'belly',
+      },
+    ],
+    ['circle', styles.tomatoSoft!, { cx: 150, cy: 62, r: 7, 'stroke-width': 3 }],
+    ['circle', styles.pinkFill!, { cx: 168, cy: 89, r: 5, opacity: 0.6 }],
+    ['circle', styles.inkFill!, { cx: 205, cy: 87, r: 7, 'data-part': 'nose' }],
+    ['circle', styles.paperFill!, { cx: 203, cy: 84, r: 2 }],
+  ],
+  mushroom: [
+    { paint: styles.paper!, d: MUSHROOM.stalk, shadow: [8, -4], part: 'stalk' },
+    ['circle', styles.pinkFill!, { cx: 114, cy: 76, r: 5, opacity: 0.6 }],
+    ['circle', styles.pinkFill!, { cx: 148, cy: 76, r: 5, opacity: 0.6 }],
+    {
+      paint: styles.racer!,
+      d: MUSHROOM.cap,
+      shadow: [10, -6],
+      part: 'cap',
+      on: (
+        [
+          [100, 8, 9],
+          [136, -6, 8],
+          [166, 14, 10],
+          [122, 26, 6],
+          [84, 26, 5],
+          [150, 34, 5],
+        ] as const
+      ).map(([cx, cy, r]): Shape => [
+        'circle',
+        styles.paper!,
+        { cx, cy, r, 'stroke-width': 2.5, 'data-part': 'spots' },
+      ]),
+    },
+    shine('M156 -10 Q174 -2 180 14'),
+  ],
+  // What its stop knocks off is marked `data-lost`: its cap, with its stalk and scales.
+  acorn: [
+    { paint: styles.racer!, d: ACORN.nut, shadow: [9, -6], part: 'nut' },
+    shine('M160 54 Q166 78 158 102'),
+    ['circle', styles.pinkFill!, { cx: 106, cy: 80, r: 5, opacity: 0.6 }],
+    ['circle', styles.pinkFill!, { cx: 156, cy: 80, r: 5, opacity: 0.6 }],
+    ...inkUnder(ACORN.stalk, 11, 5, styles.barkLine!).map(([tag, className, attributes]): Shape => [
+      tag,
+      className,
+      { ...attributes, 'data-part': 'stalk', 'data-lost': 1 },
+    ]),
+    {
+      paint: styles.bark!,
+      d: ACORN.cap,
+      shadow: [9, -6],
+      part: 'scaly-cap',
+      marks: { 'data-lost': 1 },
+      on: [['path', styles.line!, { d: ACORN.scales, 'stroke-width': 2.5, 'data-lost': 1 }]],
+    },
+  ],
 };
 
 /**
@@ -2138,6 +2428,10 @@ export const REACH: Readonly<Record<Creature, Reach>> = {
   snowman: { least: 12, most: 35 },
   gingerbread: { least: 15, most: 38 },
   tree: { least: -2, most: 18 },
+  squirrel: { least: -6, most: 5 },
+  hedgehog: { least: -13, most: 0 },
+  mushroom: { least: -14, most: 2 },
+  acorn: { least: -10, most: 14 },
 };
 
 /** What a creature's burst or stop brings out, each hidden until then. */
@@ -2179,7 +2473,17 @@ export type CreatureProp =
   | 'crumbs'
   | 'gumdrop'
   | 'lights'
-  | 'bauble';
+  | 'bauble'
+  | 'blur'
+  | 'hole'
+  | 'nut'
+  | 'mound'
+  | 'ball'
+  | 'stuck'
+  | 'burrow'
+  | 'spores'
+  | 'chaser'
+  | 'cap';
 
 /**
  * Where a prop goes: on the ground, behind everything; under the body,
@@ -2215,6 +2519,12 @@ const LAYERS: Partial<Record<CreatureProp, 'ground' | 'under' | 'front'>> = {
   snow: 'ground',
   blizzard: 'ground',
   lights: 'front',
+  hole: 'ground',
+  mound: 'ground',
+  burrow: 'ground',
+  chaser: 'ground',
+  stuck: 'front',
+  spores: 'front',
 };
 
 /** Two puffs of steam shooting up from (0, 0). */
@@ -2633,6 +2943,149 @@ const BAUBLE: readonly Shape[] = [
   ['circle', styles.paperFill!, { cx: 2.5, cy: -2.5, r: 1.8, opacity: 0.8 }],
 ];
 
+/** The blur lines of a squirrel gone nuts. */
+const BLUR: readonly Shape[] = [
+  ['path', styles.line!, { d: 'M70 70 H30 M62 108 H16 M76 150 H40', 'stroke-width': 4 }],
+  ['path', styles.line!, { d: 'M28 40 Q16 64 30 88 M18 120 Q8 140 22 162', 'stroke-width': 3 }],
+];
+
+/** A little hole in the ground in front of a squirrel, the earth dug out of it beside it. */
+const HOLE: readonly Shape[] = [
+  ['ellipse', styles.inkSoft!, { cx: 204, cy: 189, rx: 20, ry: 5, 'stroke-width': 2.5 }],
+  ['path', styles.bark!, { d: 'M222 190 Q232 176 246 190 Z', 'stroke-width': 3 }],
+];
+
+/** An acorn for burying, round (0, 0). */
+const NUT: readonly Shape[] = [
+  ['path', styles.orange!, { d: 'M-7 -2 Q-7 9 0 12 Q7 9 7 -2 Z', 'stroke-width': 2.5 }],
+  ['path', styles.bark!, { d: 'M-9 -1 Q-9 -9 0 -9 Q9 -9 9 -1 Q0 -4 -9 -1 Z', 'stroke-width': 2.5 }],
+  ['path', styles.line!, { d: 'M0 -9 L2 -13', 'stroke-width': 2.5 }],
+];
+
+/** The earth patted down over a buried acorn. */
+const MOUND: readonly Shape[] = [
+  ['path', styles.bark!, { d: 'M184 190 Q204 172 226 190 Z', 'stroke-width': 3 }],
+  ['path', styles.line!, { d: 'M196 184 l3 -2 M208 180 l3 2', 'stroke-width': 2 }],
+];
+
+/** A hedgehog curled into a spiky ball round (130, 140), its snout peeping out. */
+const BALL: readonly Shape[] = [
+  [
+    'path',
+    styles.racer!,
+    { d: `${spikes(130, 140, 50, 50, 0, 360, 16)} Z`, 'stroke-width': 4, 'data-part': 'spines' },
+  ],
+  [
+    'path',
+    styles.line!,
+    {
+      d: 'M108 128 l-8 -6 M130 112 V102 M152 126 l8 -6 M112 158 l-8 6 M146 160 l8 6',
+      'stroke-width': 3,
+    },
+  ],
+  [
+    'path',
+    styles.tomatoSoft!,
+    { d: 'M126 150 Q146 136 166 148 Q170 160 150 164 Q132 164 126 150 Z', 'stroke-width': 3 },
+  ],
+  ['circle', styles.inkFill!, { cx: 165, cy: 151, r: 5 }],
+];
+
+/** Leaves stuck on a hedgehog's spines. */
+const STUCK: readonly Shape[] = (() => {
+  const { orange, tomato, sun } = leaves(
+    [
+      [64, 104, -60],
+      [76, 62, -30],
+      [108, 38, 10],
+      [148, 40, 40],
+      [176, 64, 70],
+    ],
+    1.2,
+  );
+  return [
+    ['path', styles.orange!, { d: orange, 'stroke-width': 2.5 }],
+    ['path', styles.tomato!, { d: tomato, 'stroke-width': 2.5 }],
+    ['path', styles.sun!, { d: sun, 'stroke-width': 2.5 }],
+  ];
+})();
+
+/** The hole a mushroom sinks into and pops up out of, earth flying from it. */
+const BURROW: readonly Shape[] = [
+  ['ellipse', styles.inkSoft!, { cx: 130, cy: 189, rx: 46, ry: 8, 'stroke-width': 3 }],
+  ...(
+    [
+      [78, 182, 5],
+      [184, 180, 6],
+      [66, 168, 4],
+      [196, 166, 4],
+    ] as const
+  ).map(([cx, cy, r]): Shape => ['circle', styles.bark!, { cx, cy, r, 'stroke-width': 2.5 }]),
+];
+
+/** A puff of spores over a mushroom's cap. */
+const SPORES: readonly Shape[] = (
+  [
+    [84, -26, 5],
+    [104, -40, 4],
+    [132, -46, 6],
+    [160, -38, 4],
+    [180, -22, 5],
+    [70, -6, 4],
+    [194, 0, 4],
+    [118, -30, 3],
+    [146, -28, 3],
+  ] as const
+).map(([cx, cy, r], i): Shape => [
+  'circle',
+  i % 2 ? styles.paper! : styles.sun!,
+  { cx, cy, r, 'stroke-width': 2 },
+]);
+
+/**
+ * The squirrel that chases an acorn, drawn from the squirrel at 0.7 in
+ * orange, its feet on the ground behind the acorn, reaching for it.
+ */
+const CHASER: readonly Shape[] = (
+  [
+    ['path', styles.orange!, { d: SQUIRREL.tail, 'stroke-width': 4 }],
+    ...inkUnder('M118 146 Q110 168 94 174', 17, 10, styles.limb!, 'orange'),
+    ...inkUnder('M134 147 Q154 160 152 184', 17, 10, styles.limb!, 'orange'),
+    ['path', styles.orange!, { d: SQUIRREL.body, 'stroke-width': 4 }],
+    ['path', styles.paper!, { d: SQUIRREL.belly, 'stroke-width': 3 }],
+    ...inkUnder('M142 100 Q162 98 176 86', 15, 8, styles.limb!, 'orange'),
+    ['path', styles.orange!, { d: SQUIRREL.ears, 'stroke-width': 4 }],
+    ['path', styles.pinkFill!, { d: SQUIRREL.inside }],
+    ['path', styles.line!, { d: SQUIRREL.tufts, 'stroke-width': 3.5 }],
+    ['path', styles.orange!, { d: SQUIRREL.head, 'stroke-width': 4 }],
+    ['ellipse', styles.paper!, { cx: 124, cy: 48, rx: 10, ry: 12, 'stroke-width': 3 }],
+    ['ellipse', styles.paper!, { cx: 154, cy: 48, rx: 10, ry: 12, 'stroke-width': 3 }],
+    ['circle', styles.inkFill!, { cx: 128, cy: 50, r: 5 }],
+    ['circle', styles.inkFill!, { cx: 158, cy: 50, r: 5 }],
+    ['ellipse', styles.paper!, { cx: 156, cy: 72, rx: 16, ry: 12, 'stroke-width': 3 }],
+    ['path', styles.pink!, { d: SQUIRREL.nose, 'stroke-width': 2.5 }],
+    ['path', styles.line!, { d: 'M146 84 Q156 90 168 82', 'stroke-width': 3 }],
+    ['path', styles.paper!, { d: 'M152 86 h8 v9 h-8 Z', 'stroke-width': 2.5 }],
+  ] as Shape[]
+).map(([tag, className, attributes]): Shape => [
+  tag,
+  className,
+  { ...attributes, transform: 'translate(-110 57) scale(0.7)' },
+]);
+
+/** The acorn's cap, with its stalk and scales, round the middle of its rim at (0, 0). */
+const CAP: readonly Shape[] = (
+  [
+    ...inkUnder(ACORN.stalk, 11, 5, styles.barkLine!),
+    ['path', styles.bark!, { d: ACORN.cap, 'stroke-width': 4 }],
+    ['path', styles.line!, { d: ACORN.scales, 'stroke-width': 2.5 }],
+  ] as Shape[]
+).map(([tag, className, attributes]): Shape => [
+  tag,
+  className,
+  { ...attributes, transform: 'translate(-130 -19)' },
+]);
+
 /** The paints of a creature's feet, as `FEET` takes them. */
 const footPaints = (spec: Spec) => ({
   shoe: FILLS[spec.shoes],
@@ -2680,6 +3133,15 @@ const PROPS: Partial<Record<Creature, Partial<Record<CreatureProp, (spec: Spec) 
   snowman: { blizzard: () => [...BLIZZARD], carrot: () => [...CARROT] },
   gingerbread: { crumbs: () => [...CRUMBS], gumdrop: () => [...GUMDROP] },
   tree: { lights: () => [...LIGHTS], bauble: () => [...BAUBLE] },
+  squirrel: {
+    blur: () => [...BLUR],
+    hole: () => [...HOLE],
+    nut: () => [...NUT],
+    mound: () => [...MOUND],
+  },
+  hedgehog: { ball: () => [...BALL], stuck: () => [...STUCK] },
+  mushroom: { burrow: () => [...BURROW], spores: () => [...SPORES] },
+  acorn: { chaser: () => [...CHASER], cap: () => [...CAP] },
 };
 
 export interface CreatureRunner extends Runner {
@@ -2700,8 +3162,12 @@ export interface CreatureRunner extends Runner {
   readonly wisps: readonly SVGElement[];
   /** The octopus's hanging tentacles, each its parts, back to front, to whirl or hide. */
   readonly tentacles: readonly (readonly SVGElement[])[];
-  /** What its stop knocks off it, to hide until it's put back: the carrot, a gumdrop, a bauble. */
+  /** What its stop knocks off it, to hide until it's put back: the carrot, a gumdrop, a bauble, a cap. */
   readonly lost: readonly SVGElement[];
+  /** The squirrel's tail, to whirl about its root. */
+  readonly tail: readonly SVGElement[];
+  /** Everything of it but its props, to hide while it's curled into a ball. */
+  readonly whole: readonly SVGGElement[];
   /** Stretches both arms forward, for what's out of reach. */
   setStretch(on: boolean): void;
   /** Bends forward from its hips by `degrees`, unless it leans back scared. */
@@ -2850,15 +3316,20 @@ export function creature(
         { d: `${OUTSIDE} ${part.d}`, 'clip-rule': 'evenodd', transform: `translate(${dx} ${dy})` },
       ],
     ]);
+    const marks = part.marks ?? {};
     draw(own, [
       [
         'path',
         part.paint,
-        { d: part.d, 'stroke-width': 0, ...(part.part && { 'data-part': part.part }) },
+        { d: part.d, 'stroke-width': 0, ...(part.part && { 'data-part': part.part }), ...marks },
       ],
       ...(part.on ?? []),
-      ['path', styles.shade!, { d: part.d, 'clip-path': `url(#${clip.id})`, 'data-part': 'shade' }],
-      ['path', styles.line!, { d: part.d, 'stroke-width': 4 }],
+      [
+        'path',
+        styles.shade!,
+        { d: part.d, 'clip-path': `url(#${clip.id})`, 'data-part': 'shade', ...marks },
+      ],
+      ['path', styles.line!, { d: part.d, 'stroke-width': 4, ...marks }],
     ]);
   });
 
@@ -2967,7 +3438,7 @@ export function creature(
   } else if (santa) {
     const [x, y] = spec.hat;
     group(front, 'santa', santaHat(true)).setAttribute('transform', `translate(${x} ${y})`);
-  } else if (costume === 'acorn') {
+  } else if (costume === 'acorn' && kind !== 'acorn') {
     const [x, y] = spec.hat;
     group(front, 'acorn-cap', acornCap(true)).setAttribute(
       'transform',
@@ -3357,6 +3828,11 @@ export function creature(
     light: own.querySelector<SVGElement>('[data-part="light"]'),
     wisps: [...own.querySelectorAll<SVGElement>('[data-part="wisps"]')],
     lost: [...own.querySelectorAll<SVGElement>('[data-lost]')],
+    tail: [...own.querySelectorAll<SVGElement>('[data-swing="tail"]')],
+    whole: [...el.children].filter(
+      (child): child is SVGGElement =>
+        child.tagName === 'g' && !Object.values(props).includes(child as SVGGElement),
+    ),
     tentacles:
       kind === 'octopus'
         ? TENTACLES.map((_, i) => [...own.querySelectorAll<SVGElement>(`[data-tentacle="${i}"]`)])

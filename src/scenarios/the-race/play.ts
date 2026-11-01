@@ -19,7 +19,15 @@ import {
   type Mood,
   type Show,
 } from '../../scenario-kit';
-import { creature, CREATURE_SPEC, FLAIL, REACH, TENTACLES, type CreatureRunner } from './creature';
+import {
+  creature,
+  CREATURE_SPEC,
+  FLAIL,
+  REACH,
+  TAIL_ROOT,
+  TENTACLES,
+  type CreatureRunner,
+} from './creature';
 import { boxAt, bubbleOffsets, faceAt, lane, tagAt, tagBox, tagSize, type Lane } from './layout';
 import { raceMusic } from './music';
 import {
@@ -77,6 +85,7 @@ const BURSTS: Record<Kind, string> = {
   rocket: 'fires its boosters',
   sandwich: 'gets extra spicy',
   reindeer: 'takes off',
+  leaf: 'catches the breeze',
   zombie: 'gets a second wind',
   robot: 'switches to turbo',
   shark: 'finds its sea legs',
@@ -102,6 +111,10 @@ const BURSTS: Record<Kind, string> = {
   snowman: 'rides a blizzard',
   gingerbread: 'runs as fast as it can',
   tree: 'lights up',
+  squirrel: 'goes nuts',
+  hedgehog: 'rolls into a ball',
+  mushroom: 'pops up ahead',
+  acorn: 'is chased by a squirrel',
 };
 const STOPS: Record<Kind, string> = {
   snail: 'stops for a snack',
@@ -113,6 +126,7 @@ const STOPS: Record<Kind, string> = {
   rocket: 'runs out of fuel',
   sandwich: 'drops its pickle',
   reindeer: 'gets tangled in fairy lights',
+  leaf: 'lands in a puddle',
   zombie: 'loses a shoe',
   robot: 'needs a reboot',
   shark: 'stops to tie its laces',
@@ -138,6 +152,10 @@ const STOPS: Record<Kind, string> = {
   snowman: 'loses its nose',
   gingerbread: 'loses a button',
   tree: 'drops a bauble',
+  squirrel: 'buries an acorn',
+  hedgehog: 'collects leaves',
+  mushroom: 'sneezes',
+  acorn: 'loses its cap',
 };
 /** What the commentator calls a racer, where it isn't its kind's name. */
 const CALLED: Partial<Record<Kind, string>> = {
@@ -145,6 +163,7 @@ const CALLED: Partial<Record<Kind, string>> = {
   sticky: 'sticky note',
   icecream: 'ice cream',
   tree: 'Christmas tree',
+  leaf: 'giant leaf',
 };
 
 /** What each track does to someone in its own burst and stop. */
@@ -167,6 +186,7 @@ const GAITS: Record<Kind, { px: number; seconds: number }> = {
   rocket: { px: 2, seconds: 0.2 },
   sandwich: { px: 4, seconds: 0.36 },
   reindeer: { px: 6, seconds: 0.4 },
+  leaf: { px: 5, seconds: 0.6 },
   zombie: { px: 3, seconds: 0.5 },
   robot: { px: 2, seconds: 0.24 },
   shark: { px: 4, seconds: 0.32 },
@@ -192,6 +212,10 @@ const GAITS: Record<Kind, { px: number; seconds: number }> = {
   snowman: { px: 3, seconds: 0.34 },
   gingerbread: { px: 5, seconds: 0.28 },
   tree: { px: 3, seconds: 0.36 },
+  squirrel: { px: 4, seconds: 0.26 },
+  hedgehog: { px: 3, seconds: 0.24 },
+  mushroom: { px: 3, seconds: 0.34 },
+  acorn: { px: 4, seconds: 0.3 },
 };
 
 /** `look` drawn in the theme's `dress`: a rider on its mount, or a creature. */
@@ -252,6 +276,18 @@ const LEAP = { px: 34, up: 0.2 };
  * many times a second, about (x, y) on its grid.
  */
 const TANGLED = { from: 0.1, shake: 0.8, degrees: 10, rate: 4, pivot: [190, 84] };
+/**
+ * A giant leaf lifts this high, in drawing pixels, over the first `up` s of
+ * its burst, sails on the breeze, which blows `blow` px back behind it, and
+ * comes down over the last `up` s; its shadow stays on the ground.
+ */
+const SAIL = { px: 34, up: 0.3, blow: -40 };
+/**
+ * A giant leaf settles this far into a puddle over `settle` s of its stop,
+ * turns once slowly round from `turn` s until "Phew!", and floats up again
+ * by the time it's off.
+ */
+const PUDDLE = { px: 30, settle: 0.3, turn: 0.3 };
 /**
  * A track's own burst shows for `burst` s, past the burst itself, so the
  * moon bounce is one long hop; it skids `skid` degrees on a wet floor. A
@@ -402,17 +438,58 @@ const WASABI = { from: -70, at: [150, 34], fall: 0.3 };
 const BLIZZARD = { turns: 1.5, middle: [130, 110] };
 /** A gingerbread sprints bent this far forward, its crumbs flying back this far over its burst. */
 const SPRINT = { degrees: 12, to: [-50, 8] };
-/** What a Christmas thing's stop knocks off it, and from where to where on its grid it falls. */
-const KNOCKED: Partial<Record<Creature, ['carrot' | 'gumdrop' | 'bauble', number[], number[]]>> = {
+/** What a Christmas thing's or the acorn's stop knocks off it, and from where to where on its grid it falls. */
+const KNOCKED: Partial<
+  Record<Creature, ['carrot' | 'gumdrop' | 'bauble' | 'cap', number[], number[]]>
+> = {
   snowman: ['carrot', [149, 71], [198, 182]],
   gingerbread: ['gumdrop', [131, 126], [178, 184]],
   tree: ['bauble', [164, 136], [196, 182]],
+  acorn: ['cap', [130, 19], [200, 168]],
 };
 /**
  * It falls off `drop` s into the stop, over `fall` s; the thing bends this
  * far for it from `reach` s, and has it back on at `back`.
  */
 const LOSS = { drop: 0.1, fall: 0.35, reach: 0.4, degrees: 30, back: 1.3 };
+/** A mushroom sinks into the ground over the first `down` s of its burst, and pops up over the last `up` s. */
+const SINK = { down: 0.2, up: 0.3 };
+/**
+ * A mushroom breathes in from `in` s into its stop, leaning `back`; it
+ * sneezes at `at`, bending this far for `bow` s, its spores puffing up
+ * `rise` px over `puff` s and hanging there until "Phew!".
+ */
+const SNEEZE = { in: 0.1, at: 0.5, back: -12, degrees: 24, bow: 0.4, rise: 20, puff: 0.4 };
+/** A squirrel pops up behind an acorn over `pop` s and chases it, bobbing this high this often. */
+const CHASE = { pop: 0.2, bob: 6, rate: 4 };
+/** A squirrel gone nuts runs bent this far, its tail whirling round this many times over its burst. */
+const NUTS = { degrees: 12, turns: 3 };
+/**
+ * A squirrel digs, bent `degrees` and wiggling `wiggle` either way `rate`
+ * times a second, from `dig` s into its stop; it drops an acorn from `from`
+ * into the hole at `to` at `drop` s, over `fall` s, and pats it down, `pat`
+ * degrees up and down, from `pats` s until "Phew!".
+ */
+const BURY = {
+  dig: 0.1,
+  degrees: 30,
+  wiggle: 6,
+  rate: 3,
+  drop: 0.7,
+  fall: 0.3,
+  from: [200, 140],
+  to: [204, 184],
+  pats: 1,
+  pat: 10,
+};
+/** A hedgehog rolls this many times about its ball's middle over its burst. */
+const CURL = { turns: 2, middle: [130, 140] };
+/**
+ * Leaves stick to a hedgehog's spines from `from` s into its stop; from
+ * `shake` s it shakes this far either way, this many times a second, and
+ * they fall off to `off` by "Phew!".
+ */
+const COLLECT = { from: 0.1, shake: 0.8, degrees: 8, rate: 4, off: [-30, 60] };
 /** The animals and spooky creatures that tilt from their feet, as the things on legs do. */
 const CRITTERS: readonly Creature[] = [
   'cat',
@@ -423,6 +500,8 @@ const CRITTERS: readonly Creature[] = [
   'mummy',
   'yeti',
   'gnome',
+  'squirrel',
+  'hedgehog',
 ];
 /** Where each of the octopus's hanging tentacles starts, to whirl about. */
 const TENTACLES_FROM = TENTACLES.map((d) => d.slice(1).split(' ').slice(0, 2).map(Number));
@@ -514,6 +593,8 @@ interface Rider {
   readonly legs: SVGElement[];
   readonly head: SVGElement[];
   readonly antlers: SVGElement[];
+  /** The giant leaf's shadow and the breeze under it, left on the ground as it lifts or settles. */
+  readonly float: SVGElement[];
   /**
    * What the track's own event brings to this racer: a cup, seaweed, swirls,
    * a shadow, snow, a sledge, a pile of leaves and the leaves flying out of
@@ -545,8 +626,8 @@ export function eventCaption(event: RaceEvent, kind: Kind, course: Course = 'fie
 
 /**
  * What gets said when: "Nooo!" in a burst and in a surge; "Zzz…" from a
- * dozing caterpillar, "Hic!" from a monster, and "Phew!" in any stop, and
- * from the rival who brakes.
+ * dozing caterpillar, "Hic!" from a monster, "Achoo!" from a mushroom, and
+ * "Phew!" in any stop, and from the rival who brakes.
  */
 function sayings(plan: Plan, unlucky: string, mountOf: (name: string) => Kind): Saying[] {
   const { slow, finish, win } = plan.times;
@@ -567,6 +648,9 @@ function sayings(plan: Plan, unlucky: string, mountOf: (name: string) => Kind): 
         : []),
       ...(kind === 'monster'
         ? HICCUPS.at.map((hic) => ({ name, text: 'Hic!', from: at + hic, to: at + hic + 0.4 }))
+        : []),
+      ...(kind === 'mushroom'
+        ? [{ name, text: 'Achoo!', from: at + SNEEZE.at, to: at + SNEEZE.at + 0.8 }]
         : []),
       { name, text: 'Phew!', from: at + STOP.phew, to: at + STOP.phew + 1.1 },
     ];
@@ -751,6 +835,7 @@ export async function playTheRace(show: Show): Promise<void> {
       legs: parts('legs'),
       head: parts('bird-head'),
       antlers: [...drawn.el.querySelectorAll<SVGElement>('[data-shake="deer-head"]')],
+      float: parts('leaf-shadow'),
       own: mine,
       state: null,
     };
@@ -1042,7 +1127,48 @@ export async function playTheRace(show: Show): Promise<void> {
       }
       write(drawn.el, '@data-shake', Math.abs(shake).toFixed(1));
     }
+    if (look.mount === 'leaf') {
+      // Up on the breeze, or down into a puddle, its shadow and the puddle staying on the ground.
+      const sail =
+        burst && !still
+          ? SAIL.px * Math.min(1, burst.since / SAIL.up, (burst.seconds - burst.since) / SAIL.up)
+          : 0;
+      const wet = stopped && since < STOP.phew;
+      const settle =
+        stopped && since < STOP.off
+          ? PUDDLE.px *
+            (still ? 1 : Math.min(1, since / PUDDLE.settle, (STOP.off - since) / PUDDLE.settle))
+          : 0;
+      const hop = sail - settle;
+      write(drawn.el, '--hop', `${(-hop).toFixed(1)}px`);
+      write(drawn.el, '@data-hop', hop.toFixed(1));
+      const ground = hop ? `translate(0 ${hop.toFixed(1)})` : '';
+      for (const part of rider.float) {
+        write(part, '@transform', ground);
+        showPart(part, !wet);
+      }
+      const puddle = props.puddle!;
+      showPart(puddle, wet);
+      write(puddle, '@transform', ground);
+      if (wet) shown.push('puddle');
+      const breeze = props.breeze!;
+      showPart(breeze, !!burst);
+      if (burst) {
+        move(breeze, [0, 0], [SAIL.blow, -sail], still ? 0 : burst.since / burst.seconds);
+        shown.push('breeze');
+      }
+    }
     write(drawn.el, '@data-props', shown.join(' '));
+  };
+
+  /** How tall a mushroom stands, 0 to 1, as it sinks into the ground in its burst and pops up further on. */
+  const heightOf = (rider: Rider, t: number) => {
+    const burst = rider.look.mount === 'mushroom' && !show.reducedMotion && burstOf(rider.name, t);
+    if (!burst) return 1;
+    const { since, seconds } = burst;
+    if (since < SINK.down) return 1 - since / SINK.down;
+    const up = since - (seconds - SINK.up);
+    return up < 0 ? 0 : gsap.parseEase('back.out(2)')(up / SINK.up);
   };
 
   /** Where `name`'s nose is along the track, not on the stage, at show second `t`. */
@@ -1284,6 +1410,38 @@ export async function playTheRace(show: Show): Promise<void> {
     }
     // Its lights all on through its burst, none of them blinking.
     if (kind === 'tree') showing('lights', !!burst);
+    if (kind === 'mushroom') {
+      showing('burrow', !!burst);
+      // It breathes in, leaning back, then sneezes its spores out, bending forward.
+      if (showing('spores', until(SNEEZE.at, STOP.phew))) {
+        const puffed = still ? 1 : Math.min(1, (since - SNEEZE.at) / SNEEZE.puff);
+        write(
+          props.spores!,
+          '@transform',
+          `translate(130 ${(-SNEEZE.rise * puffed).toFixed(1)}) ` +
+            `scale(${(0.5 + 0.5 * puffed).toFixed(2)}) translate(-130 0)`,
+        );
+      }
+      drawn.setBend(
+        until(SNEEZE.in, SNEEZE.at)
+          ? SNEEZE.back
+          : until(SNEEZE.at, SNEEZE.at + SNEEZE.bow)
+            ? SNEEZE.degrees
+            : 0,
+      );
+    }
+    // A squirrel pops up behind the acorn, from its feet, and runs after it.
+    if (kind === 'acorn' && showing('chaser', !!burst)) {
+      const up = still ? 1 : Math.min(1, burst!.since / CHASE.pop);
+      const bob = still
+        ? 0
+        : CHASE.bob * Math.abs(Math.sin(2 * Math.PI * CHASE.rate * burst!.since));
+      write(
+        props.chaser!,
+        '@transform',
+        `translate(0 ${(RACER.feet * (1 - up) - bob).toFixed(1)}) scale(1 ${up.toFixed(2)})`,
+      );
+    }
     const knocked = KNOCKED[kind];
     if (knocked) {
       const [prop, from, to] = knocked;
@@ -1472,6 +1630,56 @@ export async function playTheRace(show: Show): Promise<void> {
       });
       swing(ANGEL.legs * sweep);
       write(drawn.el, '@data-sweep', Math.abs(ANGEL.arms * sweep).toFixed(1));
+    }
+    if (kind === 'squirrel') {
+      // Gone nuts: a blur, its tail whirling round.
+      showing('blur', !!burst);
+      const whirl = burst && !still ? 360 * NUTS.turns * done : 0;
+      const [x, y] = TAIL_ROOT;
+      for (const part of drawn.tail) {
+        write(part, '@transform', whirl ? `rotate(${whirl.toFixed(1)} ${x} ${y})` : '');
+      }
+      write(drawn.el, '@data-whirl', whirl.toFixed(1));
+      // It digs a hole, drops an acorn in and pats the earth down over it.
+      showing('hole', until(BURY.dig, BURY.pats));
+      if (showing('nut', until(BURY.drop, BURY.pats))) {
+        const fallen = still ? 1 : Math.min(1, (since - BURY.drop) / BURY.fall);
+        move(props.nut!, BURY.from, BURY.to, fallen);
+      }
+      showing('mound', until(BURY.pats, STOP.phew));
+      const digging = until(BURY.dig, BURY.pats) && !still;
+      const patting = until(BURY.pats, STOP.phew) && !still;
+      const bend = burst
+        ? NUTS.degrees
+        : until(BURY.dig, STOP.phew)
+          ? BURY.degrees +
+            (digging ? BURY.wiggle * Math.sin(2 * Math.PI * BURY.rate * (since - BURY.dig)) : 0) -
+            (patting
+              ? BURY.pat * Math.abs(Math.sin(2 * Math.PI * BURY.rate * (since - BURY.pats)))
+              : 0)
+          : 0;
+      drawn.setBend(Math.round(bend));
+    }
+    if (kind === 'hedgehog') {
+      // Curled into a spiky ball, rolling.
+      const curled = showing('ball', !!burst);
+      for (const part of drawn.whole) showPart(part, !curled);
+      const spin = curled && !still ? 360 * CURL.turns * done : 0;
+      const [x, y] = CURL.middle;
+      write(props.ball!, '@transform', spin ? `rotate(${spin.toFixed(1)} ${x} ${y})` : '');
+      write(drawn.el, '@data-spin', spin.toFixed(1));
+      // Leaves stuck on its spines, shaken off.
+      let shake = 0;
+      if (showing('stuck', until(COLLECT.from, STOP.phew))) {
+        const shaking = !still && since >= COLLECT.shake;
+        if (shaking) {
+          shake = COLLECT.degrees * Math.sin(2 * Math.PI * COLLECT.rate * (since - COLLECT.shake));
+        }
+        const off = shaking ? (since - COLLECT.shake) / (STOP.phew - COLLECT.shake) : 0;
+        move(props.stuck!, [0, 0], COLLECT.off, off);
+      }
+      if (shake) tilt = shake;
+      write(drawn.el, '@data-shake', Math.abs(shake).toFixed(1));
     }
     write(drawn.el, 'transform-origin', `${origin[0]}px ${origin[1]}px`);
     return tilt;
@@ -1714,11 +1922,16 @@ export async function playTheRace(show: Show): Promise<void> {
       write(drawn.el, 'rotate', tilt);
       write(drawn.el, '@data-rotate', tilt);
       const turn = look.mount === 'chair' ? SPIN : look.mount === 'villain' ? CAPE : null;
-      const spin =
-        turn && since >= 0 && since < turn.seconds && !show.reducedMotion
+      const turning = look.mount === 'leaf' && since >= PUDDLE.turn && since < STOP.phew;
+      const spin = show.reducedMotion
+        ? 1
+        : turn && since >= 0 && since < turn.seconds
           ? Math.cos((2 * Math.PI * turn.turns * since) / turn.seconds)
-          : 1;
-      const turned = spin === 1 ? '' : `${spin.toFixed(2)} 1`;
+          : turning
+            ? Math.cos((2 * Math.PI * (since - PUDDLE.turn)) / (STOP.phew - PUDDLE.turn))
+            : 1;
+      const tall = heightOf(rider, t);
+      const turned = spin === 1 && tall === 1 ? '' : `${spin.toFixed(2)} ${tall.toFixed(2)}`;
       write(drawn.el, 'scale', turned);
       write(drawn.el, '@data-scale', turned);
       ride(rider, t, moving, since);
