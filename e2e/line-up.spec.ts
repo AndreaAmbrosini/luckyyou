@@ -44,6 +44,7 @@ test("The Race's Line-up fits 1280 by 800 with 8 people", async ({ page }) => {
   const row = page.getByRole('list', { name: "Today's people" });
   await inView(page.getByRole('group', { name: 'Theme' }).getByRole('button'));
   await inView(page.getByRole('button', { name: 'Shuffle everyone' }));
+  await inView(page.getByRole('group', { name: 'Deal from' }).getByRole('button'));
   await inView(row.getByRole('listitem'));
   await inView(row.getByRole('button'));
   await inView(page.getByRole('contentinfo'));

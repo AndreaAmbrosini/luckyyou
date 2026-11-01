@@ -1,22 +1,45 @@
 // Looks for a show's Line-up (decision 0011): dealt at random, fitted to
 // what the show offers now, and handed to the show where it can't change them.
 // Its theme (decision 0017): drawn at random, or found among those offered.
+// Dealt from the theme's choices, when asked (decision 0019).
 
-import type { ChosenLook, LineUp } from './contract';
+import type { ChosenLook, LineUp, LineUpChoice } from './contract';
 import { pickOne, shuffle } from './random';
+
+/** The first option's choices that suit the theme named `theme`, in the theme's order. */
+export function suitingChoices(lineUp: LineUp, theme: string | undefined): LineUpChoice[] {
+  const first = lineUp.options[0]!;
+  return (themeNamed(lineUp, theme)?.suits ?? []).flatMap((each) =>
+    first.choices.filter((choice) => choice.name === each),
+  );
+}
+
+/**
+ * Each option's choices to deal from: all of them, but for the first
+ * option's when `theme` names some that suit it.
+ */
+function dealtFrom(lineUp: LineUp, theme: string | undefined) {
+  const suiting = suitingChoices(lineUp, theme);
+  return lineUp.options.map((option, index) =>
+    index === 0 && suiting.length > 0 ? suiting : option.choices,
+  );
+}
 
 /**
  * A look for each of `names`, dealt from a shuffled deck per option, so the
- * choices vary as much as the head count allows.
+ * choices vary as much as the head count allows. With `theme`, the first
+ * option is dealt from the choices that suit it.
  */
 export function dealLooks(
   lineUp: LineUp,
   names: readonly string[],
   random: () => number,
+  theme?: string,
 ): Map<string, ChosenLook> {
-  const decks = lineUp.options.map((option) => ({
+  const from = dealtFrom(lineUp, theme);
+  const decks = lineUp.options.map((option, index) => ({
     option: option.name,
-    deck: shuffle(option.choices, random).map((choice) => choice.name),
+    deck: shuffle(from[index]!, random).map((choice) => choice.name),
   }));
   return new Map(
     names.map((name, index) => [
@@ -26,10 +49,14 @@ export function dealLooks(
   );
 }
 
-/** A look with a choice drawn at random for each option. */
-export function randomLook(lineUp: LineUp, random: () => number): ChosenLook {
+/**
+ * A look with a choice drawn at random for each option; with `theme`, the
+ * first option's from the choices that suit it.
+ */
+export function randomLook(lineUp: LineUp, random: () => number, theme?: string): ChosenLook {
+  const from = dealtFrom(lineUp, theme);
   return Object.fromEntries(
-    lineUp.options.map((option) => [option.name, pickOne(option.choices, random).name]),
+    lineUp.options.map((option, index) => [option.name, pickOne(from[index]!, random).name]),
   );
 }
 

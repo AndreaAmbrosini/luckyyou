@@ -1,5 +1,6 @@
-// Everyone's look on each show's Line-up, its theme and who is pinned, kept
-// in this browser per show (decisions 0011, 0016 and 0017) and read so that
+// Everyone's look on each show's Line-up, its theme, who is pinned and what
+// it deals from, kept in this browser per show (decisions 0011, 0016, 0017
+// and 0019) and read so that
 // storage that is blocked, full or damaged never stops the Line-up (decision 0004).
 
 import { useCallback, useState } from 'react';
@@ -12,6 +13,11 @@ export const looksKey = (id: string) => `luckyyou:v1:line-up:${id}`;
 export const themeKey = (id: string) => `luckyyou:v1:line-up:${id}:theme`;
 /** The names of everyone whose look is pinned, today's people or not. */
 export const pinsKey = (id: string) => `luckyyou:v1:line-up:${id}:pins`;
+/** What the Line-up deals from, "theme" or "any"; the theme's when nothing is kept. */
+export const dealFromKey = (id: string) => `luckyyou:v1:line-up:${id}:deal-from`;
+
+/** What Shuffle, the dice and "Surprise me" deal the first option from. */
+export type DealFrom = 'theme' | 'any';
 
 /** The theme a Line-up shows, and whether "Surprise" drew it. */
 export interface ThemeChoice {
@@ -44,6 +50,7 @@ export function useLooks() {
   const [kept, setKept] = useState<ReadonlyMap<string, Stored>>(new Map());
   const [keptThemes, setKeptThemes] = useState<ReadonlyMap<string, unknown>>(new Map());
   const [keptPins, setKeptPins] = useState<ReadonlyMap<string, ReadonlySet<string>>>(new Map());
+  const [keptDealFrom, setKeptDealFrom] = useState<ReadonlyMap<string, DealFrom>>(new Map());
 
   const save = useCallback(
     (scenario: Scenario, today: Looks) => {
@@ -138,5 +145,30 @@ export function useLooks() {
     [keptPins, pinsOf],
   );
 
-  return { open, change: save, openTheme, changeTheme, openPins, changePins };
+  /** What a show's Line-up deals from: the theme's choices, unless "any" was kept. */
+  const openDealFrom = useCallback(
+    (scenario: Scenario): DealFrom =>
+      keptDealFrom.get(scenario.id) ??
+      (readJson(dealFromKey(scenario.id)) === 'any' ? 'any' : 'theme'),
+    [keptDealFrom],
+  );
+
+  const changeDealFrom = useCallback(
+    (scenario: Scenario, from: DealFrom) => {
+      setKeptDealFrom(new Map(keptDealFrom).set(scenario.id, from));
+      writeJson(dealFromKey(scenario.id), from);
+    },
+    [keptDealFrom],
+  );
+
+  return {
+    open,
+    change: save,
+    openTheme,
+    changeTheme,
+    openPins,
+    changePins,
+    openDealFrom,
+    changeDealFrom,
+  };
 }

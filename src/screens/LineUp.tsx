@@ -9,7 +9,7 @@ import {
   type KeyboardEvent,
   type ReactNode,
 } from 'react';
-import type { ThemeChoice } from '../line-up/looks';
+import type { DealFrom, ThemeChoice } from '../line-up/looks';
 import type {
   ChosenLook,
   LineUpChoice,
@@ -17,7 +17,13 @@ import type {
   LineUp as LineUpOf,
   LineUpTheme,
 } from '../scenario-kit/contract';
-import { dealLooks, drawTheme, randomLook, themeNamed } from '../scenario-kit/line-up';
+import {
+  dealLooks,
+  drawTheme,
+  randomLook,
+  suitingChoices,
+  themeNamed,
+} from '../scenario-kit/line-up';
 import { Button } from '../ui/Button';
 import { ArrowLeftIcon, ArrowRightIcon, CheckIcon, CrossIcon, DieIcon, PinIcon } from '../ui/icons';
 import { Bar } from './Bar';
@@ -34,7 +40,10 @@ export interface LineUpProps {
   theme: ThemeChoice | null;
   /** Today's people whose look is pinned (decision 0016). */
   pinned: ReadonlySet<string>;
+  /** What Shuffle, the dice and "Surprise me" deal the first option from (decision 0019). */
+  dealFrom: DealFrom;
   onThemeChange(theme: ThemeChoice): void;
+  onDealFromChange(from: DealFrom): void;
   onLooksChange(looks: ReadonlyMap<string, ChosenLook>, pinned: ReadonlySet<string>): void;
   onBack(): void;
   onStart(): void;
@@ -63,7 +72,9 @@ export function LineUp({
   looks,
   theme,
   pinned,
+  dealFrom,
   onThemeChange,
+  onDealFromChange,
   onLooksChange,
   onBack,
   onStart,
@@ -86,27 +97,32 @@ export function LineUp({
   const words = lineUp.words;
   const themed = theme ? themeNamed(lineUp, theme.name) : undefined;
   const suiting: Suiting | null = themed
-    ? {
-        theme: themed,
-        choices: (themed.suits ?? []).flatMap((each) =>
-          first.choices.filter((choice) => choice.name === each),
-        ),
-      }
+    ? { theme: themed, choices: suitingChoices(lineUp, themed.name) }
     : null;
   const suits = (look: ChosenLook) =>
     suiting?.choices.some((choice) => choice.name === look[first.name]) ?? false;
+  // The switch shows while some choices suit the theme; it deals from them when on.
+  const switched = suiting !== null && suiting.choices.length > 0;
+  const dealing = switched && dealFrom === 'theme' ? suiting.theme.name : undefined;
+  const themeSide = switched && words ? `${suiting.theme.label} ${words.choices}` : null;
+  const anySide = `Any ${first.label.toLowerCase()}`;
 
   /** Gives `who` a look chosen by hand, which pins it. */
   const change = (who: string, next: ChosenLook) =>
     onLooksChange(new Map(looks).set(who, next), new Set(pinned).add(who));
 
-  /** Deals `who` a new look, unlike the one they had, and unpins it. */
+  /**
+   * Deals `who` a new look, unlike the one they had, and unpins it. From the
+   * theme's choices, the first option's choice is unlike theirs too.
+   */
   function deal(who: string) {
     const was = looks.get(who)!;
-    let next = randomLook(lineUp, Math.random);
+    const unlike = (next: ChosenLook) =>
+      !sameLook(next, was) && (!dealing || next[first.name] !== was[first.name]);
+    let next = randomLook(lineUp, Math.random, dealing);
     // A die that changes nothing would look like a broken button.
-    for (let tries = 0; tries < 10 && sameLook(next, was); tries++) {
-      next = randomLook(lineUp, Math.random);
+    for (let tries = 0; tries < 10 && !unlike(next); tries++) {
+      next = randomLook(lineUp, Math.random, dealing);
     }
     const unpinned = new Set(pinned);
     unpinned.delete(who);
@@ -124,7 +140,7 @@ export function LineUp({
   function shuffleEveryone() {
     const who = names.filter((each) => !pinned.has(each));
     setDealt({ round: dealt.round + 1, who });
-    onLooksChange(new Map([...looks, ...dealLooks(lineUp, who, Math.random)]), pinned);
+    onLooksChange(new Map([...looks, ...dealLooks(lineUp, who, Math.random, dealing)]), pinned);
   }
 
   /** Whose card gets the focus back once the sheet has closed. */
@@ -201,6 +217,32 @@ export function LineUp({
               </p>
             )}
             <span className={layout.spacer} />
+            {themeSide && (
+              <>
+                <span id={`${id}-deal`} className={styles.dealLabel}>
+                  Deal from
+                </span>
+                <div className={styles.sides} role="group" aria-labelledby={`${id}-deal`}>
+                  <button
+                    type="button"
+                    className={styles.side}
+                    aria-pressed={dealFrom === 'theme'}
+                    onClick={() => onDealFromChange('theme')}
+                  >
+                    <Badge />
+                    {themeSide}
+                  </button>
+                  <button
+                    type="button"
+                    className={styles.side}
+                    aria-pressed={dealFrom === 'any'}
+                    onClick={() => onDealFromChange('any')}
+                  >
+                    {anySide}
+                  </button>
+                </div>
+              </>
+            )}
             <Button onClick={shuffleEveryone}>
               <DieIcon five size={24} />
               Shuffle everyone
@@ -306,6 +348,7 @@ export function LineUp({
           theme={theme?.name ?? null}
           suiting={suiting}
           pinned={pinned.has(names[open]!)}
+          dealsFrom={themeSide && (dealing ? themeSide : anySide.toLowerCase())}
           ground={ground}
           onMove={setOpen}
           onChange={(next) => change(names[open]!, next)}
@@ -341,6 +384,8 @@ interface SheetProps {
   theme: string | null;
   suiting: Suiting | null;
   pinned: boolean;
+  /** What "Surprise me" deals from, in words, while the Line-up has the switch. */
+  dealsFrom: string | null;
   ground: ReturnType<typeof groundOf>;
   onMove(index: number): void;
   onChange(look: ChosenLook): void;
@@ -355,7 +400,7 @@ interface SheetProps {
  * options, the first one's choices that suit the theme first.
  */
 function Sheet(props: SheetProps) {
-  const { lineUp, names, index, look, theme, suiting, pinned, ground } = props;
+  const { lineUp, names, index, look, theme, suiting, pinned, dealsFrom, ground } = props;
   const { onMove, onChange, onDeal, onPin, onClose } = props;
   const id = useId();
   const sheet = useRef<HTMLDivElement>(null);
@@ -489,6 +534,7 @@ function Sheet(props: SheetProps) {
                 {pinned
                   ? 'Pinned: Shuffle everyone leaves this look as it is.'
                   : 'Not pinned: Shuffle everyone may change it.'}
+                {dealsFrom && ` Surprise me deals from ${dealsFrom}.`}
               </p>
             </div>
           </div>

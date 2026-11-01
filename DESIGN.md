@@ -66,8 +66,8 @@ used.
 - **Postcard**: a theme's picture over its name, on paper; the chosen one in
   sun with a check, or a die on "Surprise".
 - **Person card**: paper under each person on the ground: name, look in
-  words, die, pin; a sun ring inside when pinned; a sun star badge when their
-  choice suits the theme.
+  words, die, pin; a sun ring inside when pinned; a sun star badge when they
+  suit the theme.
 - **Look sheet**: paper from the right over the Line-up, dimmed by ink at 45%:
   the portrait on the theme's ground, "Surprise me", pin and options;
   mint "Done".
@@ -86,9 +86,9 @@ in one row; under them, a paper panel: the chosen show, what it takes, what
 comes next. A show with a line-up adds "Start with last line-up" to the bar.
 
 **Line-up.** The heading; "1 · Track: Autumn" over the postcards; "2 ·
-Racers" and "Shuffle everyone"; everyone in one row on the theme's ground, sky
-over a floor with an ink line on top, over their cards. The bar names the
-theme and pins.
+Racers", "Deal from" (paper pills, sun when on) and "Shuffle
+everyone"; everyone in one row on the theme's ground, sky over an ink-topped
+floor, over their cards. The bar names the theme and pins.
 
 **Show.** The scenario owns the window ([show.feature](specs/show.feature));
 the volume pill is paper.
