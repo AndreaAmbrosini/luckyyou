@@ -75,13 +75,18 @@ test("every request stays on the site's own origin", async ({ page, baseURL }) =
   page.on('request', (request) => origins.add(new URL(request.url()).origin));
   await page.goto('./');
 
-  // Load both families even where the page doesn't use them yet.
-  const [lilita, nunito] = await page.evaluate(async () => [
-    (await document.fonts.load('400 1em "Lilita One"')).length,
-    (await document.fonts.load('900 1em Nunito')).length,
-  ]);
+  // Load every family, even where the page doesn't use it yet.
+  const faces = await page.evaluate(async () =>
+    Promise.all(
+      [
+        '800 1em "Bricolage Grotesque Variable"',
+        '700 1em "Figtree Variable"',
+        '400 1em "Lilita One"',
+        '900 1em Nunito',
+      ].map(async (font) => [font, (await document.fonts.load(font)).length] as const),
+    ),
+  );
 
-  expect(lilita, 'Lilita One font faces').toBeGreaterThan(0);
-  expect(nunito, 'Nunito font faces').toBeGreaterThan(0);
+  for (const [font, count] of faces) expect(count, font).toBeGreaterThan(0);
   expect([...origins]).toEqual([new URL(baseURL!).origin]);
 });

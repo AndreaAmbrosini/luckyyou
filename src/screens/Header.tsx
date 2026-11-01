@@ -1,5 +1,5 @@
 import { useFullscreen } from '../ui/fullscreen';
-import { CheckIcon, FullscreenIcon, SoundIcon } from '../ui/icons';
+import { CheckIcon, FullscreenIcon, SoundIcon, SparkleIcon } from '../ui/icons';
 import styles from './Header.module.css';
 import { MusicControl, type MusicControlProps } from './MusicControl';
 
@@ -22,7 +22,14 @@ export function Header({ steps, current, onMutedChange, ...music }: HeaderProps)
 
   return (
     <header className={styles.header}>
-      <span className={styles.logo}>LuckyYou</span>
+      <span className={styles.logo}>
+        <span className={styles.sparkle}>
+          <SparkleIcon size={26} />
+        </span>
+        <span>
+          Lucky<span className={styles.you}>You</span>
+        </span>
+      </span>
       <ol className={styles.steps} aria-label="Steps">
         {steps.map(({ label, chosen }, index) => {
           const done = index < current;
@@ -34,7 +41,7 @@ export function Header({ steps, current, onMutedChange, ...music }: HeaderProps)
               aria-current={index === current ? 'step' : undefined}
             >
               <span className={styles.mark} aria-hidden="true">
-                {done ? <CheckIcon size={18} /> : index + 1}
+                {done ? <CheckIcon size={20} /> : index + 1}
               </span>
               {label}
               {done && chosen !== undefined && (

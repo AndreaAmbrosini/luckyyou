@@ -1,7 +1,7 @@
 import { Fragment, useEffect, useId, useRef } from 'react';
 import type { LineUp, Scenario } from '../scenario-kit/contract';
 import { Button } from '../ui/Button';
-import { ArrowRightIcon, CheckIcon, PlayIcon } from '../ui/icons';
+import { ArrowRightIcon, CheckIcon, PeopleIcon, PlayIcon } from '../ui/icons';
 import { Bar } from './Bar';
 import layout from './layout.module.css';
 import styles from './PickAShow.module.css';
@@ -50,7 +50,7 @@ export function PickAShow(props: PickAShowProps) {
           <div className={layout.group}>
             <h1 className={layout.heading}>Pick a show</h1>
             <p className={styles.whoIsIn}>
-              <span className={layout.pill}>{count} in</span>{' '}
+              <span className={`${layout.pill} ${styles.count}`}>{count} in</span>{' '}
               {names.map((name, index) => (
                 <Fragment key={index}>
                   {index > 0 && ', '}
@@ -85,7 +85,7 @@ export function PickAShow(props: PickAShowProps) {
                 >
                   {on && (
                     <span className={styles.check} data-check>
-                      <CheckIcon size={24} />
+                      <CheckIcon size={26} />
                     </span>
                   )}
                   <span className={styles.top}>
@@ -116,7 +116,10 @@ export function PickAShow(props: PickAShowProps) {
                           : `Takes at least ${min} people`}
                       </span>
                     )}
-                    <span className={styles.badge}>{min === max ? min : `${min}–${max}`}</span>
+                    <span className={styles.badge}>
+                      <PeopleIcon size={18} />
+                      {min === max ? min : `${min}–${max}`}
+                    </span>
                     {scenario.lineUp && <span className={styles.badge}>+ Line-up</span>}
                   </span>
                 </button>
@@ -136,7 +139,9 @@ export function PickAShow(props: PickAShowProps) {
             </p>
           )}
           {chosen?.lineUp && (
-            <Button onClick={() => onStartWithLastLineUp(chosen)}>Start with last line-up</Button>
+            <Button variant="outline" onClick={() => onStartWithLastLineUp(chosen)}>
+              Start with last line-up
+            </Button>
           )}
           <Button
             ref={main}
@@ -155,7 +160,7 @@ export function PickAShow(props: PickAShowProps) {
             ) : (
               <>
                 {chosen ? `Start ${chosen.name}` : 'Start'}
-                <PlayIcon size={24} />
+                <PlayIcon size={26} />
               </>
             )}
           </Button>

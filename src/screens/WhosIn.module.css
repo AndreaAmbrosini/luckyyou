@@ -1,24 +1,18 @@
+/* The team, straight on the ground. It scrolls, with room for the focus ring round its tiles. */
 .sheet {
   flex-grow: 1;
   min-height: 12rem;
+  margin: -0.5rem;
+  padding: 0.5rem;
   overflow-y: auto;
-  padding: 1.125rem;
-  border: var(--line) solid var(--color-ink);
-  border-radius: var(--radius-card);
-  background-color: var(--color-paper);
-  box-shadow: var(--shadow);
-}
-
-.sheet[data-removing='true'] {
-  border-style: dashed;
-  background-color: var(--color-tomato-soft);
 }
 
 .welcome {
   max-width: 38.75rem;
   margin: 2.5rem auto;
-  font-size: var(--size-button);
-  font-weight: 800;
+  color: var(--color-text-soft);
+  font-size: var(--size-lead);
+  font-weight: 700;
   line-height: 1.35;
   text-align: center;
 }
@@ -27,7 +21,7 @@
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
   align-content: start;
-  gap: 0.875rem;
+  gap: 1rem;
   margin: 0;
   padding: 0;
   list-style: none;
@@ -36,26 +30,24 @@
 .tile {
   display: flex;
   align-items: center;
-  gap: 0.75rem;
+  gap: 1rem;
   height: 100%;
   min-height: 5.75rem;
-  padding: 0.5rem 1rem 0.5rem 0.875rem;
-  border: var(--line) dashed var(--color-ink-soft);
-  border-radius: var(--radius-tile);
-  background-color: var(--color-paper);
-  color: var(--color-ink-soft);
-  font-weight: 700;
-  line-height: 1.2;
+  padding: 0.5rem 1.125rem;
+  border: var(--line) dashed var(--color-edge-strong);
+  border-radius: var(--radius-person);
+  color: var(--color-text-soft);
+  font-size: var(--size-tile);
+  font-weight: 800;
+  line-height: 1.15;
   cursor: pointer;
 }
 
 .ticked {
   border-style: solid;
-  border-color: var(--color-ink);
-  background-color: var(--color-sun);
-  color: var(--color-ink);
-  box-shadow: var(--shadow-small);
-  font-weight: 800;
+  border-color: var(--color-marigold);
+  background-color: var(--color-marigold);
+  color: var(--color-ground);
 }
 
 .tile:has(:focus-visible),
@@ -69,11 +61,16 @@
   flex-shrink: 0;
   align-items: center;
   justify-content: center;
-  width: 1.875rem;
-  height: 1.875rem;
-  border: var(--line) solid currentColor;
-  border-radius: 0.5625rem;
-  background-color: var(--color-paper);
+  width: 2.375rem;
+  height: 2.375rem;
+  border: var(--line) solid var(--color-edge-strong);
+  border-radius: var(--radius-box);
+}
+
+.ticked .box {
+  border-color: var(--color-ground);
+  background-color: var(--color-ground);
+  color: var(--color-marigold);
 }
 
 .name {
@@ -83,10 +80,10 @@
 
 .removable {
   justify-content: space-between;
-  padding-right: 0.625rem;
+  padding-right: 0.875rem;
   border-style: solid;
-  border-color: var(--color-ink);
-  color: var(--color-ink);
+  background-color: var(--color-raised);
+  color: var(--color-text);
   cursor: default;
 }
 
@@ -95,26 +92,30 @@
   flex-shrink: 0;
   align-items: center;
   justify-content: center;
-  width: var(--target-min);
-  height: var(--target-min);
-  border: var(--line) solid var(--color-ink);
+  width: 3rem;
+  height: 3rem;
+  border: none;
   border-radius: var(--radius-pill);
   background-color: var(--color-tomato);
-  color: var(--color-ink);
+  color: var(--color-ground);
   cursor: pointer;
+}
+
+.hint {
+  color: var(--color-marigold);
 }
 
 .add {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: 0.625rem;
   height: 100%;
   min-height: 5.75rem;
-  padding: 0 0.75rem 0 1rem;
-  border: var(--line) solid var(--color-ink);
-  border-radius: var(--radius-tile);
-  background-color: var(--color-paper);
-  color: var(--color-ink-soft);
+  padding: 0 0.625rem 0 1.125rem;
+  border: var(--line) solid var(--color-edge-mid);
+  border-radius: var(--radius-person);
+  background-color: var(--color-panel);
+  color: var(--color-text-soft);
 }
 
 .add:focus-within {
@@ -123,8 +124,11 @@
 }
 
 .add .addButton {
-  min-height: 2.625rem;
-  box-shadow: none;
+  padding: 0 1.125rem;
+  border-color: var(--color-text);
+  background-color: var(--color-text);
+  color: var(--color-ground);
+  font-weight: 900;
 }
 
 .field {
@@ -132,11 +136,13 @@
   width: 0;
   border: none;
   background-color: transparent;
-  color: var(--color-ink);
+  color: var(--color-text);
+  font-size: var(--size-body);
+  font-weight: 700;
   outline: none;
 }
 
 .field::placeholder {
-  color: var(--color-ink-soft);
+  color: var(--color-text-faint);
   opacity: 1;
 }

@@ -17,8 +17,8 @@ export function Bar({ back, children, inert }: BarProps) {
   return (
     <footer className={layout.bar} inert={inert}>
       {back && (
-        <Button onClick={back.onClick}>
-          <ArrowLeftIcon size={20} />
+        <Button variant="outline" onClick={back.onClick}>
+          <ArrowLeftIcon size={22} />
           {back.label}
         </Button>
       )}
