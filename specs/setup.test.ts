@@ -118,8 +118,8 @@ describeSpec(await loadFeature('./setup.feature'), ({ Rule }) => {
               },
               {
                 step: 'Line up the hats',
-                status: null,
-                buttons: ['Pick a show', 'Shuffle everyone', 'Start the hats'],
+                status: 'Pin a look to keep it when you shuffle',
+                buttons: ['Pick a show', 'Start the hats'],
                 atTheBottom: true,
               },
             ]);
@@ -321,7 +321,7 @@ describeSpec(await loadFeature('./setup.feature'), ({ Rule }) => {
       });
       Then('the panel says its Line-up comes next', () => {
         expect(chosenPanel('The Race')).toHaveTextContent(
-          'Next you choose how everyone looks on its Line-up, or start with the last line-up.',
+          "Next you pick the place and everyone's hat, or start with last time's.",
         );
       });
       And("the main button reads {string}, from the line-up's heading", (_, label: string) => {

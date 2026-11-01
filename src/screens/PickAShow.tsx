@@ -1,5 +1,5 @@
 import { Fragment, useEffect, useId, useRef } from 'react';
-import type { Scenario } from '../scenario-kit/contract';
+import type { LineUp, Scenario } from '../scenario-kit/contract';
 import { Button } from '../ui/Button';
 import { ArrowRightIcon, CheckIcon, PlayIcon } from '../ui/icons';
 import { Bar } from './Bar';
@@ -187,14 +187,9 @@ function Chosen({ id, scenario, count }: { id: string; scenario: Scenario; count
           <span className={styles.factMark} aria-hidden="true">
             <ArrowRightIcon size={22} />
           </span>
-          {scenario.lineUp ? (
-            <span>
-              Next you choose how everyone looks on its <span className={styles.word}>Line-up</span>
-              , or start with the last <span className={styles.word}>line-up</span>.
-            </span>
-          ) : (
-            'No line-up: it starts as soon as you press Start.'
-          )}
+          {scenario.lineUp
+            ? `Next you pick ${nextPicks(scenario.lineUp)}, or start with last time's.`
+            : 'No line-up: it starts as soon as you press Start.'}
         </li>
       </ul>
     </section>
@@ -202,3 +197,9 @@ function Chosen({ id, scenario, count }: { id: string; scenario: Scenario; count
 }
 
 const lowerFirst = (text: string) => text.charAt(0).toLowerCase() + text.slice(1);
+
+/** What a show's Line-up has you pick, in its words: "the track and everyone's racer". */
+function nextPicks({ themes, words, options }: LineUp) {
+  const everyone = `everyone's ${lowerFirst(options[0]!.label)}`;
+  return themes && words ? `the ${lowerFirst(words.theme)} and ${everyone}` : everyone;
+}

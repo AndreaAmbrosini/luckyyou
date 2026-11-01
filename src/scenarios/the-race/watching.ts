@@ -1116,22 +1116,5 @@ export async function dressedOn(course: Course) {
   });
   return [...drawn.values()];
 }
-/** Everyone at the start, and in the panel's drawing, on `course`. */
-export function lineUpOn(course: Course) {
-  const people = [...DRESSED].map(([name, look], index) => ({
-    name,
-    place: index + 1,
-    look,
-    chosen: index === 0,
-  }));
-  const lineUp = theRace.lineUp!;
-  const start = lineUp.drawStart!({ people, theme: course });
-  return [
-    ...start.el.querySelectorAll<SVGSVGElement>('svg[data-person]'),
-    ...people.map(
-      ({ name, place, look }) => lineUp.draw(look, { name, place, theme: course }) as SVGSVGElement,
-    ),
-  ];
-}
 export const accessories = (svg: SVGSVGElement) =>
   svg.querySelectorAll('[data-part="cap"], [data-part="goggles"], [data-part="snorkel"]');

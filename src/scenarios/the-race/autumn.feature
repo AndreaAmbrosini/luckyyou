@@ -10,7 +10,7 @@ Feature: The Race in Autumn
     Scenario: Autumn is a theme
       When the Line-up opens for The Race
       Then "Autumn" is a theme, after "Moon", its postcard trees in autumn colours over a path
-      And with Autumn chosen, the racer option's first tab is "Autumn"
+      And with Autumn chosen, the racer option's first tab is "Autumn racers"
 
     Scenario: What Autumn looks like
       When the show runs on Autumn
@@ -36,7 +36,7 @@ Feature: The Race in Autumn
         | burst | Carla catches the wind!        | an umbrella opens in Carla's racer's hand, and the wind lifts it off the ground and into the lead, shouting "Nooo!", or its rider does |
 
     Scenario: Everyone wears an acorn cap
-      When the show runs on Autumn, or its Line-up shows Autumn
+      When the show runs on Autumn
       Then every rider wears an acorn cap instead of the cap, goggles or snorkel the kit hands out, and a top hat stays on the mount
       And every creature wears one where its top hat goes, instead of the top hat
       And the garden gnome wears a small one on the tip of its own hat

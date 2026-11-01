@@ -50,7 +50,6 @@ import {
   actOutOwnEvent,
   DRESSED,
   dressedOn,
-  lineUpOn,
   accessories,
 } from './watching';
 
@@ -80,9 +79,9 @@ describeSpec(await loadFeature('./christmas.feature'), ({ Rule }) => {
         expect(classes).toContain(styles.sun);
         expect(classes.at(-1)).toBe(styles.snow);
       });
-      And(`with Christmas chosen, the racer option's first tab is "Christmas"`, () => {
-        // specs/line-up.feature: a theme's suits are its first tab, named for it.
-        expect(christmas().label).toBe('Christmas');
+      And(`with Christmas chosen, the racer option's first tab is "Christmas racers"`, () => {
+        // specs/line-up.feature: the sheet shows a theme's suits first, in its words.
+        expect(`${christmas().label} ${lineUp.words!.choices}`).toBe('Christmas racers');
         expect(christmas().suits!.length).toBeGreaterThan(0);
       });
     });
@@ -197,9 +196,9 @@ describeSpec(await loadFeature('./christmas.feature'), ({ Rule }) => {
 
     RuleScenario('Everyone wears a Santa hat', ({ When, Then, And }) => {
       let drawn: SVGSVGElement[] = [];
-      When('the show runs on Christmas, or its Line-up shows Christmas', async () => {
-        drawn = [...(await dressedOn('christmas')), ...lineUpOn('christmas')];
-        expect(drawn).toHaveLength(3 * DRESSED.size);
+      When('the show runs on Christmas', async () => {
+        drawn = await dressedOn('christmas');
+        expect(drawn).toHaveLength(DRESSED.size);
       });
       Then(
         'every rider wears a Santa hat instead of the cap, goggles or snorkel the kit hands out, and a top hat stays on the mount',
@@ -229,7 +228,7 @@ describeSpec(await loadFeature('./christmas.feature'), ({ Rule }) => {
       });
       And("the garden gnome's own hat gets a white brim and a bobble instead", () => {
         const gnomes = drawn.filter((each) => each.dataset.mount === 'gnome');
-        expect(gnomes).toHaveLength(3);
+        expect(gnomes).toHaveLength(1);
         for (const gnome of gnomes) {
           const brim = gnome.querySelector('[data-part="santa"]')!;
           expect([...brim.children].map((shape) => shape.getAttribute('class'))).toEqual([
@@ -242,7 +241,7 @@ describeSpec(await loadFeature('./christmas.feature'), ({ Rule }) => {
       });
       And('on any other theme, nobody wears one', async () => {
         for (const course of COURSES.filter((each) => each !== 'christmas')) {
-          const others = [...(await dressedOn(course)), ...lineUpOn(course)];
+          const others = await dressedOn(course);
           for (const svg of others) {
             expect(svg.querySelector('[data-part="santa"]'), course).toBeNull();
             if (svg.dataset.part === 'racer') {

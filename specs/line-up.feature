@@ -36,8 +36,7 @@ Feature: The Line-up
       When I go back to the shows, then press "Next" to its Line-up again
       Then Anna has the look I chose
 
-  # Step 2. Decision 0019.
-  @pending
+  # Decision 0019.
   Rule: Everyone stands in one row, on the theme's ground
 
     Scenario: Everyone stands in one row
@@ -76,27 +75,11 @@ Feature: The Line-up
 
   Rule: Changing a look
 
-    # Old design: replaced by "Everyone stands in one row" and "Clicking
-    # someone opens their look in a sheet" (step 2).
-    Scenario: Today's people in a row, the chosen one under it
-      Given a show's Line-up is open with 8 people
-      When I click Ben's tile
-      Then today's people sit in one row of tiles, in today's order, Ben's marked as chosen, in sun, and pressed
-      And under the row, Ben is drawn bigger with his name, "Surprise me" and the show's options
-      And an option that shows him in each choice has a sheet of its own beside him
-
     Scenario: The chosen one of each option is marked and named
       When Ben's look is shown
       Then in each option, the choice he has is marked by a check mark as well as by colour
       And each option's heading names his choice, as in "Colour: Orange"
       And a colour option shows its choices as round swatches, each named for screen readers
-
-    # Old design: replaced by "A choice shows at once, in the sheet and in the
-    # row" (step 2).
-    Scenario: A choice changes the look at once
-      Given Ben's look is shown
-      When I choose another choice of an option
-      Then Ben is drawn with it, bigger and on his tile
 
     Scenario: Surprise me
       Given Ben's look is shown
@@ -130,12 +113,6 @@ Feature: The Line-up
       Then each of today's people gets a look drawn at random
       And the looks vary as much as the choices allow
 
-    # Old design: replaced by "Readable over a screen share, in a row" (step 2).
-    Scenario: Readable over a screen share
-      When a show's Line-up is open with 8 people, a 15-character name among them
-      Then every name is at least --size-body, wrapping inside its tile
-      And every control is at least --target-min across, and shows the keyboard focus
-
   # Decision 0017.
   Rule: A show can offer themes
 
@@ -145,23 +122,20 @@ Feature: The Line-up
       Then a row of postcards sits above today's people: "Surprise", then each theme as a picture over its name
       And the chosen one is marked by a check mark as well as by colour
 
-    # Step 2. Decision 0019.
-    @pending
+    # Decision 0019.
     Scenario: The themes come first, in the show's words
       Given a show whose line-up offers themes, and calls them tracks and its first option's choices racers
       When its Line-up opens with Autumn chosen, 9 racers suiting it
       Then above the postcards, the heading reads "1 · Track: Autumn · 9 racers suit it"
       And above today's people, "2 · Racers"
 
-    # Step 2. Decision 0019.
-    @pending
+    # Decision 0019.
     Scenario: Choices that suit the theme are starred
       Given a theme is chosen, and 3 of today's 8 people have a first-option choice that suits it
       Then each of those 3 has a star in the row, read out as "Suits Autumn"
       And beside "2 · Racers", a star reads "3 of 8 suit Autumn"
 
-    # Step 2. Decision 0019.
-    @pending
+    # Decision 0019.
     Scenario: The sheet shows the theme's choices first
       Given a theme that some of the first option's choices suit is chosen
       When Ben's look opens in the sheet
@@ -201,15 +175,6 @@ Feature: The Line-up
       When a theme is chosen
       Then the show draws every look in it, so it can dress everyone for it
 
-    # Old design: replaced by "The sheet shows the theme's choices first"
-    # (step 2).
-    Scenario: A theme's own tab
-      Given a show whose themes each suit some of its first option's choices
-      When a theme is chosen and Ben's look is shown
-      Then the option's first tab is named for the theme, marked with a star, and holds the choices that suit it
-      And each of those choices is still in its own group's tab
-      And with a theme that no choice suits, there is no such tab
-
     Scenario: The show is handed the theme
       Given a theme is chosen, by hand or by "Surprise"
       When I start the show
@@ -220,26 +185,6 @@ Feature: The Line-up
       When I run a show with themes in the lab
       Then its theme is drawn from the run's seed
       And when I choose a theme in the lab, it runs on that one
-
-  # Old design, the whole rule: replaced by the rule "Everyone stands in one
-  # row, on the theme's ground" (step 2, decision 0019).
-  # Decision 0016.
-  Rule: A show can draw its start
-
-    Scenario: The Line-up shows the show's start
-      Given a show whose line-up draws its start, with 8 people
-      When its Line-up opens
-      Then the show's start, drawn in the chosen theme, takes the place of the row of tiles, with everyone in their look, in today's order
-      And beside each person are a die and a pin
-      And the chosen person's look is in a panel over the start, with their name, their pin, "Surprise me" and the show's options
-
-    Scenario: Choosing someone where they stand
-      When I click Ben where he stands
-      Then Ben is marked as chosen, in sun, and pressed, and his look is in the panel
-
-    Scenario: Another theme redraws the start
-      When I choose another theme
-      Then the start is drawn in it at once, everyone in their look
 
   # Decision 0016.
   Rule: Pinned looks stay
@@ -258,11 +203,11 @@ Feature: The Line-up
       Given Anna and Ben are pinned
       When I choose "Shuffle everyone"
       Then everyone else gets a look drawn at random, and Anna and Ben keep theirs
-      And beside the button, a note says how many pinned looks stay
+      And the bottom bar says how many pinned looks stay
 
     Scenario: A die deals one look
       Given Ben is pinned
-      When I press the die beside Ben, or "Surprise me" in his panel
+      When I press the die beside Ben, or "Surprise me" in his sheet
       Then Ben gets a look drawn at random, unlike the one he had, and isn't pinned
 
     Scenario: Pins are kept
@@ -376,3 +321,5 @@ Feature: The Line-up
         | two themes with the same name                     |
         | a theme without a picture                         |
         | a theme suiting a choice its option doesn't offer |
+        | themes without the show's words for them          |
+        | a theme without a ground                          |

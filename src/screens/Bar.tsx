@@ -8,12 +8,14 @@ export interface BarProps {
   back?: { label: string; onClick(): void };
   /** After the way back: a status, a hint, then the buttons, the main one last. */
   children: ReactNode;
+  /** While a sheet is open over the step. */
+  inert?: boolean;
 }
 
 /** The bar along the bottom of every step before the show. */
-export function Bar({ back, children }: BarProps) {
+export function Bar({ back, children, inert }: BarProps) {
   return (
-    <footer className={layout.bar}>
+    <footer className={layout.bar} inert={inert}>
       {back && (
         <Button onClick={back.onClick}>
           <ArrowLeftIcon size={20} />

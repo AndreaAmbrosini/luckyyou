@@ -38,8 +38,9 @@ export interface LineUp {
   readonly options: readonly LineUpOption[];
   /**
    * Draws `person` in `look`, calm, filling the element the Line-up puts it
-   * in. `place` is their place in today's list, from 1; `theme` is the one
-   * chosen, by name, null for a line-up without themes.
+   * in, feet near its foot, where it stands on the theme's ground. `place`
+   * is their place in today's list, from 1; `theme` is the one chosen, by
+   * name, null for a line-up without themes.
    */
   draw(
     look: ChosenLook,
@@ -48,45 +49,10 @@ export interface LineUp {
   /** Where the whole show takes place, one for everyone, shown as postcards (decision 0017). */
   readonly themes?: readonly LineUpTheme[];
   /**
-   * Draws the show's start on the START grid, in `theme`, everyone in their
-   * look, and says where each one stands (decision 0016). Without it, the
-   * Line-up shows a row of tiles.
+   * What the show calls a theme and its first option's choices, as in
+   * "Track" and "racers" (decision 0019). A line-up with themes has them.
    */
-  drawStart?(scene: {
-    readonly people: readonly StartPerson[];
-    readonly theme: string | null;
-  }): LineUpStart;
-}
-
-/**
- * The grid a line-up's start is drawn on, in px, and how much of its right
- * the Line-up's panel covers.
- */
-export const START = { width: 1194, height: 440, panel: 648 } as const;
-
-/** One of today's people at a show's start. */
-export interface StartPerson {
-  readonly name: string;
-  /** Their place in today's list, from 1. */
-  readonly place: number;
-  readonly look: ChosenLook;
-  /** The one whose look is in the panel, drawn so it shows. */
-  readonly chosen: boolean;
-}
-
-/** A show's start, as its line-up draws it. */
-export interface LineUpStart {
-  /** The scene, filling a START-sized box. */
-  readonly el: Element;
-  /**
-   * Each person, in today's order: the box on the grid that chooses them,
-   * left of the panel with room on its left for a die and a pin, and their
-   * drawing, which flips in when their look is dealt.
-   */
-  readonly places: readonly {
-    readonly box: { left: number; top: number; width: number; height: number };
-    readonly drawing: Element;
-  }[];
+  readonly words?: { readonly theme: string; readonly choices: string };
 }
 
 /** One of a line-up's themes. A line-up offers none, or at least two. */
@@ -98,8 +64,13 @@ export interface LineUpTheme {
   /** Draws its postcard's picture, 120 by 46, filling the box it shows in. */
   picture(): Element;
   /**
-   * The first option's choices that suit it, by name, in the order its tab
-   * shows them: while it is chosen, they are that option's first tab.
+   * The ground everyone stands on in the Line-up's row while it is chosen:
+   * colours from tokens.css, as in `--color-<sky>` (decision 0019).
+   */
+  readonly ground: { readonly sky: string; readonly floor: string };
+  /**
+   * The first option's choices that suit it, by name, in the order the
+   * Line-up's sheet shows them first: while it is chosen, they are starred.
    */
   readonly suits?: readonly string[];
 }

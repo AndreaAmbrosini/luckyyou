@@ -11,6 +11,7 @@ import { runShow } from '../src/scenario-kit/testing';
 import { looksKey, pinsKey, themeKey } from '../src/line-up/looks';
 import {
   addName,
+  bar,
   blockStorage,
   choose,
   currentUser,
@@ -31,7 +32,6 @@ import {
   fakeScenario,
   groupedLineUp,
   pictureLineUp,
-  startLineUp,
   themedLineUp,
   type FakeScenario,
 } from './support/fake-scenarios';
@@ -52,11 +52,80 @@ const HATS = fakeLineUp().options[0]!;
 
 /** Two themes that suit Hat Show's hats. */
 const THEMES_FOR_HATS: LineUpTheme[] = [
-  { name: 'beach', label: 'Beach', suits: ['cap'], picture: () => document.createElement('i') },
-  { name: 'snow', label: 'Snow', suits: ['beanie'], picture: () => document.createElement('i') },
+  {
+    name: 'beach',
+    label: 'Beach',
+    ground: { sky: 'sky', floor: 'sun' },
+    suits: ['cap'],
+    picture: () => document.createElement('i'),
+  },
+  {
+    name: 'snow',
+    label: 'Snow',
+    ground: { sky: 'glass', floor: 'paper' },
+    suits: ['beanie'],
+    picture: () => document.createElement('i'),
+  },
 ];
 
 const hatShow = () => fakeScenario({ name: 'Hat Show', lineUp: fakeLineUp() });
+const themedShow = () => fakeScenario({ name: 'Hat Show', lineUp: themedLineUp() });
+
+/** Racers for a line-up whose themes are tracks, and the nine that suit Autumn, in its order. */
+const RACERS = [
+  ['leaf', 'Giant leaf', 'Rides'],
+  ['squirrel', 'Squirrel', 'Animals'],
+  ['hedgehog', 'Hedgehog', 'Animals'],
+  ['mushroom', 'Mushroom', 'Things'],
+  ['acorn', 'Acorn', 'Things'],
+  ['snail', 'Snail', 'Rides'],
+  ['caterpillar', 'Caterpillar', 'Rides'],
+  ['pigeon', 'Pigeon', 'Animals'],
+  ['gnome', 'Garden gnome', 'Things'],
+  ['duck', 'Duck', 'Rides'],
+  ['rocket', 'Rocket', 'Rides'],
+  ['robot', 'Robot', 'Things'],
+] as const;
+const AUTUMN = [
+  'squirrel',
+  'leaf',
+  'hedgehog',
+  'mushroom',
+  'acorn',
+  'snail',
+  'caterpillar',
+  'pigeon',
+  'gnome',
+];
+
+/**
+ * Track Show: its themes are tracks and its first option's choices racers,
+ * in three groups. Autumn suits nine of them, in its own order; Moon none.
+ */
+function trackLineUp(): LineUp {
+  const [, colour] = fakeLineUp().options as [LineUpOption, LineUpOption];
+  const track = (name: string, label: string, suits?: string[]) => ({
+    name,
+    label,
+    ground: { sky: 'sky', floor: 'bark' },
+    suits,
+    picture: () => document.createElement('i'),
+  });
+  return fakeLineUp({
+    options: [
+      {
+        name: 'racer',
+        label: 'Racer',
+        choices: RACERS.map(([name, label, group]) => ({ name, label, group })),
+      },
+      colour,
+    ],
+    themes: [track('autumn', 'Autumn', AUTUMN), track('moon', 'Moon')],
+    words: { theme: 'Track', choices: 'racers' },
+  });
+}
+const trackShow = () => fakeScenario({ name: 'Track Show', lineUp: trackLineUp() });
+const labelOf = (name: string) => RACERS.find((racer) => racer[0] === name)![1];
 
 /** Ticks `names`, moves on to the shows and clicks `scenario`, which has a line-up. */
 async function openLineUp(names: readonly string[], scenario: FakeScenario) {
@@ -66,16 +135,20 @@ async function openLineUp(names: readonly string[], scenario: FakeScenario) {
   await pickShow(scenario.name);
 }
 
-const tileList = () => screen.getByRole('list', { name: "Today's people" });
-const tiles = () => within(tileList()).getAllByRole('button');
-const tile = (name: string) => within(tileList()).getByRole('button', { name });
-/** The chosen one's look, under the tiles. */
-const panel = (name: string) => screen.getByRole('region', { name });
-const group = (name: string, label: string) =>
-  within(panel(name)).getByRole('group', { name: label });
+/** Today's people, a place each: their drawing and card, a die and a pin. */
+const row = () => screen.getByRole('list', { name: "Today's people" });
+const places = () => within(row()).getAllByRole('listitem');
+/** `name`'s drawing and card, which open their look. */
+const card = (name: string) => within(row()).getByRole('button', { name });
 /** The text of the element an element's aria-labelledby names. */
 const accessibleLabel = (element: Element) =>
   document.getElementById(element.getAttribute('aria-labelledby')!)!.textContent;
+const nameOf = (place: HTMLElement) => accessibleLabel(place.querySelector('button')!);
+/** `name`'s look, in the sheet over the Line-up. */
+const sheet = (name: string) => screen.getByRole('dialog', { name });
+const openSheet = (name: string) => currentUser().click(card(name));
+const group = (name: string, label: string) =>
+  within(sheet(name)).getByRole('group', { name: label });
 /** Hat Show with each hat drawn as the person in it. */
 const drawnHats = () => {
   const [hat, colour] = fakeLineUp().options as [LineUpOption, LineUpOption];
@@ -92,10 +165,10 @@ const lookOf = (element: HTMLElement): ChosenLook =>
       .map((pair) => pair.split('=')),
   );
 
-/** Each tile's look, by name. */
-const tileLooks = () => new Map(tiles().map((each) => [each.textContent!, lookOf(each)]));
+/** Each look in the row, by name. */
+const rowLooks = () => new Map(places().map((each) => [nameOf(each)!, lookOf(each)]));
 
-/** The pressed choices in one of the panel's options. */
+/** The pressed choices in one of the sheet's options. */
 const pressed = (name: string, label: string) =>
   within(group(name, label))
     .getAllByRole('button')
@@ -107,32 +180,24 @@ const otherChoice = (option: string, look: ChosenLook) =>
     .options.find((each) => each.name === option)!
     .choices.find((choice) => choice.name !== look[option])!;
 
-/** Hat Show, drawing its start. */
-const startShow = () => fakeScenario({ name: 'Hat Show', lineUp: startLineUp() });
-const startRegion = () => screen.getByRole('region', { name: 'The start' });
-/** The scene the show drew. */
-const drawnStart = () => startRegion().querySelector<HTMLElement>('[data-part="fake-start"]')!;
-const places = () => screen.getByRole('list', { name: "Today's people" });
-/** Where `name` stands, which chooses them. */
-const standingAt = (name: string) => within(places()).getByRole('button', { name });
 const die = (name: string) => screen.getByRole('button', { name: `A new look for ${name}` });
 const pin = (name: string) => screen.getByRole('button', { name: `Pin ${name}` });
-/** `name` as the show drew them at its start. */
-const drawingOf = (name: string) =>
-  drawnStart().querySelector<HTMLElement>(`[data-person$=" ${name}"]`)!;
-/** Each look drawn at the start, by name. */
-const startLooks = () =>
-  new Map(
-    [...drawnStart().querySelectorAll<HTMLElement>('[data-person]')].map((drawn) => [
-      drawn.dataset.person!.split(' ').slice(1).join(' '),
-      readLook(drawn),
-    ]),
-  );
-const readLook = (drawn: HTMLElement): ChosenLook =>
-  Object.fromEntries(drawn.dataset.look!.split(' ').map((pair) => pair.split('=')));
+/** `name`'s drawing in the row, which flips in when dealt. */
+const drawingOf = (name: string) => card(name).querySelector('[data-look]')!.parentElement!;
 const sameLook = (one: ChosenLook, two: ChosenLook) =>
   Object.keys(one).every((option) => one[option] === two[option]);
 const pinBen = () => localStorage.setItem(pinsKey('hat-show'), JSON.stringify(['Ben']));
+
+const postcardRow = () => screen.getByRole('group', { name: 'Theme' });
+const postcard = (label: string) => within(postcardRow()).getByRole('button', { name: label });
+/** The tab lists in an option of the sheet: the theme's view first, when it has one. */
+const tabsIn = (option: HTMLElement) =>
+  within(option)
+    .getAllByRole('tablist')
+    .map((list) => within(list).getAllByRole('tab'));
+/** The choices an option of the sheet shows. */
+const shownIn = (option: HTMLElement) =>
+  within(within(option).getAllByRole('tabpanel').at(-1)!).getAllByRole('button');
 
 /** A size that is --target-min, or a size in rem that is at least as big. */
 const bigEnough = (value: string) =>
@@ -188,6 +253,16 @@ const PROBLEMS: Record<string, { lineUp: Partial<LineUp>; why: string }> = {
     lineUp: { themes: [{ ...THEMES_FOR_HATS[0]!, suits: ['cap', 'helmet'] }, THEMES_FOR_HATS[1]!] },
     why: `its line-up theme "beach" suits a choice its first option doesn't offer`,
   },
+  "themes without the show's words for them": {
+    lineUp: { themes: THEMES_FOR_HATS, words: undefined },
+    why: 'its line-up has themes but no words for them',
+  },
+  'a theme without a ground': {
+    lineUp: {
+      themes: [{ ...THEMES_FOR_HATS[0]!, ground: undefined as never }, THEMES_FOR_HATS[1]!],
+    },
+    why: 'its line-up theme "beach" has no ground',
+  },
   'no way to draw a look': {
     lineUp: { draw: undefined as unknown as LineUp['draw'] },
     why: 'its line-up has no draw function',
@@ -209,8 +284,8 @@ describeSpec(await loadFeature('./line-up.feature'), ({ Rule }) => {
       When('I press its "Next" button', () => choose('Next: line up the hats'));
       Then("its Line-up shows {any}, in today's order, each drawn in their look", () => {
         expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('Line up the hats');
-        expect(tiles().map((each) => each.textContent)).toEqual(names);
-        tiles().forEach((each, index) => {
+        expect(places().map(nameOf)).toEqual(names);
+        places().forEach((each, index) => {
           expect(fits(fakeLineUp(), lookOf(each))).toBe(true);
           const drawn = each.querySelector<HTMLElement>('[data-person]')!;
           expect(drawn.dataset.person).toBe(`${index + 1} ${names[index]}`);
@@ -228,7 +303,7 @@ describeSpec(await loadFeature('./line-up.feature'), ({ Rule }) => {
         "its start button has the keyboard focus, so Enter starts the show with everyone's looks as they are",
         async () => {
           expect(startButton()).toHaveFocus();
-          const shown = tileLooks();
+          const shown = rowLooks();
           await currentUser().keyboard('{Enter}');
           await waitFor(() => expect(scenario.runs).toHaveLength(1));
           expect(new Map(scenario.runs[0]!.looks)).toEqual(shown);
@@ -267,12 +342,14 @@ describeSpec(await loadFeature('./line-up.feature'), ({ Rule }) => {
       let chosen: ChosenLook;
       Given("I changed Anna's look on a show's Line-up", async () => {
         await openLineUp(['Anna', 'Ben'], scenario);
-        const before = lookOf(tile('Anna'));
+        await openSheet('Anna');
+        const before = lookOf(card('Anna'));
         const hat = otherChoice('hat', before);
         await currentUser().click(
           within(group('Anna', 'Hat')).getByRole('button', { name: hat.label }),
         );
         chosen = { ...before, hat: hat.name };
+        await choose('Done');
       });
       When('I go back to the shows, then press "Next" to its Line-up again', async () => {
         await choose('Pick a show');
@@ -280,74 +357,263 @@ describeSpec(await loadFeature('./line-up.feature'), ({ Rule }) => {
         await choose('Next: line up the hats');
       });
       Then('Anna has the look I chose', () => {
-        expect(lookOf(tile('Anna'))).toEqual(chosen);
+        expect(lookOf(card('Anna'))).toEqual(chosen);
       });
     });
   });
 
-  Rule('Changing a look', ({ RuleScenario }) => {
-    RuleScenario(
-      "Today's people in a row, the chosen one under it",
-      ({ Given, When, Then, And }) => {
-        const team = TEAM.slice(0, 8);
-        Given("a show's Line-up is open with {int} people", (_, count: number) =>
-          openLineUp(team.slice(0, count), fakeScenario({ name: 'Hat Show', lineUp: drawnHats() })),
-        );
-        When("I click Ben's tile", () => currentUser().click(tile('Ben')));
-        Then(
-          "today's people sit in one row of tiles, in today's order, Ben's marked as chosen, in sun, and pressed",
-          () => {
-            expect(team).toContain('Ben');
-            expect(tiles().map((each) => each.textContent)).toEqual(team);
-            expect(getComputedStyle(tileList()).gridAutoFlow).toBe('column');
-            for (const each of tiles()) {
-              const ben = each === tile('Ben');
-              expect(each).toHaveAttribute('aria-pressed', String(ben));
-              expect(getComputedStyle(each).backgroundColor).toBe(
-                ben ? 'var(--color-sun)' : 'var(--color-paper)',
-              );
-            }
-          },
-        );
-        And(
-          "under the row, Ben is drawn bigger with his name, {string} and the show's options",
-          () => {
-            const look = panel('Ben');
-            expect(tileList().compareDocumentPosition(look)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
-            expect(within(look).getByRole('heading', { level: 2 })).toHaveTextContent('Ben');
-            const box = (element: Element) => getComputedStyle(element.parentElement!);
-            const big = within(look)
-              .getByRole('heading', { level: 2 })
-              .closest('div')!.parentElement!;
-            expect(lookOf(big)).toEqual(lookOf(tile('Ben')));
-            expect(parseFloat(box(big.querySelector('[data-look]')!).width)).toBeGreaterThan(
-              parseFloat(box(tile('Ben').querySelector('[data-look]')!).maxWidth),
-            );
-            expect(within(look).getByRole('button', { name: 'Surprise me' })).toBeInTheDocument();
-            expect(
-              within(look)
-                .getAllByRole('group')
-                .map((each) => accessibleLabel(each)),
-            ).toEqual(fakeLineUp().options.map((option) => option.label));
-          },
-        );
-        And('an option that shows him in each choice has a sheet of its own beside him', () => {
-          const card = within(panel('Ben')).getByRole('heading', { level: 2 }).closest('div')!
-            .parentElement!.parentElement!;
-          expect(card).toContainElement(group('Ben', 'Colour'));
-          expect(card).not.toContainElement(group('Ben', 'Hat'));
-          expect(getComputedStyle(group('Ben', 'Hat')).borderRadius).toBe('var(--radius-card)');
-        });
-      },
-    );
+  Rule("Everyone stands in one row, on the theme's ground", ({ RuleScenario }) => {
+    const team = TEAM.slice(0, 8);
 
+    RuleScenario('Everyone stands in one row', ({ Given, Then, And }) => {
+      Given("a show's Line-up is open with {int} people", (_, count: number) =>
+        openLineUp(team.slice(0, count), hatShow()),
+      );
+      Then("everyone stands in one row, in today's order, drawn in their look", () => {
+        expect(places().map(nameOf)).toEqual(team);
+        expect(getComputedStyle(row()).gridAutoFlow).toBe('column');
+        places().forEach((each, index) => {
+          const drawn = each.querySelector<HTMLElement>('[data-person]')!;
+          expect(drawn.dataset.person).toBe(`${index + 1} ${team[index]}`);
+          expect(fits(fakeLineUp(), lookOf(each))).toBe(true);
+        });
+      });
+      And('under each is a card with their name, their look in words, a die and a pin', () => {
+        const options = fakeLineUp().options;
+        for (const name of team) {
+          const look = lookOf(card(name));
+          const words = options
+            .map((option) => option.choices.find((choice) => choice.name === look[option.name]))
+            .map((choice) => choice!.label)
+            .join(' · ');
+          expect(card(name)).toHaveAccessibleName(name);
+          expect(card(name)).toHaveAccessibleDescription(words);
+          const [stand, paper] = [...card(name).children];
+          expect(stand).toContainElement(card(name).querySelector('[data-look]'));
+          expect(paper).toHaveTextContent(`${name}${words}`);
+          expect(getComputedStyle(paper!).backgroundColor).toBe('var(--color-paper)');
+          const place = card(name).closest('li')!;
+          expect(within(place).getByRole('button', { name: `A new look for ${name}` })).toBe(
+            die(name),
+          );
+          expect(within(place).getByRole('button', { name: `Pin ${name}` })).toHaveAttribute(
+            'aria-pressed',
+            'false',
+          );
+        }
+      });
+    });
+
+    RuleScenario("The row stands on the theme's ground", ({ Given, When, Then, And }) => {
+      /** The ground the row stands on, and its floor. */
+      const ground = () => row().parentElement!;
+      const sky = () => ground().firstElementChild!;
+      Given('a show whose themes each name a ground', () => {
+        for (const theme of themedLineUp().themes!) expect(theme.ground).toBeDefined();
+      });
+      When('a theme is chosen', async () => {
+        localStorage.setItem(themeKey('hat-show'), JSON.stringify('snow'));
+        await openLineUp(['Anna', 'Ben'], themedShow());
+      });
+      Then('the row stands on its ground, in the sky and floor colours it names', () => {
+        expect(ground().style.getPropertyValue('--sky')).toBe('var(--color-glass)');
+        expect(ground().style.getPropertyValue('--floor')).toBe('var(--color-paper)');
+        expect(sky()).toHaveAttribute('aria-hidden', 'true');
+        expect(getComputedStyle(sky()).backgroundColor).toBe('var(--sky)');
+        const floor = sky().firstElementChild!;
+        expect(getComputedStyle(floor).backgroundColor).toBe('var(--floor)');
+        // Everyone stands in it: the row is drawn over the ground, the height it is.
+        expect(sky().nextElementSibling).toBe(row());
+        expect(getComputedStyle(sky()).height).toBe('var(--stand)');
+        expect(getComputedStyle(card('Ben').firstElementChild!).height).toBe('var(--stand)');
+      });
+      And('choosing another theme changes the ground at once', async () => {
+        await currentUser().click(postcard('Beach'));
+        expect(ground().style.getPropertyValue('--sky')).toBe('var(--color-sky)');
+        expect(ground().style.getPropertyValue('--floor')).toBe('var(--color-sun)');
+      });
+    });
+
+    RuleScenario('Clicking someone opens their look in a sheet', ({ Given, When, Then, And }) => {
+      Given("a show's Line-up is open with {int} people", (_, count: number) =>
+        openLineUp(team.slice(0, count), hatShow()),
+      );
+      When('I click Ben, or his card', async () => {
+        await currentUser().click(drawingOf('Ben'));
+        expect(sheet('Ben')).toBeInTheDocument();
+        await choose('Done');
+        await currentUser().click(within(card('Ben')).getByText('Ben'));
+      });
+      Then(
+        `a sheet opens over the Line-up with Ben drawn bigger, his name, "2 of 8", "Surprise me", his pin and the show's options`,
+        () => {
+          const look = sheet('Ben');
+          expect(look).toHaveAttribute('aria-modal', 'true');
+          expect(look).toHaveFocus();
+          // Nothing under it takes a click or the focus until it closes.
+          expect(screen.getByRole('main')).toHaveAttribute('inert');
+          expect(bar()).toHaveAttribute('inert');
+          expect(within(look).getByRole('heading', { level: 2 })).toHaveTextContent('Ben');
+          expect(look).toHaveTextContent('2 of 8');
+          const portrait = look.querySelector<HTMLElement>('[data-person]')!;
+          expect(portrait.dataset.person).toBe('2 Ben');
+          expect(lookOf(look)).toEqual(lookOf(card('Ben')));
+          // Bigger than the widest place in the row: e2e/line-up.spec.ts measures it.
+          expect(getComputedStyle(portrait.parentElement!).width).toBe('10.5rem');
+          expect(within(look).getByRole('button', { name: 'Surprise me' })).toBeInTheDocument();
+          expect(within(look).getByRole('button', { name: 'Pin' })).toHaveAttribute(
+            'aria-pressed',
+            'false',
+          );
+          expect(
+            within(look)
+              .getAllByRole('group')
+              .map((each) => accessibleLabel(each)),
+          ).toEqual(fakeLineUp().options.map((option) => option.label));
+        },
+      );
+      And('its arrows show the previous and the next person', async () => {
+        const arrow = (name: string, label: string) =>
+          within(sheet(name)).getByRole('button', { name: label });
+        await currentUser().click(arrow('Ben', 'Next: Carla'));
+        expect(sheet('Carla')).toHaveTextContent('3 of 8');
+        await currentUser().click(arrow('Carla', 'Previous: Ben'));
+        await currentUser().click(arrow('Ben', 'Previous: Anna'));
+        // They go round.
+        await currentUser().click(arrow('Anna', `Previous: ${team[7]}`));
+        expect(sheet(team[7]!)).toHaveTextContent('8 of 8');
+        await currentUser().click(arrow(team[7]!, 'Next: Anna'));
+        await currentUser().click(arrow('Anna', 'Next: Ben'));
+        expect(lookOf(sheet('Ben'))).toEqual(lookOf(card('Ben')));
+      });
+      And(`"Done" or Esc closes it, and the focus goes back to Ben's card`, async () => {
+        await choose('Done');
+        expect(screen.queryByRole('dialog')).toBeNull();
+        expect(card('Ben')).toHaveFocus();
+        expect(screen.getByRole('main')).not.toHaveAttribute('inert');
+        await openSheet('Ben');
+        await currentUser().keyboard('{Escape}');
+        expect(screen.queryByRole('dialog')).toBeNull();
+        expect(card('Ben')).toHaveFocus();
+        // Tab stays inside it while it is open.
+        await openSheet('Ben');
+        for (let press = 0; press < 40; press++) {
+          await currentUser().tab();
+          expect(sheet('Ben')).toContainElement(document.activeElement as HTMLElement);
+        }
+      });
+    });
+
+    RuleScenario('A choice shows at once, in the sheet and in the row', ({ Given, When, Then }) => {
+      let chosen: ChosenLook;
+      Given("Ben's look is open in the sheet", async () => {
+        await openLineUp(['Anna', 'Ben'], hatShow());
+        await openSheet('Ben');
+      });
+      When('I choose another choice of an option', async () => {
+        const before = lookOf(card('Ben'));
+        const colour = otherChoice('colour', before);
+        await currentUser().click(
+          within(group('Ben', 'Colour')).getByRole('button', { name: colour.label }),
+        );
+        chosen = { ...before, colour: colour.name };
+      });
+      Then('Ben is drawn with it at once, in the sheet and in the row', () => {
+        expect(lookOf(sheet('Ben'))).toEqual(chosen);
+        expect(lookOf(card('Ben'))).toEqual(chosen);
+        const colour = fakeLineUp().options[1]!.choices.find((each) => each.name === chosen.colour);
+        expect(card('Ben')).toHaveAccessibleDescription(expect.stringContaining(colour!.label));
+      });
+    });
+
+    RuleScenario('Readable over a screen share, in a row', ({ When, Then, And }) => {
+      const long = 'Maria-Elena Ros';
+      When(
+        "a show's Line-up is open with {int} people, a 15-character name among them",
+        (_, count: number) => openLineUp([...TEAM.slice(0, count - 1), long], hatShow()),
+      );
+      Then('every name is at least --size-body, wrapping inside its card', () => {
+        expect(long).toHaveLength(15);
+        expect(places()).toHaveLength(8);
+        for (const each of places()) {
+          const name = document.getElementById(
+            each.querySelector('button')!.getAttribute('aria-labelledby')!,
+          )!;
+          expect(getComputedStyle(name).fontSize).toBe('var(--size-body)');
+          expect(getComputedStyle(name).overflowWrap).toBe('anywhere');
+          expect(getComputedStyle(each).minWidth).toBe('0px');
+        }
+      });
+      And(
+        'every control is at least --target-min across, and shows the keyboard focus',
+        async () => {
+          const controls = () => [
+            ...within(screen.getByRole('main')).getAllByRole('button'),
+            ...within(bar()).getAllByRole('button'),
+            ...(screen.queryByRole('dialog')
+              ? within(screen.getByRole('dialog')).getAllByRole('button')
+              : []),
+          ];
+          const check = () => {
+            for (const button of controls()) {
+              const style = getComputedStyle(button);
+              const label = button.getAttribute('aria-label') ?? button.textContent!;
+              expect(bigEnough(style.minHeight) || bigEnough(style.height), label).toBe(true);
+              if (!button.textContent) {
+                expect(bigEnough(style.minWidth) || bigEnough(style.width), label).toBe(true);
+              }
+            }
+          };
+          check();
+          await openSheet('Ben');
+          check();
+          // The app's focus ring, which nothing on the Line-up takes away.
+          expect(css('../src/styles/global.css')).toMatch(
+            /:focus-visible \{\s*outline: var\(--focus\);/,
+          );
+          expect(css('../src/screens/LineUp.module.css')).not.toMatch(/outline/);
+        },
+      );
+    });
+
+    RuleScenario('Everything in view at 1280 by 800', ({ Given, When, Then, And }) => {
+      // jsdom has no layout: e2e/line-up.spec.ts measures The Race's Line-up
+      // in a real 1280 by 800 window. Here: what that measuring leans on.
+      const long = 'Maria-Elena Ros';
+      Given('8 people, a 15-character name among them, in a 1280 by 800 window', () => {
+        expect(long).toHaveLength(15);
+      });
+      When('the Line-up opens', () => openLineUp([...TEAM.slice(0, 7), long], themedShow()));
+      Then(
+        'the themes, everyone and their cards, and the bottom bar are in view without scrolling',
+        () => {
+          expect(places()).toHaveLength(8);
+          // The ground takes the height the window leaves it.
+          expect(css('../src/screens/LineUp.module.css')).toMatch(
+            /--stand: clamp\([\d.]+rem, 100dvh - [\d.]+rem, [\d.]+rem\);/,
+          );
+        },
+      );
+      And(
+        "with Ben's sheet open, his first option's first eight choices are in view, and any more scroll inside the sheet",
+        async () => {
+          await openSheet('Ben');
+          const body = group('Ben', 'Hat').parentElement!;
+          expect(getComputedStyle(body).overflowY).toBe('auto');
+          expect(getComputedStyle(sheet('Ben')).bottom).toBe('0px');
+        },
+      );
+    });
+  });
+
+  Rule('Changing a look', ({ RuleScenario }) => {
     RuleScenario('The chosen one of each option is marked and named', ({ When, Then, And }) => {
       const lineUp = drawnHats();
       let look: ChosenLook;
       When("Ben's look is shown", async () => {
         await openLineUp(['Anna', 'Ben'], fakeScenario({ name: 'Hat Show', lineUp }));
-        await currentUser().click(tile('Ben'));
-        look = lookOf(tile('Ben'));
+        await openSheet('Ben');
+        look = lookOf(card('Ben'));
       });
       Then(
         'in each option, the choice he has is marked by a check mark as well as by colour',
@@ -393,49 +659,26 @@ describeSpec(await loadFeature('./line-up.feature'), ({ Rule }) => {
       );
     });
 
-    RuleScenario('A choice changes the look at once', ({ Given, When, Then }) => {
-      let chosen: ChosenLook;
-      Given("Ben's look is shown", async () => {
-        await openLineUp(['Anna', 'Ben'], hatShow());
-        await currentUser().click(tile('Ben'));
-      });
-      When('I choose another choice of an option', async () => {
-        const before = lookOf(tile('Ben'));
-        const colour = otherChoice('colour', before);
-        await currentUser().click(
-          within(group('Ben', 'Colour')).getByRole('button', { name: colour.label }),
-        );
-        chosen = { ...before, colour: colour.name };
-      });
-      Then('Ben is drawn with it, bigger and on his tile', () => {
-        expect(lookOf(panel('Ben'))).toEqual(chosen);
-        expect(lookOf(tile('Ben'))).toEqual(chosen);
-      });
-    });
-
     RuleScenario('Surprise me', ({ Given, When, Then }) => {
       let before: ChosenLook;
       Given("Ben's look is shown", async () => {
         await openLineUp(['Anna', 'Ben'], hatShow());
-        await currentUser().click(tile('Ben'));
-        before = lookOf(tile('Ben'));
+        await openSheet('Ben');
+        before = lookOf(card('Ben'));
       });
       When('I choose {string}', (_, label: string) => choose(label));
       Then("Ben gets a look drawn at random from the show's choices", () => {
-        const after = lookOf(tile('Ben'));
+        const after = lookOf(card('Ben'));
         expect(fits(fakeLineUp(), after)).toBe(true);
         expect(after).not.toEqual(before);
-        expect(lookOf(panel('Ben'))).toEqual(after);
+        expect(lookOf(sheet('Ben'))).toEqual(after);
       });
     });
 
     RuleScenario("An option's groups are tabs", ({ Given, When, Then, And }) => {
       const hat = groupedLineUp().options[0]!;
       const tabs = () => within(group('Ben', 'Hat')).getAllByRole('tab');
-      const shownChoices = () =>
-        within(within(group('Ben', 'Hat')).getByRole('tabpanel'))
-          .getAllByRole('button')
-          .map((button) => button.textContent);
+      const shownChoices = () => shownIn(group('Ben', 'Hat')).map((button) => button.textContent);
       const labelsIn = (label: string) =>
         hat.choices.filter((choice) => choice.group === label).map((choice) => choice.label);
       let mine: (typeof hat.choices)[number];
@@ -443,13 +686,13 @@ describeSpec(await loadFeature('./line-up.feature'), ({ Rule }) => {
         openLineUp(['Anna', 'Ben'], fakeScenario({ name: 'Hat Show', lineUp: groupedLineUp() })),
       );
       When("Ben's look is shown", async () => {
-        await currentUser().click(tile('Ben'));
-        mine = hat.choices.find((choice) => choice.name === lookOf(tile('Ben')).hat)!;
+        await openSheet('Ben');
+        mine = hat.choices.find((choice) => choice.name === lookOf(card('Ben')).hat)!;
       });
       Then(
         'that option has one tab per group, named for the group, in the order their first choices come',
         () => {
-          expect(within(group('Ben', 'Hat')).getByRole('tablist')).toBeInTheDocument();
+          expect(within(group('Ben', 'Hat')).getByRole('tablist')).toHaveAccessibleName('Hat');
           expect(tabs().map((tab) => tab.textContent)).toEqual(['Hats', 'Helmets']);
         },
       );
@@ -462,12 +705,12 @@ describeSpec(await loadFeature('./line-up.feature'), ({ Rule }) => {
         );
       });
       And("choosing the other tab shows its choices and leaves Ben's look as it was", async () => {
-        const before = lookOf(tile('Ben'));
+        const before = lookOf(card('Ben'));
         const other = tabs().find((tab) => tab.textContent !== mine.group)!;
         await currentUser().click(other);
         expect(other).toHaveAttribute('aria-selected', 'true');
         expect(shownChoices()).toEqual(labelsIn(other.textContent!));
-        expect(lookOf(tile('Ben'))).toEqual(before);
+        expect(lookOf(card('Ben'))).toEqual(before);
         // The arrow keys move along the tabs, too.
         await currentUser().keyboard('{ArrowLeft}');
         expect(tabs().find((tab) => tab.textContent === mine.group)).toHaveFocus();
@@ -494,11 +737,11 @@ describeSpec(await loadFeature('./line-up.feature'), ({ Rule }) => {
         () =>
           openLineUp(['Anna', 'Ben'], fakeScenario({ name: 'Hat Show', lineUp: pictureLineUp() })),
       );
-      When("Ben's look is shown", () => currentUser().click(tile('Ben')));
+      When("Ben's look is shown", () => openSheet('Ben'));
       Then(
         'each choice of the first option is Ben drawn with that choice and the rest of his look, its label under it',
         () => {
-          const look = lookOf(tile('Ben'));
+          const look = lookOf(card('Ben'));
           expect(buttons('Hat')).toHaveLength(hat.choices.length);
           buttons('Hat').forEach((button, index) => {
             const choice = hat.choices[index]!;
@@ -524,7 +767,7 @@ describeSpec(await loadFeature('./line-up.feature'), ({ Rule }) => {
         },
       );
       And("choosing a choice redraws the first option's pictures in Ben's new look", async () => {
-        const before = lookOf(tile('Ben'));
+        const before = lookOf(card('Ben'));
         const other = colour.choices.find((choice) => choice.name !== before.colour)!;
         await currentUser().click(
           within(group('Ben', 'Colour')).getByRole('button', { name: other.label }),
@@ -540,10 +783,10 @@ describeSpec(await loadFeature('./line-up.feature'), ({ Rule }) => {
         openLineUp(['Anna', 'Ben'], fakeScenario({ name: 'Hat Show', lineUp: groupedLineUp() })),
       );
       When('I choose {string} for Ben, again and again', async (_, label: string) => {
-        await currentUser().click(tile('Ben'));
+        await openSheet('Ben');
         for (let time = 0; time < 30; time++) {
           await choose(label);
-          const chosen = lookOf(tile('Ben')).hat;
+          const chosen = lookOf(card('Ben')).hat;
           groups.add(hat.choices.find((choice) => choice.name === chosen)!.group);
         }
       });
@@ -556,17 +799,17 @@ describeSpec(await loadFeature('./line-up.feature'), ({ Rule }) => {
       let before: Map<string, ChosenLook>;
       When('I choose {string}', async (_, label: string) => {
         await openLineUp(TEAM.slice(0, 8), hatShow());
-        before = tileLooks();
+        before = rowLooks();
         await choose(label);
       });
       Then("each of today's people gets a look drawn at random", () => {
-        const after = tileLooks();
+        const after = rowLooks();
         expect([...after.keys()]).toEqual(TEAM.slice(0, 8));
         for (const look of after.values()) expect(fits(fakeLineUp(), look)).toBe(true);
         expect(after).not.toEqual(before);
       });
       And('the looks vary as much as the choices allow', () => {
-        const looks = [...tileLooks().values()];
+        const looks = [...rowLooks().values()];
         for (const option of fakeLineUp().options) {
           const counts = option.choices.map(
             (choice) => looks.filter((look) => look[option.name] === choice.name).length,
@@ -575,47 +818,11 @@ describeSpec(await loadFeature('./line-up.feature'), ({ Rule }) => {
         }
       });
     });
-
-    RuleScenario('Readable over a screen share', ({ When, Then, And }) => {
-      const long = 'Maria-Elena Ros';
-      When(
-        "a show's Line-up is open with {int} people, a 15-character name among them",
-        (_, count: number) => openLineUp([...TEAM.slice(0, count - 1), long], hatShow()),
-      );
-      Then('every name is at least --size-body, wrapping inside its tile', () => {
-        expect(long).toHaveLength(15);
-        expect(tiles()).toHaveLength(8);
-        for (const each of tiles()) {
-          const name = within(each).getByText(each.textContent!);
-          expect(getComputedStyle(name).fontSize).toBe('var(--size-body)');
-          expect(getComputedStyle(name).overflowWrap).toBe('anywhere');
-          expect(getComputedStyle(name).maxWidth).toBe('100%');
-        }
-      });
-      And('every control is at least --target-min across, and shows the keyboard focus', () => {
-        for (const button of within(screen.getByRole('main')).getAllByRole('button')) {
-          const style = getComputedStyle(button);
-          const label = button.getAttribute('aria-label') ?? button.textContent!;
-          expect(bigEnough(style.minHeight) || bigEnough(style.height), label).toBe(true);
-          if (!button.textContent) {
-            expect(bigEnough(style.minWidth) || bigEnough(style.width), label).toBe(true);
-          }
-        }
-        // The app's focus ring, which nothing on the Line-up takes away.
-        expect(css('../src/styles/global.css')).toMatch(
-          /:focus-visible \{\s*outline: var\(--focus\);/,
-        );
-        expect(css('../src/screens/LineUp.module.css')).not.toMatch(/outline/);
-      });
-    });
   });
 
   Rule('A show can offer themes', ({ RuleScenario }) => {
-    const themedShow = () => fakeScenario({ name: 'Hat Show', lineUp: themedLineUp() });
     const THEMES = themedLineUp().themes!;
-    const postcardRow = () => screen.getByRole('group', { name: 'Theme' });
     const postcards = () => within(postcardRow()).getAllByRole('button');
-    const postcard = (label: string) => within(postcardRow()).getByRole('button', { name: label });
     const chosenCards = () =>
       postcards().filter((card) => card.getAttribute('aria-pressed') === 'true');
     /** The theme a postcard's picture shows, or null for Surprise's own. */
@@ -623,18 +830,6 @@ describeSpec(await loadFeature('./line-up.feature'), ({ Rule }) => {
       card.querySelector<HTMLElement>('[data-picture]')?.dataset.picture ?? null;
     const markOn = (card: HTMLElement) =>
       card.querySelector<HTMLElement>('[data-mark]')?.dataset.mark ?? null;
-    const tabNames = () =>
-      within(group('Ben', 'Hat'))
-        .getAllByRole('tab')
-        .map((tab) => tab.textContent);
-    const shownChoices = () =>
-      within(within(group('Ben', 'Hat')).getByRole('tabpanel'))
-        .getAllByRole('button')
-        .map((button) => button.textContent);
-    const labelsOf = (names: readonly string[]) =>
-      names.map(
-        (name) => themedLineUp().options[0]!.choices.find((choice) => choice.name === name)!.label,
-      );
 
     /** Opens Hat Show's Line-up again after going back to the shows. */
     async function goBackAndReopen() {
@@ -655,7 +850,7 @@ describeSpec(await loadFeature('./line-up.feature'), ({ Rule }) => {
             ...THEMES.map((theme) => theme.label),
           ]);
           expect(
-            postcardRow().compareDocumentPosition(tileList()) & Node.DOCUMENT_POSITION_FOLLOWING,
+            postcardRow().compareDocumentPosition(row()) & Node.DOCUMENT_POSITION_FOLLOWING,
           ).toBeTruthy();
           postcards()
             .slice(1)
@@ -675,6 +870,138 @@ describeSpec(await loadFeature('./line-up.feature'), ({ Rule }) => {
           expect(markOn(card)).toBeNull();
           expect(getComputedStyle(card).backgroundColor).toBe('var(--color-paper)');
         }
+      });
+    });
+
+    RuleScenario("The themes come first, in the show's words", ({ Given, When, Then, And }) => {
+      const lineUp = trackLineUp();
+      const following = (one: Element, two: Element) =>
+        (one.compareDocumentPosition(two) & Node.DOCUMENT_POSITION_FOLLOWING) !== 0;
+      Given(
+        "a show whose line-up offers themes, and calls them tracks and its first option's choices racers",
+        () => {
+          expect(lineUp.words).toEqual({ theme: 'Track', choices: 'racers' });
+        },
+      );
+      When(
+        'its Line-up opens with Autumn chosen, {int} racers suiting it',
+        async (_, count: number) => {
+          expect(lineUp.themes![0]!.suits).toHaveLength(count);
+          localStorage.setItem(themeKey('track-show'), JSON.stringify('autumn'));
+          await openLineUp(['Anna', 'Ben'], trackShow());
+        },
+      );
+      Then('above the postcards, the heading reads {string}', (_, text: string) => {
+        const heading = screen.getByRole('heading', { level: 2, name: text });
+        expect(following(heading, postcardRow())).toBe(true);
+      });
+      And("above today's people, {string}", (_, text: string) => {
+        const heading = screen.getByRole('heading', { level: 2, name: text });
+        expect(following(postcardRow(), heading)).toBe(true);
+        expect(following(heading, row())).toBe(true);
+        expect(heading.closest('section')).toHaveAccessibleName(text);
+      });
+    });
+
+    RuleScenario('Choices that suit the theme are starred', ({ Given, Then, And }) => {
+      const team = TEAM.slice(0, 8);
+      const racers = ['duck', 'leaf', 'rocket', 'squirrel', 'robot', 'duck', 'pigeon', 'rocket'];
+      const suiting = team.filter((_, index) => AUTUMN.includes(racers[index]!));
+      Given(
+        "a theme is chosen, and {int} of today's {int} people have a first-option choice that suits it",
+        async (_, count: number, everyone: number) => {
+          expect(suiting).toHaveLength(count);
+          expect(team).toHaveLength(everyone);
+          localStorage.setItem(themeKey('track-show'), JSON.stringify('autumn'));
+          localStorage.setItem(
+            looksKey('track-show'),
+            JSON.stringify(
+              Object.fromEntries(
+                team.map((name, index) => [name, { racer: racers[index], colour: 'sun' }]),
+              ),
+            ),
+          );
+          await openLineUp(team, trackShow());
+        },
+      );
+      Then(
+        'each of those {int} has a star in the row, read out as {string}',
+        (_, count: number, label: string) => {
+          const starred = places().filter(
+            (each) => within(each).queryAllByRole('img', { name: label }).length > 0,
+          );
+          expect(starred).toHaveLength(count);
+          expect(starred.map(nameOf)).toEqual(suiting);
+          for (const each of starred) {
+            const star = within(each).getByRole('img', { name: label });
+            expect(getComputedStyle(star).backgroundColor).toBe('var(--color-sun)');
+          }
+        },
+      );
+      And('beside {string}, a star reads {string}', (_, heading: string, text: string) => {
+        const note = screen.getByRole('heading', { level: 2, name: heading }).nextElementSibling!;
+        expect(note).toHaveTextContent(text);
+        expect(note.querySelector('svg')).not.toBeNull();
+      });
+    });
+
+    RuleScenario("The sheet shows the theme's choices first", ({ Given, When, Then, And }) => {
+      const racer = () => group('Ben', 'Racer');
+      Given("a theme that some of the first option's choices suit is chosen", () => {
+        localStorage.setItem(themeKey('track-show'), JSON.stringify('autumn'));
+        localStorage.setItem(
+          looksKey('track-show'),
+          JSON.stringify({ Ben: { racer: 'duck', colour: 'mint' } }),
+        );
+      });
+      When("Ben's look opens in the sheet", async () => {
+        await openLineUp(['Anna', 'Ben'], trackShow());
+        await openSheet('Ben');
+      });
+      Then(
+        'the first option offers {string} and {string}, the first chosen, holding the choices that suit Autumn in its order',
+        (_, theirs: string, all: string) => {
+          const [views] = tabsIn(racer());
+          expect(views!.map((tab) => tab.textContent!.replace(/\d+$/, ''))).toEqual([theirs, all]);
+          expect(views!.map((tab) => tab.getAttribute('aria-selected'))).toEqual(['true', 'false']);
+          expect(views![0]).toHaveTextContent(`${theirs}${AUTUMN.length}`);
+          expect(views![1]).toHaveTextContent(`${all}${RACERS.length}`);
+          expect(tabsIn(racer())).toHaveLength(1);
+          expect(shownIn(racer()).map((button) => button.textContent)).toEqual(AUTUMN.map(labelOf));
+          // Ben's racer isn't among them, and his look is as it was.
+          expect(pressed('Ben', 'Racer')).toHaveLength(0);
+          expect(lookOf(card('Ben')).racer).toBe('duck');
+        },
+      );
+      And(
+        'with {string}, its groups are tabs, and each choice that suits Autumn has a star',
+        async (_, all: string) => {
+          await currentUser().click(within(racer()).getByRole('tab', { name: new RegExp(all) }));
+          const [, groups] = tabsIn(racer());
+          expect(groups!.map((tab) => tab.textContent)).toEqual(['Rides', 'Animals', 'Things']);
+          // It opens on Ben's choice's group.
+          expect(groups![0]).toHaveAttribute('aria-selected', 'true');
+          for (const tab of groups!) {
+            await currentUser().click(tab);
+            const shown = RACERS.filter(([, , kind]) => kind === tab.textContent);
+            expect(shownIn(racer())).toHaveLength(shown.length);
+            shown.forEach(([name, label], index) => {
+              const button = shownIn(racer())[index]!;
+              expect(button).toHaveTextContent(label);
+              const star = within(button).queryByRole('img', { name: 'Suits Autumn' });
+              expect(star !== null, name).toBe(AUTUMN.includes(name));
+            });
+          }
+        },
+      );
+      And("with a theme that no choice suits, the option shows only its groups' tabs", async () => {
+        await choose('Done');
+        await currentUser().click(postcard('Moon'));
+        await openSheet('Ben');
+        const lists = tabsIn(racer());
+        expect(lists).toHaveLength(1);
+        expect(lists[0]!.map((tab) => tab.textContent)).toEqual(['Rides', 'Animals', 'Things']);
+        expect(within(racer()).queryAllByRole('img')).toHaveLength(0);
       });
     });
 
@@ -789,43 +1116,15 @@ describeSpec(await loadFeature('./line-up.feature'), ({ Rule }) => {
 
     RuleScenario('Each look is drawn in the theme', ({ Given, When, Then }) => {
       Given('a show whose line-up offers themes', () => openLineUp(['Anna', 'Ben'], themedShow()));
-      When('a theme is chosen', () => currentUser().click(postcard('Beach')));
+      When('a theme is chosen', async () => {
+        await currentUser().click(postcard('Beach'));
+        await openSheet('Ben');
+      });
       Then('the show draws every look in it, so it can dress everyone for it', () => {
         const drawn = [...document.querySelectorAll<HTMLElement>('[data-look]')];
-        expect(drawn.length).toBeGreaterThan(2);
+        // Everyone in the row, and Ben in the sheet.
+        expect(drawn).toHaveLength(3);
         for (const each of drawn) expect(each.dataset.theme).toBe('beach');
-      });
-    });
-
-    RuleScenario("A theme's own tab", ({ Given, When, Then, And }) => {
-      Given("a show whose themes each suit some of its first option's choices", () =>
-        openLineUp(['Anna', 'Ben'], themedShow()),
-      );
-      When("a theme is chosen and Ben's look is shown", async () => {
-        await currentUser().click(postcard('Beach'));
-        await currentUser().click(tile('Ben'));
-      });
-      Then(
-        "the option's first tab is named for the theme, marked with a star, and holds the choices that suit it",
-        async () => {
-          const [first] = within(group('Ben', 'Hat')).getAllByRole('tab');
-          expect(tabNames()).toEqual(['Beach', 'Hats', 'Helmets']);
-          expect(first!.querySelector('svg')).not.toBeNull();
-          expect(first).toHaveAccessibleName('Beach');
-          await currentUser().click(first!);
-          expect(shownChoices()).toEqual(labelsOf(['crown', 'bike']));
-        },
-      );
-      And("each of those choices is still in its own group's tab", async () => {
-        const tab = (name: string) => within(group('Ben', 'Hat')).getByRole('tab', { name });
-        await currentUser().click(tab('Hats'));
-        expect(shownChoices()).toContain('Crown');
-        await currentUser().click(tab('Helmets'));
-        expect(shownChoices()).toContain('Bike helmet');
-      });
-      And('with a theme that no choice suits, there is no such tab', async () => {
-        await currentUser().click(postcard('Party'));
-        expect(tabNames()).toEqual(['Hats', 'Helmets']);
       });
     });
 
@@ -967,88 +1266,6 @@ describeSpec(await loadFeature('./line-up.feature'), ({ Rule }) => {
     });
   });
 
-  Rule('A show can draw its start', ({ RuleScenario }) => {
-    RuleScenario("The Line-up shows the show's start", ({ Given, When, Then, And }) => {
-      const team = TEAM.slice(0, 8);
-      Given('a show whose line-up draws its start, with {int} people', () => {
-        localStorage.setItem(themeKey('hat-show'), JSON.stringify('snow'));
-      });
-      When('its Line-up opens', () => openLineUp(team, startShow()));
-      Then(
-        "the show's start, drawn in the chosen theme, takes the place of the row of tiles, with everyone in their look, in today's order",
-        () => {
-          expect(drawnStart().dataset.theme).toBe('snow');
-          const standing = [...drawnStart().querySelectorAll<HTMLElement>('[data-person]')];
-          expect(standing.map((each) => each.dataset.person)).toEqual(
-            team.map((name, index) => `${index + 1} ${name}`),
-          );
-          for (const look of startLooks().values()) expect(fits(startLineUp(), look)).toBe(true);
-          // Nobody is drawn anywhere else: there are no tiles.
-          expect(document.querySelectorAll('[data-person]')).toHaveLength(team.length);
-          for (const name of team) expect(startRegion()).toContainElement(standingAt(name));
-        },
-      );
-      And('beside each person are a die and a pin', () => {
-        for (const name of team) {
-          const left = (button: HTMLElement) => parseFloat(button.style.left);
-          expect(left(die(name))).toBeLessThan(left(pin(name)));
-          expect(left(pin(name))).toBeLessThan(left(standingAt(name)));
-          expect(pin(name)).toHaveAttribute('aria-pressed', 'false');
-        }
-      });
-      And(
-        `the chosen person's look is in a panel over the start, with their name, their pin, "Surprise me" and the show's options`,
-        () => {
-          const look = panel('Anna');
-          expect(startRegion()).toContainElement(look);
-          expect(within(look).getByRole('heading', { level: 2 })).toHaveTextContent('Anna');
-          expect(within(look).getByRole('button', { name: 'Pin' })).toHaveAttribute(
-            'aria-pressed',
-            'false',
-          );
-          expect(within(look).getByRole('button', { name: 'Surprise me' })).toBeInTheDocument();
-          expect(group('Anna', 'Hat')).toBeInTheDocument();
-          expect(group('Anna', 'Colour')).toBeInTheDocument();
-        },
-      );
-    });
-
-    RuleScenario('Choosing someone where they stand', ({ When, Then }) => {
-      When('I click Ben where he stands', async () => {
-        await openLineUp(['Anna', 'Ben', 'Carla'], startShow());
-        await currentUser().click(standingAt('Ben'));
-      });
-      Then('Ben is marked as chosen, in sun, and pressed, and his look is in the panel', () => {
-        expect(standingAt('Ben')).toHaveAttribute('aria-pressed', 'true');
-        for (const other of ['Anna', 'Carla']) {
-          expect(standingAt(other)).toHaveAttribute('aria-pressed', 'false');
-        }
-        // The show draws who is chosen, in sun: the-race.feature.
-        const chosen = drawnStart().querySelectorAll<HTMLElement>('[data-chosen]');
-        expect([...chosen].map((each) => each.dataset.person)).toEqual(['2 Ben']);
-        expect(within(panel('Ben')).getByRole('heading', { level: 2 })).toHaveTextContent('Ben');
-      });
-    });
-
-    RuleScenario('Another theme redraws the start', ({ When, Then }) => {
-      let before: Map<string, ChosenLook>;
-      When('I choose another theme', async () => {
-        localStorage.setItem(themeKey('hat-show'), JSON.stringify('snow'));
-        await openLineUp(['Anna', 'Ben', 'Carla'], startShow());
-        before = startLooks();
-        await currentUser().click(
-          within(screen.getByRole('group', { name: 'Theme' })).getByRole('button', {
-            name: 'Beach',
-          }),
-        );
-      });
-      Then('the start is drawn in it at once, everyone in their look', () => {
-        expect(drawnStart().dataset.theme).toBe('beach');
-        expect(startLooks()).toEqual(before);
-      });
-    });
-  });
-
   Rule('Pinned looks stay', ({ RuleScenario }) => {
     /** The pin's look: pressed, its fill and its outline. */
     const pinLook = (button: HTMLElement) => ({
@@ -1056,12 +1273,12 @@ describeSpec(await loadFeature('./line-up.feature'), ({ Rule }) => {
       fill: getComputedStyle(button).backgroundColor,
       outline: getComputedStyle(button).borderStyle,
     });
-    const panelPin = (name: string) => within(panel(name)).getByRole('button', { name: /^Pin/ });
+    const sheetPin = (name: string) => within(sheet(name)).getByRole('button', { name: /^Pin/ });
 
     RuleScenario('Choosing by hand pins a look', ({ Given, When, Then }) => {
       Given("Ben's look is shown and isn't pinned", async () => {
-        await openLineUp(['Anna', 'Ben', 'Carla'], startShow());
-        await currentUser().click(standingAt('Ben'));
+        await openLineUp(['Anna', 'Ben', 'Carla'], hatShow());
+        await openSheet('Ben');
         expect(pin('Ben')).toHaveAttribute('aria-pressed', 'false');
       });
       When('I choose any of his choices', async () => {
@@ -1071,22 +1288,26 @@ describeSpec(await loadFeature('./line-up.feature'), ({ Rule }) => {
         );
       });
       Then('Ben is pinned: his pin is pressed, in sun with a solid outline', () => {
-        for (const button of [pin('Ben'), panelPin('Ben')]) {
+        for (const button of [pin('Ben'), sheetPin('Ben')]) {
           expect(pinLook(button)).toEqual({
             pressed: 'true',
             fill: 'var(--color-sun)',
             outline: 'solid',
           });
         }
-        expect(panelPin('Ben')).toHaveTextContent('Pinned');
+        expect(sheetPin('Ben')).toHaveTextContent('Pinned');
         expect(pin('Anna')).toHaveAttribute('aria-pressed', 'false');
+        // And his card keeps a sun ring inside its outline.
+        const paper = card('Ben').lastElementChild!;
+        expect(getComputedStyle(paper).boxShadow).toContain('var(--color-sun)');
+        expect(getComputedStyle(card('Anna').lastElementChild!).boxShadow).not.toContain('sun');
       });
     });
 
     RuleScenario('A pin can be taken off', ({ Given, When, Then }) => {
       Given('Ben is pinned', () => pinBen());
       When('I press his pin', async () => {
-        await openLineUp(['Anna', 'Ben', 'Carla'], startShow());
+        await openLineUp(['Anna', 'Ben', 'Carla'], hatShow());
         expect(pin('Ben')).toHaveAttribute('aria-pressed', 'true');
         await currentUser().click(pin('Ben'));
       });
@@ -1104,55 +1325,56 @@ describeSpec(await loadFeature('./line-up.feature'), ({ Rule }) => {
       let before: Map<string, ChosenLook>;
       Given('Anna and Ben are pinned', async () => {
         localStorage.setItem(pinsKey('hat-show'), JSON.stringify(['Anna', 'Ben']));
-        await openLineUp(team, startShow());
-        before = startLooks();
+        await openLineUp(team, hatShow());
+        before = rowLooks();
       });
       When('I choose {string}', (_, label: string) => choose(label));
       Then('everyone else gets a look drawn at random, and Anna and Ben keep theirs', () => {
-        const after = startLooks();
+        const after = rowLooks();
         expect(after.get('Anna')).toEqual(before.get('Anna'));
         expect(after.get('Ben')).toEqual(before.get('Ben'));
         const others = team.slice(2);
-        for (const name of others) expect(fits(startLineUp(), after.get(name))).toBe(true);
+        for (const name of others) expect(fits(fakeLineUp(), after.get(name))).toBe(true);
         expect(others.some((name) => !sameLook(after.get(name)!, before.get(name)!))).toBe(true);
         expect(pin('Anna')).toHaveAttribute('aria-pressed', 'true');
         expect(pin('Ben')).toHaveAttribute('aria-pressed', 'true');
       });
-      And('beside the button, a note says how many pinned looks stay', () => {
-        const shuffle = screen.getByRole('button', { name: 'Shuffle everyone' });
-        expect(shuffle.nextElementSibling).toHaveTextContent('Pinned looks stay as they are (2).');
+      And('the bottom bar says how many pinned looks stay', () => {
+        expect(within(bar()).getByRole('status')).toHaveTextContent(
+          '2 pinned, kept when you shuffle',
+        );
       });
     });
 
     RuleScenario('A die deals one look', ({ Given, When, Then }) => {
       const dealt: { before: ChosenLook; after: ChosenLook; pinned: string | null }[] = [];
       Given('Ben is pinned', () => pinBen());
-      When(`I press the die beside Ben, or "Surprise me" in his panel`, async () => {
-        await openLineUp(['Anna', 'Ben', 'Carla'], startShow());
-        for (const press of [
-          () => die('Ben'),
-          () => within(panel('Ben')).getByRole('button', { name: 'Surprise me' }),
-        ]) {
-          await currentUser().click(standingAt('Ben'));
-          if (pin('Ben').getAttribute('aria-pressed') === 'false') {
-            await currentUser().click(pin('Ben'));
-          }
+      When(`I press the die beside Ben, or "Surprise me" in his sheet`, async () => {
+        await openLineUp(['Anna', 'Ben', 'Carla'], hatShow());
+        const surprise = () => within(sheet('Ben')).getByRole('button', { name: 'Surprise me' });
+        for (const [press, pinIt] of [
+          [() => die('Ben'), () => pin('Ben')],
+          [surprise, () => sheetPin('Ben')],
+        ] as const) {
+          if (press === surprise) await openSheet('Ben');
           for (let turn = 0; turn < 5; turn++) {
-            const before = startLooks().get('Ben')!;
+            if (pinIt().getAttribute('aria-pressed') === 'false') {
+              await currentUser().click(pinIt());
+            }
+            const before = lookOf(card('Ben'));
             await currentUser().click(press());
             dealt.push({
               before,
-              after: startLooks().get('Ben')!,
+              after: lookOf(card('Ben')),
               pinned: pin('Ben').getAttribute('aria-pressed'),
             });
-            await currentUser().click(pin('Ben'));
           }
         }
       });
       Then("Ben gets a look drawn at random, unlike the one he had, and isn't pinned", () => {
         expect(dealt).toHaveLength(10);
         for (const { before, after, pinned } of dealt) {
-          expect(fits(startLineUp(), after)).toBe(true);
+          expect(fits(fakeLineUp(), after)).toBe(true);
           expect(sameLook(after, before)).toBe(false);
           expect(pinned).toBe('false');
         }
@@ -1161,7 +1383,7 @@ describeSpec(await loadFeature('./line-up.feature'), ({ Rule }) => {
 
     RuleScenario('Pins are kept', ({ Given, When, Then }) => {
       Given('Ben is pinned', async () => {
-        await openLineUp(['Anna', 'Ben', 'Carla'], startShow());
+        await openLineUp(['Anna', 'Ben', 'Carla'], hatShow());
         await currentUser().click(pin('Ben'));
       });
       When("I reload the page and open that show's Line-up again", async () => {
@@ -1179,7 +1401,7 @@ describeSpec(await loadFeature('./line-up.feature'), ({ Rule }) => {
       const team = TEAM.slice(0, 8);
       When('"Shuffle everyone" deals new looks', async () => {
         localStorage.setItem(pinsKey('hat-show'), JSON.stringify(['Ben']));
-        await openLineUp(team, startShow());
+        await openLineUp(team, hatShow());
         await choose('Shuffle everyone');
       });
       Then(
@@ -1196,17 +1418,21 @@ describeSpec(await loadFeature('./line-up.feature'), ({ Rule }) => {
           expect(delays[0]).toBe(0);
           delays.slice(1).forEach((delay, index) => expect(delay).toBeGreaterThan(delays[index]!));
           // Ben's look is pinned: it wasn't dealt, so it doesn't flip.
-          expect(drawingOf('Ben').getAttribute('class')).toBeNull();
+          expect(drawingOf('Ben').style.animationDelay).toBe('');
+          expect(parseFloat(getComputedStyle(drawingOf('Ben')).animationDuration) || 0).toBe(0);
         },
       );
       And('with reduced motion, the looks change without flipping', async () => {
         vi.stubGlobal('matchMedia', (query: string) => ({
           matches: query === '(prefers-reduced-motion: reduce)',
         }));
-        const before = startLooks();
+        const before = rowLooks();
         await choose('Shuffle everyone');
-        expect(startLooks()).not.toEqual(before);
-        for (const name of team) expect(drawingOf(name).getAttribute('class')).toBeNull();
+        expect(rowLooks()).not.toEqual(before);
+        for (const name of team) {
+          expect(drawingOf(name).style.animationDelay).toBe('');
+          expect(parseFloat(getComputedStyle(drawingOf(name)).animationDuration) || 0).toBe(0);
+        }
       });
     });
   });
@@ -1214,12 +1440,13 @@ describeSpec(await loadFeature('./line-up.feature'), ({ Rule }) => {
   Rule('Everyone keeps their look', ({ RuleScenario, RuleScenarioOutline }) => {
     /** Changes Anna's hat on the open Line-up, and gives her new look. */
     async function changeAnnasHat() {
-      await currentUser().click(tile('Anna'));
-      const before = lookOf(tile('Anna'));
+      await openSheet('Anna');
+      const before = lookOf(card('Anna'));
       const hat = otherChoice('hat', before);
       await currentUser().click(
         within(group('Anna', 'Hat')).getByRole('button', { name: hat.label }),
       );
+      await choose('Done');
       return { ...before, hat: hat.name };
     }
 
@@ -1234,11 +1461,11 @@ describeSpec(await loadFeature('./line-up.feature'), ({ Rule }) => {
       let look: ChosenLook;
       Given("Anna has a look on a show's Line-up", async () => {
         await openLineUp(['Anna', 'Ben'], hatShow());
-        look = lookOf(tile('Anna'));
+        look = lookOf(card('Anna'));
       });
       When("I reload the page and open that show's Line-up again", () => reopen());
       Then('Anna has the same look', () => {
-        expect(lookOf(tile('Anna'))).toEqual(look);
+        expect(lookOf(card('Anna'))).toEqual(look);
       });
     });
 
@@ -1252,13 +1479,13 @@ describeSpec(await loadFeature('./line-up.feature'), ({ Rule }) => {
       });
       When('it opens with Dario ticked', () => openLineUp(['Anna', 'Dario'], hatShow()));
       Then('Dario has a look drawn at random', () => {
-        dario = lookOf(tile('Dario'));
+        dario = lookOf(card('Dario'));
         expect(fits(fakeLineUp(), dario)).toBe(true);
-        expect(lookOf(tile('Anna'))).toEqual({ hat: 'crown', colour: 'sun' });
+        expect(lookOf(card('Anna'))).toEqual({ hat: 'crown', colour: 'sun' });
       });
       And('he keeps it from then on, unless it is changed', async () => {
         await reopen();
-        expect(lookOf(tile('Dario'))).toEqual(dario);
+        expect(lookOf(card('Dario'))).toEqual(dario);
       });
     });
 
@@ -1270,7 +1497,7 @@ describeSpec(await loadFeature('./line-up.feature'), ({ Rule }) => {
         renderApp({ scenarios: [hatShow(), other] });
         await moveOnToShows();
         await pickShow('Other Show');
-        before = lookOf(tile('Anna'));
+        before = lookOf(card('Anna'));
         await choose('Pick a show');
       });
       When("I change Anna's look in one of them", async () => {
@@ -1279,7 +1506,7 @@ describeSpec(await loadFeature('./line-up.feature'), ({ Rule }) => {
       });
       Then("her look in the other doesn't change", async () => {
         await reopen('Other Show');
-        expect(lookOf(tile('Anna'))).toEqual(before);
+        expect(lookOf(card('Anna'))).toEqual(before);
       });
     });
 
@@ -1294,7 +1521,7 @@ describeSpec(await loadFeature('./line-up.feature'), ({ Rule }) => {
         });
         When("the show's Line-up opens", () => openLineUp(['Anna', 'Ben'], hatShow()));
         Then('that option gets a choice at random, and her other choices are kept', () => {
-          const look = lookOf(tile('Anna'));
+          const look = lookOf(card('Anna'));
           expect(fits(fakeLineUp(), look)).toBe(true);
           expect(look.colour).toBe('mint');
           const stored = JSON.parse(localStorage.getItem(looksKey('hat-show'))!);
@@ -1322,7 +1549,7 @@ describeSpec(await loadFeature('./line-up.feature'), ({ Rule }) => {
           chosen = await changeAnnasHat();
         });
         Then('Anna is drawn with the new look', () => {
-          expect(lookOf(tile('Anna'))).toEqual(chosen);
+          expect(lookOf(card('Anna'))).toEqual(chosen);
         });
         And('the show starts with it', async () => {
           await currentUser().click(startButton());

@@ -8,7 +8,7 @@ Feature: The Race at Christmas
     Scenario: Christmas is a theme, after Autumn
       When the Line-up opens for The Race
       Then "Christmas" is a theme, after "Autumn", its postcard a tree on snow at dusk
-      And with Christmas chosen, the racer option's first tab is "Christmas"
+      And with Christmas chosen, the racer option's first tab is "Christmas racers"
 
     Scenario: What Christmas looks like
       When the show runs on Christmas
@@ -33,7 +33,7 @@ Feature: The Race at Christmas
         | burst | Carla jumps on a sledge!       | a red sledge slides in under Carla's racer and whooshes it into the lead, shouting "Nooo!"           |
 
     Scenario: Everyone wears a Santa hat
-      When the show runs on Christmas, or its Line-up shows Christmas
+      When the show runs on Christmas
       Then every rider wears a Santa hat instead of the cap, goggles or snorkel the kit hands out, and a top hat stays on the mount
       And every creature wears one where its top hat goes, instead of the top hat
       And the garden gnome's own hat gets a white brim and a bobble instead

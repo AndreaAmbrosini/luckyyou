@@ -76,7 +76,7 @@ const filled = (text: unknown) => typeof text === 'string' && text.trim() !== ''
 /** Every problem with a scenario's line-up (decision 0011). */
 function lineUpProblems(lineUp: unknown): string[] {
   if (typeof lineUp !== 'object' || lineUp === null) return ["its line-up isn't an object"];
-  const { heading, start, options, draw, themes } = lineUp as Record<string, unknown>;
+  const { heading, start, options, draw, themes, words } = lineUp as Record<string, unknown>;
   const problems: string[] = [];
   if (!filled(heading)) problems.push('its line-up has no heading');
   if (!filled(start)) problems.push('its line-up has no start label');
@@ -119,11 +119,15 @@ function lineUpProblems(lineUp: unknown): string[] {
   if (themes !== undefined) {
     const first = Array.isArray(options) ? (options[0] as { choices?: unknown } | undefined) : null;
     problems.push(...themeProblems(themes, first?.choices));
+    const { theme, choices } = (words ?? {}) as Record<string, unknown>;
+    if (!filled(theme) || !filled(choices)) {
+      problems.push('its line-up has themes but no words for them');
+    }
   }
   return problems;
 }
 
-/** Every problem with a line-up's themes (decision 0017). */
+/** Every problem with a line-up's themes (decisions 0017 and 0019). */
 function themeProblems(themes: unknown, choices: unknown): string[] {
   if (!Array.isArray(themes) || themes.length < 2) return ['its line-up has fewer than 2 themes'];
   const offered = new Set(
@@ -132,7 +136,7 @@ function themeProblems(themes: unknown, choices: unknown): string[] {
   const problems: string[] = [];
   const seen = new Set<unknown>();
   for (const theme of themes as unknown[]) {
-    const { name, label, picture, suits } = (theme ?? {}) as Record<string, unknown>;
+    const { name, label, picture, ground, suits } = (theme ?? {}) as Record<string, unknown>;
     if (!filled(name) || !filled(label)) {
       problems.push('its line-up has a theme without a name or label');
       continue;
@@ -140,6 +144,8 @@ function themeProblems(themes: unknown, choices: unknown): string[] {
     if (seen.has(name)) problems.push(`its line-up has two themes named "${name}"`);
     seen.add(name);
     if (typeof picture !== 'function') problems.push(`its line-up theme "${name}" has no picture`);
+    const { sky, floor } = (ground ?? {}) as Record<string, unknown>;
+    if (!filled(sky) || !filled(floor)) problems.push(`its line-up theme "${name}" has no ground`);
     if (suits === undefined) continue;
     const odd = Array.isArray(suits) ? suits.find((choice) => !offered.has(choice)) : suits;
     if (odd !== undefined) {
