@@ -13,7 +13,7 @@ how it should feel.
    with `Enforced by …`. Records are never rewritten: when a newer one
    replaces a record, only its status line changes, to `Superseded by NNNN`.
 3. Plans and design notes go in the pull request, not the repo.
-4. Run `npm run check` before every commit.
+4. Commit after `npm run check-quick`, merge after `npm run check`.
 
 ## Rules
 

@@ -18,7 +18,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "e2e": "playwright test",
-    "check": "npm run typecheck && npm run lint && npm run format:check && npm run test && npm run build"
+    "check": "node scripts/check.mjs",
+    "check-quick": "node scripts/check.mjs --quick"
   },
   "dependencies": {
     "@fontsource/lilita-one": "5.3.0",
