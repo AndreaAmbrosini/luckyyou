@@ -22,7 +22,8 @@ import {
 } from '../scenario-kit/contract';
 import { dealLooks, drawTheme, randomLook, themeNamed } from '../scenario-kit/line-up';
 import { Button } from '../ui/Button';
-import { ArrowLeftIcon, CheckIcon, DieIcon, PinIcon } from '../ui/icons';
+import { CheckIcon, DieIcon, PinIcon } from '../ui/icons';
+import { Bar } from './Bar';
 import layout from './layout.module.css';
 import styles from './LineUp.module.css';
 
@@ -169,120 +170,118 @@ export function LineUp({
   const pinCount = names.filter((each) => pinned.has(each)).length;
 
   return (
-    <main className={`${layout.main} ${styles.main}`}>
-      <div className={layout.titleRow}>
-        <div className={layout.group}>
-          <Button onClick={onBack}>
-            <ArrowLeftIcon size={20} />
-            Pick a show
-          </Button>
-          <h1 className={layout.heading}>{lineUp.heading}</h1>
-          <p className={layout.say}>Click someone to change their look.</p>
+    <>
+      <main className={`${layout.main} ${styles.main}`}>
+        <div className={layout.titleRow}>
+          <div className={layout.group}>
+            <h1 className={layout.heading}>{lineUp.heading}</h1>
+            <p className={layout.say}>Click someone to change their look.</p>
+          </div>
         </div>
-      </div>
 
-      <div className={`${styles.body} ${scene ? styles.startBody : ''}`}>
-        {lineUp.themes && theme && (
-          <Postcards
-            themes={lineUp.themes}
-            theme={theme}
-            surprise={() => drawTheme(lineUp, Math.random, theme.name)}
-            onChange={(next) => {
-              onThemeChange(next);
-              setOpen({});
-            }}
-          />
-        )}
-        {scene ? (
-          <Start
-            scene={scene}
-            names={names}
-            chosen={chosen}
-            pinned={pinned}
-            flippingRef={flippingRef}
-            onChoose={choose}
-            onDeal={deal}
-            onPin={togglePin}
-          >
-            <section className={styles.panel} aria-labelledby={`${id}-name`}>
-              <div className={styles.panelHead}>
-                <h2 id={`${id}-name`} className={styles.panelName} dir="auto">
-                  {name}
-                </h2>
-                <p className={styles.panelChoice}>
-                  {first?.choices.find((choice) => choice.name === look[first.name])?.label}
-                </p>
-                <PinButton on={pinned.has(name)} onClick={() => togglePin(name)}>
-                  {pinned.has(name) ? 'Pinned' : 'Pin'}
-                </PinButton>
-                <Button className={styles.panelButton} onClick={() => deal(name)}>
-                  <DieIcon size={20} />
-                  Surprise me
-                </Button>
-              </div>
-              <div className={styles.panelBody}>
-                <div className={styles.panelDrawn}>{optionsWhere(true, true)}</div>
-                <div className={styles.panelSide}>{optionsWhere(false, true)}</div>
-              </div>
-            </section>
-          </Start>
-        ) : (
-          <>
-            <ul className={styles.tiles} aria-label="Today's people">
-              {names.map((each, index) => (
-                <li key={each} className={styles.slot}>
-                  <button
-                    type="button"
-                    className={styles.tile}
-                    aria-pressed={index === chosen}
-                    onClick={() => choose(index)}
-                  >
+        <div className={`${styles.body} ${scene ? styles.startBody : ''}`}>
+          {lineUp.themes && theme && (
+            <Postcards
+              themes={lineUp.themes}
+              theme={theme}
+              surprise={() => drawTheme(lineUp, Math.random, theme.name)}
+              onChange={(next) => {
+                onThemeChange(next);
+                setOpen({});
+              }}
+            />
+          )}
+          {scene ? (
+            <Start
+              scene={scene}
+              names={names}
+              chosen={chosen}
+              pinned={pinned}
+              flippingRef={flippingRef}
+              onChoose={choose}
+              onDeal={deal}
+              onPin={togglePin}
+            >
+              <section className={styles.panel} aria-labelledby={`${id}-name`}>
+                <div className={styles.panelHead}>
+                  <h2 id={`${id}-name`} className={styles.panelName} dir="auto">
+                    {name}
+                  </h2>
+                  <p className={styles.panelChoice}>
+                    {first?.choices.find((choice) => choice.name === look[first.name])?.label}
+                  </p>
+                  <PinButton on={pinned.has(name)} onClick={() => togglePin(name)}>
+                    {pinned.has(name) ? 'Pinned' : 'Pin'}
+                  </PinButton>
+                  <Button className={styles.panelButton} onClick={() => deal(name)}>
+                    <DieIcon size={20} />
+                    Surprise me
+                  </Button>
+                </div>
+                <div className={styles.panelBody}>
+                  <div className={styles.panelDrawn}>{optionsWhere(true, true)}</div>
+                  <div className={styles.panelSide}>{optionsWhere(false, true)}</div>
+                </div>
+              </section>
+            </Start>
+          ) : (
+            <>
+              <ul className={styles.tiles} aria-label="Today's people">
+                {names.map((each, index) => (
+                  <li key={each} className={styles.slot}>
+                    <button
+                      type="button"
+                      className={styles.tile}
+                      aria-pressed={index === chosen}
+                      onClick={() => choose(index)}
+                    >
+                      <Drawing
+                        className={styles.small}
+                        lineUp={lineUp}
+                        look={looks.get(each)!}
+                        name={each}
+                        place={index + 1}
+                        theme={theme?.name ?? null}
+                      />
+                      <span className={styles.name} dir="auto">
+                        {each}
+                      </span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+
+              {/* Under the row: the options drawn as them, each in a sheet of its own, then their card. */}
+              <section className={styles.look} aria-labelledby={`${id}-name`}>
+                {optionsWhere(true)}
+                <div className={styles.card}>
+                  <div className={styles.who}>
                     <Drawing
-                      className={styles.small}
+                      className={styles.big}
                       lineUp={lineUp}
-                      look={looks.get(each)!}
-                      name={each}
-                      place={index + 1}
+                      look={look}
+                      name={name}
+                      place={chosen + 1}
                       theme={theme?.name ?? null}
                     />
-                    <span className={styles.name} dir="auto">
-                      {each}
-                    </span>
-                  </button>
-                </li>
-              ))}
-            </ul>
-
-            {/* Under the row: the options drawn as them, each in a sheet of its own, then their card. */}
-            <section className={styles.look} aria-labelledby={`${id}-name`}>
-              {optionsWhere(true)}
-              <div className={styles.card}>
-                <div className={styles.who}>
-                  <Drawing
-                    className={styles.big}
-                    lineUp={lineUp}
-                    look={look}
-                    name={name}
-                    place={chosen + 1}
-                    theme={theme?.name ?? null}
-                  />
-                  <div className={styles.whoText}>
-                    <h2 id={`${id}-name`} className={styles.chosenName} dir="auto">
-                      {name}
-                    </h2>
-                    <Button variant="quiet" className={styles.surprise} onClick={surprise}>
-                      Surprise me
-                    </Button>
+                    <div className={styles.whoText}>
+                      <h2 id={`${id}-name`} className={styles.chosenName} dir="auto">
+                        {name}
+                      </h2>
+                      <Button variant="quiet" className={styles.surprise} onClick={surprise}>
+                        Surprise me
+                      </Button>
+                    </div>
                   </div>
+                  {optionsWhere(false)}
                 </div>
-                {optionsWhere(false)}
-              </div>
-            </section>
-          </>
-        )}
-      </div>
+              </section>
+            </>
+          )}
+        </div>
+      </main>
 
-      <footer className={layout.footer}>
+      <Bar back={{ label: 'Pick a show', onClick: onBack }}>
         <Button onClick={shuffleEveryone}>
           {starts && <DieIcon five size={24} />}
           Shuffle everyone
@@ -298,8 +297,8 @@ export function LineUp({
         <Button ref={start} variant="primary" onClick={onStart}>
           {lineUp.start}
         </Button>
-      </footer>
-    </main>
+      </Bar>
+    </>
   );
 }
 

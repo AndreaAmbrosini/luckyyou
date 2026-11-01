@@ -92,10 +92,11 @@ function team() {
   return screen.getByRole('region', { name: 'Team' });
 }
 
-/** The names on the list, top to bottom. */
+/** The names on the list, top to bottom; the add field is its last tile. */
 export function listNames(): string[] {
   return within(team())
     .queryAllByRole('listitem')
+    .filter((item) => !within(item).queryByRole('textbox'))
     .map((item) => item.textContent ?? '');
 }
 
@@ -123,9 +124,25 @@ export function showCard(name: string): HTMLElement {
   return screen.getByRole('button', { name });
 }
 
+/** The bar along the bottom of a step before the show. */
+export function bar(): HTMLElement {
+  return screen.getByRole('contentinfo');
+}
+
+/** The step's main button: the bar's last. */
+export function mainButton(): HTMLElement {
+  return within(bar()).getAllByRole('button').at(-1)!;
+}
+
+/** Chooses a show on the "Pick a show" step, then presses the main button: it starts, or its Line-up opens. */
+export async function pickShow(name: string): Promise<void> {
+  await user.click(showCard(name));
+  await user.click(mainButton());
+}
+
 /** The names of the show cards on the "Pick a show" step, in order. */
 export function pickerNames(): string[] {
-  return within(screen.getByRole('main'))
+  return within(screen.getByRole('list', { name: 'Shows' }))
     .queryAllByRole('listitem')
     .map((item) => computeName(within(item).getByRole('button')));
 }
@@ -193,12 +210,12 @@ export function stubDraws(value: number): void {
   });
 }
 
-/** Ticks `names`, opens the shows step with `scenarios`, and clicks the first one. */
+/** Ticks `names`, opens the shows step with `scenarios`, and starts the first one. */
 export async function startShow(names: readonly string[], ...scenarios: Scenario[]): Promise<void> {
   storeTicked(names, ['Zoe']);
   renderApp({ scenarios });
   await moveOnToShows();
-  await user.click(showCard(scenarios[0]!.name));
+  await pickShow(scenarios[0]!.name);
 }
 
 /** The result's heading, once the show is over. */

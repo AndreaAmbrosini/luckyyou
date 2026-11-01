@@ -7,7 +7,9 @@ import { loadSettings } from '../src/settings/settings';
 import {
   currentUser,
   fakeFullscreen,
+  mainButton,
   moveOnToShows,
+  pickShow,
   renderApp,
   resultHeading,
   showCard,
@@ -260,7 +262,7 @@ describeSpec(await loadFeature('./show.feature'), ({ Rule }) => {
         renderApp({ scenarios: [scenario] });
         await currentUser().click(screen.getByRole('button', { name: 'Fullscreen' }));
         await moveOnToShows();
-        await currentUser().click(showCard(scenario.name));
+        await pickShow(scenario.name);
         await waitFor(() => expect(show()).not.toBeNull());
       });
       When('the page leaves fullscreen', () => act(() => document.exitFullscreen()));
@@ -307,6 +309,7 @@ describeSpec(await loadFeature('./show.feature'), ({ Rule }) => {
           fireEvent.click(screen.getByRole('button', { name: 'Next: pick a show' }));
           vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
           fireEvent.click(showCard(scenario.name));
+          fireEvent.click(mainButton());
         });
         When('the show has run for {int} seconds', async (_, seconds: number) => {
           await act(async () => vi.advanceTimersByTime(seconds * 1000 - 1));

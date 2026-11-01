@@ -4,6 +4,7 @@ import type { People } from '../people/people';
 import { HEAD_COUNT } from '../scenario-kit/contract';
 import { Button } from '../ui/Button';
 import { ArrowRightIcon, CheckIcon, CrossIcon, PlusIcon, TrashIcon } from '../ui/icons';
+import { Bar } from './Bar';
 import layout from './layout.module.css';
 import styles from './WhosIn.module.css';
 
@@ -85,30 +86,45 @@ export function WhosIn({ people, onNext }: { people: People; onNext(): void }) {
   const blocked = blockedReason(ticked);
 
   return (
-    <main className={layout.main}>
-      <div className={layout.titleRow}>
-        <div className={layout.group}>
-          <h1 className={layout.heading}>{heading}</h1>
-          {list.length > 0 && (
-            <p className={layout.pill} data-blocked={blocked !== null} aria-live="polite">
-              {ticked} of {list.length} in
-            </p>
+    <>
+      <main className={layout.main}>
+        <div className={layout.titleRow}>
+          <div className={layout.intro}>
+            <div className={layout.group}>
+              <h1 className={layout.heading}>{heading}</h1>
+              {list.length > 0 && (
+                <p className={layout.pill} data-blocked={blocked !== null} aria-live="polite">
+                  {ticked} of {list.length} in
+                </p>
+              )}
+            </div>
+            {list.length > 0 && (
+              <p className={layout.say}>Tick everyone on today's call. The app picks from them.</p>
+            )}
+          </div>
+          {list.length > 0 && !inRemoveMode && (
+            <div className={layout.group}>
+              <Button onClick={() => people.tickAll(true)}>Everyone</Button>
+              <Button onClick={() => people.tickAll(false)}>No one</Button>
+              <Button ref={removePeople} onClick={startRemoving}>
+                <TrashIcon size={18} />
+                Remove people
+              </Button>
+            </div>
           )}
         </div>
-        {list.length > 0 && !inRemoveMode && (
-          <div className={layout.group}>
-            <Button onClick={() => people.tickAll(true)}>Everyone</Button>
-            <Button onClick={() => people.tickAll(false)}>No one</Button>
-          </div>
-        )}
-      </div>
 
-      <section ref={sheet} className={styles.sheet} data-removing={inRemoveMode} aria-label="Team">
-        {list.length === 0 ? (
-          <p className={styles.welcome}>
-            Add each teammate once, below. They stay in this browser, ready for the next call.
-          </p>
-        ) : (
+        <section
+          ref={sheet}
+          className={styles.sheet}
+          data-removing={inRemoveMode}
+          aria-label="Team"
+        >
+          {list.length === 0 && (
+            <p className={styles.welcome}>
+              Add each teammate once, below. They stay in this browser, ready for the next call.
+            </p>
+          )}
           <ul className={styles.grid}>
             {list.map((person) => (
               <li
@@ -154,11 +170,37 @@ export function WhosIn({ people, onNext }: { people: People; onNext(): void }) {
                 )}
               </li>
             ))}
+            {!inRemoveMode && (
+              <li className={styles.item}>
+                <form className={styles.add} onSubmit={add}>
+                  <PlusIcon size={20} />
+                  <label htmlFor={fieldId} className="visually-hidden">
+                    Add a name
+                  </label>
+                  <input
+                    ref={field}
+                    id={fieldId}
+                    className={styles.field}
+                    value={draft}
+                    placeholder="Add a name"
+                    autoComplete="off"
+                    onChange={(event) => {
+                      setDraft(event.target.value);
+                      setRefusal(null);
+                      setHighlight(null);
+                    }}
+                  />
+                  <Button type="submit" className={styles.addButton}>
+                    Add
+                  </Button>
+                </form>
+              </li>
+            )}
           </ul>
-        )}
-      </section>
+        </section>
+      </main>
 
-      <footer className={layout.footer}>
+      <Bar>
         {inRemoveMode ? (
           <>
             <p className={layout.say}>Click × to take someone off the team.</p>
@@ -169,41 +211,13 @@ export function WhosIn({ people, onNext }: { people: People; onNext(): void }) {
           </>
         ) : (
           <>
-            <div className={layout.group}>
-              <form className={styles.add} onSubmit={add}>
-                <PlusIcon size={20} />
-                <label htmlFor={fieldId} className="visually-hidden">
-                  Add a name
-                </label>
-                <input
-                  ref={field}
-                  id={fieldId}
-                  className={styles.field}
-                  value={draft}
-                  placeholder="Add a name"
-                  autoComplete="off"
-                  onChange={(event) => {
-                    setDraft(event.target.value);
-                    setRefusal(null);
-                    setHighlight(null);
-                  }}
-                />
-                <Button type="submit" className={styles.addButton}>
-                  Add
-                </Button>
-              </form>
-              {refusal && (
-                <p className={`${layout.note} ${layout.warning}`} role="alert">
-                  {refusal}
-                </p>
-              )}
-              {list.length > 0 && (
-                <Button ref={removePeople} onClick={startRemoving}>
-                  <TrashIcon size={18} />
-                  Remove people
-                </Button>
-              )}
-            </div>
+            {/* Not live: the count pill already says each change. */}
+            {!blocked && <p className={layout.say}>Ready: {ticked} people. Next, pick a show.</p>}
+            {refusal && (
+              <p className={`${layout.note} ${layout.warning}`} role="alert">
+                {refusal}
+              </p>
+            )}
             <div className={layout.end}>
               {blocked && (
                 <p id={reasonId} className={layout.note} role="status">
@@ -224,8 +238,8 @@ export function WhosIn({ people, onNext }: { people: People; onNext(): void }) {
             </div>
           </>
         )}
-      </footer>
-    </main>
+      </Bar>
+    </>
   );
 }
 

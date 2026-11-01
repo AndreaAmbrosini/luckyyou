@@ -7,12 +7,11 @@ import type { Scenario } from '../src/scenario-kit/contract';
 import { runShow, type ShowRecord } from '../src/scenario-kit/testing';
 import template from '../src/scenarios/_template';
 import {
-  currentUser,
   moveOnToShows,
+  pickShow,
   pickerNames,
   renderApp,
   resultHeading,
-  showCard,
   storeTicked,
   TEAM,
 } from './support/app';
@@ -219,7 +218,7 @@ describeSpec(await loadFeature('./scenarios.feature'), ({ Rule }) => {
           );
         });
         And('the other scenarios still work', async () => {
-          await currentUser().click(showCard('Fine'));
+          await pickShow('Fine');
           await resultHeading();
           expect(fine.runs).toHaveLength(1);
         });

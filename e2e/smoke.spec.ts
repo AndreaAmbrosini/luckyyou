@@ -13,7 +13,8 @@ test('a whole pick', async ({ page }) => {
     await page.getByRole('button', { name: 'Add', exact: true }).click();
   }
   await page.getByRole('button', { name: 'Next: pick a show' }).click();
-  await page.getByRole('button', { name: 'Shark Bait' }).click();
+  await page.getByRole('button', { name: 'Shark Bait', exact: true }).click();
+  await page.getByRole('button', { name: 'Start Shark Bait' }).click();
 
   // A show lasts at most 30 seconds.
   const heading = page.getByRole('heading', { level: 1, name: /^Lucky you, .+ 🎉$/ });
@@ -44,7 +45,8 @@ test('long names never cover each other on stage', async ({ page }) => {
   }, team);
   await page.reload();
   await page.getByRole('button', { name: 'Next: pick a show' }).click();
-  await page.getByRole('button', { name: 'Shark Bait' }).click();
+  await page.getByRole('button', { name: 'Shark Bait', exact: true }).click();
+  await page.getByRole('button', { name: 'Start Shark Bait' }).click();
 
   // Heads pop in with a little overshoot, so look again until they have
   // settled. Once someone leaves the water, twelve tags are no longer in it.

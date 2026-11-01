@@ -11,36 +11,11 @@ Feature: The Line-up
 
   Rule: A show with a line-up opens it first
 
-    # Old design: replaced by "Next opens the chosen show's Line-up" (step 1).
-    Scenario: Clicking a show with a line-up opens its Line-up
-      Given "Anna", "Ben" and "Carla" are ticked
-      And I moved on to the shows
-      When I click a show with a line-up
-      Then its Line-up shows a tile for each of "Anna", "Ben" and "Carla", in today's order, each drawn in their look
-      And the show hasn't started
-
-    # Step 1.
-    @pending
     Scenario: Next opens the chosen show's Line-up
       Given "Anna", "Ben" and "Carla" are ticked, and a show with a line-up is chosen
       When I press its "Next" button
       Then its Line-up shows "Anna", "Ben" and "Carla", in today's order, each drawn in their look
       And the show hasn't started
-
-    # Old design: replaced by "Start plays the chosen show" in
-    # specs/setup.feature (step 1).
-    Scenario: A show without a line-up still starts at once
-      Given I moved on to the shows
-      When I click a show without a line-up
-      Then it starts
-
-    # Old design: replaced by "A done step shows what was chosen there" and
-    # "The Line-up step shows once a show with a line-up is chosen" in
-    # specs/setup.feature (step 1).
-    Scenario: The steps show the third step
-      When a show's Line-up is open
-      Then the steps read "1 · Who's in", "2 · Pick a show" and "3 · Line-up", the last one current
-      And on the other screens there are only the first two
 
     Scenario: Start has the focus
       When a show's Line-up opens
@@ -56,15 +31,6 @@ Feature: The Line-up
       When I choose "Run again"
       Then the show starts at once, with everyone's looks as they were
 
-    # Old design: replaced by "Going back keeps the looks, there and back"
-    # (step 1).
-    Scenario: Going back keeps the looks
-      Given I changed Anna's look on a show's Line-up
-      When I go back to the shows, then click that show again
-      Then Anna has the look I chose
-
-    # Step 1.
-    @pending
     Scenario: Going back keeps the looks, there and back
       Given I changed Anna's look on a show's Line-up
       When I go back to the shows, then press "Next" to its Line-up again
