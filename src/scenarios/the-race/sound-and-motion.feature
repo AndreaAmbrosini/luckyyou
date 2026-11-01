@@ -35,7 +35,7 @@ Feature: The Race's sound and motion
     Scenario: Jingle Bells at Christmas, the galop elsewhere
       When the show runs on Christmas with music on
       Then Jingle Bells plays instead of the galop, with sleigh bells, on the galop's beats: a roll under "On your marks…", the chorus from "Go!", a faster strain from "Final stretch!", a run down at a quarter of the speed in the slow moment, and silence from the line to the fanfare
-      And the sports field, the office, under the sea and the Moon keep the galop
+      And the sports field, under the sea and the Moon keep the galop
 
     # Vivaldi's The Four Seasons (1725) is public domain. The user heard it in
     # the Lab and approved it on 2026-11-01.
@@ -44,9 +44,8 @@ Feature: The Race's sound and motion
       Then the opening of Autumn from Vivaldi's The Four Seasons plays instead of the galop, on the galop's beats: a roll under "On your marks…", its first theme from "Go!", a faster strain from "Final stretch!", a run down at a quarter of the speed in the slow moment, and silence from the line to the fanfare
 
     # Scott Joplin's The Entertainer (1902) is public domain, arranged from his
-    # score; the 1973 film's arrangement is not. Passes once the user has heard
-    # it in the Lab.
-    @pending
+    # score; the 1973 film's arrangement is not. The user heard it in the Lab
+    # and approved it on 2026-11-01.
     Scenario: The Entertainer in the office
       When the show runs in the office with music on
       Then Scott Joplin's The Entertainer plays instead of the galop, on the galop's beats: a roll under "On your marks…", its first strain from "Go!", a faster strain from "Final stretch!", a run down at a quarter of the speed in the slow moment, and silence from the line to the fanfare

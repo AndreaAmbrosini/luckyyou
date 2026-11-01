@@ -18,7 +18,6 @@ import {
   raised,
   overlap,
   shared,
-  COURSE_NAMES,
   plansOn,
   type Heard,
   listen,
@@ -281,15 +280,15 @@ describeSpec(await loadFeature('./sound-and-motion.feature'), ({ Rule }) => {
           expect(pitchesOf(stretch).slice(0, 4)).toEqual(tuneOf('G4 E5 D5 C5'));
         },
       );
-      And('the sports field, the office, under the sea and the Moon keep the galop', () => {
+      And('the sports field, under the sea and the Moon keep the galop', () => {
         for (const plan of plansOn(names(8), 'Anna', 'field', 3)) {
           const galop = raceMusic(plan);
           // The galop's first bar, after its pickup.
           const tell = lead(galop.notes.filter((note) => note.at >= 0));
           expect(pitchesOf(tell).slice(0, 8)).toEqual(tuneOf('G4 G4 G4 G4 G4 C5 D5 E5'));
           expect(galop.notes.some((note) => note.voice === 'bells')).toBe(false);
-          for (const [name, course] of Object.entries(COURSE_NAMES)) {
-            expect(raceMusic({ ...plan, course }).notes, name).toEqual(galop.notes);
+          for (const course of ['sea', 'moon'] as const) {
+            expect(raceMusic({ ...plan, course }).notes, course).toEqual(galop.notes);
           }
         }
       });
@@ -317,6 +316,29 @@ describeSpec(await loadFeature('./sound-and-motion.feature'), ({ Rule }) => {
           expect(pitchesOf(stretch).slice(0, 7)).toEqual(opening);
           expect(stretchBass[0]!.pitch).toBe(pitchOf('A2'));
           expect(stretch.at(-1)!.pitch).toBe(pitchOf('A4'));
+        },
+      );
+    });
+
+    RuleScenario('The Entertainer in the office', ({ When, Then }) => {
+      let race: Heard;
+      When('the show runs in the office with music on', async () => {
+        race = await listen(names(8), 'Anna', 1, 'office');
+        expect(race.record.outcome).toBe('finished');
+      });
+      Then(
+        `Scott Joplin's The Entertainer plays instead of the galop, on the galop's beats: a roll under "On your marks…", its first strain from "Go!", a faster strain from "Final stretch!", a run down at a quarter of the speed in the slow moment, and silence from the line to the fanfare`,
+        () => {
+          const { racing, stretch, stretchAt } = onTheGalopsBeats(race, 'snare');
+          // Its first strain from "Go!", as Joplin's score has it in C.
+          expect(pitchesOf(racing).slice(0, 9)).toEqual(tuneOf('E4 C5 E4 C5 E4 C5 C5 D5 D#5'));
+          // The second strain in the stretch, from its first beat.
+          expect(stretch[0]!.at).toBe(stretchAt);
+          expect(pitchesOf(stretch).slice(0, 6)).toEqual(tuneOf('G5 A5 G5 E5 F5 F#5'));
+          // The slow moment's run is the close of Joplin's introduction.
+          const slowAt = raceMusic(race.plan).at(race.plan.times.slow).beat;
+          const run = lead(race.notes.filter((note) => note.at >= slowAt));
+          expect(pitchesOf(run)).toEqual(tuneOf('B4 A4 Ab4 G4'));
         },
       );
     });

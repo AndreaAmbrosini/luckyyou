@@ -7,7 +7,9 @@
 // Lord Pierpont, 1857, public domain) takes the galop's place, on its beats,
 // with sleigh bells. On Autumn, the opening of Autumn from Vivaldi's The Four
 // Seasons (1725, public domain) does, arranged from the Mutopia Project's
-// edition, down a fourth from F to C.
+// edition, down a fourth from F to C. In the office, Scott Joplin's The
+// Entertainer (1902, public domain) does, arranged from the Mutopia Project's
+// edition of his score, a 2/4 bar to each bar of four beats.
 
 import { drums, melody, oomPah, type Note, type Voice } from '../../scenario-kit';
 import type { Course, Plan } from './plan';
@@ -102,7 +104,37 @@ const AUTUMN: Tune = {
   slow: 'B4:.5 A4:.5 G4:.5 F4:.5',
 };
 
-const TUNES: Partial<Record<Course, Tune>> = { christmas: JINGLE_BELLS, autumn: AUTUMN };
+const ENTERTAINER: Tune = {
+  roll: 'snare',
+  pickup: 'D4:.5 D#4:.5',
+  // The first strain, sixteen bars, the top of Joplin's octaves, ending on the
+  // pickup into itself.
+  strain: [
+    'E4:.5 C5 E4:.5 C5 E4:.5 C5:3 C5:.5 D5:.5 D#5:.5',
+    'E5:.5 C5:.5 D5:.5 E5 B4:.5 D5 | C5:3 D4:.5 D#4:.5',
+    'E4:.5 C5 E4:.5 C5 E4:.5 C5:3.5 A4:.5 G4:.5',
+    'F#4:.5 A4:.5 C5:.5 E5 D5:.5 C5:.5 A4:.5 | D5:3 D4:.5 D#4:.5',
+    'E4:.5 C5 E4:.5 C5 E4:.5 C5:3 C5:.5 D5:.5 D#5:.5',
+    'E5:.5 C5:.5 D5:.5 E5 B4:.5 D5 | C5:3 C5:.5 D5:.5',
+    'E5:.5 C5:.5 D5:.5 E5 C5:.5 D5:.5 C5:.5 | E5:.5 C5:.5 D5:.5 E5 C5:.5 D5:.5 C5:.5',
+    'E5:.5 C5:.5 D5:.5 E5 B4:.5 D5 | C5:3 D4:.5 D#4:.5',
+  ].join(' | '),
+  chords: ['C', 'F', 'G7', 'C', 'C', 'F', 'D7', 'G7', 'C', 'F', 'G7', 'C', 'C', 'F', 'G7', 'C'],
+  // The second strain's bars 5 to 8, which open as it does and close on G.
+  stretch: [
+    'G5 A5:.5 G5 E5:.5 F5:.5 F#5:.5 | G5 A5:.5 G5 G5:.5 A5:.5 A#5:.5',
+    'B5:.5 B5 B5 A5:.5 F#5:.5 D5:.5 | G5:2.5 E5:.5 F5:.5 F#5:.5',
+  ].join(' | '),
+  stretchChords: ['C', 'C', 'D7', 'G7'],
+  // The close of Joplin's introduction, down to G.
+  slow: 'B4:.5 A4:.5 Ab4:.5 G4:.5',
+};
+
+const TUNES: Partial<Record<Course, Tune>> = {
+  christmas: JINGLE_BELLS,
+  autumn: AUTUMN,
+  office: ENTERTAINER,
+};
 
 /** Sleigh bells on each beat of `bars` bars, then four shakes fading over the slow moment's two. */
 function bells(bars: number, from: number): Note[] {
