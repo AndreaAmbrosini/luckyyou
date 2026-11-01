@@ -1437,6 +1437,191 @@ describeSpec(await loadFeature('./line-up.feature'), ({ Rule }) => {
     });
   });
 
+  Rule("Dealing from the theme's choices", ({ RuleScenario }) => {
+    const team = TEAM.slice(0, 8);
+    const racersOf = (names: readonly string[]) =>
+      names.map((name) => rowLooks().get(name)!.racer!);
+    const dealFrom = () => screen.getByRole('group', { name: 'Deal from' });
+    const sides = () => within(dealFrom()).getAllByRole('button');
+    const onSide = () =>
+      sides()
+        .filter((side) => side.getAttribute('aria-pressed') === 'true')
+        .map((side) => side.textContent);
+    /** How many times each of `choices` comes up in `dealt`, at most one apart when they vary as much as they can. */
+    const spread = (dealt: readonly string[], choices: readonly string[]) => {
+      const counts = choices.map((choice) => dealt.filter((each) => each === choice).length);
+      return Math.max(...counts) - Math.min(...counts);
+    };
+    /** Opens Track Show's Line-up on `theme`, with Anna in a duck and Ben in a rocket, neither suiting Autumn. */
+    async function openOn(theme: string, names: readonly string[], lineUp = trackLineUp()) {
+      localStorage.setItem(themeKey('track-show'), JSON.stringify(theme));
+      localStorage.setItem(
+        looksKey('track-show'),
+        JSON.stringify({
+          Anna: { racer: 'duck', colour: 'sun' },
+          Ben: { racer: 'rocket', colour: 'mint' },
+        }),
+      );
+      await openLineUp(names, fakeScenario({ name: 'Track Show', lineUp }));
+    }
+
+    RuleScenario("The theme's choices, by default", ({ Given, Then, When, And }) => {
+      Given('a show whose line-up offers themes, on Autumn, with Anna and Ben pinned', async () => {
+        localStorage.setItem(pinsKey('track-show'), JSON.stringify(['Anna', 'Ben']));
+        await openOn('autumn', team);
+      });
+      Then(
+        'beside {string}, a switch {string} offers {string} and {string}, the first on',
+        (_, shuffle: string, label: string, theirs: string, any: string) => {
+          expect(dealFrom()).toHaveAccessibleName(label);
+          expect(sides().map((side) => side.textContent)).toEqual([theirs, any]);
+          expect(onSide()).toEqual([theirs]);
+          expect(dealFrom().nextElementSibling).toBe(screen.getByRole('button', { name: shuffle }));
+          expect(getComputedStyle(sides()[0]!).backgroundColor).toBe('var(--color-sun)');
+          expect(getComputedStyle(sides()[1]!).backgroundColor).toBe('var(--color-paper)');
+        },
+      );
+      When('I choose {string}', (_, label: string) => choose(label));
+      Then(
+        'everyone but Anna and Ben gets a first-option choice that suits Autumn, as different from each other as those choices allow',
+        () => {
+          expect(racersOf(['Anna', 'Ben'])).toEqual(['duck', 'rocket']);
+          const dealt = racersOf(team.slice(2));
+          for (const racer of dealt) expect(AUTUMN).toContain(racer);
+          expect(new Set(dealt).size).toBe(dealt.length);
+        },
+      );
+      And('their other options are drawn from all their choices', () => {
+        const colours = trackLineUp().options[1]!.choices.map((choice) => choice.name);
+        const dealt = team.slice(2).map((name) => rowLooks().get(name)!);
+        for (const look of dealt) expect(fits(trackLineUp(), look)).toBe(true);
+        expect(
+          spread(
+            dealt.map((look) => look.colour!),
+            colours,
+          ),
+        ).toBeLessThanOrEqual(1);
+      });
+    });
+
+    RuleScenario('A die and Surprise me follow the switch', ({ Given, When, Then }) => {
+      const dealt: { before: string; after: string }[] = [];
+      Given('the switch is on {string}', async (_, side: string) => {
+        await openOn('autumn', ['Anna', 'Ben', 'Carla']);
+        expect(onSide()).toEqual([side]);
+      });
+      When(`I press the die beside Ben, or "Surprise me" in his sheet`, async () => {
+        const surprise = () => within(sheet('Ben')).getByRole('button', { name: 'Surprise me' });
+        for (const press of [() => die('Ben'), surprise]) {
+          if (press === surprise) await openSheet('Ben');
+          for (let turn = 0; turn < 5; turn++) {
+            const before = lookOf(card('Ben')).racer!;
+            await currentUser().click(press());
+            dealt.push({ before, after: lookOf(card('Ben')).racer! });
+          }
+        }
+        expect(
+          within(sheet('Ben')).getByText(/Surprise me deals from Autumn racers\.$/),
+        ).toBeVisible();
+      });
+      Then('Ben gets a choice that suits Autumn, unlike the one he had', () => {
+        expect(dealt).toHaveLength(10);
+        for (const { before, after } of dealt) {
+          expect(AUTUMN).toContain(after);
+          expect(after).not.toBe(before);
+        }
+      });
+    });
+
+    RuleScenario('Any racer deals from every choice', ({ Given, When, Then }) => {
+      const everyone = TEAM.slice(0, RACERS.length);
+      Given('the switch is on {string}', async (_, side: string) => {
+        await openOn('autumn', everyone);
+        await currentUser().click(within(dealFrom()).getByRole('button', { name: side }));
+        expect(onSide()).toEqual([side]);
+      });
+      When('I choose {string}', (_, label: string) => choose(label));
+      Then("the looks are dealt from all of the show's choices", () => {
+        // As many people as racers: each racer comes up once.
+        expect(new Set(racersOf(everyone))).toEqual(new Set(RACERS.map(([name]) => name)));
+      });
+    });
+
+    RuleScenario('A Surprise theme deals from the theme it drew', ({ Given, Then }) => {
+      const MOON = ['rocket', 'robot', 'duck'];
+      const lineUp = trackLineUp();
+      const withMoon: LineUp = {
+        ...lineUp,
+        themes: lineUp.themes!.map((theme) =>
+          theme.name === 'moon' ? { ...theme, suits: MOON } : theme,
+        ),
+      };
+      Given('"Surprise" drew {string}', async (_, drawn: string) => {
+        await openOn('autumn', team, withMoon);
+        // Surprise draws a track other than the one showing: Moon.
+        await currentUser().click(postcard('Surprise'));
+        expect(
+          screen.getByRole('heading', { level: 2, name: /^1 · Track: (\w+)/ }),
+        ).toHaveTextContent(`Track: ${drawn}`);
+      });
+      Then(
+        'the switch offers {string}, and deals from the choices that suit Moon',
+        async (_, label: string) => {
+          expect(onSide()).toEqual([label]);
+          await choose('Shuffle everyone');
+          const dealt = racersOf(team);
+          for (const racer of dealt) expect(MOON).toContain(racer);
+          expect(spread(dealt, MOON)).toBeLessThanOrEqual(1);
+        },
+      );
+    });
+
+    RuleScenario('A theme that no choice suits has no switch', ({ Given, Then }) => {
+      const everyone = TEAM.slice(0, RACERS.length);
+      Given('a theme that names no choices is chosen', () => openOn('moon', everyone));
+      Then('there is no switch, and every deal draws from all the choices', async () => {
+        expect(screen.queryByRole('group', { name: 'Deal from' })).toBeNull();
+        await choose('Shuffle everyone');
+        expect(new Set(racersOf(everyone))).toEqual(new Set(RACERS.map(([name]) => name)));
+        await openSheet('Ben');
+        expect(within(sheet('Ben')).queryByText(/deals from/)).toBeNull();
+      });
+    });
+
+    RuleScenario('The switch is kept per show', ({ Given, When, Then, And }) => {
+      const shows = [trackShow(), fakeScenario({ name: 'Other Show', lineUp: trackLineUp() })];
+      const side = (label: string) => within(dealFrom()).getByRole('button', { name: label });
+      Given("I set the switch to {string} on a show's Line-up", async (_, label: string) => {
+        for (const show of shows) {
+          localStorage.setItem(themeKey(show.id), JSON.stringify('autumn'));
+        }
+        storeTicked(['Anna', 'Ben'], ['Zoe']);
+        renderApp({ scenarios: shows });
+        await moveOnToShows();
+        // Other Show's switch is left on Autumn racers.
+        await pickShow('Other Show');
+        await currentUser().click(side('Any racer'));
+        await currentUser().click(side('Autumn racers'));
+        await choose('Pick a show');
+        await pickShow('Track Show');
+        await currentUser().click(side(label));
+      });
+      When("I reload the page and open that show's Line-up again", async () => {
+        reload();
+        await moveOnToShows();
+        await pickShow('Track Show');
+      });
+      Then('the switch is still on {string}', (_, label: string) => {
+        expect(onSide()).toEqual([label]);
+      });
+      And("another show's switch is as I left it there", async () => {
+        await choose('Pick a show');
+        await pickShow('Other Show');
+        expect(onSide()).toEqual(['Autumn racers']);
+      });
+    });
+  });
+
   Rule('Everyone keeps their look', ({ RuleScenario, RuleScenarioOutline }) => {
     /** Changes Anna's hat on the open Line-up, and gives her new look. */
     async function changeAnnasHat() {

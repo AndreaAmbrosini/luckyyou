@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { catalogue } from './catalogue/catalogue';
-import { useLooks, type ThemeChoice } from './line-up/looks';
+import { useLooks, type DealFrom, type ThemeChoice } from './line-up/looks';
 import { usePeople } from './people/people';
 import { newSeed, pickUnlucky } from './pick/pick';
 import type { ChosenLook, Scenario } from './scenario-kit/contract';
@@ -24,6 +24,7 @@ type Screen =
       looks: Looks;
       theme: ThemeChoice | null;
       pinned: ReadonlySet<string>;
+      dealFrom: DealFrom;
     }
   | { name: 'show'; run: Run }
   | { name: 'result'; run: Run };
@@ -80,6 +81,7 @@ export default function App({ scenarios = catalogue }: AppProps) {
         looks: looks.open(scenario, ticked),
         theme: looks.openTheme(scenario),
         pinned: looks.openPins(scenario, ticked),
+        dealFrom: looks.openDealFrom(scenario),
       });
     } else {
       start(scenario, ticked);
@@ -145,9 +147,14 @@ export default function App({ scenarios = catalogue }: AppProps) {
           looks={screen.looks}
           theme={screen.theme}
           pinned={screen.pinned}
+          dealFrom={screen.dealFrom}
           onThemeChange={(theme) => {
             looks.changeTheme(screen.scenario, theme);
             setScreen({ ...screen, theme });
+          }}
+          onDealFromChange={(dealFrom) => {
+            looks.changeDealFrom(screen.scenario, dealFrom);
+            setScreen({ ...screen, dealFrom });
           }}
           onLooksChange={(next, pinned) => {
             looks.change(screen.scenario, next);

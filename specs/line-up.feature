@@ -5,10 +5,6 @@ Feature: The Line-up
   the step and keeps everyone's looks in this browser. Looks and themes never
   change who is picked: specs/pick.feature.
 
-  # The new setup's build steps are listed in specs/setup.feature. Each
-  # pending scenario here says its step; "Old design" marks what a step
-  # replaces.
-
   Rule: A show with a line-up opens it first
 
     Scenario: Next opens the chosen show's Line-up
@@ -220,8 +216,7 @@ Feature: The Line-up
       Then each one flips in like a turned sticker, in 0.4 seconds or more, one after another from the first person down
       And with reduced motion, the looks change without flipping
 
-  # Step 3. Decision 0019.
-  @pending
+  # Decision 0019.
   Rule: Dealing from the theme's choices
 
     Scenario: The theme's choices, by default

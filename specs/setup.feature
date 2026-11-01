@@ -3,14 +3,6 @@ Feature: Setting up a pick
   today, then chooses the show to play and starts it. A show with a line-up
   adds a third: specs/line-up.feature.
 
-  # The new setup, in three build steps, in this order: 1. every step's frame,
-  # and choosing a show before starting it; 2. the Line-up's row on the
-  # theme's ground, its stars and its sheet; 3. dealing from the theme's
-  # choices (steps 2 and 3 in specs/line-up.feature). Each pending scenario
-  # says its step. Scenarios marked "Old design" describe the app before a
-  # step; the build deletes each one, with its steps, when the scenario that
-  # replaces it passes.
-
   Rule: Every step before the show has the same frame
 
     Scenario: The way back on the left, the one main button on the right
