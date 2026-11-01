@@ -31,7 +31,9 @@ describeSpec(await loadFeature('./sound-and-motion.feature'), ({ Rule }) => {
     let heard: Promise<Heard> | undefined;
     /** One run at 8 people, Anna unlucky, shared by the scenarios that watch the show. */
     const heardRace = () => (heard ??= listen(names(8), 'Anna'));
-    const lead = (notes: readonly Note[]) => notes.filter((note) => note.voice === 'lead');
+    /** The tune's notes: the lead's, or the steel drum's under the sea. */
+    const lead = (notes: readonly Note[]) =>
+      notes.filter((note) => note.voice === 'lead' || note.voice === 'steel');
 
     RuleScenario('A drum roll, then the galop from "Go!"', ({ When, Then, And }) => {
       let race: Heard;
@@ -280,16 +282,14 @@ describeSpec(await loadFeature('./sound-and-motion.feature'), ({ Rule }) => {
           expect(pitchesOf(stretch).slice(0, 4)).toEqual(tuneOf('G4 E5 D5 C5'));
         },
       );
-      And('the sports field, under the sea and the Moon keep the galop', () => {
+      And('the sports field and the Moon keep the galop', () => {
         for (const plan of plansOn(names(8), 'Anna', 'field', 3)) {
           const galop = raceMusic(plan);
           // The galop's first bar, after its pickup.
           const tell = lead(galop.notes.filter((note) => note.at >= 0));
           expect(pitchesOf(tell).slice(0, 8)).toEqual(tuneOf('G4 G4 G4 G4 G4 C5 D5 E5'));
           expect(galop.notes.some((note) => note.voice === 'bells')).toBe(false);
-          for (const course of ['sea', 'moon'] as const) {
-            expect(raceMusic({ ...plan, course }).notes, course).toEqual(galop.notes);
-          }
+          expect(raceMusic({ ...plan, course: 'moon' }).notes).toEqual(galop.notes);
         }
       });
     });
@@ -339,6 +339,33 @@ describeSpec(await loadFeature('./sound-and-motion.feature'), ({ Rule }) => {
           const slowAt = raceMusic(race.plan).at(race.plan.times.slow).beat;
           const run = lead(race.notes.filter((note) => note.at >= slowAt));
           expect(pitchesOf(run)).toEqual(tuneOf('B4 A4 Ab4 G4'));
+        },
+      );
+    });
+
+    RuleScenario('Mango Walk under the sea', ({ When, Then }) => {
+      let race: Heard;
+      When('the show runs under the sea with music on', async () => {
+        race = await listen(names(8), 'Anna', 1, 'sea');
+        expect(race.record.outcome).toBe('finished');
+      });
+      Then(
+        `Mango Walk plays instead of the galop, its tune on steel drums over an off-beat bass and a shaker, on the galop's beats: a shaker roll under "On your marks…", its tune from "Go!", a faster strain from "Final stretch!", a run down at a quarter of the speed in the slow moment, and silence from the line to the fanfare`,
+        () => {
+          const { racing, stretch, stretchAt } = onTheGalopsBeats(race, 'shaker');
+          // Its tune from "Go!", up a fourth from G to C, all on steel drums.
+          expect(pitchesOf(racing).slice(0, 8)).toEqual(tuneOf('G5 A5 G5 F5 E5 F5 E5 D5'));
+          expect(race.notes.some((note) => note.voice === 'lead')).toBe(false);
+          expect(racing.every((note) => note.voice === 'steel')).toBe(true);
+          // The bass on 1, then on the off-beats; a shaker on every half beat.
+          const firstBar = race.notes.filter((note) => note.at >= 0 && note.at < 4);
+          const bass = firstBar.filter((note) => note.voice === 'bass');
+          expect(bass.map((note) => note.at)).toEqual([0, 1.5, 2.5, 3.5]);
+          const shaken = firstBar.filter((note) => note.voice === 'shaker');
+          expect(shaken.map((note) => note.at)).toEqual([0, 0.5, 1, 1.5, 2, 2.5, 3, 3.5]);
+          // "Now tell me, Joe" in the stretch, from its first beat.
+          expect(stretch[0]!.at).toBe(stretchAt);
+          expect(pitchesOf(stretch).slice(0, 4)).toEqual(tuneOf('G4 G4 A4 C5'));
         },
       );
     });
