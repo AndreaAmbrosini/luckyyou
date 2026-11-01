@@ -9,7 +9,16 @@
 
 import { nameTag, START, type LineUpStart, type StartPerson } from '../../scenario-kit';
 import { boxAt, startLane, startRows, START_TRACK, tagAt, tagSize } from './layout';
-import { drawing, group, RACER, type Kind, type Pose, type Runner, type Shape } from './parts';
+import {
+  drawing,
+  group,
+  lens,
+  RACER,
+  type Kind,
+  type Pose,
+  type Runner,
+  type Shape,
+} from './parts';
 import { COURSES, type Course } from './plan';
 import styles from './the-race.module.css';
 import type { Mood } from '../../scenario-kit';
@@ -136,6 +145,46 @@ const BANDS: Readonly<Record<Course, () => Shape[]>> = {
       ),
     ];
   },
+  autumn() {
+    // The race's park, short: trees on a lawn, leaves falling, a wooden fence with piles of leaves.
+    let trunks = '';
+    const crowns = ['', '', ''];
+    for (const [x, r, colour] of [
+      [40, 20, 0],
+      [170, 15, 1],
+      [330, 18, 2],
+      [620, 14, 0],
+      [900, 18, 2],
+      [1130, 21, 1],
+    ] as const) {
+      trunks += R(x - 3, 22, 6, 22);
+      crowns[colour] += O(x, 22, r);
+    }
+    const falling = ['', '', ''];
+    [
+      [100, 12, 30],
+      [250, 30, -40],
+      [420, 22, 60],
+      [520, 40, 10],
+      [760, 14, -20],
+      [1050, 30, 45],
+    ].forEach(([x = 0, y = 0, angle = 0], i) => (falling[i % 3] += lens(x, y, angle, 0.6)));
+    let fence = R(-10, 44, 1214, 5) + R(-10, 53, 1214, 5);
+    for (let x = 20; x < 1194; x += 120) fence += R(x, 40, 7, 22);
+    const piles = [120, 600, 1000].map((x) => `M${x} 62 Q${x + 20} 38 ${x + 40} 62 Z `).join('');
+    return [
+      L('M-10 40 Q150 32 300 40 T610 40 T920 40 T1230 40 V64 H-10 Z', styles.mint!, 3),
+      L(trunks, styles.bark!, 3),
+      L(crowns[0]!, styles.orange!, 3),
+      L(crowns[1]!, styles.tomato!, 3),
+      L(crowns[2]!, styles.sun!, 3),
+      L(falling[0]!, styles.orange!, 2),
+      L(falling[1]!, styles.tomato!, 2),
+      L(falling[2]!, styles.sun!, 2),
+      L(fence, styles.bark!, 3),
+      L(piles, styles.orange!, 3),
+    ];
+  },
   christmas() {
     const flakes = [
       [30, 40],
@@ -200,6 +249,7 @@ const GROUNDS: Readonly<Record<Course, { ground: string; lines: string; dashed: 
   office: { ground: styles.carpet!, lines: styles.sunFill!, dashed: false },
   sea: { ground: styles.sun!, lines: styles.orangeFill!, dashed: false },
   moon: { ground: styles.shark!, lines: styles.paperFill!, dashed: true },
+  autumn: { ground: styles.bark!, lines: styles.paperFill!, dashed: false },
   christmas: { ground: styles.snow!, lines: styles.glassFill!, dashed: false },
 };
 

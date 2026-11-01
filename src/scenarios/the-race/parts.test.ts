@@ -290,6 +290,7 @@ describe('the photo-finish card', () => {
       office: styles.carpet,
       sea: styles.sun,
       moon: styles.shark,
+      autumn: styles.bark,
       christmas: styles.snow,
     };
     for (const course of COURSES) {

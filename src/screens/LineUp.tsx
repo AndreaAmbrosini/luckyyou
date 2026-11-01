@@ -311,7 +311,7 @@ interface OptionProps {
   name: string;
   place: number;
   theme: string | null;
-  /** The chosen theme's own tab, ahead of the groups' (decision 0015). */
+  /** The chosen theme's own tab, ahead of the groups' (decision 0017). */
   themeTab: { label: string; choices: readonly LineUpChoice[] } | null;
   /** The open tab's key, when one was clicked. */
   open: string | undefined;

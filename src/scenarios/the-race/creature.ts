@@ -10,9 +10,11 @@
 
 import type { Look, Mood } from '../../scenario-kit';
 import {
+  acornCap,
   draw,
   drawing,
   dressFor,
+  GOLDEN_ACORN,
   group,
   PRESENT,
   RACER,
@@ -2711,8 +2713,12 @@ const SVG = 'http://www.w3.org/2000/svg';
 /** Everything off the grid's edges, so a clip of it less a shape is the rest. */
 const OUTSIDE = 'M-200 -200 H440 V400 H-200 Z';
 
-/** How far a present balanced on the head rises, to sit on top of a Santa hat. */
-const PRESENT_LIFT = 50;
+/**
+ * How far a prize balanced on the head rises, to sit on top of a Santa hat
+ * or an acorn cap; on the gnome, on top of its own hat.
+ */
+const PRIZE_LIFT = { santa: 50, acorn: 34 } as const;
+const GNOME_LIFT = { santa: 0, acorn: 18 } as const;
 
 /** How many creatures have been drawn, so each drawing's clip ids are its own. */
 let drawings = 0;
@@ -2723,9 +2729,10 @@ let drawings = 0;
  * its front leg and foot, its front arm, and the scarf, bow tie, number, top
  * hat and trophy. Everything but the legs leans from its hips. `face` is the
  * kit's look for the run, for the astronaut's and the villain's skin, and
- * the shark's legs. In the theme's `dress`, a Santa hat takes the top hat's
- * place, and the gnome's own hat gets a brim and a bobble instead; a
- * present takes the trophy's.
+ * the shark's legs. In the theme's `dress`, a Santa hat or an acorn cap
+ * takes the top hat's place; the gnome's own hat gets a brim and a bobble
+ * instead, or a small acorn cap on its tip. A present or a golden acorn
+ * takes the trophy's.
  */
 export function creature(
   look: RacerLook & { readonly mount: Creature },
@@ -2933,10 +2940,11 @@ export function creature(
     text.setAttribute('y', String(y));
     text.textContent = String(number);
   }
-  const santa = dress.costume === 'santa';
-  // The tree wears its Santa hat instead of its star.
-  if (santa) own.querySelector('[data-part="star"]')?.remove();
-  if (look.extra === 'tophat' && !santa) {
+  const { costume } = dress;
+  const santa = costume === 'santa';
+  // The tree wears its costume instead of its star.
+  if (costume) own.querySelector('[data-part="star"]')?.remove();
+  if (look.extra === 'tophat' && !costume) {
     const [x, y] = spec.hat;
     const hat = group(front, 'tophat', [
       ['rect', styles.inkFill!, { x: 7, y: 2, width: 22, height: 24, rx: 2 }],
@@ -2959,16 +2967,28 @@ export function creature(
   } else if (santa) {
     const [x, y] = spec.hat;
     group(front, 'santa', santaHat(true)).setAttribute('transform', `translate(${x} ${y})`);
+  } else if (costume === 'acorn') {
+    const [x, y] = spec.hat;
+    group(front, 'acorn-cap', acornCap(true)).setAttribute(
+      'transform',
+      `translate(${x} ${y})${kind === 'gnome' ? ' scale(0.55)' : ''}`,
+    );
   }
 
   // Held overhead, or balanced on the head or the fin by short arms: on top
-  // of a Santa hat, a present balanced on the head is lifted clear of it.
-  const present = dress.prize === 'present';
-  const balanced = spec.reach > 0 && spec.reach < 1 && santa && kind !== 'gnome';
-  const trophy = drawing(72, 60, present ? [...PRESENT, shine('M53 32 V50', 4, 0.6)] : TROPHY);
+  // of a costume, a prize balanced on the head is lifted clear of it.
+  const [nut, ...acorn] = GOLDEN_ACORN;
+  const prizes = {
+    trophy: TROPHY,
+    present: [...PRESENT, shine('M53 32 V50', 4, 0.6)],
+    'golden-acorn': [nut!, shine('M46 32 Q48 42 43 50', 4), ...acorn],
+  };
+  const balanced = spec.reach > 0 && spec.reach < 1 && costume;
+  const lift = balanced ? (kind === 'gnome' ? GNOME_LIFT : PRIZE_LIFT)[costume] : 0;
+  const trophy = drawing(72, 60, prizes[dress.prize]);
   trophy.dataset.part = dress.prize;
   trophy.setAttribute('x', String(spec.cup[0] - 36));
-  trophy.setAttribute('y', String(spec.cup[1] - (balanced ? PRESENT_LIFT : 0)));
+  trophy.setAttribute('y', String(spec.cup[1] - lift));
   trophy.setAttribute('width', '72');
   trophy.setAttribute('height', '60');
   front.append(trophy);
@@ -3323,6 +3343,12 @@ export function creature(
     look,
     nose: spec.nose,
     faceX: spec.face,
+    // Where the front hand goes as it waves.
+    waving: (() => {
+      const [x, y] = spec.shoulders[1];
+      const kk = spec.fins ? Math.max(spec.reach, 0.7) * (spec.finK ?? 1) : spec.reach;
+      return [x + 18 * kk, y - 46 * kk] as const;
+    })(),
     body,
     face,
     arms: [arms[0]!.holder, arms[1]!.holder],

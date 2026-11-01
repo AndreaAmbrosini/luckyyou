@@ -282,14 +282,6 @@ Feature: The Race
 
   Rule: Christmas
 
-    # Old design: replaced by "Christmas is a theme, after Autumn" (step 2).
-    Scenario: Christmas is a theme
-      When the Line-up opens for The Race
-      Then "Christmas" is a theme, after "Moon", its postcard a tree on snow at dusk
-      And with Christmas chosen, the racer option's first tab is "Christmas"
-
-    # Step 2.
-    @pending
     Scenario: Christmas is a theme, after Autumn
       When the Line-up opens for The Race
       Then "Christmas" is a theme, after "Autumn", its postcard a tree on snow at dusk
@@ -403,9 +395,8 @@ Feature: The Race
       When the show runs
       Then the blizzard's swirl doesn't spin
 
-  # Step 2. Autumn is a park by day; night, pumpkins, bats and graves are
+  # Autumn is a park by day; night, pumpkins, bats and graves are
   # Halloween's.
-  @pending
   Rule: Autumn
 
     Scenario: Autumn is a theme

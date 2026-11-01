@@ -123,7 +123,7 @@ function lineUpProblems(lineUp: unknown): string[] {
   return problems;
 }
 
-/** Every problem with a line-up's themes (decision 0015). */
+/** Every problem with a line-up's themes (decision 0017). */
 function themeProblems(themes: unknown, choices: unknown): string[] {
   if (!Array.isArray(themes) || themes.length < 2) return ['its line-up has fewer than 2 themes'];
   const offered = new Set(
