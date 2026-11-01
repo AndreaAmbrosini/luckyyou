@@ -111,12 +111,12 @@ describe('a racer', () => {
     expect(drawn({ colour: 'mint' }).el.style.getPropertyValue('--band')).toBe('var(--color-sun)');
   });
 
-  it('holds the reins, or the chair’s backrest, the hopper’s horns or the rocket’s handlebar', () => {
+  it('holds the reins, or the chair’s backrest, the hopper’s horns, the rocket’s handlebar or the leaf’s tip', () => {
     for (const mount of MOUNTS) {
       const { el } = drawn({ mount });
       expect(el.dataset.pose).toBe('hold');
       expect(shown(el, '[data-part="reins"]'), mount).toBe(
-        !['chair', 'hopper', 'rocket'].includes(mount),
+        !['chair', 'hopper', 'rocket', 'leaf'].includes(mount),
       );
       expect(SPEC[mount].reins === null, mount).toBe(SPEC[mount].hold !== undefined);
     }

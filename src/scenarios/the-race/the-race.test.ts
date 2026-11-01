@@ -1989,6 +1989,11 @@ describeSpec(await loadFeature('./the-race.feature'), ({ Rule }) => {
             snowman: [131, 163],
             gingerbread: [131, 160],
             tree: [130, 182],
+            // Autumn's animals and things on legs, from the canvas.
+            squirrel: [139, 176],
+            hedgehog: [171, 212],
+            mushroom: [131, 190],
+            acorn: [131, 188],
           });
           for (const { el, look } of all) {
             expect(el.getAttribute('viewBox')).toBe(`0 0 ${RACER.width} ${RACER.height}`);
@@ -2254,14 +2259,15 @@ describeSpec(await loadFeature('./the-race.feature'), ({ Rule }) => {
     RuleScenario('Four animals and four spooky creatures', ({ When, Then, And }) => {
       const choices = theRace.lineUp!.options[0]!.choices;
       const listed = (text: string) => [...text.matchAll(/"([^"]+)"/g)].map(([, x]) => x);
-      /** The racers in `group` after `last`, which ends `held`. */
+      /** The racers in `group` right after `last`, which ends `held`. */
       const after = (group: string, held: string) => {
         const names = listed(held);
         const last = names.pop()!;
         const labels = choices
           .filter((choice) => choice.group === group)
           .map((choice) => choice.label);
-        expect(labels.slice(labels.indexOf(last) + 1)).toEqual(names);
+        const from = labels.indexOf(last) + 1;
+        expect(labels.slice(from, from + names.length)).toEqual(names);
         return names;
       };
       When('the Line-up opens for The Race', () => {
@@ -2927,14 +2933,15 @@ describeSpec(await loadFeature('./the-race.feature'), ({ Rule }) => {
         (shape) => shape.tagName !== 'g',
       );
     RuleScenario('Four racers for Christmas', ({ When, Then, And }) => {
-      /** The racers in `group` after `last`, which ends `held`. */
+      /** The racers in `group` right after `last`, which ends `held`. */
       const after = (group: string, held: string) => {
         const names = listed(held);
         const last = names.pop()!;
         const labels = choices
           .filter((choice) => choice.group === group)
           .map((choice) => read(choice.label));
-        expect(labels.slice(labels.indexOf(last) + 1)).toEqual(names);
+        const from = labels.indexOf(last) + 1;
+        expect(labels.slice(from, from + names.length)).toEqual(names);
       };
       When('the Line-up opens for The Race', () => {
         expect(lineUp.options[0]!.label).toBe('Racer');
@@ -3670,6 +3677,499 @@ describeSpec(await loadFeature('./the-race.feature'), ({ Rule }) => {
         },
       );
     });
+  });
+
+  Rule("Autumn's own racers", ({ RuleScenario, RuleScenarioOutline }) => {
+    const lineUp = theRace.lineUp!;
+    const choices = lineUp.options[0]!.choices;
+    const listed = (text: string) => [...text.matchAll(/"([^"]+)"/g)].map(([, x]) => x);
+    /** The five racers, as the feature names them. */
+    const FALL: Readonly<Record<string, Kind>> = {
+      'giant leaf': 'leaf',
+      squirrel: 'squirrel',
+      hedgehog: 'hedgehog',
+      mushroom: 'mushroom',
+      acorn: 'acorn',
+    };
+    const face = handOutLooks(['Anna'], createRandom(1)).get('Anna')!;
+    /** `kind` in `colour`, calm, as the show draws it, in the theme's `dress` if given. */
+    const drawnAs = (
+      kind: Kind,
+      colour: RacerColour = 'tomato',
+      dress?: Parameters<typeof creature>[1]['dress'],
+    ) =>
+      isCreature(kind)
+        ? creature({ mount: kind, colour, extra: 'scarf' }, { face, number: 1, dress })
+        : racer({ mount: kind, colour, extra: 'scarf' }, { face, number: 1, dress });
+    /** Every shape in `svg` named `part`, but its groups. */
+    const partsOf = (svg: Element, part: string) =>
+      [...svg.querySelectorAll<SVGElement>(`[data-part="${part}"]`)].filter(
+        (shape) => shape.tagName !== 'g',
+      );
+
+    RuleScenario('Five racers for Autumn', ({ When, Then, And }) => {
+      /** The racers in `group` right after `last`, which ends `held`. */
+      const after = (group: string, held: string) => {
+        const names = listed(held);
+        const last = names.pop()!;
+        const labels = choices
+          .filter((choice) => choice.group === group)
+          .map((choice) => read(choice.label));
+        const from = labels.indexOf(last) + 1;
+        expect(labels.slice(from, from + names.length)).toEqual(names);
+      };
+      When('the Line-up opens for The Race', () => {
+        expect(lineUp.options[0]!.label).toBe('Racer');
+      });
+      Then('the group "Rides" also holds {any}', (_, held: string) => after('Rides', held));
+      And('the group "Animals" also holds {any}', (_, held: string) => after('Animals', held));
+      And('the group "Things on legs" also holds {any}', (_, held: string) =>
+        after('Things on legs', held),
+      );
+      And('with Autumn chosen, its tab holds {any}', (_, held: string) => {
+        const autumn = lineUp.themes!.find((each) => each.name === 'autumn')!;
+        const labelOf = (name: string) =>
+          read(choices.find((choice) => choice.name === name)!.label);
+        expect(autumn.suits!.map(labelOf)).toEqual(listed(held));
+      });
+    });
+
+    RuleScenario('The giant leaf', ({ Given, When, Then, And }) => {
+      const looks = new Map<string, ChosenLook>();
+      let ivo: SVGSVGElement;
+      Given('Ivo chose the giant leaf in sun', () => {
+        looks.set('Ivo', { mount: 'leaf', colour: 'sun', extra: 'number' });
+        looks.set('Anna', { mount: 'duck', colour: 'mint', extra: 'scarf' });
+      });
+      When('the show runs', async () => {
+        ivo = (await firstDrawn(looks)).get('Ivo')!;
+      });
+      Then(
+        'Ivo sits on a sun leaf with a face, floating on the breeze just off the ground, and holds its curled-up tip',
+        () => {
+          expect(ivo.dataset).toMatchObject({ part: 'racer', mount: 'leaf' });
+          expect(ivo.style.getPropertyValue('--racer')).toBe('var(--color-sun)');
+          const mount = ivo.querySelector('[data-part="mount"]')!;
+          const blade = bounds(partsOf(mount, 'blade')[0]!.getAttribute('d')!);
+          // Its face: two eyes and a smile on the blade, by its tip.
+          const eyes = [...mount.querySelectorAll(`circle.${styles.inkFill}`)];
+          expect(eyes).toHaveLength(2);
+          for (const eye of eyes) {
+            expect(Number(eye.getAttribute('cx'))).toBeGreaterThan(blade.left);
+            expect(Number(eye.getAttribute('cx'))).toBeLessThan(blade.right);
+          }
+          // Under him, off the ground, over its shadow and the breeze.
+          expect(blade.top).toBeLessThanOrEqual(SPEC.leaf.saddle[1]);
+          expect(blade.bottom).toBeGreaterThan(SPEC.leaf.saddle[1]);
+          expect(blade.bottom).toBeLessThan(RACER.feet - 30);
+          const ground = partsOf(mount, 'leaf-shadow');
+          expect(ground.map((shape) => shape.tagName)).toEqual(['ellipse', 'path']);
+          expect(Number(ground[0]!.getAttribute('cy'))).toBeGreaterThan(RACER.feet - 6);
+          expect(bounds(ground[1]!.getAttribute('d')!).top).toBeGreaterThan(blade.bottom);
+          // No reins: his hand is on the tip, curled up at the front.
+          expect(reined(ivo)).toBe(false);
+          const [x, y] = SPEC.leaf.hold!;
+          const tip = bounds(partsOf(mount, 'tip')[0]!.getAttribute('d')!);
+          expect(x).toBeGreaterThanOrEqual(tip.left);
+          expect(x).toBeLessThanOrEqual(tip.right);
+          expect(y).toBeGreaterThanOrEqual(tip.top);
+          expect(tip.top).toBeLessThan(blade.top);
+          const fists = [...ivo.querySelectorAll(`[data-part="hands"] circle`)].filter(
+            (fist) => fist.getAttribute('display') !== 'none',
+          );
+          expect(fists.map((fist) => [fist.getAttribute('cx'), fist.getAttribute('cy')])).toEqual([
+            [String(x), String(y)],
+          ]);
+        },
+      );
+      And("his head is at the same height as every rider's", () => {
+        expect(SPEC.leaf.saddle[1]).toBe(SPEC.snail.saddle[1]);
+        for (const count of [2, 8]) {
+          const at = lane(count - 1, count);
+          expect(faceAt('leaf', at, 900).top).toBe(faceAt('snail', at, 900).top);
+        }
+      });
+    });
+
+    RuleScenario('Four creatures for Autumn', ({ When, Then, And }) => {
+      let drawn: Record<
+        'squirrel' | 'hedgehog' | 'mushroom' | 'acorn',
+        ReturnType<typeof creature>
+      >;
+      /** Its legs' paint, and each foot's kind and its shoe's class. */
+      const legsAndFeet = (one: ReturnType<typeof creature>) => ({
+        legs: [...one.el.querySelectorAll<SVGElement>('path[data-part="legs"]')].map((leg) =>
+          leg.style.getPropertyValue('--paint'),
+        ),
+        feet: one.shoes.map((shoe) => [
+          shoe.dataset.foot,
+          shoe.querySelector('[data-part="shoe"]')!.getAttribute('class'),
+        ]),
+      });
+      const dark = {
+        legs: ['var(--color-ink-soft)', 'var(--color-ink-soft)'],
+        feet: [
+          ['sneaker', styles.paper],
+          ['sneaker', styles.paper],
+        ],
+      };
+      /** Whether every eye of `one` is inside the box of the path named `part`. */
+      const eyesOn = (one: ReturnType<typeof creature>, part: string) => {
+        const box = bounds(partsOf(one.el, part)[0]!.getAttribute('d')!);
+        return CREATURE_SPEC[one.look.mount].eyes.every(
+          ([x, y]) => x > box.left && x < box.right && y > box.top && y < box.bottom,
+        );
+      };
+      When('someone races as a squirrel, a hedgehog, a mushroom or an acorn', () => {
+        drawn = {
+          squirrel: drawnAs('squirrel') as ReturnType<typeof creature>,
+          hedgehog: drawnAs('hedgehog') as ReturnType<typeof creature>,
+          mushroom: drawnAs('mushroom') as ReturnType<typeof creature>,
+          acorn: drawnAs('acorn') as ReturnType<typeof creature>,
+        };
+      });
+      Then(
+        'the squirrel has a bushy tail curling up behind it, a white belly and buck teeth, and runs on bare paws',
+        () => {
+          const { squirrel } = drawn;
+          const own = squirrel.el.querySelector('[data-part="own"]')!;
+          // Its tail first, behind the rest, and as tall as its head.
+          const tail = partsOf(own, 'tail')[0]!;
+          expect(own.firstElementChild).toBe(tail);
+          expect(tail.getAttribute('class')).toBe(styles.racer);
+          const ys = (tail.getAttribute('d')!.match(/-?[\d.]+/g) ?? [])
+            .map(Number)
+            .filter((_, i) => i % 2);
+          expect(Math.min(...ys)).toBeLessThan(CREATURE_SPEC.squirrel.eyes[0]![1]);
+          expect(partsOf(own, 'belly')[0]!.getAttribute('class')).toBe(styles.paper);
+          // A buck tooth under its smirk.
+          const tooth = squirrel.el.querySelector('[data-part="fangs"]')!;
+          expect(tooth.getAttribute('display')).not.toBe('none');
+          expect(tooth.getAttribute('d')).toMatch(/h8 v9 h-8 Z/);
+          expect(legsAndFeet(squirrel)).toEqual({
+            legs: ['var(--racer)', 'var(--racer)'],
+            feet: [
+              ['bare', styles.racer],
+              ['bare', styles.racer],
+            ],
+          });
+        },
+      );
+      And(
+        'the hedgehog has spines over its back and head, a pointed snout with a black nose, and runs on bare feet',
+        () => {
+          const { hedgehog } = drawn;
+          const spec = CREATURE_SPEC.hedgehog;
+          const spines = bounds(partsOf(hedgehog.el, 'spines')[0]!.getAttribute('d')!);
+          // Back past its hips and up over its eyes.
+          expect(spines.left).toBeLessThan(spec.hips[0][0] - 40);
+          expect(spines.top).toBeLessThan(Math.min(...spec.eyes.map(([, y]) => y)) - 30);
+          const snout = partsOf(hedgehog.el, 'snout')[0]!;
+          expect(snout.getAttribute('class')).toBe(styles.tomatoSoft);
+          // Pointed: it narrows to the black nose at its tip.
+          const nose = partsOf(hedgehog.el, 'nose')[0]!;
+          expect(nose.getAttribute('class')).toBe(styles.inkFill);
+          expect(Number(nose.getAttribute('cx')) + Number(nose.getAttribute('r'))).toBe(spec.nose);
+          expect(bounds(snout.getAttribute('d')!).right).toBeGreaterThan(spec.nose - 10);
+          expect(legsAndFeet(hedgehog)).toEqual({
+            legs: ['var(--color-bark)', 'var(--color-bark)'],
+            feet: [
+              ['bare', styles.bark],
+              ['bare', styles.bark],
+            ],
+          });
+        },
+      );
+      And(
+        'the mushroom has a spotted cap and its face on a white stalk, on dark legs in white sneakers',
+        () => {
+          const { mushroom } = drawn;
+          const spots = partsOf(mushroom.el, 'spots');
+          expect(spots.length).toBeGreaterThanOrEqual(5);
+          for (const spot of spots) expect(spot.getAttribute('class')).toBe(styles.paper);
+          expect(partsOf(mushroom.el, 'stalk')[0]!.getAttribute('class')).toBe(styles.paper);
+          expect(eyesOn(mushroom, 'stalk')).toBe(true);
+          expect(eyesOn(mushroom, 'cap')).toBe(false);
+          expect(legsAndFeet(mushroom)).toEqual(dark);
+        },
+      );
+      And(
+        'the acorn has its face on the nut under a scaly bark cap with a stalk, on dark legs in white sneakers',
+        () => {
+          const { acorn } = drawn;
+          expect(eyesOn(acorn, 'nut')).toBe(true);
+          const cap = partsOf(acorn.el, 'scaly-cap')[0]!;
+          expect(cap.getAttribute('class')).toBe(styles.bark);
+          // Over the nut, its scales on it and its stalk on top.
+          expect(bounds(cap.getAttribute('d')!).top).toBeLessThan(
+            bounds(partsOf(acorn.el, 'nut')[0]!.getAttribute('d')!).top,
+          );
+          const scales = cap.nextElementSibling!;
+          expect(scales.getAttribute('class')).toBe(styles.line);
+          expect(scales.getAttribute('d')!.match(/M/g)!.length).toBeGreaterThanOrEqual(12);
+          const stalk = partsOf(acorn.el, 'stalk').map((line) => line.getAttribute('class'));
+          expect(stalk).toEqual([styles.line, styles.barkLine]);
+          expect(legsAndFeet(acorn)).toEqual(dark);
+        },
+      );
+      And("on Autumn, the acorn's own cap is all it wears", () => {
+        const dress = { costume: 'acorn', prize: 'golden-acorn' } as const;
+        const acorn = drawnAs('acorn', 'sun', dress);
+        expect(acorn.el.querySelector('[data-part="acorn-cap"]')).toBeNull();
+        expect(partsOf(acorn.el, 'scaly-cap')).toHaveLength(1);
+        // Every other Autumn racer wears an acorn cap.
+        for (const kind of ['leaf', 'squirrel', 'hedgehog', 'mushroom'] as const) {
+          expect(
+            drawnAs(kind, 'sun', dress).el.querySelector('[data-part="acorn-cap"]'),
+            kind,
+          ).not.toBeNull();
+        }
+      });
+    });
+
+    RuleScenarioOutline(
+      'Where an autumn <racer> wears its colour',
+      ({ When, Then }, { racer: called }) => {
+        let svg: SVGSVGElement;
+        /** Where each wears its colour: its parts so named. */
+        const WEARS: Readonly<Record<string, readonly string[]>> = {
+          'giant leaf': ['blade', 'tip'],
+          squirrel: ['fur', 'tail', 'hand', 'shoe'],
+          hedgehog: ['spines'],
+          mushroom: ['cap'],
+          acorn: ['nut'],
+        };
+        When('someone races as a <racer> in tomato', () => {
+          svg = drawnAs(FALL[called]!).el;
+        });
+        Then('<where> is tomato', () => {
+          expect(svg.style.getPropertyValue('--racer')).toBe('var(--color-tomato)');
+          for (const part of WEARS[called]!) {
+            const shapes = partsOf(svg, part);
+            expect(shapes.length, part).toBeGreaterThanOrEqual(1);
+            for (const shape of shapes) {
+              expect(shape.getAttribute('class'), `${called} ${part}`).toBe(
+                part === 'tip' ? styles.racerLine : styles.racer,
+              );
+            }
+          }
+        });
+      },
+    );
+
+    /** Five people on the giant leaf, or two as a creature, the burst and stop `name`'s. */
+    const run = (called: string, name: string, reducedMotion = false) => {
+      const kind = FALL[called]!;
+      return isCreature(kind)
+        ? shared.thing(kind, name, reducedMotion)
+        : shared.mount(kind, name, reducedMotion);
+    };
+
+    RuleScenarioOutline(
+      'An autumn <racer> bursts ahead',
+      ({ When, Then, And }, { racer: called, name, burst }) => {
+        let watched: Watched;
+        When("someone's <racer> bursts ahead", async () => {
+          watched = await run(called, name);
+        });
+        Then(`the caption is "<name>'s <racer> <burst>!"`, () => {
+          expect(captions(watched)).toContain(`${name}'s ${called} ${burst}!`);
+          expect(watched.plan.events[0]).toMatchObject({ kind: 'burst', subject: name });
+        });
+        And('<what>, and it shoots into the lead, shouting "Nooo!", or its rider does', () => {
+          const { at } = watched.plan.events[0]!;
+          const during = between(watched, at, at + BURST.seconds).map(
+            (frame) => frame.racers[name]!,
+          );
+          const before = between(watched, at - 0.5, at).map((frame) => frame.racers[name]!);
+          /** How long the burst shows `prop`, in seconds. */
+          const showing = (prop: string) =>
+            during.filter((racer) => racer.props.split(' ').includes(prop)).length * STEP;
+          const kind = FALL[called]!;
+          const prop = {
+            leaf: 'breeze',
+            squirrel: 'blur',
+            hedgehog: 'ball',
+            mushroom: 'burrow',
+            acorn: 'chaser',
+          }[kind as 'leaf'];
+          expect(showing(prop), prop).toBeGreaterThanOrEqual(BURST.seconds - 2 * STEP);
+          for (const racer of before) expect(racer.props).not.toContain(prop);
+          switch (kind) {
+            case 'leaf': {
+              // Up off the ground, sailing most of the burst.
+              expect(before.every((racer) => racer.hop === 0)).toBe(true);
+              const high = during.filter((racer) => racer.hop > 25);
+              expect(high.length * STEP).toBeGreaterThanOrEqual(0.3);
+              break;
+            }
+            case 'squirrel':
+              // Its tail whirls round.
+              expect(Math.max(...during.map((racer) => racer.whirl))).toBeGreaterThan(180);
+              break;
+            case 'hedgehog':
+              // Curled up, nothing of it shows but the ball, rolling.
+              expect(during.every((racer) => !racer.legs)).toBe(true);
+              expect(Math.max(...during.map((racer) => racer.spin))).toBeGreaterThan(180);
+              break;
+            case 'mushroom': {
+              // Down into the ground, and up again by the end.
+              const height = (racer: Drawn) => Number(racer.scale.split(' ')[1] ?? 1);
+              expect(Math.min(...during.map(height))).toBe(0);
+              const after = between(watched, at + BURST.seconds, at + BURST.seconds + 0.3);
+              for (const frame of after) expect(frame.racers[name]!.scale).toBe('');
+              break;
+            }
+            case 'acorn':
+              break;
+          }
+          // Gone once the burst is over.
+          const done = between(watched, at + BURST.seconds + 0.1, at + BURST.seconds + 0.5);
+          for (const frame of done) expect(frame.racers[name]!.props).not.toContain(prop);
+          expect(leaderAt(watched.plan, at)).not.toBe(name);
+          expect(leaderAt(watched.plan, at + BURST.seconds)).toBe(name);
+          const shouting = watched.frames.filter((frame) => saying(frame, name, 'Nooo!'));
+          expect(shouting[0]!.time).toBeGreaterThanOrEqual(at);
+          expect(shouting[0]!.time).toBeLessThan(at + 0.5);
+        });
+      },
+    );
+
+    RuleScenarioOutline(
+      'An autumn <racer> stops',
+      ({ When, Then, And }, { racer: called, name, stop }) => {
+        let watched: Watched;
+        /** The stopped racer, frame by frame from the stop to the next event or the run's end. */
+        const during = () => {
+          const { at } = watched.plan.events[1]!;
+          return watched.frames
+            .filter((frame) => frame.time >= at && frame.time < at + spacing(5))
+            .map((frame) => ({ ...frame, racer: frame.racers[name]!, since: frame.time - at }));
+        };
+        When("someone's <racer> stops", async () => {
+          watched = await run(called, name);
+        });
+        Then(`the caption is "<name>'s <racer> <stop>!"`, () => {
+          expect(captions(watched)).toContain(`${name}'s ${called} ${stop}!`);
+          expect(watched.plan.events[1]).toMatchObject({ kind: 'stop', subject: name });
+        });
+        And('<what>, and it drops back while the camera goes on', () => {
+          const stopped = during().filter((frame) => frame.racer.stopped);
+          expect(stopped.length).toBeGreaterThan(10);
+          const before = stopped.filter((frame) => frame.since < STOP.phew);
+          /** How long the stop shows `prop`, in seconds. */
+          const showing = (prop: string) =>
+            stopped.filter((frame) => frame.racer.props.split(' ').includes(prop)).length * STEP;
+          /** The first time in the stop it shows `prop`. */
+          const first = (prop: string) =>
+            stopped.find((frame) => frame.racer.props.split(' ').includes(prop))?.since ?? -1;
+          switch (FALL[called]) {
+            case 'leaf': {
+              // Down in the puddle, turning round in it.
+              expect(showing('puddle')).toBeGreaterThanOrEqual(1);
+              expect(Math.min(...before.map((frame) => frame.racer.hop))).toBeLessThan(-20);
+              const turns = before.map((frame) => Number(frame.racer.scale.split(' ')[0] || 1));
+              expect(Math.min(...turns)).toBeLessThan(-0.9);
+              break;
+            }
+            case 'squirrel': {
+              // A hole, then the acorn in it, then the earth patted down over it.
+              const [hole, nut, mound] = ['hole', 'nut', 'mound'].map(first);
+              expect(hole).toBeGreaterThan(0);
+              expect(nut).toBeGreaterThan(hole);
+              expect(mound).toBeGreaterThan(nut);
+              const bent = before.filter((frame) => frame.racer.bend > 15);
+              expect(bent.length * STEP).toBeGreaterThanOrEqual(1);
+              break;
+            }
+            case 'hedgehog': {
+              // Leaves on its spines, shaken off by "Phew!".
+              expect(showing('stuck')).toBeGreaterThanOrEqual(1);
+              expect(Math.max(...before.map((frame) => frame.racer.shake))).toBeGreaterThan(4);
+              break;
+            }
+            case 'mushroom': {
+              // A puff of spores, and "Achoo!", with a bow.
+              expect(showing('spores')).toBeGreaterThanOrEqual(0.8);
+              const achoo = stopped.filter((frame) => saying(frame, name, 'Achoo!'));
+              expect(achoo.length).toBeGreaterThan(0);
+              expect(achoo[0]!.since).toBeCloseTo(first('spores'), 5);
+              expect(Math.max(...before.map((frame) => frame.racer.bend))).toBeGreaterThan(15);
+              break;
+            }
+            case 'acorn': {
+              // Its cap on the ground while it bends for it.
+              expect(showing('cap')).toBeGreaterThanOrEqual(0.8);
+              const bending = before.filter(
+                (frame) => frame.racer.bend > 20 && frame.racer.props.includes('cap'),
+              );
+              expect(bending.length * STEP).toBeGreaterThanOrEqual(0.5);
+              break;
+            }
+          }
+          const start = stopped[0]!;
+          const last = stopped.at(-1)!;
+          expect(last.racer.nose).toBeLessThan(start.racer.nose - 200);
+          expect(last.camera).toBeGreaterThan(start.camera + 300);
+        });
+        And('it waves, says "Phew!", and sets off again further back, or its rider does', () => {
+          const frames = during();
+          const waving = frames.filter(
+            ({ racer }) => racer.stopped && racer.pose === 'wave' && racer.bend === 0,
+          );
+          expect(waving.length).toBeGreaterThan(0);
+          expect(frames.some((frame) => saying(frame, name, 'Phew!'))).toBe(true);
+          const off = frames.find((frame) => frame.since > STOP.off + 0.1)!;
+          expect(off.racer.stopped).toBe(false);
+          expect(off.racer.gait).toBe('on');
+          expect(off.racer.props).toBe('');
+          expect([off.racer.bend, off.racer.shake, off.racer.hop, off.racer.scale]).toEqual([
+            0,
+            0,
+            0,
+            '',
+          ]);
+          const { at } = watched.plan.events[1]!;
+          expect(orderAt(watched.plan, at + STOP.off).indexOf(name)).toBeGreaterThan(
+            orderAt(watched.plan, at - 0.01).indexOf(name),
+          );
+        });
+      },
+    );
+
+    RuleScenario(
+      'With reduced motion, the Autumn racers keep still too',
+      ({ Given, When, Then }) => {
+        let squirrel: Watched;
+        let hedgehog: Watched;
+        let leaf: Watched;
+        Given('reduced motion is on', () => undefined);
+        When('the show runs', async () => {
+          squirrel = await run('squirrel', 'Giulia', true);
+          hedgehog = await run('hedgehog', 'Marco', true);
+          leaf = await run('giant leaf', 'Ivo', true);
+        });
+        Then(
+          "the squirrel's tail doesn't whirl, the hedgehog doesn't spin as it rolls, and the giant leaf doesn't turn in its puddle",
+          () => {
+            /** `name` in `watched`, frame by frame, from its `index`th event for `seconds`. */
+            const of = (watched: Watched, name: string, index: number, seconds: number) => {
+              const { at } = watched.plan.events[index]!;
+              return between(watched, at, at + seconds).map((frame) => frame.racers[name]!);
+            };
+            const whirling = of(squirrel, 'Giulia', 0, BURST.seconds);
+            expect(whirling.every((racer) => racer.props.includes('blur'))).toBe(true);
+            for (const racer of whirling) expect(racer.whirl).toBe(0);
+            const rolling = of(hedgehog, 'Marco', 0, BURST.seconds);
+            expect(rolling.every((racer) => racer.props.includes('ball'))).toBe(true);
+            for (const racer of rolling) expect(racer.spin).toBe(0);
+            const wet = of(leaf, 'Ivo', 1, STOP.phew);
+            expect(wet.every((racer) => racer.props.includes('puddle'))).toBe(true);
+            for (const racer of wet) expect(racer.scale).toBe('');
+          },
+        );
+      },
+    );
   });
 
   Rule('The unlucky person crosses first', ({ RuleScenario, RuleScenarioOutline }) => {
