@@ -170,19 +170,19 @@ describeSpec(await loadFeature('./scenarios.feature'), ({ Rule }) => {
       });
     });
 
-    RuleScenario('Scenarios are listed by name', ({ Given, Then }) => {
+    RuleScenario('The Race is listed first, the others by name', ({ Given, Then }) => {
       let modules: Record<string, unknown>;
-      Given('scenarios named "Snail Race", "Hot Potato" and "Shark Bait"', () => {
+      Given('scenarios named "Snail Race", "The Race", "Hot Potato" and "Shark Bait"', () => {
         modules = modulesFor(
-          ['Snail Race', 'Hot Potato', 'Shark Bait'].map((name) => {
+          ['Snail Race', 'The Race', 'Hot Potato', 'Shark Bait'].map((name) => {
             const scenario = fakeScenario({ name });
             return [scenario.id, scenario];
           }),
         );
       });
-      Then('the picker lists "Hot Potato", "Shark Bait", "Snail Race"', async () => {
+      Then('the picker lists "The Race", "Hot Potato", "Shark Bait", "Snail Race"', async () => {
         await startApp(discoverScenarios(modules, { production: false }));
-        expect(pickerNames()).toEqual(['Hot Potato', 'Shark Bait', 'Snail Race']);
+        expect(pickerNames()).toEqual(['The Race', 'Hot Potato', 'Shark Bait', 'Snail Race']);
       });
     });
 

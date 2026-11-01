@@ -154,8 +154,9 @@ function themeProblems(themes: unknown, choices: unknown): string[] {
 
 /**
  * The scenarios in a map of `src/scenarios/<folder>/index.ts` modules, as
- * `import.meta.glob` gives it, sorted by name. Folders starting with `_` are
- * skipped, and so is any scenario with a problem, which the console names.
+ * `import.meta.glob` gives it: The Race first, the others by name. Folders
+ * starting with `_` are skipped, and so is any scenario with a problem, which
+ * the console names.
  */
 export function discoverScenarios(
   modules: Readonly<Record<string, unknown>>,
@@ -172,5 +173,10 @@ export function discoverScenarios(
     if (production && scenario.developmentOnly) continue;
     found.push(scenario);
   }
-  return found.sort((a, b) => compareNames(a.name, b.name));
+  return found.sort(
+    (a, b) => Number(b.id === FIRST) - Number(a.id === FIRST) || compareNames(a.name, b.name),
+  );
 }
+
+/** The scenario the picker lists first. */
+const FIRST = 'the-race';

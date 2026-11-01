@@ -14,9 +14,9 @@ Feature: Scenarios
       Then it is not in the scenario picker
       And the app doesn't load it, so the production build leaves it out
 
-    Scenario: Scenarios are listed by name
-      Given scenarios named "Snail Race", "Hot Potato" and "Shark Bait"
-      Then the picker lists "Hot Potato", "Shark Bait", "Snail Race"
+    Scenario: The Race is listed first, the others by name
+      Given scenarios named "Snail Race", "The Race", "Hot Potato" and "Shark Bait"
+      Then the picker lists "The Race", "Hot Potato", "Shark Bait", "Snail Race"
 
     Scenario: Development-only scenarios stay out of production
       Given a scenario marked development-only
