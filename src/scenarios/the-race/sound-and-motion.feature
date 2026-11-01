@@ -43,6 +43,32 @@ Feature: The Race's sound and motion
       When the show runs on Autumn with music on
       Then the opening of Autumn from Vivaldi's The Four Seasons plays instead of the galop, on the galop's beats: a roll under "On your marks…", its first theme from "Go!", a faster strain from "Final stretch!", a run down at a quarter of the speed in the slow moment, and silence from the line to the fanfare
 
+    # Scott Joplin's The Entertainer (1902) is public domain, arranged from his
+    # score; the 1973 film's arrangement is not. Passes once the user has heard
+    # it in the Lab.
+    @pending
+    Scenario: The Entertainer in the office
+      When the show runs in the office with music on
+      Then Scott Joplin's The Entertainer plays instead of the galop, on the galop's beats: a roll under "On your marks…", its first strain from "Go!", a faster strain from "Final stretch!", a run down at a quarter of the speed in the slow moment, and silence from the line to the fanfare
+
+    # "Under the Sea" from The Little Mermaid is under copyright, so this
+    # calypso is our own tune, not an echo of it. Passes once the user has
+    # heard it in the Lab.
+    @pending
+    Scenario: A calypso of our own under the sea
+      When the show runs under the sea with music on
+      Then a calypso of our own plays instead of the galop, its tune on steel drums over an off-beat bass and a shaker, on the galop's beats: a shaker roll under "On your marks…", its tune from "Go!", a faster strain from "Final stretch!", a run down at a quarter of the speed in the slow moment, and silence from the line to the fanfare
+
+    # Richard Strauss's Also sprach Zarathustra (1896) and Johann Strauss II's
+    # The Blue Danube (1866) are public domain. Passes once the user has heard
+    # it in the Lab.
+    @pending
+    Scenario: Zarathustra, then the Blue Danube, on the Moon
+      When the show runs on the Moon with music on
+      Then the sunrise from Zarathustra plays under "On your marks…": a low held C, the rising C, G and C, a major chord turning minor, and timpani
+      And the Blue Danube's waltz plays from "Go!" instead of the galop, 3 beats a bar at the galop's beats a second, fitted to whole bars so "Final stretch!" comes on the first beat of one
+      And a faster strain plays from "Final stretch!", a run down at a quarter of the speed in the slow moment, and silence from the line to the fanfare
+
   Rule: It reads without sound
 
     Scenario: Captions tell the race, a thing at a time
