@@ -282,14 +282,13 @@ describeSpec(await loadFeature('./sound-and-motion.feature'), ({ Rule }) => {
           expect(pitchesOf(stretch).slice(0, 4)).toEqual(tuneOf('G4 E5 D5 C5'));
         },
       );
-      And('the sports field and the Moon keep the galop', () => {
+      And('the sports field keeps the galop', () => {
         for (const plan of plansOn(names(8), 'Anna', 'field', 3)) {
           const galop = raceMusic(plan);
           // The galop's first bar, after its pickup.
           const tell = lead(galop.notes.filter((note) => note.at >= 0));
           expect(pitchesOf(tell).slice(0, 8)).toEqual(tuneOf('G4 G4 G4 G4 G4 C5 D5 E5'));
           expect(galop.notes.some((note) => note.voice === 'bells')).toBe(false);
-          expect(raceMusic({ ...plan, course: 'moon' }).notes).toEqual(galop.notes);
         }
       });
     });
@@ -366,6 +365,32 @@ describeSpec(await loadFeature('./sound-and-motion.feature'), ({ Rule }) => {
           // "Now tell me, Joe" in the stretch, from its first beat.
           expect(stretch[0]!.at).toBe(stretchAt);
           expect(pitchesOf(stretch).slice(0, 4)).toEqual(tuneOf('G4 G4 A4 C5'));
+        },
+      );
+    });
+
+    RuleScenario('By the Light of the Silvery Moon on the Moon', ({ When, Then }) => {
+      let race: Heard;
+      When('the show runs on the Moon with music on', async () => {
+        race = await listen(names(8), 'Anna', 1, 'moon');
+        expect(race.record.outcome).toBe('finished');
+      });
+      Then(
+        `By the Light of the Silvery Moon plays instead of the galop, on the galop's beats: a roll under "On your marks…", its chorus from "Go!", a faster strain from "Final stretch!", a run down at a quarter of the speed in the slow moment, and silence from the line to the fanfare`,
+        () => {
+          const { racing, stretch, stretchAt } = onTheGalopsBeats(race, 'snare');
+          // "By the" into "Go!", then the chorus, as the 1909 sheet music has it in C.
+          const runUp = lead(race.notes.filter((note) => note.at < 0));
+          expect(pitchesOf(runUp)).toEqual(tuneOf('E4 F4'));
+          expect(pitchesOf(racing).slice(0, 10)).toEqual(tuneOf('G4 C5 D5 E5 D5 C5 A4 D5 C5 A4'));
+          // The chorus's last lines in the stretch, from its first beat.
+          expect(stretch[0]!.at).toBe(stretchAt);
+          expect(pitchesOf(stretch).slice(0, 4)).toEqual(tuneOf('E5 C5 D5 F5'));
+          // The slow moment's run falls from the D the stretch ends on.
+          expect(stretch.at(-1)!.pitch).toBe(pitchOf('D5'));
+          const slowAt = raceMusic(race.plan).at(race.plan.times.slow).beat;
+          const run = lead(race.notes.filter((note) => note.at >= slowAt));
+          expect(pitchesOf(run)).toEqual(tuneOf('D5 C5 A4 G4'));
         },
       );
     });

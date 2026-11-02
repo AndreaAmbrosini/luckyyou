@@ -95,6 +95,8 @@ const CHORDS: Record<string, { root: string; fifth: string; stab: string[] }> = 
   F: { root: 'F2', fifth: 'C3', stab: ['A3', 'C4', 'F4'] },
   D7: { root: 'D3', fifth: 'A2', stab: ['C4', 'D4', 'F#4'] },
   E7: { root: 'E3', fifth: 'B2', stab: ['G#3', 'B3', 'D4'] },
+  A7: { root: 'A2', fifth: 'E3', stab: ['G3', 'C#4', 'E4'] },
+  Dm: { root: 'D3', fifth: 'A2', stab: ['A3', 'D4', 'F4'] },
 };
 
 /** A galop's oom-pah, one chord a bar of four beats: bass, stab, bass, stab. */
