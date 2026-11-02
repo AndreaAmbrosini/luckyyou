@@ -12,7 +12,9 @@
 // edition of his score, a 2/4 bar to each bar of four beats. Under the sea,
 // Mango Walk (traditional Jamaican, public domain) does, on steel drums over a
 // calypso's off-beat bass and a shaker, arranged from the tune in the BBC's
-// Singing Together (Spring 1970), up a fourth from G to C.
+// Singing Together (Spring 1970), up a fourth from G to C. On the Moon, By the
+// Light of the Silvery Moon (Gus Edwards, 1909, public domain) does, arranged
+// from John Chambers's transcription of the 1909 sheet music in C.
 
 import { calypso, drums, melody, oomPah, type Note, type Voice } from '../../scenario-kit';
 import type { Course, Plan } from './plan';
@@ -163,11 +165,49 @@ const MANGO_WALK: Tune = {
   beat: shakers,
 };
 
+const SILVERY_MOON: Tune = {
+  roll: 'snare',
+  pickup: 'E4:.5 F4:.5',
+  // The chorus, seventeen bars, ending on the pickup into itself.
+  strain: [
+    'G4:4 | r C5:.5 D5:.5 E5:.5 D5:.5 C5 | A4:4 | r D5 C5 A4',
+    'B4:4 | r G4:.5 A4:.5 B4:.5 A4:.5 G4 | A4:2 E4:2 | G4:2 r E4:.5 F4:.5',
+    'G4:4 | r C5:.5 D5:.5 E5:.5 D5:.5 C5 | A4:4 | r D5 E5 F5',
+    'E5 C5 D5 F5 | E5 C5:.5 D5:.5 E5:.5 D5:.5 C5 | E5:4 | r C5:.5 D5:.5 E5:.5 C5:.5 D5',
+    'C5:2 r E4:.5 F4:.5',
+  ].join(' | '),
+  chords: [
+    'C',
+    'C',
+    'D7',
+    'D7',
+    'G7',
+    'G7',
+    'Am',
+    'G7',
+    'C',
+    'C',
+    'F',
+    'Dm',
+    'C',
+    'Am',
+    'A7',
+    'D7',
+    'C',
+  ],
+  // The chorus's last lines, up to the D before its close.
+  stretch: 'E5 C5 D5 F5 | E5 C5:.5 D5:.5 E5:.5 D5:.5 C5 | E5:4 | r C5:.5 D5:.5 E5:.5 C5:.5 D5',
+  stretchChords: ['C', 'Am', 'D7', 'G7'],
+  // Down from the D, as "d c A" falls in its fourth bar, to the low G.
+  slow: 'D5:.5 C5:.5 A4:.5 G4:.5',
+};
+
 const TUNES: Partial<Record<Course, Tune>> = {
   christmas: JINGLE_BELLS,
   autumn: AUTUMN,
   office: ENTERTAINER,
   sea: MANGO_WALK,
+  moon: SILVERY_MOON,
 };
 
 /** A calypso's beat for `bars` bars: kicks on 1 and 3 unless left out, a shaker on every half beat, leaning on the off-beats. */

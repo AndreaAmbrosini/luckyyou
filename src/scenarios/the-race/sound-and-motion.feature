@@ -35,7 +35,7 @@ Feature: The Race's sound and motion
     Scenario: Jingle Bells at Christmas, the galop elsewhere
       When the show runs on Christmas with music on
       Then Jingle Bells plays instead of the galop, with sleigh bells, on the galop's beats: a roll under "On your marks…", the chorus from "Go!", a faster strain from "Final stretch!", a run down at a quarter of the speed in the slow moment, and silence from the line to the fanfare
-      And the sports field and the Moon keep the galop
+      And the sports field keeps the galop
 
     # Vivaldi's The Four Seasons (1725) is public domain. The user heard it in
     # the Lab and approved it on 2026-11-01.
@@ -58,15 +58,14 @@ Feature: The Race's sound and motion
       When the show runs under the sea with music on
       Then Mango Walk plays instead of the galop, its tune on steel drums over an off-beat bass and a shaker, on the galop's beats: a shaker roll under "On your marks…", its tune from "Go!", a faster strain from "Final stretch!", a run down at a quarter of the speed in the slow moment, and silence from the line to the fanfare
 
-    # Richard Strauss's Also sprach Zarathustra (1896) and Johann Strauss II's
-    # The Blue Danube (1866) are public domain. Passes once the user has heard
-    # it in the Lab.
-    @pending
-    Scenario: Zarathustra, then the Blue Danube, on the Moon
+    # By the Light of the Silvery Moon (Gus Edwards, 1909) is public domain,
+    # arranged from John Chambers's transcription of the 1909 sheet music. The
+    # user heard Zarathustra's sunrise and the Blue Danube in the Lab, found
+    # them not catchy and not suited to the race, chose this song instead,
+    # heard it in the Lab and approved it on 2026-11-02.
+    Scenario: By the Light of the Silvery Moon on the Moon
       When the show runs on the Moon with music on
-      Then the sunrise from Zarathustra plays under "On your marks…": a low held C, the rising C, G and C, a major chord turning minor, and timpani
-      And the Blue Danube's waltz plays from "Go!" instead of the galop, 3 beats a bar at the galop's beats a second, fitted to whole bars so "Final stretch!" comes on the first beat of one
-      And a faster strain plays from "Final stretch!", a run down at a quarter of the speed in the slow moment, and silence from the line to the fanfare
+      Then By the Light of the Silvery Moon plays instead of the galop, on the galop's beats: a roll under "On your marks…", its chorus from "Go!", a faster strain from "Final stretch!", a run down at a quarter of the speed in the slow moment, and silence from the line to the fanfare
 
   Rule: It reads without sound
 
