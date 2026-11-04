@@ -1,9 +1,11 @@
 import { loadFeature } from '@amiceli/vitest-cucumber';
 import { expect } from 'vitest';
-import { speechBox, stagePx } from '../../scenario-kit';
+import { speechBox, stagePx, type Note } from '../../scenario-kit';
+import { follow, pitchOf } from '../../scenario-kit/music';
 import { createRandom } from '../../scenario-kit/random';
 import { describeSpec } from '../../scenario-kit/testing';
 import dontWakeTheDog from './index';
+import { dogMusic } from './music';
 import {
   atRisk,
   captionAt,
@@ -1160,6 +1162,203 @@ describeSpec(await loadFeature('./dont-wake-the-dog.feature'), ({ Rule }) => {
         }
       });
     });
+  });
+
+  Rule('Its music tiptoes with the crossers', ({ RuleScenario }) => {
+    /**
+     * The song as the kit's player starts it, at 60 frames a second: each
+     * note and the show second it starts.
+     */
+    const played = (plan: Plan) => {
+      const score = dogMusic(plan);
+      const song = follow(score.notes);
+      const starts: { note: Note; time: number }[] = [];
+      for (let frame = 0; frame / 60 <= plan.end; frame++) {
+        const t = frame / 60;
+        const { beat, speed } = score.at(t);
+        for (const due of song.to(beat, speed)) {
+          starts.push({ note: due.note, time: t + due.delay });
+        }
+      }
+      return { score, starts };
+    };
+    /** The tune: the bassoon's upper voice. */
+    const tune = (notes: readonly Note[]) =>
+      notes.filter((note) => note.voice === 'bassoon' && (note.level ?? 1) === 1);
+    /** At `count` people, a plan for each ending, waking with 3 left and with 2. */
+    const everyWay = (count: number) =>
+      ENDINGS.flatMap((ending) =>
+        (count === 2 ? [2] : [3, 2]).map(
+          (wakesWith) =>
+            find(count, (plan) => plan.ending === ending && plan.wakesWith === wakesWith).plan,
+        ),
+      );
+    /** The freezes of `plan`: the last, on the unlucky person's turn, never ends. */
+    const freezes = (plan: Plan): Span[] =>
+      plan.turns.flatMap((turn) => {
+        if (!turn.hold) return [];
+        return turn === plan.turns.at(-1) ? [{ ...turn.hold, to: Infinity }] : [turn.hold];
+      });
+
+    RuleScenario('The Marionette creeps in with the first turn', ({ Given, When, Then, And }) => {
+      let run: Watched;
+      Given('8 people', () => undefined);
+      When('the show runs with music on', async () => {
+        const { team, unlucky, seed } = find(
+          8,
+          (plan) => plan.ending === 'on-back' && plan.turns.some((turn) => turn.scare === 'wuf'),
+        );
+        run = await watch(team, unlucky, seed);
+        expect(run.record.outcome).toBe('finished');
+      });
+      Then(
+        "Gounod's Funeral March of a Marionette starts as the first person steps back to tiptoe to the dog",
+        () => {
+          const { plan } = run;
+          const first = plan.turns[0]!.crossings[0]!.by;
+          const start = plan.turns[0]!.from + WAY.wait;
+          // They leave their seat as the song sets off from its first note.
+          expect(moves(plan, first, { from: 0, to: start })).toBe(false);
+          expect(moves(plan, first, { from: start, to: start + 0.1 })).toBe(true);
+          const score = dogMusic(plan);
+          expect(score.at(start - 1e-6).speed).toBe(0);
+          expect(score.at(start).beat).toBe(0);
+          expect(score.at(start).speed).toBeGreaterThan(0);
+          const setOff = run.moves.find((move) => move.speed > 0)!;
+          expect(setOff.time).toBeGreaterThanOrEqual(start - 1e-9);
+          expect(setOff.time).toBeLessThanOrEqual(start + STEP + 1e-9);
+          expect(Math.min(...run.notes.map((note) => note.at))).toBe(0);
+          // Gounod's clarinet tune, in D minor, on the bassoon: D (E) D C# B, C# D E.
+          expect(
+            tune(run.notes)
+              .slice(0, 8)
+              .map((note) => note.pitch),
+          ).toEqual(['D4', 'E4', 'D4', 'C#4', 'B3', 'C#4', 'D4', 'E4'].map(pitchOf));
+        },
+      );
+      And('it plays a little faster after each crossing that gets through the gate', () => {
+        for (const plan of everyWay(8)) {
+          const score = dogMusic(plan);
+          const throughs = plan.turns.flatMap((turn) =>
+            turn.crossings.flatMap((crossing) => crossing.through ?? []),
+          );
+          expect(throughs.length).toBeGreaterThan(3);
+          // The pace from the first tiptoe, then from each crossing through:
+          // a creak's freeze can end as they get through, so not just before it.
+          const paces = [
+            score.at(plan.turns[0]!.from + WAY.wait).speed,
+            ...throughs.map((t) => score.at(t + 1e-6).speed),
+          ];
+          paces.slice(1).forEach((pace, k) => {
+            expect(pace / paces[k]!).toBeGreaterThan(1);
+            expect(pace / paces[k]!).toBeLessThanOrEqual(1.1);
+          });
+        }
+        // On the stage the pace only ever goes up.
+        const pace = run.moves.filter((move) => move.speed > 0).map((move) => move.speed);
+        pace.forEach((speed, k) => {
+          if (k > 0) expect(speed).toBeGreaterThanOrEqual(pace[k - 1]!);
+        });
+        expect(new Set(pace).size).toBeGreaterThan(3);
+      });
+    });
+
+    RuleScenario('A freeze freezes the music', ({ Given, When, Then, And }) => {
+      let runs: Plan[];
+      Given('8 people', () => undefined);
+      When('a scare makes someone freeze', () => {
+        runs = plansFor(8, 30).map((run) => run.plan);
+        const scared = runs.filter((plan) =>
+          plan.turns.some((turn) => turn.kind === 'safe' && turn.hold),
+        );
+        expect(scared.length).toBeGreaterThan(20);
+      });
+      Then('no note starts until they move again', () => {
+        for (const plan of runs) {
+          for (const { time } of played(plan).starts) {
+            for (const freeze of freezes(plan)) {
+              expect(time < freeze.from - 1e-9 || time >= freeze.to - 1e-9).toBe(true);
+            }
+          }
+        }
+      });
+      And('the tune picks up where it stopped', () => {
+        for (const plan of runs) {
+          const { score, starts } = played(plan);
+          // Every note of the song starts once, in its order: none is skipped at a freeze.
+          expect(starts).toHaveLength(score.notes.length);
+          starts.forEach(({ note }, k) => {
+            if (k > 0) expect(note.at).toBeGreaterThanOrEqual(starts[k - 1]!.note.at);
+          });
+          // The next one comes as they move again.
+          for (const freeze of freezes(plan).filter((each) => each.to < Infinity)) {
+            const next = starts.find(({ time }) => time >= freeze.from)!;
+            const pace = score.at(freeze.to).speed;
+            expect(next.time - freeze.to).toBeLessThan(2 / pace + 1 / 60);
+          }
+        }
+      });
+    });
+
+    RuleScenario("From the heartbeat on, the low end is the heartbeat's", ({ When, Then }) => {
+      let runs: Plan[];
+      When('the heartbeat starts', () => {
+        runs = [2, 3, 4, 8, 12].flatMap(everyWay);
+      });
+      Then("the tune plays on without its bass until the dog's eyes open", () => {
+        for (const plan of runs) {
+          const { score, starts } = played(plan);
+          const people = `${plan.order.length} people, ${plan.ending}`;
+          const thin = score.at(plan.heartbeats[0]!).beat;
+          const bass = score.notes.filter((note) => note.voice === 'bass');
+          expect(
+            bass.filter((note) => note.at >= thin - 1e-9),
+            people,
+          ).toEqual([]);
+          if (plan.order.length > 3) expect(bass.length, people).toBeGreaterThan(0);
+          expect(tune(score.notes).filter((note) => note.at >= thin).length).toBeGreaterThan(0);
+          // On into the unlucky person's turn until its scare holds it, as
+          // every scare does, and nothing once its eyes are open.
+          const last = plan.turns.at(-1)!;
+          expect(last.hold!.from, people).toBeGreaterThan(last.from);
+          expect(score.at(last.from).speed, people).toBeGreaterThan(0);
+          expect(score.at(last.hold!.from - 1e-6).speed, people).toBeGreaterThan(0);
+          expect(Math.max(...starts.map(({ time }) => time)), people).toBeLessThan(plan.wakes);
+        }
+      });
+    });
+
+    RuleScenario(
+      "Silence from the dog's eyes opening to the fanfare",
+      ({ Given, When, Then, And }) => {
+        let run: Watched;
+        Given('the unlucky person is {string}', async (_, name: string) => {
+          run = await watch(['Anna', 'Ben', 'Carla', 'Giulia', name, 'Priya'], name, 1);
+        });
+        When("the dog's eyes open", () => {
+          expect(run.frames.at(-1)!.time).toBeGreaterThan(run.plan.wakes);
+        });
+        Then("the music stops, and doesn't come back", () => {
+          const { plan } = run;
+          const atWake = dogMusic(plan).at(plan.wakes).beat;
+          const ends = Math.max(...run.notes.map((note) => note.at + note.beats));
+          expect(ends).toBeLessThanOrEqual(atWake + 1e-6);
+          const after = run.moves.filter((move) => move.time >= plan.wakes);
+          expect(after.length).toBeGreaterThan(30);
+          for (const move of after) expect(move).toMatchObject({ beat: atWake, speed: 0 });
+        });
+        And('the "Woof!" and the fanfare with "Walkies!" play as before', () => {
+          const { plan, cues } = run;
+          const at = (cue: string) =>
+            cues.filter((each) => each.cue === cue).map((each) => each.time);
+          expect(at('bark')).toHaveLength(1);
+          expect(at('fanfare')).toHaveLength(1);
+          expect(Math.abs(at('bark')[0]! - plan.woof)).toBeLessThanOrEqual(STEP + 1e-9);
+          expect(Math.abs(at('fanfare')[0]! - plan.walkies)).toBeLessThanOrEqual(STEP + 1e-9);
+          expect(frameAt(run, plan.walkies + STEP).sign).toBe('Walkies!');
+        });
+      },
+    );
   });
 
   Rule('It reads without sound', ({ RuleScenario }) => {

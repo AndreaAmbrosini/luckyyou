@@ -244,9 +244,10 @@ Feature: Don't Wake the Dog
       And each time the gate swings shut, its latch clicks
 
   # Gounod's Funeral March of a Marionette (1872), the Alfred Hitchcock
-  # Presents theme, is public domain, arranged from his score. Passes once the
-  # user has heard it in the Lab.
-  @pending
+  # Presents theme, is public domain, arranged from his 1879 orchestral score;
+  # the TV show's arrangement is not. The last scare holds it as every other
+  # does, so it gives nothing away, and it never goes on. The user heard it in
+  # the Lab and approved it on 2026-11-05.
   Rule: Its music tiptoes with the crossers
 
     Scenario: The Marionette creeps in with the first turn
