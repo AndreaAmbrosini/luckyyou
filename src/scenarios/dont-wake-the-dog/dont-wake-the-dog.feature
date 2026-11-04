@@ -243,6 +243,34 @@ Feature: Don't Wake the Dog
       Then each "Sniff…" and "Sniff!" sniffs, each "Wuf…" grumbles, the "Woof!" barks and each "Creak!" creaks, as its bubble appears
       And each time the gate swings shut, its latch clicks
 
+  # Gounod's Funeral March of a Marionette (1872), the Alfred Hitchcock
+  # Presents theme, is public domain, arranged from his score. Passes once the
+  # user has heard it in the Lab.
+  @pending
+  Rule: Its music tiptoes with the crossers
+
+    Scenario: The Marionette creeps in with the first turn
+      Given 8 people
+      When the show runs with music on
+      Then Gounod's Funeral March of a Marionette starts as the first person steps back to tiptoe to the dog
+      And it plays a little faster after each crossing that gets through the gate
+
+    Scenario: A freeze freezes the music
+      Given 8 people
+      When a scare makes someone freeze
+      Then no note starts until they move again
+      And the tune picks up where it stopped
+
+    Scenario: From the heartbeat on, the low end is the heartbeat's
+      When the heartbeat starts
+      Then the tune plays on without its bass until the dog's eyes open
+
+    Scenario: Silence from the dog's eyes opening to the fanfare
+      Given the unlucky person is "Marco"
+      When the dog's eyes open
+      Then the music stops, and doesn't come back
+      And the "Woof!" and the fanfare with "Walkies!" play as before
+
   Rule: It reads without sound
 
     Scenario: Captions tell the story, a turn at a time
