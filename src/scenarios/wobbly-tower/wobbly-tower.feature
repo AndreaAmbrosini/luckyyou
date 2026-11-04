@@ -243,6 +243,33 @@ Feature: Wobbly Tower
       When the show runs at every head count from 2 to 12, with each ending, falling with 3 left and with 2 left
       Then each run lasts between 15 and 29 seconds
 
+  # Julius Fučík's Entry of the Gladiators (1897) is public domain, arranged
+  # from his score. Passes once the user has heard it in the Lab.
+  @pending
+  Rule: Its music marches with the turns
+
+    Scenario: The circus march from the first toss
+      Given 8 people
+      When the show runs with music on
+      Then Fučík's Entry of the Gladiators starts as the first block is tossed
+      And until "Final three!" each block lands on a beat of the march
+
+    Scenario: From the heartbeat on, it marches on tiptoe
+      When the heartbeat starts
+      Then the march plays on at half its pace, quieter, without bass or drums
+
+    Scenario: A hovering block holds a trill
+      Given 8 people
+      When a block hovers over the top of the tower
+      Then the tune holds a trill until the block is set down
+      And each dip slides the trill down, and it comes back up as the block pulls back
+
+    Scenario: Silence from the stillness to the fanfare
+      Given the unlucky person is "Marco"
+      When the tower goes still before it falls
+      Then the music stops, and doesn't come back
+      And the tower's sounds and the fanfare with the hard hat play as before
+
   Rule: It reads without sound
 
     Scenario: Captions tell the story, a turn at a time
