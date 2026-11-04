@@ -3,7 +3,7 @@
 // show that slows down slows its music with it.
 
 export type Voice =
-  'lead' | 'bass' | 'stab' | 'kick' | 'snare' | 'hat' | 'bells' | 'steel' | 'shaker';
+  'lead' | 'bass' | 'stab' | 'kick' | 'snare' | 'hat' | 'bells' | 'steel' | 'shaker' | 'bassoon';
 
 export interface Note {
   /** Where it starts, in beats from the song's first bar; negative before it. */
@@ -254,6 +254,24 @@ export function playNote(
         wave.connect(tone);
         return timed(wave, when, gate + 0.06);
       });
+    }
+    case 'bassoon': {
+      // A bassoon: a reedy sawtooth with its top shut down and a nasal bump
+      // around 500 Hz, tongued short and dry, so it creeps rather than rings.
+      const gate = Math.max(0.05, seconds * 0.55);
+      const shape = gain(context, when, 0.16 * level, 0.012, gate, 0.07);
+      shape.connect(out);
+      const reed = context.createBiquadFilter();
+      reed.type = 'peaking';
+      reed.frequency.setValueAtTime(500, context.currentTime);
+      reed.Q.setValueAtTime(1.5, context.currentTime);
+      reed.gain.setValueAtTime(8, context.currentTime);
+      reed.connect(shape);
+      const tone = lowpass(context, 1400);
+      tone.connect(reed);
+      const wave = oscillator(context, 'sawtooth', hz);
+      wave.connect(tone);
+      return [timed(wave, when, gate + 0.08)];
     }
     case 'bass': {
       const gate = Math.max(0.08, seconds * 0.85);

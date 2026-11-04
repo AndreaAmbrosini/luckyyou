@@ -3,7 +3,7 @@
 // alone; only stage scenarios run shows.
 
 import { gsap } from 'gsap';
-import type { Cue, Scenario } from '../../scenario-kit';
+import type { Cue, Note, Scenario } from '../../scenario-kit';
 import { createRandom } from '../../scenario-kit/random';
 import { runShow, type ShowRecord } from '../../scenario-kit/testing';
 import dontWakeTheDog from './index';
@@ -127,12 +127,22 @@ export interface Frame {
   readonly behindTheDog: boolean;
 }
 
-/** A show as the stage drew it: its plan, its frames, its captions and the sounds it asked for. */
+/**
+ * A show as the stage drew it: its plan, its frames, its captions, the
+ * sounds it asked for, and the song it handed the kit.
+ */
 export interface Watched {
   readonly plan: Plan;
   readonly frames: readonly Frame[];
   readonly record: ShowRecord;
   readonly cues: readonly { readonly time: number; readonly cue: Cue }[];
+  readonly notes: readonly Note[];
+  /** Each move of the song, at the show second of the frame it came in. */
+  readonly moves: readonly {
+    readonly time: number;
+    readonly beat: number;
+    readonly speed: number;
+  }[];
 }
 
 /** Show seconds per frame when watching: coarse, so a show takes a moment. */
@@ -165,6 +175,8 @@ async function record(
   const plan = planShow(team, unlucky, createRandom(seed));
   const frames: Frame[] = [];
   const cues: { time: number; cue: Cue }[] = [];
+  let notes: readonly Note[] = [];
+  const songMoves: { time: number | null; beat: number; speed: number }[] = [];
   let now = 0;
   const listened: Scenario = {
     ...dontWakeTheDog,
@@ -176,6 +188,16 @@ async function record(
           play(cue) {
             cues.push({ time: now, cue });
             return show.sound.play(cue);
+          },
+          music(song) {
+            notes = song;
+            const music = show.sound.music(song);
+            return {
+              to(beat, speed) {
+                songMoves.push({ time: null, beat, speed });
+                music.to(beat, speed);
+              },
+            };
           },
         },
       }),
@@ -199,6 +221,7 @@ async function record(
     reducedMotion,
     onFrame(time, stage) {
       now = time;
+      for (const move of songMoves) move.time ??= time;
       parts ??= {
         people: [...stage.querySelectorAll<HTMLElement>('[data-person]')].map((el) => ({
           name: el.dataset.person!,
@@ -268,7 +291,14 @@ async function record(
       });
     },
   });
-  return { plan, frames, record, cues };
+  return {
+    plan,
+    frames,
+    record,
+    cues,
+    notes,
+    moves: songMoves.map(({ time, ...move }) => ({ time: time!, ...move })),
+  };
 }
 
 /** The frames of `run` from `from` up to, not including, `to`. */

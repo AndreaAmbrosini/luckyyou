@@ -46,6 +46,7 @@ import {
   type Spot,
   type TagSet,
 } from './layout';
+import { dogMusic } from './music';
 import { atRisk, BUBBLE, captionAt, dogAt, moodAt, planShow, type Plan, type Saying } from './plan';
 import styles from './dont-wake-the-dog.module.css';
 
@@ -249,10 +250,22 @@ export async function playDontWakeTheDog(show: Show): Promise<void> {
     );
     gate.swing(open?.gate ? swingAt(open.gate, t) : 0);
   };
+  // The music moves along with the show's time, as everything else does.
+  const score = dogMusic(plan);
+  const music = show.sound.music(score.notes);
   const clock = { t: 0 };
   timeline.to(
     clock,
-    { t: plan.end, duration: plan.end, ease: 'none', onUpdate: () => draw(clock.t) },
+    {
+      t: plan.end,
+      duration: plan.end,
+      ease: 'none',
+      onUpdate: () => {
+        draw(clock.t);
+        const { beat, speed } = score.at(clock.t);
+        music.to(beat, speed);
+      },
+    },
     0,
   );
   draw(0);
