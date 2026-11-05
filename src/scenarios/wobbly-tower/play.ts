@@ -50,6 +50,7 @@ import {
   type TagSet,
   type Spot,
 } from './layout';
+import { wobblyTowerMusic } from './music';
 import {
   bench as drawBench,
   block as drawBlock,
@@ -62,7 +63,7 @@ import {
 } from './parts';
 import {
   BEATS,
-  DIP,
+  hoverAt,
   NEARLY_SAYS,
   planShow,
   READ,
@@ -484,8 +485,24 @@ export async function playWobblyTower(show: Show): Promise<void> {
       if (sweat !== person.sweat) person.face.setSweat((person.sweat = sweat));
     }
   };
+  // The music moves along with the show's time, as everything else does.
+  const score = wobblyTowerMusic(plan);
+  const music = show.sound.music(score.notes);
   const clock = { t: 0 };
-  timeline.to(clock, { t: total, duration: total, ease: 'none', onUpdate: () => draw(clock.t) }, 0);
+  timeline.to(
+    clock,
+    {
+      t: total,
+      duration: total,
+      ease: 'none',
+      onUpdate: () => {
+        draw(clock.t);
+        const { beat, speed } = score.at(clock.t);
+        music.to(beat, speed);
+      },
+    },
+    0,
+  );
   draw(0);
 
   // Who holds a block overhead, from the lift to the whoosh, and who reaches
@@ -819,27 +836,12 @@ function tossed(flight: Flight, to: Block, u: number): Block {
 
 /**
  * The y of a careful toss's block at `t` in its hover, from `hover.from` to
- * its landing at `lands`: at `high`, it dips `hover.dips` times down to
- * `low` and back up, each move DIP.least to DIP.most seconds with still
- * pauses alike before, between and after, then it is set down at `down` in
- * the last DIP.setDown seconds.
+ * its landing at `lands`: at `high`, it dips down to `low` and back up as
+ * `hoverAt` says, then it is set down at `down`.
  */
 function dipping(hover: Hover, lands: number, high: number, low: number, down: number, t: number) {
-  const setDown = lands - DIP.setDown;
-  if (t >= setDown) return high + (down - high) * ease.sway((t - setDown) / DIP.setDown);
-  const room = setDown - hover.from;
-  const move = Math.min(DIP.most, room / (2 * hover.dips));
-  const pause = (room - 2 * hover.dips * move) / (hover.dips + 1);
-  let left = t - hover.from;
-  for (let dip = 0; dip < hover.dips; dip++) {
-    left -= pause;
-    if (left < 0) return high;
-    if (left < move) return high + (low - high) * ease.sway(left / move);
-    left -= move;
-    if (left < move) return low + (high - low) * ease.sway(left / move);
-    left -= move;
-  }
-  return high;
+  const { dip, set } = hoverAt(hover, lands, t, ease.sway);
+  return set > 0 ? high + (down - high) * set : high + (low - high) * dip;
 }
 
 /**
