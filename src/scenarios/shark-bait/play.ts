@@ -20,6 +20,7 @@ import {
   type Show,
 } from '../../scenario-kit';
 import { fitTags, HANGING_SIZE, places, tagBottom, type Place, type Spot } from './layout';
+import { sharkBaitMusic } from './music';
 import { helicopter, sea, shark as drawShark } from './parts';
 import { BEATS, planShow, type Beat, type Rescue } from './plan';
 import styles from './shark-bait.module.css';
@@ -85,6 +86,9 @@ export async function playSharkBait(show: Show): Promise<void> {
   const at = (time: number, run: () => void) => void timeline.call(run, [], time);
   const caption = (time: number, text: string) => at(time, () => show.caption(text));
   const cue = (time: number, sound: Cue) => at(time, () => void show.sound.play(sound));
+  /** Every heartbeat, in show seconds: the music plays quieter under them. */
+  const heartbeats: number[] = [];
+  const heartbeat = (time: number) => (heartbeats.push(time), cue(time, 'heartbeat'));
 
   const { scene, waves } = sea();
   show.stage.append(scene);
@@ -228,6 +232,17 @@ export async function playSharkBait(show: Show): Promise<void> {
   timeline.add(popIn(woohoo), ending.settled);
   timeline.set({}, {}, total);
 
+  // The music moves along with the show's time, as everything else does.
+  const score = sharkBaitMusic({
+    dive: ending.dive,
+    heartbeats: heartbeats.sort((a, b) => a - b),
+  });
+  const music = show.sound.music(score.notes);
+  timeline.eventCallback('onUpdate', () => {
+    const { beat, speed } = score.at(timeline.time());
+    music.to(beat, speed);
+  });
+
   await show.play(timeline);
 
   /**
@@ -295,7 +310,7 @@ export async function playSharkBait(show: Show): Promise<void> {
       chopper.aim(name, time);
       moods(time, name);
       chopper.phase('hovering', time);
-      if (rescue.kind === 'duel') cue(time, 'heartbeat');
+      if (rescue.kind === 'duel') heartbeat(time);
       if (two && (slip === null || index <= slip)) {
         // With two people, the caption follows the rope: "Marco… Giulia… Marco… Giulia!"
         caption(time, aims.slice(0, index + 1).join('… ') + (last ? '!' : '…'));
@@ -325,7 +340,7 @@ export async function playSharkBait(show: Show): Promise<void> {
         const back = out + FEINT.out;
         const halfway = target.place.x + FEINT.reach * (other.place.x - target.place.x);
         moods(out, other.name);
-        cue(out, 'heartbeat');
+        heartbeat(out);
         chopper.swing(halfway, out, FEINT.out);
         chopper.flyTo({ x: halfway, y: HOVER_Y }, out, FEINT.out, 'power2.out');
         moods(back, name);

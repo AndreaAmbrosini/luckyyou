@@ -1,11 +1,13 @@
 import { loadFeature } from '@amiceli/vitest-cucumber';
 import { gsap } from 'gsap';
 import { describe, expect, it } from 'vitest';
-import { stagePx, type Scenario } from '../../scenario-kit';
+import { stagePx, type Cue, type Note, type Scenario } from '../../scenario-kit';
+import { follow, pitchOf } from '../../scenario-kit/music';
 import { describeSpec, runShow, type ShowRecord } from '../../scenario-kit/testing';
 import sharkBait from './index';
 import { fitTags, places, tagBottom, type Place } from './layout';
-import { planShow } from './plan';
+import { HEARTBEAT, RATE } from './music';
+import { planShow, type Rescue } from './plan';
 import { createRandom } from '../../scenario-kit/random';
 
 const TEAM = [
@@ -350,6 +352,81 @@ const BEATS: Record<string, string> = {
   "the shark's run": 'sharks-run',
   'the victory lap': 'victory-lap',
 };
+
+/** A show as it sounded: the song it handed the kit, each move of it, and the sounds it asked for. */
+interface Listened {
+  readonly notes: readonly Note[];
+  /** Each move of the song, at the show second of the frame it came in. */
+  readonly moves: readonly {
+    readonly time: number;
+    readonly beat: number;
+    readonly speed: number;
+  }[];
+  /** Each sound, at the show second of the frame it came in. */
+  readonly cues: readonly { readonly time: number; readonly cue: Cue }[];
+}
+
+/** Show seconds a frame, as the kit plays shows. */
+const STEP = 1 / 60;
+
+/** Runs Shark Bait with a sound that keeps what the show asked of it. */
+async function listen(names: readonly string[], unlucky: string, seed: number): Promise<Listened> {
+  let notes: readonly Note[] = [];
+  const moves: { time: number | null; beat: number; speed: number }[] = [];
+  const cues: { time: number | null; cue: Cue }[] = [];
+  const listened: Scenario = {
+    ...sharkBait,
+    play: (show) =>
+      sharkBait.play({
+        ...show,
+        sound: {
+          play: (cue) => (cues.push({ time: null, cue }), () => undefined),
+          stopAll() {},
+          music(song) {
+            notes = song;
+            return { to: (beat, speed) => void moves.push({ time: null, beat, speed }) };
+          },
+        },
+      }),
+  };
+  const record = await runShow(listened, {
+    names,
+    unlucky,
+    seed,
+    step: STEP,
+    onFrame(time) {
+      for (const each of [...moves, ...cues]) each.time ??= time;
+    },
+  });
+  expect(record.outcome).toBe('finished');
+  return {
+    notes,
+    moves: moves.map(({ time, ...move }) => ({ time: time!, ...move })),
+    cues: cues.map(({ time, cue }) => ({ time: time!, cue })),
+  };
+}
+
+/** The show second the song reached `beat`, between the frames on either side of it. */
+function heard(run: Listened, beat: number): number {
+  const after = run.moves.findIndex((move) => move.beat >= beat);
+  const [before, next] = [run.moves[after - 1], run.moves[after]!];
+  // Before the first frame, back from it at its speed.
+  if (!before) return next.time - (next.beat - beat) / next.speed;
+  if (next.beat === before.beat) return next.time;
+  return (
+    before.time + ((beat - before.beat) / (next.beat - before.beat)) * (next.time - before.time)
+  );
+}
+
+/** When each sound came, in show seconds. */
+const cuesOf = (run: Listened, cue: Cue) =>
+  run.cues.filter((each) => each.cue === cue).map((each) => each.time);
+
+/** The duel's shape: a slip, a feint, or neither. */
+function shapeOf(rescues: readonly Rescue[]): 'slip' | 'feint' | 'neither' {
+  const duel = rescues.find((rescue) => rescue.kind === 'duel')!;
+  return duel.slip !== null ? 'slip' : duel.feint !== null ? 'feint' : 'neither';
+}
 
 describeSpec(await loadFeature('./shark-bait.feature'), ({ Rule }) => {
   Rule('Its card', ({ RuleScenario }) => {
@@ -840,6 +917,154 @@ describeSpec(await loadFeature('./shark-bait.feature'), ({ Rule }) => {
           }
         },
       );
+    });
+  });
+
+  Rule("Its music is the shark's", ({ RuleScenario, RuleScenarioOutline }) => {
+    RuleScenario('A dun-dun from the splash-in, and nothing else', ({ When, Then, And }) => {
+      let run: Listened;
+      When('the show runs with music on', async () => {
+        run = await listen(TEAM, 'Marco', 1);
+      });
+      Then('a low half step, two notes over and over, starts with the splash-in', () => {
+        const [low, high] = [pitchOf('B1'), pitchOf('C2')];
+        const duns = run.notes.filter((note) => note.voice === 'bass');
+        expect(duns.length).toBeGreaterThan(40);
+        duns.forEach((note, k) => {
+          expect(note.at).toBe(k);
+          expect(note.pitch).toBe(k % 2 === 0 ? low : high);
+        });
+        // It sets off in the frame of the splash-in, or the next.
+        const setOff = run.moves.find((move) => move.speed > 0)!;
+        expect(setOff.time).toBeLessThanOrEqual(2 * STEP);
+        expect(setOff.beat).toBeLessThan(2 * STEP * RATE.start);
+        expect(cuesOf(run, 'splash')[0]!).toBeLessThanOrEqual(2 * STEP);
+      });
+      And('nothing else plays: no tune, no chords, no drums', () => {
+        const duns = run.notes.filter((note) => note.voice === 'bass');
+        const growls = run.notes.filter((note) => note.voice === 'bassoon');
+        expect(duns.length + growls.length).toBe(run.notes.length);
+        // The bassoon only doubles each dun, on the same note.
+        expect(growls.map(({ at, beats, pitch }) => ({ at, beats, pitch }))).toEqual(
+          duns.map(({ at, beats, pitch }) => ({ at, beats, pitch })),
+        );
+      });
+    });
+
+    RuleScenarioOutline(
+      'The dun-dun quickens all the way to the dive, with <count> people',
+      ({ When, Then, And }, { count }) => {
+        let runs: { label: string; run: Listened }[];
+        When(
+          'the show runs with <count> people, with a slip, with a feint and with neither',
+          async () => {
+            const names = TEAM.slice(TEAM.length - Number(count));
+            runs = [];
+            for (const shape of ['slip', 'feint', 'neither']) {
+              let seed = 1;
+              while (shapeOf(planShow(names, 'Marco', createRandom(seed)).rescues) !== shape)
+                seed++;
+              const label = `${count} people, ${shape}, seed ${seed}`;
+              runs.push({ label, run: await listen(names, 'Marco', seed) });
+            }
+          },
+        );
+        Then(
+          'the dun-dun gets quicker with every note, from 2 a second at the splash-in to 10 as the shark dives',
+          () => {
+            expect(RATE).toEqual({ start: 2, top: 10 });
+            for (const { label, run } of runs) {
+              const moving = run.moves.filter((move) => move.speed > 0);
+              moving.slice(1).forEach((move, k) => {
+                expect(move.speed, `${label}, at ${move.time}`).toBeGreaterThan(moving[k]!.speed);
+              });
+              expect(moving[0]!.speed, label).toBeCloseTo(2, 2);
+              expect(moving.at(-1)!.speed, label).toBeGreaterThan(9.8);
+              expect(moving.at(-1)!.speed, label).toBeLessThanOrEqual(10);
+              // A dun a beat, each one sooner after the last than the one before.
+              const times = run.notes
+                .filter((note) => note.voice === 'bass')
+                .map((note) => heard(run, note.at));
+              const gaps = times.slice(1).map((time, k) => time - times[k]!);
+              gaps.slice(1).forEach((gap, k) => {
+                expect(gap, `${label}, dun ${k + 2}`).toBeLessThan(gaps[k]!);
+              });
+            }
+          },
+        );
+        And('it plays on under each heartbeat, quieter, without a pause', () => {
+          for (const { label, run } of runs) {
+            const heartbeats = cuesOf(run, 'heartbeat');
+            expect(heartbeats.length, label).toBeGreaterThanOrEqual(2);
+            const duns = run.notes.filter((note) => note.voice === 'bass');
+            const growls = run.notes.filter((note) => note.voice === 'bassoon');
+            let under = 0;
+            duns.forEach((note, k) => {
+              const time = heard(run, note.at);
+              // How far inside the nearest heartbeat's span it starts; outside, below 0.
+              const inside = Math.max(
+                ...heartbeats.map((heartbeat) =>
+                  Math.min(
+                    time - (heartbeat - HEARTBEAT.before),
+                    heartbeat + HEARTBEAT.after - time,
+                  ),
+                ),
+              );
+              if (inside > 2 * STEP) {
+                under++;
+                expect(note.level, `${label}, at ${time}`).toBe(HEARTBEAT.level);
+              } else if (inside < -2 * STEP) {
+                expect(note.level, `${label}, at ${time}`).toBe(1);
+              }
+              expect(growls[k]!.level! / note.level!, label).toBeCloseTo(
+                growls[0]!.level! / duns[0]!.level!,
+                9,
+              );
+            });
+            expect(HEARTBEAT.level).toBeLessThan(1);
+            expect(under, label).toBeGreaterThan(0);
+            // Never longer between duns than at the splash-in.
+            const times = duns.map((note) => heard(run, note.at));
+            times.slice(1).forEach((time, k) => {
+              expect(time - times[k]!, label).toBeLessThanOrEqual(1 / RATE.start + STEP);
+            });
+          }
+        });
+      },
+    );
+
+    RuleScenario('The dive cuts it', ({ Given, When, Then, And }) => {
+      let unlucky: string;
+      let run: Listened;
+      let dive: number;
+      let ride: number;
+      Given('the unlucky person is {string}', (_, name: string) => {
+        unlucky = name;
+      });
+      When('the shark heads for {string}', async () => {
+        run = await listen(TEAM, unlucky, 1);
+        // It splashes as it dives, and again as it comes up.
+        [dive, ride] = cuesOf(run, 'splash').slice(-2) as [number, number];
+        expect(ride - dive).toBeGreaterThan(0.5);
+      });
+      Then("the music stops at the dive, and doesn't come back", () => {
+        const moving = run.moves.filter((move) => move.speed > 0);
+        expect(moving.at(-1)!.time).toBeLessThan(dive);
+        const ends = Math.max(...run.notes.map((note) => note.at + note.beats));
+        const after = run.moves.filter((move) => move.time >= dive);
+        expect(after.length).toBeGreaterThan(60);
+        for (const move of after) expect(move).toMatchObject({ beat: ends, speed: 0 });
+        // As the kit's player hands notes on: none starts at the dive or after.
+        const song = follow(run.notes);
+        for (const move of run.moves) {
+          for (const due of song.to(move.beat, move.speed)) {
+            expect(move.time + due.delay).toBeLessThan(dive);
+          }
+        }
+      });
+      And('the fanfare plays as {string} comes up riding the shark, as before', () => {
+        expect(cuesOf(run, 'fanfare')).toEqual([ride]);
+      });
     });
   });
 

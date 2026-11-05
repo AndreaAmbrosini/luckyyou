@@ -149,27 +149,30 @@ Feature: Shark Bait
 
   # Music of our own. The user asked for John Williams's Jaws theme (1975),
   # which is under copyright, and chose this instead: a low half step, two
-  # notes over and over, and a tune of our own over it, with nothing else from
-  # his score. Passes once the user has heard it in the Lab.
-  @pending
+  # notes over and over, with nothing else from his score. The user heard it
+  # in the Lab and approved it on 2026-11-05.
   Rule: Its music is the shark's
 
-    Scenario: A dun-dun from the splash-in, and a rescue tune over it
+    Scenario: A dun-dun from the splash-in, and nothing else
       When the show runs with music on
       Then a low half step, two notes over and over, starts with the splash-in
-      And a jaunty tune of our own plays over it while people are lifted out
+      And nothing else plays: no tune, no chords, no drums
 
-    Scenario: In the duel, the dun-dun quickens between the heartbeats
-      Given 12 people
-      When the rope comes down for the last two
-      Then the tune stops, and the dun-dun plays on alone, between the heartbeats
-      And it gets quicker with every swing of the rope
+    Scenario Outline: The dun-dun quickens all the way to the dive, with <count> people
+      When the show runs with <count> people, with a slip, with a feint and with neither
+      Then the dun-dun gets quicker with every note, from 2 a second at the splash-in to 10 as the shark dives
+      And it plays on under each heartbeat, quieter, without a pause
 
-    Scenario: The shark's run speeds the dun-dun to a blur, and the dive cuts it
+      Examples:
+        | count |
+        | 2     |
+        | 4     |
+        | 12    |
+
+    Scenario: The dive cuts it
       Given the unlucky person is "Marco"
       When the shark heads for "Marco"
-      Then the dun-dun gets faster and faster until the shark dives
-      And the music stops at the dive, and doesn't come back
+      Then the music stops at the dive, and doesn't come back
       And the fanfare plays as "Marco" comes up riding the shark, as before
 
   Rule: It reads without sound
