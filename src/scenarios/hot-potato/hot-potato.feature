@@ -227,23 +227,22 @@ Feature: Hot Potato
       And at 4 to 7 people, each run lasts between 14.5 and 23.5 seconds
 
   # The Can-can, the Galop infernal from Offenbach's Orpheus in the Underworld
-  # (1858), is public domain, arranged from his score. In the party game,
-  # whoever holds the potato when the music stops is caught. Passes once the
-  # user has heard it in the Lab.
-  @pending
-  Rule: Its music slows with the passes
+  # (1858), is public domain, arranged from Heugel's 1874 vocal score. In the
+  # party game, whoever holds the potato when the music stops is caught. The
+  # user heard it in the Lab and approved it on 2026-11-05, speeding up as the
+  # danger grows rather than slowing with the passes.
+  Rule: Its music speeds up as the danger grows
 
     Scenario: The Can-can goes round with the potato
       Given 6 people
       When the show runs with music on
       Then the Can-can starts with the first pass after the plop
-      And every pass moves it on by the same number of beats, so it slows as the passes do
+      And in the laps every catch lands on a quarter note
 
-    Scenario: From "Last lap!", the low end is the heartbeat's
-      Given 6 people
-      When "Last lap!" appears
-      Then the Can-can drags a little more with every pass, through the crawl
-      And no bass plays from then on
+    Scenario: From "Last lap!", quicker and quicker
+      When the show runs at every head count from 2 to 12, with each ending, with and without going back
+      Then from "Last lap!" the Can-can gets quicker and quicker, 1.7 times as fast as in the laps when it stops
+      And no bass or kick plays from then on
 
     Scenario: The music stops, then it pops
       Given the unlucky person is "Luca"
