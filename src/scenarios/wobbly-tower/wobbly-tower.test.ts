@@ -1,10 +1,12 @@
 import { loadFeature } from '@amiceli/vitest-cucumber';
 import { expect } from 'vitest';
-import { describeSpec, type ShowRecord } from '../../scenario-kit/testing';
+import { describeSpec, runShow, type ShowRecord } from '../../scenario-kit/testing';
 import { createRandom } from '../../scenario-kit/random';
-import { speechBox, stagePx } from '../../scenario-kit';
+import { speechBox, stagePx, type Cue, type Note, type Scenario } from '../../scenario-kit';
+import { follow, pitchOf } from '../../scenario-kit/music';
 import wobblyTower from './index';
-import { LEANS as PEAKS, planShow, type Ending, type Plan, type Turn } from './plan';
+import { wobblyTowerMusic, THIN, TOP, type Score } from './music';
+import { hoverAt, LEANS as PEAKS, planShow, type Ending, type Plan, type Turn } from './plan';
 import {
   blockBox,
   blockHeight,
@@ -83,6 +85,113 @@ const KINDS = [
   'tags',
   'tower',
 ];
+
+/** A show as it sounded: the song it handed the kit, each move of it, and the sounds it asked for. */
+interface Listened {
+  readonly plan: Plan;
+  readonly notes: readonly Note[];
+  /** Each move of the song, at the show second of the frame it came in. */
+  readonly moves: readonly {
+    readonly time: number;
+    readonly beat: number;
+    readonly speed: number;
+  }[];
+  /** Each sound, at the show second of the frame it came in. */
+  readonly cues: readonly { readonly time: number; readonly cue: Cue }[];
+}
+
+/** Runs Wobbly Tower with a sound that keeps what the show asked of it. */
+async function listen(team: readonly string[], unlucky: string, seed: number): Promise<Listened> {
+  let notes: readonly Note[] = [];
+  const moves: { time: number | null; beat: number; speed: number }[] = [];
+  const cues: { time: number | null; cue: Cue }[] = [];
+  const listened: Scenario = {
+    ...wobblyTower,
+    play: (show) =>
+      wobblyTower.play({
+        ...show,
+        sound: {
+          play: (cue) => (cues.push({ time: null, cue }), () => undefined),
+          stopAll() {},
+          music(song) {
+            notes = song;
+            return { to: (beat, speed) => void moves.push({ time: null, beat, speed }) };
+          },
+        },
+      }),
+  };
+  const record = await runShow(listened, {
+    names: team,
+    unlucky,
+    seed,
+    step: STEP,
+    onFrame(time) {
+      for (const each of [...moves, ...cues]) each.time ??= time;
+    },
+  });
+  expect(record.outcome).toBe('finished');
+  return {
+    plan: planShow(team, unlucky, createRandom(seed)),
+    notes,
+    moves: moves.map(({ time, ...move }) => ({ time: time!, ...move })),
+    cues: cues.map(({ time, cue }) => ({ time: time!, cue })),
+  };
+}
+
+/** Two plans at every head count, with each ending, falling with each number left. */
+function everyPlan(): { label: string; plan: Plan }[] {
+  const runs: { label: string; plan: Plan }[] = [];
+  for (let count = 2; count <= 12; count++) {
+    for (const left of count <= 3 ? [count] : [3, 2]) {
+      for (const ending of ENDINGS) {
+        let found = 0;
+        for (let seed = 1; found < 2; seed++) {
+          const plan = planShow(names(count), unluckyOf(count), createRandom(seed));
+          if (plan.fallsWith !== left || plan.ending !== ending) continue;
+          runs.push({ label: `${count} people, ${left} left, ${ending}, seed ${seed}`, plan });
+          found++;
+        }
+      }
+    }
+  }
+  return runs;
+}
+
+/** The show second the song reaches `beat`. */
+function timeOf(score: Score, beat: number, plan: Plan): number {
+  let [low, high] = [0, plan.still.from];
+  for (let k = 0; k < 60; k++) {
+    const middle = (low + high) / 2;
+    if (score.at(middle).beat < beat) low = middle;
+    else high = middle;
+  }
+  return high;
+}
+
+/** The song beats a turn's hover holds the tune, from the hover to the landing or the stop. */
+const holdOf = (score: Score, turn: Turn): [number, number] => [
+  score.at(turn.hover!.from).beat,
+  score.at(turn.lands).beat,
+];
+
+/** The show second each note starts, as the kit's player starts the song at 60 frames a second. */
+function starts(plan: Plan): number[] {
+  const score = wobblyTowerMusic(plan);
+  const song = follow(score.notes);
+  const times: number[] = [];
+  for (let frame = 0; frame / 60 <= plan.end; frame++) {
+    const t = frame / 60;
+    const { beat, speed } = score.at(t);
+    for (const due of song.to(beat, speed)) times.push(t + due.delay);
+  }
+  return times;
+}
+
+/** The block's ease in and out of each move, as the stage draws it. */
+const sway = (u: number) => (1 - Math.cos(Math.PI * u)) / 2;
+
+/** Where the march goes thin: the heartbeat, or the first toss if that's later. */
+const thinFrom = (plan: Plan) => Math.max(plan.spotlight, plan.turns[0]!.lifts);
 
 describeSpec(await loadFeature('./wobbly-tower.feature'), ({ Rule }) => {
   Rule('Its card', ({ RuleScenario }) => {
@@ -1286,6 +1395,234 @@ describeSpec(await loadFeature('./wobbly-tower.feature'), ({ Rule }) => {
         const down = heaped(run.frames, run.plan);
         expect(caption.from - down.time).toBeGreaterThanOrEqual(-1e-9);
         expect(caption.from - down.time).toBeLessThanOrEqual(0.2);
+      });
+    });
+  });
+
+  Rule('Its music marches with the turns', ({ RuleScenario }) => {
+    RuleScenario('The circus march from the first toss', ({ Given, When, Then, And }) => {
+      let run: Listened;
+      Given('8 people', () => {});
+      When('the show runs with music on', async () => {
+        run = await listen(names(8), unluckyOf(8), 1);
+      });
+      Then("Fučík's Entry of the Gladiators starts as the first block is tossed", () => {
+        const { plan } = run;
+        const score = wobblyTowerMusic(plan);
+        expect(run.notes).toEqual(score.notes);
+        const first = plan.turns[0]!;
+        // It sets off between the lift and the toss.
+        const start = timeOf(score, score.at(0).beat + 1e-9, plan);
+        expect(start).toBeGreaterThanOrEqual(first.lifts - 1e-6);
+        expect(start).toBeLessThanOrEqual(first.lands - FLIGHT + 1e-6);
+        expect(score.at(start - 1e-6).speed).toBe(0);
+        // On the stage it sets off in the frame it starts, or the next.
+        const setOff = run.moves.find((move) => move.speed > 0)!;
+        expect(setOff.time).toBeGreaterThanOrEqual(start - 1e-9);
+        expect(setOff.time).toBeLessThanOrEqual(start + 2 * STEP + 1e-9);
+        // Fučík's tune, its pickup as the block flies: B♭ C♭ B♭ A, A♭ G F♯ G.
+        const lead = score.notes.filter((note) => note.voice === 'lead');
+        expect(lead[0]!.at).toBeCloseTo(score.at(start).beat, 6);
+        expect(lead.slice(0, 8).map((note) => note.pitch)).toEqual(
+          ['Bb5', 'Cb6', 'Bb5', 'A5', 'Ab5', 'G5', 'F#5', 'G5'].map(pitchOf),
+        );
+      });
+      And('until "Final three!" each block lands on a beat of the march, a half note', () => {
+        for (const plan of plans(8)) {
+          const score = wobblyTowerMusic(plan);
+          const safe = during(plan, 'safe');
+          expect(safe.length).toBeGreaterThanOrEqual(4);
+          for (const turn of safe) {
+            expect(turn.lands).toBeLessThan(plan.spotlight);
+            const half = score.at(turn.lands).beat / 2;
+            expect(half).toBeCloseTo(Math.round(half), 9);
+            // Near the march's pace of 4 quarter notes a second.
+            expect(score.at(turn.lands - 0.01).speed).toBeGreaterThan(3.3);
+            expect(score.at(turn.lands - 0.01).speed).toBeLessThan(4.7);
+          }
+        }
+      });
+    });
+
+    RuleScenario('From the heartbeat on, thinner and quicker', ({ When, Then, And }) => {
+      let runs: { label: string; plan: Plan }[];
+      When(
+        'the show runs at every head count from 2 to 12, with each ending, falling with 3 left and with 2 left',
+        () => {
+          runs = everyPlan();
+          expect(runs).toHaveLength(2 * 3 * (2 + 2 * 9));
+        },
+      );
+      Then('from the heartbeat the march plays on quieter, without bass or drums', () => {
+        const low = new Set(['bass', 'kick', 'snare', 'hat']);
+        for (const { label, plan } of runs) {
+          const score = wobblyTowerMusic(plan);
+          const thin = score.at(thinFrom(plan)).beat;
+          const before = score.notes.filter((note) => note.at < thin - 1e-9);
+          const after = score.notes.filter((note) => note.at >= thin - 1e-9);
+          // With 2 or 3 people the heartbeat comes first, so there's none at all.
+          if (plan.order.length > 3) {
+            expect(
+              before.some((note) => low.has(note.voice)),
+              label,
+            ).toBe(true);
+          }
+          for (const note of before) expect(note.level, label).toBeUndefined();
+          expect(
+            after.filter((note) => low.has(note.voice)),
+            label,
+          ).toEqual([]);
+          expect(
+            after.some((note) => note.voice === 'lead'),
+            label,
+          ).toBe(true);
+          for (const note of after) expect(note.level, label).toBe(THIN);
+        }
+      });
+      And(
+        'it gets quicker with every turn, 1.6 times as quick when the tower goes still as at the heartbeat',
+        () => {
+          expect(TOP).toBe(1.6);
+          for (const { label, plan } of runs) {
+            const score = wobblyTowerMusic(plan);
+            const from = thinFrom(plan);
+            const first = score.at(from).speed;
+            expect(first, label).toBeGreaterThan(0);
+            let before = first;
+            for (let t = from + 0.05; t < plan.still.from; t += 0.05) {
+              const { speed } = score.at(t);
+              expect(speed, label).toBeGreaterThan(before);
+              before = speed;
+            }
+            // Each turn from the heartbeat on lifts its block quicker than the one before.
+            let last = first;
+            const lifts = plan.turns.filter((turn) => turn.lifts > from);
+            expect(lifts.length, label).toBeGreaterThan(0);
+            for (const turn of lifts) {
+              expect(score.at(turn.lifts).speed, label).toBeGreaterThan(last);
+              last = score.at(turn.lifts).speed;
+            }
+            expect(score.at(plan.still.from - 1e-9).speed / first, label).toBeCloseTo(1.6, 6);
+          }
+        },
+      );
+    });
+
+    RuleScenario('A hovering block holds a trill', ({ Given, When, Then, And }) => {
+      let hovers: { plan: Plan; score: Score; turn: Turn; trill: Note[]; held: number }[];
+      Given('8 people', () => {});
+      When('a block hovers over the top of the tower', () => {
+        hovers = plans(8).flatMap((plan) => {
+          const score = wobblyTowerMusic(plan);
+          return plan.turns
+            .filter((turn) => turn.hover && turn.hover.from < plan.still.from)
+            .map((turn) => {
+              const [from, to] = holdOf(score, turn);
+              const trill = score.notes.filter(
+                (note) => note.at >= from - 1e-9 && note.at < to - 1e-9,
+              );
+              const tune = score.notes.filter(
+                (note) => note.voice === 'lead' && note.at < from - 1e-9,
+              );
+              return { plan, score, turn, trill, held: tune.at(-1)!.pitch! };
+            });
+        });
+        expect(hovers.length).toBeGreaterThan(20);
+      });
+      Then('the tune holds a trill until the block is set down', () => {
+        for (const { plan, score, turn, trill, held } of hovers) {
+          const seconds = Math.min(turn.lands, plan.still.from) - turn.hover!.from;
+          // Nothing but the trill, 10 or more notes a second, from the hover to the landing.
+          expect(trill.every((note) => note.voice === 'lead')).toBe(true);
+          expect(trill.length).toBeGreaterThanOrEqual(10 * seconds);
+          expect(trill[0]!.pitch).toBe(held);
+          const last = trill.at(-1)!;
+          const until = score.at(Math.min(turn.lands, plan.still.from - 1e-9)).beat;
+          expect(last.at + last.beats).toBeCloseTo(until, 6);
+          // Where the block holds still, a half step up and back.
+          trill.forEach((note, k) => {
+            const { dip, set } = hoverAt(turn.hover!, turn.lands, timeOf(score, note.at, plan));
+            if (dip < 0.1 && set === 0) expect(note.pitch).toBe(held + (k % 2));
+          });
+        }
+      });
+      And('each dip slides the trill down, and it comes back up as the block pulls back', () => {
+        for (const { plan, score, turn, trill, held } of hovers) {
+          const where = trill.map((note) => ({
+            pitch: note.pitch!,
+            ...hoverAt(turn.hover!, turn.lands, timeOf(score, note.at, plan), sway),
+          }));
+          const bottoms = where.filter((each) => each.dip > 0.9);
+          const still = where.filter((each) => each.dip === 0 && each.set === 0);
+          expect(bottoms.length).toBeGreaterThanOrEqual(turn.hover!.dips);
+          for (const each of bottoms) expect(each.pitch).toBeLessThanOrEqual(held - 2);
+          // Between the dips it is back where it started.
+          expect(still.length).toBeGreaterThan(0);
+          for (const each of still) expect([held, held + 1]).toContain(each.pitch);
+          // And as the block is set down it slides further.
+          for (const each of where.filter((each) => each.set > 0.9)) {
+            expect(each.pitch).toBeLessThanOrEqual(held - 5);
+          }
+        }
+      });
+      And('once the block is down the tune goes on from where it held', () => {
+        for (const plan of plans(8)) {
+          const score = wobblyTowerMusic(plan);
+          const holds = plan.turns.filter((turn) => turn.hover).map((turn) => holdOf(score, turn));
+          const trilled = (note: Note) =>
+            holds.some(([from, to]) => note.at >= from - 1e-9 && note.at < to - 1e-9);
+          const tune = score.notes.filter((note) => note.voice === 'lead' && !trilled(note));
+          expect(tune.length).toBeGreaterThan(30);
+          // Taking out the beats it held, each note of the tune comes a beat or less
+          // after the one before, as Fučík wrote it: nothing is skipped.
+          for (let k = 1; k < tune.length; k++) {
+            const [before, note] = [tune[k - 1]!, tune[k]!];
+            const holding = holds
+              .filter(([from, to]) => from >= before.at - 1e-9 && to <= note.at + 1e-9)
+              .reduce((sum, [from, to]) => sum + to - from, 0);
+            const gap = note.at - before.at - holding;
+            expect(gap).toBeGreaterThan(1e-9);
+            expect(gap).toBeLessThanOrEqual(1 + 1e-9);
+          }
+        }
+      });
+    });
+
+    RuleScenario('Silence from the stillness to the fanfare', ({ Given, When, Then, And }) => {
+      let run: Listened;
+      Given('the unlucky person is {string}', async (_, name: string) => {
+        run = await listen(MARCO_TEAM, name, 1);
+      });
+      When('the tower goes still before it falls', () => {
+        expect(run.plan.still.from).toBeLessThan(run.plan.still.to);
+      });
+      Then("the music stops, and doesn't come back", () => {
+        const { plan } = run;
+        const ends = wobblyTowerMusic(plan).at(plan.still.from).beat;
+        expect(Math.max(...run.notes.map((note) => note.at + note.beats))).toBeLessThanOrEqual(
+          ends + 1e-9,
+        );
+        // Every ending, at every head count: no note starts once it is still.
+        for (const { label, plan: each } of everyPlan()) {
+          expect(Math.max(...starts(each)), label).toBeLessThan(each.still.from);
+        }
+        // Allowing for the frame the harness can run behind the show.
+        const after = run.moves.filter((move) => move.time >= plan.still.from + 2 * STEP);
+        expect(after.length).toBeGreaterThan(60);
+        for (const move of after) expect(move).toMatchObject({ beat: ends, speed: 0 });
+      });
+      And("the tower's sounds and the fanfare with the hard hat play as before", () => {
+        const { plan, cues } = run;
+        const at = (cue: Cue) => cues.filter((each) => each.cue === cue).map((each) => each.time);
+        expect(at('thunk')).toHaveLength(2 + plan.turns.length);
+        expect(at('whoosh')).toHaveLength(plan.turns.length);
+        expect(at('heartbeat')).toHaveLength(plan.heartbeats.length);
+        expect(at('creak')).toHaveLength(plan.ending === 'dead-still' ? 2 : 1);
+        expect(at('tumble')).toHaveLength(1);
+        expect(Math.abs(at('tumble')[0]! - plan.still.to)).toBeLessThanOrEqual(2 * STEP + 1e-9);
+        expect(at('fanfare')).toHaveLength(1);
+        expect(at('fanfare')[0]!).toBeGreaterThan(at('tumble')[0]!);
+        expect(at('fanfare')[0]!).toBeLessThan(plan.end);
       });
     });
   });

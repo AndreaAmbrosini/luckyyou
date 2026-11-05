@@ -125,6 +125,37 @@ export const NEARLY_SAYS = { whoa: 0.25, caption: 1.3 } as const;
  */
 export const DIP = { least: 0.34, most: 0.6, setDown: 0.3 } as const;
 
+/**
+ * Where a careful toss's block is at `t` in its hover, from `hover.from` to
+ * its landing at `lands`: `dip`, 0 at the hover point to 1 at the bottom of
+ * a dip, and `set`, 0 until the last DIP.setDown seconds, when it is set
+ * down, to 1 as it lands. It dips `hover.dips` times, each move down or back
+ * up DIP.least to DIP.most seconds, with still pauses alike before, between
+ * and after; `shape` eases each move.
+ */
+export function hoverAt(
+  hover: Hover,
+  lands: number,
+  t: number,
+  shape: (u: number) => number = (u) => u,
+): { dip: number; set: number } {
+  const setDown = lands - DIP.setDown;
+  if (t >= setDown) return { dip: 0, set: shape(Math.min(1, (t - setDown) / DIP.setDown)) };
+  const room = setDown - hover.from;
+  const move = Math.min(DIP.most, room / (2 * hover.dips));
+  const pause = (room - 2 * hover.dips * move) / (hover.dips + 1);
+  let left = t - hover.from;
+  for (let dip = 0; dip < hover.dips; dip++) {
+    left -= pause;
+    if (left < 0) return { dip: 0, set: 0 };
+    if (left < move) return { dip: shape(left / move), set: 0 };
+    left -= move;
+    if (left < move) return { dip: 1 - shape(left / move), set: 0 };
+    left -= move;
+  }
+  return { dip: 0, set: 0 };
+}
+
 const ENDINGS: readonly Ending[] = ['dead-still', 'it-holds', 'slow-lean'];
 
 /** The first round starts here, after the paper blocks; with 2 or 3 the spotlight comes at `just`. */
