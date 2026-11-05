@@ -254,9 +254,10 @@ Feature: Wobbly Tower
       Then Fučík's Entry of the Gladiators starts as the first block is tossed
       And until "Final three!" each block lands on a beat of the march
 
-    Scenario: From the heartbeat on, it marches on tiptoe
+    Scenario: From the heartbeat on, thinner and quicker
       When the heartbeat starts
-      Then the march plays on at half its pace, quieter, without bass or drums
+      Then the march plays on quieter, without bass or drums
+      And it gets quicker with every turn until the tower goes still
 
     Scenario: A hovering block holds a trill
       Given 8 people

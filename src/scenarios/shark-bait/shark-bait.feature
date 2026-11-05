@@ -159,10 +159,11 @@ Feature: Shark Bait
       Then a low half step, two notes over and over, starts with the splash-in
       And a jaunty tune of our own plays over it while people are lifted out
 
-    Scenario: In the duel, the dun-dun waits between the heartbeats
+    Scenario: In the duel, the dun-dun quickens between the heartbeats
       Given 12 people
       When the rope comes down for the last two
-      Then the tune stops, and the dun-dun plays on alone, slower, between the heartbeats
+      Then the tune stops, and the dun-dun plays on alone, between the heartbeats
+      And it gets quicker with every swing of the rope
 
     Scenario: The shark's run speeds the dun-dun to a blur, and the dive cuts it
       Given the unlucky person is "Marco"
