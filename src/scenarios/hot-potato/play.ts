@@ -48,6 +48,7 @@ import {
   type Point,
   type Spot,
 } from './layout';
+import { hotPotatoMusic } from './music';
 import { burst, confetti, crown, field, fuse as drawFuse, potato as drawPotato } from './parts';
 import { BEATS, planShow, type Beat, type Catch, type Ending } from './plan';
 import styles from './hot-potato.module.css';
@@ -95,7 +96,16 @@ interface Person {
 export async function playHotPotato(show: Show): Promise<void> {
   const plan = planShow(show.names, show.unlucky, show.random);
   const looks = handOutLooks(show.names, show.random);
-  const timeline = gsap.timeline({ paused: true });
+  // The music moves along with the show's time, as everything else does.
+  const score = hotPotatoMusic(plan);
+  const music = show.sound.music(score.notes);
+  const timeline = gsap.timeline({
+    paused: true,
+    onUpdate: () => {
+      const { beat, speed } = score.at(timeline.time());
+      music.to(beat, speed);
+    },
+  });
   const at = (time: number, run: () => void) => void timeline.call(run, [], time);
   const cue = (time: number, sound: Cue) => at(time, () => void show.sound.play(sound));
   const caption = (time: number, text: string) => at(time, () => show.caption(text));

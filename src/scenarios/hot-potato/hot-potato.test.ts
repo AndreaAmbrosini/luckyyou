@@ -3,8 +3,10 @@ import { gsap } from 'gsap';
 import { beforeAll, describe, expect, it } from 'vitest';
 import { describeSpec, runShow, type ShowRecord } from '../../scenario-kit/testing';
 import { createRandom } from '../../scenario-kit/random';
-import { leanRoom, speechBox } from '../../scenario-kit';
+import { leanRoom, speechBox, type Cue, type Note, type Scenario } from '../../scenario-kit';
+import { follow, pitchOf } from '../../scenario-kit/music';
 import hotPotato from './index';
+import { hotPotatoMusic, TOP } from './music';
 import {
   apart,
   besideHead,
@@ -602,6 +604,73 @@ function whoaFor(plan: Plan, label: string): Whoa {
 /** When a "Phew!" bubble went up for someone sitting down at `time`. */
 const phewAt = (run: Run, time: number) =>
   run.bubbles.find((each) => each.text === 'Phew!' && Math.abs(each.time - time) <= 2 * STEP);
+
+/** A show as it sounded: the song it handed the kit, each move of it, and the sounds it asked for. */
+interface Heard {
+  readonly plan: Plan;
+  readonly record: ShowRecord;
+  readonly notes: readonly Note[];
+  /** Each move of the song, at the show second of the frame it came in. */
+  readonly moves: readonly {
+    readonly time: number;
+    readonly beat: number;
+    readonly speed: number;
+  }[];
+  /** Each sound, at the show second of the frame it came in. */
+  readonly cues: readonly { readonly time: number; readonly cue: Cue }[];
+}
+
+/** Runs Hot Potato with a sound that keeps what the show asked of it. */
+async function listen(team: readonly string[], unlucky: string, seed: number): Promise<Heard> {
+  let notes: readonly Note[] = [];
+  const moves: { time: number | null; beat: number; speed: number }[] = [];
+  const cues: { time: number | null; cue: Cue }[] = [];
+  const listened: Scenario = {
+    ...hotPotato,
+    play: (show) =>
+      hotPotato.play({
+        ...show,
+        sound: {
+          play: (cue) => (cues.push({ time: null, cue }), () => undefined),
+          stopAll() {},
+          music(song) {
+            notes = song;
+            return { to: (beat, speed) => void moves.push({ time: null, beat, speed }) };
+          },
+        },
+      }),
+  };
+  const record = await runShow(listened, {
+    names: team,
+    unlucky,
+    seed,
+    step: STEP,
+    onFrame(time) {
+      for (const each of [...moves, ...cues]) each.time ??= time;
+    },
+  });
+  expect(record.outcome).toBe('finished');
+  return {
+    plan: planShow(team, unlucky, createRandom(seed)),
+    record,
+    notes,
+    moves: moves.map(({ time, ...move }) => ({ time: time!, ...move })),
+    cues: cues.map(({ time, cue }) => ({ time: time!, cue })),
+  };
+}
+
+/** The show second each note starts, as the kit's player starts the song at 60 frames a second. */
+function starts(plan: Plan): number[] {
+  const score = hotPotatoMusic(plan);
+  const song = follow(score.notes);
+  const times: number[] = [];
+  for (let frame = 0; frame / 60 <= total(plan); frame++) {
+    const t = frame / 60;
+    const { beat, speed } = score.at(t);
+    for (const due of song.to(beat, speed)) times.push(t + due.delay);
+  }
+  return times;
+}
 
 describeSpec(await loadFeature('./hot-potato.feature'), ({ Rule }) => {
   Rule('Its card', ({ RuleScenario }) => {
@@ -1588,6 +1657,133 @@ describeSpec(await loadFeature('./hot-potato.feature'), ({ Rule }) => {
           expect(total(plan), label).toBeGreaterThanOrEqual(14.5);
           expect(total(plan), label).toBeLessThanOrEqual(23.5);
         }
+      });
+    });
+  });
+
+  Rule('Its music speeds up as the danger grows', ({ RuleScenario }) => {
+    RuleScenario('The Can-can goes round with the potato', ({ Given, When, Then, And }) => {
+      let run: Heard;
+      Given('6 people', () => {});
+      When('the show runs with music on', async () => {
+        run = await listen(names(6), 'Fabio', 1);
+      });
+      Then('the Can-can starts with the first pass after the plop', () => {
+        const { plan } = run;
+        const first = plan.catches[1]!;
+        expect(first.from).toBe(plan.catches[0]!.by);
+        const score = hotPotatoMusic(plan);
+        expect(run.notes).toEqual(score.notes);
+        expect(score.at(first.thrown - 1e-6).speed).toBe(0);
+        expect(score.at(first.thrown).speed).toBeGreaterThan(0);
+        // On the stage it sets off in the frame the pass leaves, or the next.
+        const setOff = run.moves.find((move) => move.speed > 0)!;
+        expect(setOff.time).toBeGreaterThanOrEqual(first.thrown - 1e-9);
+        expect(setOff.time).toBeLessThanOrEqual(first.thrown + 2 * STEP + 1e-9);
+        // Offenbach's chorus, its pickup as the pass flies: G, C, D F E D, G G.
+        const lead = score.notes.filter((note) => note.voice === 'lead');
+        expect(lead[0]!.at).toBe(score.at(first.thrown).beat);
+        expect(lead.slice(0, 8).map((note) => note.pitch)).toEqual(
+          ['G4', 'C5', 'D5', 'F5', 'E5', 'D5', 'G5', 'G5'].map(pitchOf),
+        );
+      });
+      And('in the laps every catch lands on a quarter note', () => {
+        for (const plan of plans(6, 'Fabio', 20)) {
+          const score = hotPotatoMusic(plan);
+          const laps = during(plan, 'laps');
+          expect(laps.length).toBeGreaterThan(7);
+          // A beat is an eighth: each catch two on from the last, the first on the first bar.
+          laps.forEach((each, k) => expect(score.at(each.at).beat).toBeCloseTo(2 * k, 9));
+        }
+      });
+    });
+
+    RuleScenario('From "Last lap!", quicker and quicker', ({ When, Then, And }) => {
+      let runs: ReturnType<typeof everyPlan>;
+      When(
+        'the show runs at every head count from 2 to 12, with each ending, with and without going back',
+        () => {
+          runs = everyPlan();
+          for (let count = 2; count <= 12; count++) {
+            const these = runs.filter(({ plan }) => plan.ring.length === count);
+            const endings = new Set(these.map(({ plan }) => plan.ending));
+            for (const ending of ENDINGS.filter((each) => each !== 'strays')) {
+              expect(endings, `${count} people`).toContain(ending);
+            }
+            if (count > 2) expect(these.some(({ plan }) => plan.back)).toBe(true);
+          }
+          expect(runs.some(({ plan }) => plan.ending === 'strays')).toBe(true);
+          expect(runs.some(({ plan }) => !plan.back)).toBe(true);
+        },
+      );
+      Then(
+        'from "Last lap!" the Can-can gets quicker and quicker, 1.7 times as fast as in the laps when it stops',
+        () => {
+          expect(TOP).toBe(1.7);
+          for (const { label, plan } of runs) {
+            const score = hotPotatoMusic(plan);
+            const lastLap = startOf(plan, 'last-lap');
+            const laps = score.at(startOf(plan, 'laps') + 0.01).speed;
+            expect(laps, label).toBeGreaterThan(0);
+            expect(score.at(lastLap - 1e-6).speed, label).toBeCloseTo(laps, 9);
+            let before = laps;
+            for (let t = lastLap + 0.05; t < plan.still.from; t += 0.05) {
+              const { speed } = score.at(t);
+              expect(speed, label).toBeGreaterThan(before);
+              before = speed;
+            }
+            expect(score.at(plan.still.from - 1e-9).speed / laps, label).toBeCloseTo(1.7, 6);
+          }
+        },
+      );
+      And('no bass or kick plays from then on', () => {
+        for (const { label, plan } of runs) {
+          const score = hotPotatoMusic(plan);
+          const thin = score.at(startOf(plan, 'last-lap')).beat;
+          const low = score.notes.filter((note) => note.voice === 'bass' || note.voice === 'kick');
+          expect(low.length, label).toBeGreaterThan(0);
+          expect(
+            low.filter((note) => note.at >= thin - 1e-9),
+            label,
+          ).toEqual([]);
+          // The tune plays on.
+          expect(score.notes.some((note) => note.voice === 'lead' && note.at >= thin)).toBe(true);
+        }
+      });
+    });
+
+    RuleScenario('The music stops, then it pops', ({ Given, When, Then, And }) => {
+      let run: Heard;
+      Given('the unlucky person is {string}', async (_, name: string) => {
+        run = await listen(['Anna', 'Ben', 'Carla', 'Dario', 'Elena', name], name, 1);
+      });
+      When('the potato goes still in the last second', () => {
+        expect(run.plan.still.from).toBeGreaterThan(startOf(run.plan, 'last-second'));
+        expect(run.plan.still.from).toBeLessThan(startOf(run.plan, 'pop'));
+      });
+      Then("the music stops, and doesn't come back", () => {
+        const { plan } = run;
+        const ends = hotPotatoMusic(plan).at(plan.still.from).beat;
+        expect(Math.max(...run.notes.map((note) => note.at + note.beats))).toBeLessThanOrEqual(
+          ends + 1e-9,
+        );
+        // Every ending, at every head count: no note starts once it is still.
+        for (const { label, plan: each } of everyPlan()) {
+          expect(Math.max(...starts(each)), label).toBeLessThan(each.still.from);
+        }
+        // Allowing for the frame the harness can run behind the show.
+        const after = run.moves.filter((move) => move.time >= plan.still.from + 2 * STEP);
+        expect(after.length).toBeGreaterThan(30);
+        for (const move of after) expect(move).toMatchObject({ beat: ends, speed: 0 });
+      });
+      And('the pop and the fanfare play as before', () => {
+        const { plan, cues } = run;
+        const at = (cue: Cue) => cues.filter((each) => each.cue === cue).map((each) => each.time);
+        const pop = startOf(plan, 'pop');
+        expect(at('pop')).toHaveLength(1);
+        expect(at('fanfare')).toHaveLength(1);
+        expect(Math.abs(at('pop')[0]! - pop)).toBeLessThanOrEqual(2 * STEP + 1e-9);
+        expect(Math.abs(at('fanfare')[0]! - (pop + 0.3))).toBeLessThanOrEqual(2 * STEP + 1e-9);
       });
     });
   });
