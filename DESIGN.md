@@ -54,8 +54,8 @@ that goes on. Every value is in [tokens.css](src/styles/tokens.css).
   a done one raised, with a mint check and what was chosen; the rest dashed.
 - **Person tile**: four across, `--radius-person`. Ticked: marigold, a
   marigold check in a ground box. Unticked: no fill, dashed, an empty box. A
-  long name wraps inside its tile; a new one pops in, unless motion is reduced.
-  In remove mode: raised, solid, and a round tomato ×.
+  long name wraps; a new tile pops in. In remove mode: raised, solid, and a
+  round tomato ×.
 - **Add tile**: panel, two tiles wide: a plus, the field and a white "Add".
 - **Count pill**: "8 of 10 in", mint from 2 to 12 ticked, tomato otherwise.
 - **Buttons**: main in tomato; secondary on panel;
