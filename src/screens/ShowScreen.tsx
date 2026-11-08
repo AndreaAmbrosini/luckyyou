@@ -25,6 +25,8 @@ export interface Run {
   readonly muted: boolean;
   /** The music's volume, 0 to 1; 0 when the music is off. */
   readonly music: number;
+  /** The job the unlucky person wins, as the host named it; none unless named. */
+  readonly prize?: string;
 }
 
 /** The music's settings, as the header's music panel sets them. */

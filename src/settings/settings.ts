@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { readJson, writeJson } from '../storage';
+import { PRIZE_MAX } from './prize';
 
 export const SETTINGS_KEY = 'luckyyou:v1:settings';
 
@@ -11,24 +12,28 @@ export interface Settings {
   readonly musicVolume: number;
   /** The id of the show played last, ready to play again. */
   readonly lastScenario: string | null;
+  /** The job, as typed on Pick a show; empty for none. */
+  readonly prize: string;
 }
 
 /** The stored settings, with a default for anything missing or damaged. */
 export function loadSettings(): Settings {
   const stored = readJson(SETTINGS_KEY);
-  const { muted, music, musicVolume, lastScenario } = (
+  const { muted, music, musicVolume, lastScenario, prize } = (
     typeof stored === 'object' && stored !== null ? stored : {}
   ) as {
     muted?: unknown;
     music?: unknown;
     musicVolume?: unknown;
     lastScenario?: unknown;
+    prize?: unknown;
   };
   return {
     muted: muted === true,
     music: music !== false,
     musicVolume: isVolume(musicVolume) ? musicVolume : 70,
     lastScenario: typeof lastScenario === 'string' ? lastScenario : null,
+    prize: typeof prize === 'string' ? prize.slice(0, PRIZE_MAX) : '',
   };
 }
 

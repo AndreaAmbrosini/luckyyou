@@ -2,8 +2,7 @@
 
 LuckyYou's look is **Backstage**: dark screens around a bright show. Flat
 panels with thin outlines, marigold for what's chosen, tomato for the button
-that goes on. Every value is in [tokens.css](src/styles/tokens.css); this
-file says how they're used.
+that goes on. Every value is in [tokens.css](src/styles/tokens.css).
 
 ## Every screen
 
@@ -59,18 +58,18 @@ file says how they're used.
   tomato ×.
 - **Add tile**: panel: a plus, the field and a white "Add".
 - **Count pill**: "8 of 10 in", mint from 2 to 12 ticked, tomato otherwise.
-- **Buttons**: main in tomato with `--shadow-press`; secondary on panel;
+- **Buttons**: main in tomato; secondary on panel;
   outline (the bar's others) unfilled; quiet as underlined text; "Done" in
   mint; disabled unfilled and dashed, with its reason beside it.
 - **Bar**: a panel along the bottom of every step before the show: the way
   back left, the main button right, a status between, tomato-text when it
   blocks, marigold for a hint.
-- **Show card**: panel: a 16 : 9 still from the show, `--radius-picture`,
+- **Show card**: panel: a 16 : 9 still, `--radius-picture`,
   "Last time" over its top left; the name, the description, chips for how
   many it takes and "+ Line-up", or why it can't run. Chosen: a marigold ring
   and check badge. Can't run: dashed, the still dimmed.
-- **Chosen-show panel**: the show's name and line, what it takes and what
-  comes next.
+- **Chosen-show panel**: the show's name over the prize, a ground well by a
+  raised die; what it takes and what comes next.
 - **Sticker**: white on the ground, unoutlined. Its controls have an ink
   outline; pressed, marigold.
 
@@ -97,12 +96,11 @@ ground, an open group marigold; chosen tiles marigold.
 ground round its stage.
 
 **Result.** Stars and sparkles round a tilted sticker card: "Lucky you," over
-the name in grape, the marigold ribbon "Sorry for your win"; the buttons
-under it.
+the name in grape, the prize in a paper-tint well, the marigold ribbon "Sorry
+for your win"; the buttons under it. The card drops in, the name stamps,
+confetti falls behind.
 
 ## Shows
-
-Every scenario follows these:
 
 - Each show is drawn first for the usual head count in
   [PRODUCT.md](PRODUCT.md), then checked at its smallest and largest.
