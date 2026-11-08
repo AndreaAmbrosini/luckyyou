@@ -69,15 +69,21 @@ export function quoted(text: string): string[] {
   return [...text.matchAll(/"([^"]*)"/g)].map(([, name]) => name!);
 }
 
-/** Types a name into the add field, exactly as given, and adds it. */
+/** The field names are typed or pasted into. */
+export function addField(): HTMLElement {
+  return screen.getByRole('textbox', { name: 'Add a name' });
+}
+
+/** Pastes a name, or several, into the add field, exactly as given, and adds them. */
 export async function addName(text: string): Promise<void> {
-  const field = screen.getByRole('textbox', { name: 'Add a name' });
+  const field = addField();
   await user.clear(field);
   if (text !== '') {
     await user.click(field);
     await user.paste(text);
   }
-  await user.click(screen.getByRole('button', { name: 'Add' }));
+  // "Add", or "Add 3" while the field holds several names.
+  await user.click(screen.getByRole('button', { name: /^Add( \d+)?$/ }));
 }
 
 export async function choose(button: string): Promise<void> {

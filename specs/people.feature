@@ -36,6 +36,43 @@ Feature: The people list
       When I add a name made of 30 flag emoji
       Then it is added, as 30 characters
 
+  Rule: A whole team can be added at once
+
+    Scenario Outline: Names separated by <separator> are added together
+      When I add "Anna", "Ben" and "Carla", separated by <separator>
+      Then the list is "Anna", "Ben", "Carla"
+      And nothing is refused
+
+      Examples:
+        | separator  |
+        | commas     |
+        | semicolons |
+        | tabs       |
+        | new lines  |
+
+    Scenario: Empty gaps between names are ignored
+      When I add "Anna,, Ben,"
+      Then the list is "Anna", "Ben"
+      And nothing is refused
+
+    Scenario: The add button counts the names it will add
+      Given the list has "Marco"
+      When I type "Anna, Ben, marco"
+      Then the add button reads "Add 2"
+
+    Scenario: Names that can't join are skipped, in one line
+      Given the list has "Marco"
+      When I add "Lena", "marco", a name of 31 characters and "Noor" at once
+      Then the list is "Lena", "Marco", "Noor"
+      And I'm told "Added 2. Marco is already on the list. 1 name is over 30 characters."
+      And "Marco" is highlighted on the list
+      And the add field keeps the name of 31 characters
+
+    Scenario: Many names already on the list are summed up
+      Given the list has "Anna", "Ben", "Carla", "Dario" and "Elena"
+      When I add "anna, ben, carla, dario, elena"
+      Then I'm told "Anna, Ben and 3 more are already on the list."
+
   Rule: The list is in alphabetical order
 
     Scenario: Case doesn't change the order

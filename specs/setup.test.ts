@@ -2,6 +2,8 @@ import { loadFeature } from '@amiceli/vitest-cucumber';
 import { fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { expect, vi } from 'vitest';
 import {
+  addField,
+  addName,
   bar,
   choose,
   currentUser,
@@ -106,7 +108,7 @@ describeSpec(await loadFeature('./setup.feature'), ({ Rule }) => {
             expect(seen).toEqual([
               {
                 step: "Who's in today?",
-                status: 'Ready: 3 people. Next, pick a show.',
+                status: '3 in, 1 lucky winner.',
                 buttons: ['Next: pick a show'],
                 atTheBottom: true,
               },
@@ -197,6 +199,38 @@ describeSpec(await loadFeature('./setup.feature'), ({ Rule }) => {
           expect(heading()).toBe("Who's in today?");
           expect(nextButton()).toHaveAttribute('aria-disabled', 'true');
         }
+      });
+    });
+
+    RuleScenario(
+      'A first visit is ready for names, and asks for two without scolding',
+      ({ Given, Then, And, When }) => {
+        /** The reason beside the main button, as a hint: marigold, not an alert. */
+        const hint = (message: string) => {
+          expect(nextButton()).toHaveAttribute('aria-disabled', 'true');
+          expect(nextButton()).toHaveAccessibleDescription(message);
+          const reason = document.getElementById(nextButton().getAttribute('aria-describedby')!);
+          expect(reason).toHaveAttribute('data-tone', 'hint');
+        };
+        Given('a first visit', () => {
+          renderApp();
+        });
+        Then('the add field has the keyboard focus', () => {
+          expect(addField()).toHaveFocus();
+        });
+        And('beside the main button, a hint says {string}', (_, message: string) => hint(message));
+        When('I add {string}', (_, name: string) => addName(name));
+        Then('the hint says {string}', (_, message: string) => hint(message));
+      },
+    );
+
+    RuleScenario('Ready says how many are in the running', ({ Given, Then }) => {
+      Given('{int} people are ticked', (_, count: number) => {
+        storeTicked(TEAM.slice(0, count), ['Zoe']);
+        renderApp();
+      });
+      Then('the bar says {string}', (_, message: string) => {
+        expect(within(bar()).getByText(message)).toBeInTheDocument();
       });
     });
 

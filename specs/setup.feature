@@ -34,6 +34,17 @@ Feature: Setting up a pick
         | 12     | allowed |
         | 13     | blocked |
 
+    Scenario: A first visit is ready for names, and asks for two without scolding
+      Given a first visit
+      Then the add field has the keyboard focus
+      And beside the main button, a hint says "Add 2 or more. One gets lucky."
+      When I add "Anna"
+      Then the hint says "Anna can't win alone. Add one more."
+
+    Scenario: Ready says how many are in the running
+      Given 8 people are ticked
+      Then the bar says "8 in, 1 lucky winner."
+
     Scenario: Too few ticked says why
       Given 1 person is ticked
       Then I'm told "At least 2 people are needed. 1 is ticked."
