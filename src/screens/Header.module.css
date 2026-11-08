@@ -1,12 +1,60 @@
+/*
+ * One row: the logo, the steps, the round buttons. Short of room, it folds
+ * (src/ui/useFold.ts): tighter, then the logo down to its star, the done
+ * steps without their choice, then down to their check, the steps to come
+ * down to their number, and only then a second row.
+ */
 .header {
   display: flex;
   flex-shrink: 0;
-  flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
   gap: 0.75rem 1.5rem;
   min-height: 5.5rem;
   padding: 0.5rem 0;
+  white-space: nowrap;
+}
+
+.header > * {
+  flex-shrink: 0;
+}
+
+.header[data-fold~='tight'] {
+  gap: 0.75rem 1rem;
+}
+
+.header[data-fold~='wrap'] {
+  flex-wrap: wrap;
+}
+
+/* Folded away, and still read out. */
+.header[data-fold~='logo'] .word,
+.header[data-fold~='chosen'] .chosen,
+.header[data-fold~='done'] .step[data-done] .label,
+.header[data-fold~='later'] .step:not([data-done], [aria-current]) .label {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+}
+
+.header[data-fold~='logo'] .sparkle svg {
+  width: 2.25rem;
+  height: 2.25rem;
+}
+
+.header[data-fold~='done'] .step[data-done],
+.header[data-fold~='later'] .step:not([data-done], [aria-current]) {
+  padding: 0 0.375rem;
+}
+
+/* Under 736 px tall, as at 1280 × 720, a lower header. */
+@media (height < 46rem) {
+  .header {
+    min-height: 4.5rem;
+    padding: 0.25rem 0;
+  }
 }
 
 .logo {
@@ -31,11 +79,19 @@
 
 /* The pills, with a short line between each and the next. */
 .steps {
+  --between: 3rem;
+  --joint: 1.75rem;
+
   display: flex;
-  gap: 3rem;
+  gap: var(--between);
   margin: 0;
   padding: 0;
   list-style: none;
+}
+
+.header[data-fold~='tight'] .steps {
+  --between: 2rem;
+  --joint: 1rem;
 }
 
 .step {
@@ -56,8 +112,8 @@
   content: '';
   position: absolute;
   top: 50%;
-  left: -2.4375rem;
-  width: 1.75rem;
+  left: calc((var(--between) + var(--joint)) / -2 - var(--line-thin));
+  width: var(--joint);
   height: 3px;
   translate: 0 -50%;
   background-color: var(--color-edge);

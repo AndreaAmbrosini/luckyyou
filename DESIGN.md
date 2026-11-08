@@ -16,6 +16,8 @@ is in [tokens.css](src/styles/tokens.css).
 - One main button per screen, in tomato.
 - Click targets are at least `--target-min`. Keyboard focus shows as
   `--focus`, offset 3px; on the white sheet, in grape.
+- Header and bar keep to one row; short of room, they fold
+  ([setup.feature](specs/setup.feature)).
 
 ## Type
 
@@ -27,23 +29,23 @@ is in [tokens.css](src/styles/tokens.css).
 
 ## Colour roles
 
-| Token       | Used for                                                     |
-| ----------- | ------------------------------------------------------------ |
-| ground      | every screen's ground; text on marigold, tomato, mint, white |
-| panel       | the bar, cards, panels, icon and secondary buttons           |
-| raised      | a done step, chips and marks on a panel                      |
-| edge        | panel edges, the bar's top line, the line between steps      |
-| edge-mid    | secondary buttons, the add tile                              |
-| edge-strong | dashed outlines, the way back                                |
-| text-soft   | help lines, descriptions, unticked names, a step's choice    |
-| text-faint  | placeholders, disabled text                                  |
-| marigold    | the current step, what's ticked, chosen or pinned, "You"     |
-| tomato      | the main button, a count that blocks, remove buttons         |
-| tomato-text | a reason that blocks, a refused name                         |
-| mint        | a count that's fine, "Last time", "Done", a done step        |
-| paper-…     | stickers and the sheet, their wells, edges and soft text     |
-| grape       | the winner's name, focus on white                            |
-| the rest    | shows only                                                   |
+| Token       | Used for                                                  |
+| ----------- | --------------------------------------------------------- |
+| ground      | every screen's ground                                     |
+| panel       | the bar, cards, panels, icon and secondary buttons        |
+| raised      | a done step, chips and marks on a panel                   |
+| edge        | panel edges, the bar's top line, the line between steps   |
+| edge-mid    | secondary buttons, the add tile                           |
+| edge-strong | dashed outlines, the way back                             |
+| text-soft   | help lines, descriptions, unticked names, a step's choice |
+| text-faint  | placeholders, disabled text                               |
+| marigold    | the current step, what's ticked, chosen or pinned, "You"  |
+| tomato      | the main button, a count that blocks, remove buttons      |
+| tomato-text | a reason that blocks, a refused name                      |
+| mint        | a count that's fine, "Last time", "Done", a done step     |
+| paper-…     | stickers and the sheet, their wells, edges and soft text  |
+| grape       | the winner's name, focus on white                         |
+| the rest    | shows only                                                |
 
 ## Parts
 
@@ -58,15 +60,15 @@ is in [tokens.css](src/styles/tokens.css).
   round tomato ×.
 - **Add tile**: panel, two tiles wide: a plus, the field and a white "Add".
 - **Count pill**: "8 of 10 in", mint from 2 to 12 ticked, tomato otherwise.
-- **Buttons**: main in tomato; secondary on panel;
-  outline (the bar's others) unfilled; quiet as underlined text; "Done" in
-  mint; disabled unfilled and dashed, with its reason beside it.
-- **Bar**: a panel along the bottom of every step before the show: the way
-  back left, the main button right, a status between, tomato-text when it
+- **Buttons**: secondary on panel; outline (the bar's others) unfilled;
+  quiet as underlined text; "Done" in mint; disabled unfilled and dashed,
+  with its reason beside it.
+- **Bar**: a panel along the bottom of every setup step: the way back left,
+  the main button right, a status between, tomato-text when it
   blocks, marigold for a hint.
 - **Show card**: panel: a 16 : 9 still, `--radius-picture`,
-  "Last time" over its top left; the name, the description, chips for its
-  head count and "+ Line-up", or why it can't run. Chosen: a marigold ring
+  "Last time" over its top left; the name, the description, head-count and
+  "+ Line-up" chips, or why it can't run. Chosen: a marigold ring
   and check badge. Can't run: dashed, the still dimmed.
 - **Chosen-show panel**: the name over the prize, a ground well by a raised
   die; what it takes (on a short screen, its description) and what comes
@@ -98,15 +100,15 @@ ground round its stage.
 
 **Result.** Stars and sparkles round a tilted sticker card: "Lucky you," over
 the name in grape, the prize in a paper-tint well, the marigold ribbon "Sorry
-for your win"; the buttons under it. The card drops in, the name stamps,
-confetti falls behind.
+for your win"; the buttons under it. The card drops, the name stamps,
+confetti falls.
 
 ## Shows
 
 - Each show is drawn first for the usual head count in
   [PRODUCT.md](PRODUCT.md), then checked at its smallest and largest.
 - Drawings use flat fills and ink outlines of 4 to 5 stage pixels.
-- Name tags are paper stickers with an ink outline and ink text, straight,
+- Name tags are paper stickers with ink outline and text, straight,
   at least `--size-stage-tag-min`, never over another tag. They grow as fewer
   people are left. On land they sit on the chest, so hands can hold things
   overhead; on a mount or a creature, beside the face, behind it.

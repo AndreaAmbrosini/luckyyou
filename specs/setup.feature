@@ -21,6 +21,18 @@ Feature: Setting up a pick
       Then the steps read "Who's in" and "Show" while the chosen show has no line-up
       And "Line-up" joins them as soon as a show with a line-up is chosen
 
+    # Decision 0024.
+    Scenario: The header and the bar keep to one row in a small window
+      Given an 800 by 600 window, on Who's in, Pick a show with "The Race" chosen, or its Line-up
+      Then the header and the bottom bar are one row each
+      And short of room, the logo goes down to its star, a done step to its check, a step to come to its number, a status away and the way back to its arrow
+      And each still reads out in full
+
+    # Decision 0024.
+    Scenario: A big window shows the steps bigger
+      Given a window over about 1460 by 920, as at 1920 by 1080
+      Then everything on the steps before the show grows with the window, up to half as big again
+
   Rule: Moving on needs 2 to 12 ticked people
 
     Scenario Outline: Moving on with <ticked> ticked
