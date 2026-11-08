@@ -55,9 +55,9 @@ file says how they're used.
   a done one raised, with a mint check and what was chosen; the rest dashed.
 - **Person tile**: four across, `--radius-person`. Ticked: marigold, a
   marigold check in a ground box. Unticked: no fill, dashed, an empty box. A
-  long name wraps inside its tile. In remove mode: raised, solid, and a round
-  tomato ×.
-- **Add tile**: panel: a plus, the field and a white "Add".
+  long name wraps inside its tile; a new one pops in, unless motion is reduced.
+  In remove mode: raised, solid, and a round tomato ×.
+- **Add tile**: panel, two tiles wide: a plus, the field and a white "Add".
 - **Count pill**: "8 of 10 in", mint from 2 to 12 ticked, tomato otherwise.
 - **Buttons**: main in tomato with `--shadow-press`; secondary on panel;
   outline (the bar's others) unfilled; quiet as underlined text; "Done" in
@@ -79,7 +79,7 @@ file says how they're used.
 **Who's in.** "Who's in today?", the count pill and a line under it;
 "Everyone", "No one" and "Remove people" right. The tiles sit on the ground
 and scroll; the add tile is last. Remove mode puts its hint in the bar beside
-"Done". A first visit has its own heading and a note.
+"Done". A first visit is one wide add field.
 
 **Pick a show.** The heading, a mint "3 in" pill and the names. Show cards
 in one row; under them, the chosen-show panel. A show with a line-up adds
