@@ -161,19 +161,26 @@ describeSpec(await loadFeature('./show.feature'), ({ Rule }) => {
 
     RuleScenario('Music plays at the chosen volume', ({ Given, When, Then }) => {
       let audio: FakeAudio;
+      // What feeds the speakers while the show plays; the result adds its own ta-da.
+      let levels: number[] = [];
       Given('the music volume is {int}%', (_, volume: number) => {
         storeSettings({ muted: false, music: true, musicVolume: volume, lastScenario: null });
         audio = fakeAudio();
       });
       When('the show plays music', async () => {
-        const scenario = fakeScenario({ play: (show) => show.sound.music(TUNE).to(0, 4) });
+        const scenario = fakeScenario({
+          play: (show) => {
+            show.sound.music(TUNE).to(0, 4);
+            levels = audio.outputLevels;
+          },
+        });
         await startShow(PEOPLE, scenario);
         await resultHeading();
       });
       Then('the music plays at {int}% of its full level', (_, volume: number) => {
         expect(audio.started).toBeGreaterThan(0);
-        expect(audio.outputLevels).toHaveLength(1);
-        expect(audio.outputLevels[0]).toBeCloseTo((volume / 100) * FULL_LEVEL, 6);
+        expect(levels).toHaveLength(1);
+        expect(levels[0]).toBeCloseTo((volume / 100) * FULL_LEVEL, 6);
       });
     });
 

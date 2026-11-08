@@ -1,7 +1,8 @@
-import { Fragment, useEffect, useId, useRef } from 'react';
+import { Fragment, useEffect, useId, useRef, type ReactNode } from 'react';
 import type { LineUp, Scenario } from '../scenario-kit/contract';
+import { PRIZE_MAX, suggestPrize } from '../settings/prize';
 import { Button } from '../ui/Button';
-import { ArrowRightIcon, CheckIcon, PeopleIcon, PlayIcon } from '../ui/icons';
+import { ArrowRightIcon, CheckIcon, CrossIcon, DieIcon, PeopleIcon, PlayIcon } from '../ui/icons';
 import { Bar } from './Bar';
 import layout from './layout.module.css';
 import styles from './PickAShow.module.css';
@@ -14,6 +15,9 @@ export interface PickAShowProps {
   lastScenario: string | null;
   /** The chosen show; none when no show can run with today's people. */
   chosen: Scenario | undefined;
+  /** The job, as the prize the unlucky person wins; empty for none. */
+  prize: string;
+  onPrizeChange(prize: string): void;
   onChoose(scenario: Scenario): void;
   onBack(): void;
   /** Starts a show without a line-up, or opens a show's Line-up. */
@@ -25,7 +29,7 @@ export interface PickAShowProps {
 /** Step 2: clicking a show chooses it; the bar's main button starts it, or opens its Line-up. */
 export function PickAShow(props: PickAShowProps) {
   const { names, scenarios, lastScenario, chosen, onChoose, onBack } = props;
-  const { onNext, onStartWithLastLineUp } = props;
+  const { prize, onPrizeChange, onNext, onStartWithLastLineUp } = props;
   const id = useId();
   const main = useRef<HTMLButtonElement>(null);
   const noShow = useRef<HTMLParagraphElement>(null);
@@ -122,7 +126,11 @@ export function PickAShow(props: PickAShowProps) {
           })}
         </ul>
 
-        {chosen && <Chosen id={`${id}-chosen`} scenario={chosen} count={count} />}
+        {chosen && (
+          <Chosen id={`${id}-chosen`} scenario={chosen} count={count}>
+            <PrizeField prize={prize} onPrizeChange={onPrizeChange} />
+          </Chosen>
+        )}
       </main>
 
       <Bar back={{ label: "Who's in", onClick: onBack }}>
@@ -164,17 +172,28 @@ export function PickAShow(props: PickAShowProps) {
   );
 }
 
-/** The panel under the shows: what the chosen show is, what it takes, and what comes next. */
-function Chosen({ id, scenario, count }: { id: string; scenario: Scenario; count: number }) {
+/**
+ * The panel under the shows: the chosen show and the prize it's played for,
+ * what it takes, and what comes next. Its description is on its card.
+ */
+function Chosen({
+  id,
+  scenario,
+  count,
+  children,
+}: {
+  id: string;
+  scenario: Scenario;
+  count: number;
+  children: ReactNode;
+}) {
   const { min, max } = scenario.people;
   return (
     <section className={styles.panel} aria-labelledby={id}>
-      <div className={styles.panelText}>
-        <h2 id={id} className={styles.panelName}>
-          {scenario.name}
-        </h2>
-        <p className={styles.panelAbout}>{scenario.description}</p>
-      </div>
+      <h2 id={id} className={styles.panelName}>
+        {scenario.name}
+      </h2>
+      {children}
       <ul className={styles.facts}>
         <li className={styles.fact}>
           <span className={`${styles.factMark} ${styles.fine}`} aria-hidden="true">
@@ -192,6 +211,55 @@ function Chosen({ id, scenario, count }: { id: string; scenario: Scenario; count
         </li>
       </ul>
     </section>
+  );
+}
+
+/** The job, named as the prize: typed, or suggested by the die. Kept as a setting. */
+function PrizeField({ prize, onPrizeChange }: Pick<PickAShowProps, 'prize' | 'onPrizeChange'>) {
+  const id = useId();
+  const field = useRef<HTMLInputElement>(null);
+  return (
+    <div className={styles.prize}>
+      <div className={styles.prizeBox}>
+        <label htmlFor={id} className={styles.prizeLabel}>
+          Prize
+        </label>
+        <input
+          ref={field}
+          id={id}
+          className={styles.prizeField}
+          type="text"
+          value={prize}
+          maxLength={PRIZE_MAX}
+          placeholder="Name the job"
+          autoComplete="off"
+          spellCheck={false}
+          onChange={(event) => onPrizeChange(event.target.value.slice(0, PRIZE_MAX))}
+        />
+        {prize !== '' && (
+          <button
+            type="button"
+            className={styles.prizeClear}
+            aria-label="Clear the prize"
+            onClick={() => {
+              onPrizeChange('');
+              field.current?.focus();
+            }}
+          >
+            <CrossIcon size={20} />
+          </button>
+        )}
+      </div>
+      <button
+        type="button"
+        className={styles.prizeDie}
+        aria-label="Suggest a prize"
+        title="Suggest a prize"
+        onClick={() => onPrizeChange(suggestPrize(prize))}
+      >
+        <DieIcon size={28} />
+      </button>
+    </div>
   );
 }
 

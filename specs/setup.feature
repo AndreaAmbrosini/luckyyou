@@ -132,6 +132,36 @@ Feature: Setting up a pick
       Then every card is disabled
       And I'm told no show can run with 11 people
 
+  Rule: The job is named on Pick a show, as the prize
+
+    Scenario: The host names the job
+      Given "Anna", "Ben" and "Carla" are ticked, and I moved on to the shows
+      When I type "Ordering the team lunch" as the prize
+      Then the result after the show says "Your prize: Ordering the team lunch"
+
+    Scenario: The die suggests a dreaded job
+      Given no prize is named, and I moved on to the shows
+      When I press "Suggest a prize"
+      Then the prize is one of the suggested jobs
+      And each press after that suggests a different one
+
+    Scenario: A prize is at most 40 characters
+      Given I moved on to the shows
+      When I type 50 characters as the prize
+      Then the field keeps the first 40
+
+    Scenario: Clearing the prize
+      Given the prize is "Running the retro", and I moved on to the shows
+      When I press "Clear the prize"
+      Then the prize field is empty and has the keyboard focus
+      And the result after the show names no prize
+
+    Scenario: The prize is remembered in this browser, and who won is not
+      Given I named "Running the retro" as the prize, and the app picked "Ben"
+      When I reload the page and move on to the shows
+      Then the prize is still "Running the retro"
+      And nothing stored but the people list names "Ben"
+
   Rule: Mute and fullscreen
 
     Scenario: Mute is remembered in this browser

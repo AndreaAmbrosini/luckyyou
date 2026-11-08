@@ -11,6 +11,7 @@ import { PickAShow } from './screens/PickAShow';
 import { Result } from './screens/Result';
 import { ShowScreen, type Run } from './screens/ShowScreen';
 import { WhosIn } from './screens/WhosIn';
+import { prizeFor } from './settings/prize';
 import { musicLevel, useSettings } from './settings/settings';
 
 type Looks = ReadonlyMap<string, ChosenLook>;
@@ -67,6 +68,7 @@ export default function App({ scenarios = catalogue }: AppProps) {
         seed: newSeed(),
         muted: settings.muted,
         music: musicLevel(settings),
+        prize: prizeFor(settings.prize),
       },
     });
   }
@@ -170,6 +172,8 @@ export default function App({ scenarios = catalogue }: AppProps) {
           scenarios={scenarios}
           lastScenario={settings.lastScenario}
           chosen={chosen}
+          prize={settings.prize}
+          onPrizeChange={(prize) => changeSettings({ prize })}
           onChoose={(scenario) => setPicked(scenario.id)}
           onBack={() => setScreen({ name: 'whos-in' })}
           onNext={next}
