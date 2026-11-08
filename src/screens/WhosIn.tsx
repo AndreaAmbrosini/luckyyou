@@ -205,7 +205,7 @@ export function WhosIn({ people, onNext }: { people: People; onNext(): void }) {
             <div className={styles.welcome}>
               {addForm}
               <p className={styles.keep}>
-                Paste the whole team at once. This browser remembers it.
+                Paste the whole team in one go. It stays in this browser.
               </p>
             </div>
           ) : (

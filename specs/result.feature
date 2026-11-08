@@ -11,24 +11,11 @@ Feature: The result screen
       And below it says "Sorry for your win"
       And the heading has the keyboard focus
 
-    Scenario: The job is the prize
-      Given the prize is "Writing the release notes"
-      And the app picked "Ben"
-      When the show ends
-      Then under the heading it says "Your prize: Writing the release notes"
-
-    Scenario: Without a prize, the result only congratulates
-      Given no prize is named
-      When the show ends
-      Then the result names no prize
-      And under the heading it says "Sorry for your win"
-
   Rule: The news arrives one piece at a time
 
-    Scenario: The card comes in, then the name, the prize and the ribbon, then the buttons
-      Given the prize is "Running the retro"
+    Scenario: The card comes in, then the name and the ribbon, then the buttons
       When the show ends
-      Then the card, the name, the prize and the ribbon come in, in that order
+      Then the card, the name and the ribbon come in, in that order
       And the buttons come in after the ribbon
       And confetti falls behind the card
 

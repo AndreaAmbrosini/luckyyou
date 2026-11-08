@@ -3,11 +3,9 @@
 Pick one unlucky person for a job nobody wants, with a silly 10–30 second show.
 
 In a video call, one person opens LuckyYou and shares their screen. They tick
-who's here, name the job if they like, and start a show. When it's over:
+who's here and click a show to start it. When it's over:
 
 > **Lucky you, Marco 🎉**
->
-> Your prize: Running the retro
 >
 > _Sorry for your win_
 

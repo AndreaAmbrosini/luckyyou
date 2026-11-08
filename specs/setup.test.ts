@@ -23,8 +23,6 @@ import {
   tickedNames,
 } from './support/app';
 import { looksKey, themeKey } from '../src/line-up/looks';
-import { PEOPLE_KEY } from '../src/people/people';
-import { PRIZES } from '../src/settings/prize';
 import type { LineUp } from '../src/scenario-kit/contract';
 import { dealLooks } from '../src/scenario-kit/line-up';
 import { FULL_LEVEL } from '../src/scenario-kit/music';
@@ -72,9 +70,6 @@ const theRace = () => {
     lineUp: { ...lineUp, heading: 'Line up the racers', themes: [...lineUp.themes!, autumn] },
   });
 };
-
-/** The chosen-show panel's field for the job, as the prize. */
-const prizeField = () => screen.getByRole('textbox', { name: 'Prize' }) as HTMLInputElement;
 
 const css = (path: string) => readFileSync(new URL(path, import.meta.url), 'utf8');
 const header = () => screen.getByRole('banner');
@@ -726,14 +721,10 @@ describeSpec(await loadFeature('./setup.feature'), ({ Rule }) => {
         for (const line of quoted(lines))
           expect(chosenPanel('Surprise me')).toHaveTextContent(line);
       });
-      And(
-        'the main button reads {string}, with the prize field still there',
-        (_, label: string) => {
-          expect(mainButton()).toHaveAccessibleName(label);
-          expect(chosenPanel('Surprise me')).toContainElement(prizeField());
-          expect(barButtons()).not.toContain('Start with last line-up');
-        },
-      );
+      And('the main button reads {string}', (_, label: string) => {
+        expect(mainButton()).toHaveAccessibleName(label);
+        expect(barButtons()).not.toContain('Start with last line-up');
+      });
     });
 
     RuleScenario(
@@ -882,113 +873,6 @@ describeSpec(await loadFeature('./setup.feature'), ({ Rule }) => {
         await waitFor(() => expect(sharkBait.runs).toHaveLength(2));
       });
     });
-  });
-
-  Rule('The job is named on Pick a show, as the prize', ({ RuleScenario }) => {
-    /** Ticks `names`, starts the app with one show, and moves on to it. */
-    const openShows = async (names: readonly string[] = ['Anna', 'Ben', 'Carla']) => {
-      storeTicked(names, ['Dario']);
-      renderApp({ scenarios: [fakeScenario({ name: 'Shark Bait' })] });
-      await moveOnToShows();
-    };
-    /** Starts the chosen show, and waits for the result. */
-    const playToResult = async () => {
-      await currentUser().click(mainButton());
-      await resultHeading();
-    };
-    const typePrize = async (text: string) => {
-      await currentUser().clear(prizeField());
-      await currentUser().type(prizeField(), text);
-    };
-    const prizeLine = () =>
-      screen.queryByText(
-        (_, element) => element?.tagName === 'P' && /^Your prize:/.test(element.textContent ?? ''),
-      );
-
-    RuleScenario('The host names the job', ({ Given, When, Then }) => {
-      Given('{any} are ticked, and I moved on to the shows', (_, names: string) =>
-        openShows(quoted(names)),
-      );
-      When('I type {string} as the prize', (_, prize: string) => typePrize(prize));
-      Then('the result after the show says {string}', async (_, text: string) => {
-        await playToResult();
-        expect(prizeLine()).toHaveTextContent(text);
-      });
-    });
-
-    RuleScenario('The die suggests a dreaded job', ({ Given, When, Then, And }) => {
-      Given('no prize is named, and I moved on to the shows', async () => {
-        await openShows();
-        expect(prizeField()).toHaveValue('');
-      });
-      When('I press {string}', (_, label: string) => choose(label));
-      Then('the prize is one of the suggested jobs', () => {
-        expect(PRIZES).toContain(prizeField().value);
-      });
-      And('each press after that suggests a different one', async () => {
-        for (let press = 0; press < 12; press++) {
-          const before = prizeField().value;
-          await choose('Suggest a prize');
-          expect(PRIZES).toContain(prizeField().value);
-          expect(prizeField().value).not.toBe(before);
-        }
-      });
-    });
-
-    RuleScenario('A prize is at most 40 characters', ({ Given, When, Then }) => {
-      Given('I moved on to the shows', () => openShows());
-      When('I type {int} characters as the prize', (_, count: number) =>
-        typePrize('x'.repeat(count)),
-      );
-      Then('the field keeps the first {int}', (_, count: number) => {
-        expect(prizeField()).toHaveValue('x'.repeat(count));
-      });
-    });
-
-    RuleScenario('Clearing the prize', ({ Given, When, Then, And }) => {
-      Given('the prize is {string}, and I moved on to the shows', async (_, prize: string) => {
-        storeSettings({ prize });
-        await openShows();
-        expect(prizeField()).toHaveValue(prize);
-      });
-      When('I press {string}', (_, label: string) => choose(label));
-      Then('the prize field is empty and has the keyboard focus', () => {
-        expect(prizeField()).toHaveValue('');
-        expect(prizeField()).toHaveFocus();
-      });
-      And('the result after the show names no prize', async () => {
-        await playToResult();
-        expect(prizeLine()).toBeNull();
-      });
-    });
-
-    RuleScenario(
-      'The prize is remembered in this browser, and who won is not',
-      ({ Given, When, Then, And }) => {
-        Given(
-          'I named {string} as the prize, and the app picked {string}',
-          async (_, prize: string, name: string) => {
-            await openShows();
-            await typePrize(prize);
-            stubDraws(['Anna', 'Ben', 'Carla'].indexOf(name));
-            await playToResult();
-            expect(await resultHeading()).toHaveAccessibleName(`Lucky you, ${name} 🎉`);
-          },
-        );
-        When('I reload the page and move on to the shows', async () => {
-          reload();
-          await moveOnToShows();
-        });
-        Then('the prize is still {string}', (_, prize: string) => {
-          expect(prizeField()).toHaveValue(prize);
-        });
-        And('nothing stored but the people list names {string}', (_, name: string) => {
-          const stored = Object.keys(localStorage).filter((key) => key !== PEOPLE_KEY);
-          expect(stored.length).toBeGreaterThan(0);
-          for (const key of stored) expect(localStorage.getItem(key)).not.toContain(name);
-        });
-      },
-    );
   });
 
   Rule('Mute and fullscreen', ({ RuleScenario }) => {

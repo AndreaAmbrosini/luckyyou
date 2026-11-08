@@ -70,7 +70,7 @@
   fill: currentColor;
 }
 
-/* In the margins either side of the card, which is as wide as the prize needs. */
+/* In the margins either side of the card, which is as wide as the name needs. */
 .s1 {
   top: 7%;
   left: 4%;
@@ -178,65 +178,6 @@
   overflow-wrap: anywhere;
 }
 
-/* What they won: the job, in a well on the card, by a rosette. */
-.prize {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-  max-width: min(100%, 50rem);
-  margin: 0;
-  padding: 0.625rem 1.75rem 0.625rem 1.125rem;
-  border-radius: var(--radius-box);
-  background-color: var(--color-paper-tint);
-  text-align: left;
-}
-
-.rosette {
-  flex-shrink: 0;
-  width: 2.5rem;
-  height: 3.125rem;
-}
-
-.medal,
-.tail {
-  stroke: var(--color-ink);
-  stroke-width: 2.5;
-  stroke-linejoin: round;
-}
-
-.medal {
-  fill: var(--color-marigold);
-}
-
-.medalInner {
-  fill: none;
-  stroke: var(--color-ink);
-  stroke-width: 2;
-}
-
-.tail {
-  fill: var(--color-tomato);
-}
-
-.prizeLabel {
-  flex-shrink: 0;
-  color: var(--color-paper-text-soft);
-  font-size: var(--size-lead);
-  font-weight: 800;
-}
-
-.prizeName {
-  min-width: 0;
-  font-family: var(--font-title);
-  font-size: var(--size-panel-title);
-  font-weight: 800;
-  font-stretch: 88%;
-  line-height: 1;
-  letter-spacing: -1px;
-  overflow-wrap: anywhere;
-  text-wrap: balance;
-}
-
 .ribbon {
   margin: 0;
   padding: 0.375rem 1.75rem;
@@ -291,19 +232,6 @@
     );
   }
 
-  .prize {
-    padding-block: 0.375rem;
-  }
-
-  .rosette {
-    width: 2rem;
-    height: 2.5rem;
-  }
-
-  .prizeName {
-    font-size: var(--size-sorry);
-  }
-
   .ribbon {
     font-size: var(--size-card-title);
   }
@@ -316,7 +244,7 @@
 /*
  * The reveal. Each part comes in at its --at, set by the component: the card
  * drops, "Lucky you," rises, the name stamps down, the stars pop, confetti
- * falls once, the prize pops, the ribbon unfurls, the buttons rise. Every
+ * falls once, the ribbon unfurls, the buttons rise. Every
  * move lasts 0.4 s or more, and nothing flashes. With reduced motion there
  * is none of it: everything is simply there.
  */
@@ -340,10 +268,6 @@
 
   .bit {
     animation: fall var(--fall) linear calc(var(--at) + var(--delay)) both;
-  }
-
-  .prize {
-    animation: pop 0.45s ease-out var(--at) both;
   }
 
   .ribbon {
@@ -427,23 +351,6 @@
   70% {
     opacity: 1;
     transform: scale(1.2) rotate(8deg);
-  }
-
-  100% {
-    opacity: 1;
-    transform: none;
-  }
-}
-
-@keyframes pop {
-  0% {
-    opacity: 0;
-    transform: scale(0.5);
-  }
-
-  60% {
-    opacity: 1;
-    transform: scale(1.06);
   }
 
   100% {

@@ -11,7 +11,6 @@ import { PickAShow, SURPRISE } from './screens/PickAShow';
 import { Result } from './screens/Result';
 import { ShowScreen, type Run } from './screens/ShowScreen';
 import { WhosIn } from './screens/WhosIn';
-import { prizeFor } from './settings/prize';
 import { musicLevel, useSettings } from './settings/settings';
 
 type Looks = ReadonlyMap<string, ChosenLook>;
@@ -72,7 +71,6 @@ export default function App({ scenarios = catalogue }: AppProps) {
         seed: newSeed(),
         muted: settings.muted,
         music: musicLevel(settings),
-        prize: prizeFor(settings.prize),
       },
     });
   }
@@ -190,8 +188,6 @@ export default function App({ scenarios = catalogue }: AppProps) {
           lastScenario={settings.lastScenario}
           chosen={chosen}
           surprise={surprising}
-          prize={settings.prize}
-          onPrizeChange={(prize) => changeSettings({ prize })}
           onChoose={(scenario) => {
             setPicked(scenario.id);
             setSurprise(false);

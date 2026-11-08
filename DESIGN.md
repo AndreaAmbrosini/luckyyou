@@ -70,9 +70,8 @@ is in [tokens.css](src/styles/tokens.css).
   "Last time" over its top left; the name, the description, head-count and
   "+ Line-up" chips, or why it can't run. Chosen: a marigold ring
   and check badge. Can't run: dashed, the still dimmed.
-- **Chosen-show panel**: the name over the prize, a ground well by a raised
-  die; what it takes (on a short screen, its description) and what comes
-  next.
+- **Chosen-show panel**: the name over its line; what it takes (not on a
+  short screen) and what comes next.
 - **Sticker**: white on the ground, unoutlined. Its controls have an ink
   outline; pressed, marigold.
 
@@ -99,9 +98,8 @@ ground, an open group marigold; chosen tiles marigold.
 ground round its stage.
 
 **Result.** Stars and sparkles round a tilted sticker card: "Lucky you," over
-the name in grape, the prize in a paper-tint well, the marigold ribbon "Sorry
-for your win"; the buttons under it. The card drops, the name stamps,
-confetti falls.
+the name in grape, the marigold ribbon "Sorry for your win"; the buttons
+under it. The card drops, the name stamps, confetti falls.
 
 ## Shows
 

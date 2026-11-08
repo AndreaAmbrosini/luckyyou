@@ -157,8 +157,8 @@ Feature: Setting up a pick
       And I moved on to the shows
       When I click "Surprise me"
       Then "Surprise me" is chosen, marked by a check mark, and no show is
-      And the panel says "One of 2 shows. Not Hot Potato again." and "No line-up: the show stays a secret until it starts."
-      And the main button reads "Start a surprise", with the prize field still there
+      And the panel says "One of 2 shows. Not Hot Potato again." and "The show stays a secret until the curtain rises."
+      And the main button reads "Start a surprise"
 
     Scenario: A surprise is any show that can run, but last time's
       Given I played "Hot Potato" last time, and 8 people are ticked
@@ -190,36 +190,6 @@ Feature: Setting up a pick
       Given I started a surprise, and it drew "Shark Bait"
       When the show ends and I choose "Run again"
       Then Shark Bait plays again
-
-  Rule: The job is named on Pick a show, as the prize
-
-    Scenario: The host names the job
-      Given "Anna", "Ben" and "Carla" are ticked, and I moved on to the shows
-      When I type "Ordering the team lunch" as the prize
-      Then the result after the show says "Your prize: Ordering the team lunch"
-
-    Scenario: The die suggests a dreaded job
-      Given no prize is named, and I moved on to the shows
-      When I press "Suggest a prize"
-      Then the prize is one of the suggested jobs
-      And each press after that suggests a different one
-
-    Scenario: A prize is at most 40 characters
-      Given I moved on to the shows
-      When I type 50 characters as the prize
-      Then the field keeps the first 40
-
-    Scenario: Clearing the prize
-      Given the prize is "Running the retro", and I moved on to the shows
-      When I press "Clear the prize"
-      Then the prize field is empty and has the keyboard focus
-      And the result after the show names no prize
-
-    Scenario: The prize is remembered in this browser, and who won is not
-      Given I named "Running the retro" as the prize, and the app picked "Ben"
-      When I reload the page and move on to the shows
-      Then the prize is still "Running the retro"
-      And nothing stored but the people list names "Ben"
 
   Rule: Mute and fullscreen
 

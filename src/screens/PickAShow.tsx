@@ -1,8 +1,7 @@
-import { Fragment, useEffect, useId, useRef, type ReactNode } from 'react';
+import { Fragment, useEffect, useId, useRef } from 'react';
 import type { LineUp, Scenario } from '../scenario-kit/contract';
-import { PRIZE_MAX, suggestPrize } from '../settings/prize';
 import { Button } from '../ui/Button';
-import { ArrowRightIcon, CheckIcon, CrossIcon, DieIcon, PeopleIcon, PlayIcon } from '../ui/icons';
+import { ArrowRightIcon, CheckIcon, PeopleIcon, PlayIcon } from '../ui/icons';
 import { Bar } from './Bar';
 import { SurpriseStill } from './SurpriseStill';
 import layout from './layout.module.css';
@@ -18,9 +17,6 @@ export interface PickAShowProps {
   chosen: Scenario | undefined;
   /** Surprise me is chosen: the app draws the show as it starts. */
   surprise: boolean;
-  /** The job, as the prize the unlucky person wins; empty for none. */
-  prize: string;
-  onPrizeChange(prize: string): void;
   onChoose(scenario: Scenario): void;
   onSurprise(): void;
   onBack(): void;
@@ -39,8 +35,7 @@ const SURPRISE_ABOUT = 'Even you won’t know which show.';
 /** Step 2: clicking a show chooses it; the bar's main button starts it, or opens its Line-up. */
 export function PickAShow(props: PickAShowProps) {
   const { names, scenarios, lastScenario, chosen, surprise, onChoose, onBack } = props;
-  const { prize, onPrizeChange, onNext, onSurprise, onStartSurprise, onStartWithLastLineUp } =
-    props;
+  const { onNext, onSurprise, onStartSurprise, onStartWithLastLineUp } = props;
   const id = useId();
   const main = useRef<HTMLButtonElement>(null);
   const noShow = useRef<HTMLParagraphElement>(null);
@@ -156,10 +151,8 @@ export function PickAShow(props: PickAShowProps) {
             name={SURPRISE}
             about={SURPRISE_ABOUT}
             fits={`One of ${pool} shows.${last ? ` Not ${last.name} again.` : ''}`}
-            next="No line-up: the show stays a secret until it starts."
-          >
-            <PrizeField prize={prize} onPrizeChange={onPrizeChange} />
-          </Chosen>
+            next="The show stays a secret until the curtain rises."
+          />
         ) : (
           chosen && (
             <Chosen
@@ -172,9 +165,7 @@ export function PickAShow(props: PickAShowProps) {
                   ? `Next you pick ${nextPicks(chosen.lineUp)}, or start with last time's.`
                   : 'No line-up: it starts as soon as you press Start.'
               }
-            >
-              <PrizeField prize={prize} onPrizeChange={onPrizeChange} />
-            </Chosen>
+            />
           )
         )}
       </main>
@@ -225,10 +216,9 @@ export function PickAShow(props: PickAShowProps) {
 }
 
 /**
- * The panel under the shows: the chosen show, or Surprise me, and the prize
- * it's played for; why it can run, and what comes next. On a short screen,
- * where the cards leave their descriptions out, its description stands in
- * for why it can run, which the card's chips say too.
+ * The panel under the shows: the chosen show, or Surprise me, and its line;
+ * why it can run, and what comes next. On a short screen, where the cards
+ * leave their descriptions out, why it can run goes too: the chips say it.
  */
 function Chosen({
   id,
@@ -236,7 +226,6 @@ function Chosen({
   about,
   fits,
   next,
-  children,
 }: {
   id: string;
   name: string;
@@ -245,16 +234,14 @@ function Chosen({
   fits: string;
   /** What pressing the main button does. */
   next: string;
-  children: ReactNode;
 }) {
   return (
     <section className={styles.panel} aria-labelledby={id}>
       <h2 id={id} className={styles.panelName}>
         {name}
       </h2>
-      {children}
+      <p className={styles.panelAbout}>{about}</p>
       <ul className={styles.facts}>
-        <li className={`${styles.fact} ${styles.factAbout}`}>{about}</li>
         <li className={`${styles.fact} ${styles.factFits}`}>
           <span className={`${styles.factMark} ${styles.fine}`} aria-hidden="true">
             <CheckIcon size={22} />
@@ -332,55 +319,6 @@ function SurpriseCard({
         </span>
       </button>
     </li>
-  );
-}
-
-/** The job, named as the prize: typed, or suggested by the die. Kept as a setting. */
-function PrizeField({ prize, onPrizeChange }: Pick<PickAShowProps, 'prize' | 'onPrizeChange'>) {
-  const id = useId();
-  const field = useRef<HTMLInputElement>(null);
-  return (
-    <div className={styles.prize}>
-      <div className={styles.prizeBox}>
-        <label htmlFor={id} className={styles.prizeLabel}>
-          Prize
-        </label>
-        <input
-          ref={field}
-          id={id}
-          className={styles.prizeField}
-          type="text"
-          value={prize}
-          maxLength={PRIZE_MAX}
-          placeholder="Name the job"
-          autoComplete="off"
-          spellCheck={false}
-          onChange={(event) => onPrizeChange(event.target.value.slice(0, PRIZE_MAX))}
-        />
-        {prize !== '' && (
-          <button
-            type="button"
-            className={styles.prizeClear}
-            aria-label="Clear the prize"
-            onClick={() => {
-              onPrizeChange('');
-              field.current?.focus();
-            }}
-          >
-            <CrossIcon size={20} />
-          </button>
-        )}
-      </div>
-      <button
-        type="button"
-        className={styles.prizeDie}
-        aria-label="Suggest a prize"
-        title="Suggest a prize"
-        onClick={() => onPrizeChange(suggestPrize(prize))}
-      >
-        <DieIcon size={28} />
-      </button>
-    </div>
   );
 }
 

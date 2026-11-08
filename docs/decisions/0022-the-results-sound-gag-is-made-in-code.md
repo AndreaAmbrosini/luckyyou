@@ -13,8 +13,8 @@ made with Web Audio from tones: no audio files and no licences to track.
 - It follows the run's sound switch: a muted run opens no audio output. The
   music switch leaves it alone, as it isn't music.
 - It is timed on the audio clock from the result's reveal: the chord lands
-  with the name, the trombone starts with the prize, or with the ribbon when
-  there is none. Leaving the result closes its output.
+  with the name, and the trombone's last note with the ribbon. Leaving the
+  result closes its output.
 - The result reads the same with the sound off.
 
 Enforced by `specs/result.feature`.

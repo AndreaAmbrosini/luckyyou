@@ -19,20 +19,19 @@ const SPARKLE = 'M12 1.5l2.6 7.9 7.9 2.6-7.9 2.6-2.6 7.9-2.6-7.9-7.9-2.6 7.9-2.6
 
 /**
  * When each part of the news comes in, in seconds after the result opens:
- * the card drops, the name lands with the ta-da, then the bad news comes with
- * the trombone, the prize first if there is one, and the buttons last.
+ * the card drops, the name lands with the ta-da, the trombone deflates, and
+ * the ribbon's bad news lands with its last wah. The buttons come last.
  */
-function reveal(prize: boolean) {
+function reveal() {
   const landed = 0.95;
   const deflates = 1.5;
-  const ribbon = prize ? deflates + LAST_WAH : deflates;
+  const ribbon = deflates + LAST_WAH;
   return {
     card: 0,
     lucky: 0.35,
     // It hits the card 0.29 s into its 0.45 s stamp: as the ta-da's chord lands.
     name: landed - 0.29,
     landed,
-    prize: deflates,
     deflates,
     ribbon,
     buttons: ribbon + 0.45,
@@ -47,7 +46,6 @@ const AT_ONCE: Reveal = {
   lucky: 0,
   name: 0,
   landed: 0,
-  prize: 0,
   deflates: 0,
   ribbon: 0,
   buttons: 0,
@@ -80,16 +78,16 @@ export function Result({ run, onRunAgain, onRunWithout, onChangeWhosIn }: Result
   const reasonId = useId();
   const [still] = useState(prefersReducedMotion);
 
-  const { scenario, unlucky, prize } = run;
-  const times = still ? AT_ONCE : reveal(Boolean(prize));
+  const { scenario, unlucky } = run;
+  const times = still ? AT_ONCE : reveal();
 
   useEffect(() => heading.current?.focus(), [run]);
 
   // The ta-da lands with the name; the trombone comes with the bad news.
   useEffect(() => {
-    const { landed, deflates } = still ? { landed: 0.3, deflates: 1.1 } : reveal(Boolean(prize));
+    const { landed, deflates } = still ? { landed: 0.3, deflates: 1.1 } : reveal();
     return playTaDa({ muted: run.muted, landsAt: landed, deflatesAt: deflates });
-  }, [run, prize, still]);
+  }, [run, still]);
 
   const tooFew =
     run.names.length - 1 < scenario.people.min
@@ -150,15 +148,6 @@ export function Result({ run, onRunAgain, onRunWithout, onChangeWhosIn }: Result
             {unlucky} 🎉
           </span>
         </h1>
-        {prize && (
-          <p className={styles.prize} style={at(times.prize)}>
-            <Rosette />
-            <span className={styles.prizeLabel}>Your prize:</span>{' '}
-            <span className={styles.prizeName} dir="auto">
-              {prize}
-            </span>
-          </p>
-        )}
         <p className={styles.ribbon} style={at(times.ribbon)}>
           Sorry for your win
         </p>
@@ -189,17 +178,5 @@ export function Result({ run, onRunAgain, onRunWithout, onChangeWhosIn }: Result
         </p>
       )}
     </main>
-  );
-}
-
-/** A prize rosette: a marigold medal on two tomato tails, outlined in ink. */
-function Rosette() {
-  return (
-    <svg className={styles.rosette} viewBox="0 0 32 40" aria-hidden="true" focusable="false">
-      <path className={styles.tail} d="M9 20 4 37l6-3 4 5 4-17z" />
-      <path className={styles.tail} d="M23 20l5 17-6-3-4 5-4-17z" />
-      <circle className={styles.medal} cx="16" cy="15" r="12" />
-      <circle className={styles.medalInner} cx="16" cy="15" r="6.5" />
-    </svg>
   );
 }

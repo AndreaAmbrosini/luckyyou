@@ -24,16 +24,6 @@ async function resultFor(names: readonly string[], unlucky: string, scenario: Fa
   await resultHeading();
 }
 
-/** The paragraph that reads exactly `text`, or null. */
-const paragraph = (text: string) =>
-  screen.queryByText((_, element) => element?.tagName === 'P' && element.textContent === text);
-
-/** The result's prize line, if it has one. */
-const prizeLine = () =>
-  screen.queryByText(
-    (_, element) => element?.tagName === 'P' && /^Your prize:/.test(element.textContent ?? ''),
-  );
-
 /** Whether `later` comes after `earlier` on the page. */
 const follows = (earlier: Node, later: Node) =>
   Boolean(earlier.compareDocumentPosition(later) & Node.DOCUMENT_POSITION_FOLLOWING);
@@ -42,13 +32,12 @@ const follows = (earlier: Node, later: Node) =>
 const comesIn = (element: Element) =>
   parseFloat((element as HTMLElement).style.getPropertyValue('--at'));
 
-/** The parts of the result in the order the eye should meet them; the prize when there is one. */
+/** The parts of the result in the order the eye should meet them. */
 async function parts() {
   const heading = await resultHeading();
   return [
     heading.parentElement!,
     within(heading).getByText(/🎉/),
-    ...(prizeLine() ? [prizeLine()!] : []),
     screen.getByText('Sorry for your win'),
     screen.getByRole('button', { name: 'Run again' }).parentElement!,
   ];
@@ -83,56 +72,22 @@ describeSpec(await loadFeature('./result.feature'), ({ Rule }) => {
         expect(await resultHeading()).toHaveFocus();
       });
     });
-
-    RuleScenario('The job is the prize', ({ Given, And, When, Then }) => {
-      Given('the prize is {string}', (_, prize: string) => {
-        storeSettings({ prize });
-      });
-      And('the app picked {string}', (_, name: string) => {
-        stubDraws(ANNA_BEN_CARLA.indexOf(name));
-      });
-      When('the show ends', () => startShow(ANNA_BEN_CARLA, fakeScenario()));
-      Then('under the heading it says {string}', async (_, text: string) => {
-        const heading = await resultHeading();
-        expect(heading).toHaveAccessibleName('Lucky you, Ben 🎉');
-        const line = paragraph(text)!;
-        expect(line).toBeInTheDocument();
-        expect(follows(heading, line)).toBe(true);
-      });
-    });
-
-    RuleScenario('Without a prize, the result only congratulates', ({ Given, When, Then, And }) => {
-      Given('no prize is named', () => {
-        storeSettings({ prize: '   ' });
-      });
-      When('the show ends', () => resultFor(ANNA_BEN_CARLA, 'Carla', fakeScenario()));
-      Then('the result names no prize', () => {
-        expect(prizeLine()).toBeNull();
-      });
-      And('under the heading it says {string}', async (_, text: string) => {
-        expect(follows(await resultHeading(), paragraph(text)!)).toBe(true);
-      });
-    });
   });
 
   Rule('The news arrives one piece at a time', ({ RuleScenario }) => {
     RuleScenario(
-      'The card comes in, then the name, the prize and the ribbon, then the buttons',
-      ({ Given, When, Then, And }) => {
-        Given('the prize is {string}', (_, prize: string) => {
-          storeSettings({ prize });
-        });
+      'The card comes in, then the name and the ribbon, then the buttons',
+      ({ When, Then, And }) => {
         When('the show ends', () => resultFor(ANNA_BEN_CARLA, 'Ben', fakeScenario()));
-        Then('the card, the name, the prize and the ribbon come in, in that order', async () => {
-          const [card, name, prize, ribbon] = await parts();
-          expect(prize).toHaveTextContent('Your prize: Running the retro');
-          const times = [card!, name!, prize!, ribbon!].map(comesIn);
+        Then('the card, the name and the ribbon come in, in that order', async () => {
+          const [card, name, ribbon] = await parts();
+          const times = [card!, name!, ribbon!].map(comesIn);
           expect(times[0]).toBe(0);
           expect(times).toEqual(times.toSorted((a, b) => a - b));
           expect(new Set(times).size).toBe(times.length);
         });
         And('the buttons come in after the ribbon', async () => {
-          const [, , , ribbon, buttons] = await parts();
+          const [, , ribbon, buttons] = await parts();
           expect(comesIn(buttons!)).toBeGreaterThan(comesIn(ribbon!));
         });
         And('confetti falls behind the card', async () => {
@@ -150,13 +105,12 @@ describeSpec(await loadFeature('./result.feature'), ({ Rule }) => {
       ({ Given, When, Then, And }) => {
         Given('the browser asks for reduced motion', () => {
           prefersReducedMotion(true);
-          storeSettings({ prize: 'Running the retro' });
         });
         When('the show ends', () => resultFor(ANNA_BEN_CARLA, 'Ben', fakeScenario()));
         Then('every part is there from the start', async () => {
           const all = await parts();
-          expect(all).toHaveLength(5);
-          expect(all.map(comesIn)).toEqual([0, 0, 0, 0, 0]);
+          expect(all).toHaveLength(4);
+          expect(all.map(comesIn)).toEqual([0, 0, 0, 0]);
         });
         And('no confetti falls', () => {
           expect(confetti()).toBeNull();
