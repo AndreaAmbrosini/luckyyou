@@ -393,3 +393,43 @@
     gap: 0.5rem;
   }
 }
+
+/*
+ * In a low window, as at 800 by 600 or 1024 by 640, the cards keep their
+ * height and scroll sideways as one strip, and the panel keeps only the
+ * chosen show's name and the prize: the main button says what comes next.
+ */
+@media (height < 42rem) {
+  .cards {
+    flex-shrink: 0;
+    grid-template-columns: none;
+    grid-auto-columns: 10.5rem;
+    grid-auto-flow: column;
+    overflow: auto hidden;
+    padding-bottom: 0.875rem;
+  }
+
+  .tags .badge:not(.cannot) {
+    display: none;
+  }
+
+  .tags:not(:has(.cannot)) {
+    display: none;
+  }
+
+  .panel {
+    grid-template-areas: 'name prize';
+    grid-template-columns: auto minmax(0, 1fr);
+    gap: 0 1.5rem;
+    padding: 0.75rem 1.25rem;
+  }
+
+  .panelName {
+    align-self: center;
+    font-size: var(--size-card-title);
+  }
+
+  .facts {
+    display: none;
+  }
+}

@@ -72,6 +72,32 @@ test('the header and the bar keep to one row at 800 by 600', async ({ page }) =>
   );
 });
 
+test('a low window keeps every show card in reach on Pick a show', async ({ page }) => {
+  for (const [width, height] of [
+    [800, 600],
+    [1024, 640],
+  ] as const) {
+    await page.setViewportSize({ width, height });
+    await page.goto('./');
+    await page.evaluate((names) => {
+      const people = names.map((name) => ({ name, ticked: true }));
+      localStorage.setItem('luckyyou:v1:people', JSON.stringify(people));
+    }, team);
+    await page.reload();
+    await page.getByRole('button', { name: 'Next: pick a show' }).click();
+    const panel = (await page.getByRole('region', { name: /./ }).last().boundingBox())!;
+    const shows = page.getByRole('list', { name: 'Shows' }).getByRole('button');
+    for (const card of await shows.all()) {
+      await card.scrollIntoViewIfNeeded();
+      const box = (await card.boundingBox())!;
+      // The whole card, still and name, sits above the panel and inside the window.
+      expect(box.height, `${width}×${height}`).toBeGreaterThan(120);
+      expect(box.y + box.height).toBeLessThanOrEqual(panel.y + 0.5);
+      expect(box.x + box.width).toBeLessThanOrEqual(width + 0.5);
+    }
+  }
+});
+
 test('a big window shows the steps bigger', async ({ page }) => {
   const rem = () =>
     page.evaluate(() => parseFloat(getComputedStyle(document.documentElement).fontSize));
