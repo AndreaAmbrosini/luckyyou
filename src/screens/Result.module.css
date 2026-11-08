@@ -15,6 +15,45 @@
   text-align: center;
 }
 
+/* Flat paper confetti: it falls once, behind the card, as the name lands. */
+.confetti {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.bit {
+  position: absolute;
+  top: -3rem;
+  left: var(--x);
+  width: 0.75rem;
+  height: 1.125rem;
+  border-radius: 2px;
+}
+
+.streamer {
+  width: 0.4375rem;
+  height: 2.5rem;
+  border-radius: var(--radius-pill);
+}
+
+.marigold {
+  background-color: var(--color-marigold);
+}
+
+.tomato {
+  background-color: var(--color-tomato);
+}
+
+.mint {
+  background-color: var(--color-mint);
+}
+
+.soft {
+  background-color: var(--color-text-soft);
+}
+
 .sky {
   position: absolute;
   inset: 0;
@@ -31,17 +70,18 @@
   fill: currentColor;
 }
 
+/* In the margins either side of the card, which is as wide as the name needs. */
 .s1 {
-  top: 9%;
-  left: 15%;
+  top: 7%;
+  left: 4%;
   width: 5.375rem;
   color: var(--color-marigold);
   rotate: -2deg;
 }
 
 .s2 {
-  top: 11%;
-  right: 19%;
+  top: 15%;
+  right: 4%;
   width: 4rem;
   color: var(--color-tomato);
   rotate: 2deg;
@@ -57,15 +97,15 @@
 
 /* Round the card, the logo's sparkle in marigold and soft white. */
 .k1 {
-  top: 30%;
+  top: 40%;
   left: 5%;
   width: 2.25rem;
   color: var(--color-marigold);
 }
 
 .k2 {
-  top: 9%;
-  right: 7%;
+  top: 4%;
+  right: 13%;
   width: 1.75rem;
   color: var(--color-text-soft);
 }
@@ -158,9 +198,184 @@
   gap: 1.25rem;
 }
 
+/* The unfilled buttons get the ground's fill, so confetti falls behind their words, not through them. */
+.actions > button:not(:first-child) {
+  background-color: var(--color-ground);
+}
+
 .reason {
   position: relative;
   margin: -1.5rem 0 0;
   color: var(--color-tomato-text);
   font-weight: 700;
+}
+
+/* On a short window, as at 800 by 600, everything a size down, so the buttons stay in view. */
+@media (height < 42rem) {
+  .result {
+    gap: 1.5rem;
+    padding: 1.5rem;
+  }
+
+  .card {
+    gap: 0.75rem;
+    padding: 1.5rem clamp(1.25rem, 4vw, 3rem) 1.75rem;
+  }
+
+  .lucky {
+    font-size: var(--size-heading-small);
+  }
+
+  .name {
+    --name-size: calc(
+      var(--size-heading) + (var(--size-name-min) - var(--size-heading)) * var(--fit, 1)
+    );
+  }
+
+  .ribbon {
+    font-size: var(--size-card-title);
+  }
+
+  .reason {
+    margin-top: -0.75rem;
+  }
+}
+
+/*
+ * The reveal. Each part comes in at its --at, set by the component: the card
+ * drops, "Lucky you," rises, the name stamps down, the stars pop, confetti
+ * falls once, the ribbon unfurls, the buttons rise. Every
+ * move lasts 0.4 s or more, and nothing flashes. With reduced motion there
+ * is none of it: everything is simply there.
+ */
+@media (prefers-reduced-motion: no-preference) {
+  .card {
+    animation: drop 0.6s var(--at) both;
+  }
+
+  .lucky {
+    animation: rise 0.4s ease-out var(--at) both;
+  }
+
+  .name {
+    animation: stamp 0.45s var(--at) both;
+  }
+
+  .star,
+  .sparkle {
+    animation: pop-in 0.5s ease-out calc(var(--at) + var(--n) * 0.08s) both;
+  }
+
+  .bit {
+    animation: fall var(--fall) linear calc(var(--at) + var(--delay)) both;
+  }
+
+  .ribbon {
+    animation: unfurl 0.5s ease-out var(--at) both;
+  }
+
+  .actions > *,
+  .reason {
+    animation: rise 0.4s ease-out var(--at) both;
+  }
+
+  .actions > :nth-child(2) {
+    animation-delay: calc(var(--at) + 0.1s);
+  }
+
+  .actions > :nth-child(3) {
+    animation-delay: calc(var(--at) + 0.2s);
+  }
+}
+
+/* Dropped from above, it overshoots, comes back a little and settles. */
+@keyframes drop {
+  0% {
+    transform: translateY(-100vh) rotate(-9deg);
+    animation-timing-function: cubic-bezier(0.5, 0, 0.9, 0.6);
+  }
+
+  62% {
+    transform: translateY(0.75rem) rotate(1deg);
+    animation-timing-function: ease-out;
+  }
+
+  82% {
+    transform: translateY(-0.25rem) rotate(-0.5deg);
+    animation-timing-function: ease-in-out;
+  }
+
+  100% {
+    transform: none;
+  }
+}
+
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(1rem);
+  }
+
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* Big and faint, it comes down hard, squashes a little and settles. */
+@keyframes stamp {
+  0% {
+    opacity: 0;
+    transform: scale(2.2);
+    animation-timing-function: cubic-bezier(0.55, 0, 1, 0.45);
+  }
+
+  65% {
+    opacity: 1;
+    transform: scale(0.94);
+    animation-timing-function: ease-out;
+  }
+
+  100% {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes pop-in {
+  0% {
+    opacity: 0;
+    transform: scale(0) rotate(-90deg);
+  }
+
+  70% {
+    opacity: 1;
+    transform: scale(1.2) rotate(8deg);
+  }
+
+  100% {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* From its middle out to both ends. */
+@keyframes unfurl {
+  from {
+    clip-path: inset(0 50%);
+  }
+
+  to {
+    clip-path: inset(0);
+  }
+}
+
+@keyframes fall {
+  from {
+    transform: translate(0, 0) rotate(0deg);
+  }
+
+  to {
+    transform: translate(var(--drift), calc(100dvh + 6rem)) rotate(var(--spin));
+  }
 }

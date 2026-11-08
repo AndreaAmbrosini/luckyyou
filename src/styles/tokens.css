@@ -55,6 +55,8 @@
   --font-text: 'Figtree Variable', system-ui, sans-serif;
   --font-display: 'Lilita One', 'Arial Black', sans-serif;
   --font-body: 'Nunito', system-ui, sans-serif;
+  /* The setup steps' rem: 16 px, bigger in a window over about 1460 × 920, up to 24 px. */
+  --size-root: clamp(100%, min(1.1vw, 1.75vh), 150%);
   --size-small: 1.125rem;
   --size-chip: 1.1875rem;
   --size-button: 1.25rem;

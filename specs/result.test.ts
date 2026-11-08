@@ -1,15 +1,17 @@
 import { loadFeature } from '@amiceli/vitest-cucumber';
-import { screen, waitFor } from '@testing-library/react';
-import { expect } from 'vitest';
+import { screen, waitFor, within } from '@testing-library/react';
+import { expect, vi } from 'vitest';
 import {
   choose,
   quoted,
   resultHeading,
   startShow,
+  storeSettings,
   stubDraws,
   tickBox,
   tickedNames,
 } from './support/app';
+import { fakeAudio, type FakeAudio } from './support/audio';
 import { fakeScenario, type FakeScenario } from './support/fake-scenarios';
 import { describeSpec } from './support/spec';
 
@@ -20,6 +22,37 @@ async function resultFor(names: readonly string[], unlucky: string, scenario: Fa
   stubDraws(names.indexOf(unlucky));
   await startShow(names, scenario);
   await resultHeading();
+}
+
+/** Whether `later` comes after `earlier` on the page. */
+const follows = (earlier: Node, later: Node) =>
+  Boolean(earlier.compareDocumentPosition(later) & Node.DOCUMENT_POSITION_FOLLOWING);
+
+/** When a part of the result comes in, in seconds after it opens. */
+const comesIn = (element: Element) =>
+  parseFloat((element as HTMLElement).style.getPropertyValue('--at'));
+
+/** The parts of the result in the order the eye should meet them. */
+async function parts() {
+  const heading = await resultHeading();
+  return [
+    heading.parentElement!,
+    within(heading).getByText(/🎉/),
+    screen.getByText('Sorry for your win'),
+    screen.getByRole('button', { name: 'Run again' }).parentElement!,
+  ];
+}
+
+const confetti = () => document.querySelector('[data-confetti]');
+
+/** The browser's prefers-reduced-motion, as `reduce` says. */
+function prefersReducedMotion(reduce: boolean) {
+  vi.stubGlobal('matchMedia', (query: string) => ({
+    matches: reduce && query.includes('prefers-reduced-motion: reduce'),
+    media: query,
+    addEventListener: () => undefined,
+    removeEventListener: () => undefined,
+  }));
 }
 
 describeSpec(await loadFeature('./result.feature'), ({ Rule }) => {
@@ -37,6 +70,83 @@ describeSpec(await loadFeature('./result.feature'), ({ Rule }) => {
       });
       And('the heading has the keyboard focus', async () => {
         expect(await resultHeading()).toHaveFocus();
+      });
+    });
+  });
+
+  Rule('The news arrives one piece at a time', ({ RuleScenario }) => {
+    RuleScenario(
+      'The card comes in, then the name and the ribbon, then the buttons',
+      ({ When, Then, And }) => {
+        When('the show ends', () => resultFor(ANNA_BEN_CARLA, 'Ben', fakeScenario()));
+        Then('the card, the name and the ribbon come in, in that order', async () => {
+          const [card, name, ribbon] = await parts();
+          const times = [card!, name!, ribbon!].map(comesIn);
+          expect(times[0]).toBe(0);
+          expect(times).toEqual(times.toSorted((a, b) => a - b));
+          expect(new Set(times).size).toBe(times.length);
+        });
+        And('the buttons come in after the ribbon', async () => {
+          const [, , ribbon, buttons] = await parts();
+          expect(comesIn(buttons!)).toBeGreaterThan(comesIn(ribbon!));
+        });
+        And('confetti falls behind the card', async () => {
+          const [card] = await parts();
+          expect(confetti()).toHaveAttribute('aria-hidden', 'true');
+          expect(confetti()!.children.length).toBeGreaterThan(0);
+          // Earlier on the page, so the card is drawn over it.
+          expect(follows(confetti()!, card!)).toBe(true);
+        });
+      },
+    );
+
+    RuleScenario(
+      'With reduced motion, everything is simply there',
+      ({ Given, When, Then, And }) => {
+        Given('the browser asks for reduced motion', () => {
+          prefersReducedMotion(true);
+        });
+        When('the show ends', () => resultFor(ANNA_BEN_CARLA, 'Ben', fakeScenario()));
+        Then('every part is there from the start', async () => {
+          const all = await parts();
+          expect(all).toHaveLength(4);
+          expect(all.map(comesIn)).toEqual([0, 0, 0, 0]);
+        });
+        And('no confetti falls', () => {
+          expect(confetti()).toBeNull();
+        });
+      },
+    );
+  });
+
+  Rule('A ta-da that deflates', ({ RuleScenario }) => {
+    RuleScenario('A ta-da turns into a sad trombone', ({ Given, When, Then, And }) => {
+      let audio: FakeAudio;
+      Given('the sound is on', () => {
+        storeSettings({ muted: false });
+        audio = fakeAudio();
+      });
+      When('the show ends', () => resultFor(ANNA_BEN_CARLA, 'Ben', fakeScenario()));
+      Then('a ta-da plays and deflates into a sad trombone', () => {
+        expect(audio.opened).toBe(1);
+        expect(audio.started).toBeGreaterThan(0);
+      });
+      And('it stops when I leave the result', async () => {
+        await choose("Change who's in");
+        expect(audio.closed).toBe(1);
+      });
+    });
+
+    RuleScenario("A muted run's result is silent", ({ Given, When, Then }) => {
+      let audio: FakeAudio;
+      Given('the sound is off', () => {
+        storeSettings({ muted: true });
+        audio = fakeAudio();
+      });
+      When('the show ends', () => resultFor(ANNA_BEN_CARLA, 'Ben', fakeScenario()));
+      Then('nothing is heard', () => {
+        expect(audio.opened).toBe(0);
+        expect(audio.started).toBe(0);
       });
     });
   });

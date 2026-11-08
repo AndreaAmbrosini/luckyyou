@@ -11,24 +11,28 @@ export interface Settings {
   readonly musicVolume: number;
   /** The id of the show played last, ready to play again. */
   readonly lastScenario: string | null;
+  /** The last show started from Pick a show was a surprise, so Surprise me is chosen again. */
+  readonly surprise: boolean;
 }
 
 /** The stored settings, with a default for anything missing or damaged. */
 export function loadSettings(): Settings {
   const stored = readJson(SETTINGS_KEY);
-  const { muted, music, musicVolume, lastScenario } = (
+  const { muted, music, musicVolume, lastScenario, surprise } = (
     typeof stored === 'object' && stored !== null ? stored : {}
   ) as {
     muted?: unknown;
     music?: unknown;
     musicVolume?: unknown;
     lastScenario?: unknown;
+    surprise?: unknown;
   };
   return {
     muted: muted === true,
     music: music !== false,
     musicVolume: isVolume(musicVolume) ? musicVolume : 70,
     lastScenario: typeof lastScenario === 'string' ? lastScenario : null,
+    surprise: surprise === true,
   };
 }
 

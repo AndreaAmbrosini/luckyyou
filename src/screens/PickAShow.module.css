@@ -16,11 +16,11 @@
   vertical-align: middle;
 }
 
-/* One row of cards, with room around them for the check badge and the focus ring. */
+/* One row of cards, six across at 1280 wide, with room around them for the check badge and the focus ring. */
 .cards {
   display: grid;
   flex-shrink: 1;
-  grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(10.5rem, 1fr));
   align-content: start;
   gap: 1.25rem;
   min-height: 0;
@@ -159,25 +159,25 @@
   color: var(--color-tomato-text);
 }
 
-/* Under the cards: the chosen show, what it takes and what comes next. */
+/* Under the cards: the chosen show over its line, then what it takes and what comes next. */
 .panel {
   display: grid;
   flex-shrink: 0;
+  grid-template-areas:
+    'name facts'
+    'about facts';
   grid-template-columns: minmax(0, 1fr) minmax(0, 1.25fr);
   align-items: center;
-  gap: 1rem 2.5rem;
+  gap: 0.625rem 2.5rem;
   padding: 1.625rem 2rem;
   border: var(--line-thin) solid var(--color-edge);
   border-radius: var(--radius-panel);
   background-color: var(--color-panel);
 }
 
-.panelText {
-  display: grid;
-  gap: 0.625rem;
-}
-
 .panelName {
+  grid-area: name;
+  align-self: end;
   margin: 0;
   font-family: var(--font-title);
   font-size: var(--size-panel-title);
@@ -187,6 +187,8 @@
 }
 
 .panelAbout {
+  grid-area: about;
+  align-self: start;
   margin: 0;
   color: var(--color-text-soft);
   font-size: var(--size-lead);
@@ -195,6 +197,7 @@
 
 .facts {
   display: grid;
+  grid-area: facts;
   gap: 0.875rem;
   margin: 0;
   padding: 0;
@@ -226,10 +229,29 @@
   color: var(--color-ground);
 }
 
-/* On a short screen, as at 1280 by 800, everything tightens so the cards and panel fit unscrolled. */
+/*
+ * On a short screen, as at 1280 by 720 or 800, everything tightens so the
+ * cards and panel fit unscrolled: the cards leave their descriptions to the
+ * panel, where the chosen one's stands in for what its chips say.
+ */
 @media (height < 56rem) {
   .heading {
     font-size: var(--size-heading-small);
+  }
+
+  .about,
+  .factFits {
+    display: none;
+  }
+
+  /* A show that can't run keeps only its reason, which says what its count chip would. */
+  .card[aria-disabled='true'] .badge:not(.cannot) {
+    display: none;
+  }
+
+  .words,
+  .tags {
+    padding: 0 0.25rem;
   }
 
   .card {
@@ -263,5 +285,50 @@
 
   .facts {
     gap: 0.5rem;
+  }
+}
+
+/*
+ * In a low window, as at 800 by 600 or 1024 by 640, the cards keep their
+ * height and scroll sideways as one strip, and the panel keeps only the
+ * chosen show's name and line: the main button says what comes next.
+ */
+@media (height < 42rem) {
+  .cards {
+    flex-shrink: 0;
+    grid-template-columns: none;
+    grid-auto-columns: 10.5rem;
+    grid-auto-flow: column;
+    overflow: auto hidden;
+    padding-bottom: 0.875rem;
+  }
+
+  .tags .badge:not(.cannot) {
+    display: none;
+  }
+
+  .tags:not(:has(.cannot)) {
+    display: none;
+  }
+
+  .panel {
+    grid-template-areas: 'name about';
+    grid-template-columns: auto minmax(0, 1fr);
+    gap: 0 1.5rem;
+    padding: 0.75rem 1.25rem;
+  }
+
+  .panelName {
+    align-self: center;
+    font-size: var(--size-card-title);
+  }
+
+  .panelAbout {
+    align-self: center;
+    font-size: var(--size-body);
+  }
+
+  .facts {
+    display: none;
   }
 }

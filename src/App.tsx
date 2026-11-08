@@ -2,12 +2,12 @@ import { useState } from 'react';
 import { catalogue } from './catalogue/catalogue';
 import { useLooks, type DealFrom, type ThemeChoice } from './line-up/looks';
 import { usePeople } from './people/people';
-import { newSeed, pickUnlucky } from './pick/pick';
+import { drawShow, newSeed, pickUnlucky } from './pick/pick';
 import type { ChosenLook, Scenario } from './scenario-kit/contract';
 import { Header } from './screens/Header';
 import layout from './screens/layout.module.css';
 import { LineUp } from './screens/LineUp';
-import { PickAShow } from './screens/PickAShow';
+import { PickAShow, SURPRISE } from './screens/PickAShow';
 import { Result } from './screens/Result';
 import { ShowScreen, type Run } from './screens/ShowScreen';
 import { WhosIn } from './screens/WhosIn';
@@ -39,6 +39,8 @@ export default function App({ scenarios = catalogue }: AppProps) {
   const [screen, setScreen] = useState<Screen>({ name: 'whos-in' });
   // The show clicked on Pick a show, by id, kept while the app is open.
   const [picked, setPicked] = useState<string | null>(null);
+  // Surprise me is chosen: as it was last started, until a show is clicked.
+  const [surprise, setSurprise] = useState(settings.surprise);
   const looks = useLooks();
 
   const ticked = people.list.filter((person) => person.ticked).map((person) => person.name);
@@ -52,6 +54,8 @@ export default function App({ scenarios = catalogue }: AppProps) {
       : (runnable.find(({ id }) => id === picked) ??
         runnable.find(({ id }) => id === settings.lastScenario) ??
         runnable[0]);
+  // A surprise needs two shows to draw from; with fewer, the chosen show stands.
+  const surprising = surprise && screen.name !== 'line-up' && runnable.length >= 2;
 
   /** Picks the unlucky person, then hands the show the window (decision 0005). */
   function start(scenario: Scenario, names: readonly string[], looks?: Looks, theme?: string) {
@@ -74,6 +78,7 @@ export default function App({ scenarios = catalogue }: AppProps) {
   /** A show with a line-up opens it first; any other starts at once. */
   function next(scenario: Scenario) {
     setPicked(scenario.id);
+    changeSettings({ surprise: false });
     if (scenario.lineUp) {
       setScreen({
         name: 'line-up',
@@ -91,6 +96,18 @@ export default function App({ scenarios = catalogue }: AppProps) {
   /** Skips a show's Line-up: everyone in their kept look, on the kept theme or one drawn afresh. */
   function startWithLastLineUp(scenario: Scenario) {
     start(scenario, ticked, looks.open(scenario, ticked), looks.openTheme(scenario)?.name);
+  }
+
+  /**
+   * Surprise me: draws a show that can run, not last time's, and starts it.
+   * A show with a line-up skips it, so nobody sees the show before it starts.
+   * The person is picked as for any show, in its own draw (decision 0025).
+   */
+  function startSurprise() {
+    const scenario = drawShow(runnable, settings.lastScenario);
+    changeSettings({ surprise: true });
+    if (scenario.lineUp) startWithLastLineUp(scenario);
+    else start(scenario, ticked);
   }
 
   if (screen.name === 'show') {
@@ -128,8 +145,8 @@ export default function App({ scenarios = catalogue }: AppProps) {
       <Header
         steps={[
           { label: "Who's in", chosen: String(ticked.length) },
-          { label: 'Show', chosen: chosen?.name },
-          ...(chosen?.lineUp ? [{ label: 'Line-up' }] : []),
+          { label: 'Show', chosen: surprising ? SURPRISE : chosen?.name },
+          ...(!surprising && chosen?.lineUp ? [{ label: 'Line-up' }] : []),
         ]}
         current={STEP[screen.name]}
         muted={settings.muted}
@@ -170,10 +187,19 @@ export default function App({ scenarios = catalogue }: AppProps) {
           scenarios={scenarios}
           lastScenario={settings.lastScenario}
           chosen={chosen}
-          onChoose={(scenario) => setPicked(scenario.id)}
+          surprise={surprising}
+          onChoose={(scenario) => {
+            setPicked(scenario.id);
+            setSurprise(false);
+          }}
+          onSurprise={() => setSurprise(true)}
           onBack={() => setScreen({ name: 'whos-in' })}
           onNext={next}
-          onStartWithLastLineUp={startWithLastLineUp}
+          onStartSurprise={startSurprise}
+          onStartWithLastLineUp={(scenario) => {
+            changeSettings({ surprise: false });
+            startWithLastLineUp(scenario);
+          }}
         />
       )}
     </div>

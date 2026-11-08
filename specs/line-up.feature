@@ -63,11 +63,17 @@ Feature: The Line-up
       Then every name is at least --size-body, wrapping inside its card
       And every control is at least --target-min across, and shows the keyboard focus
 
-    Scenario: Everything in view at 1280 by 800
-      Given 8 people, a 15-character name among them, in a 1280 by 800 window
+    Scenario: Everything in view at 1280 by 720
+      Given 8 people, a 15-character name among them, in a 1280 by 720 window
       When the Line-up opens
       Then the themes, everyone and their cards, and the bottom bar are in view without scrolling
       And with Ben's sheet open, his first option's first eight choices are in view, and any more scroll inside the sheet
+
+    Scenario: A smaller window scrolls the Line-up
+      Given 8 people, a 15-character name among them, in an 800 by 600 window
+      When the Line-up opens
+      Then the Line-up scrolls between the header and the bottom bar
+      And every card holds its name, die and pin, and no two cards overlap
 
   Rule: Changing a look
 

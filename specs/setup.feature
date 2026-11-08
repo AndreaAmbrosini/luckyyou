@@ -21,6 +21,18 @@ Feature: Setting up a pick
       Then the steps read "Who's in" and "Show" while the chosen show has no line-up
       And "Line-up" joins them as soon as a show with a line-up is chosen
 
+    # Decision 0024.
+    Scenario: The header and the bar keep to one row in a small window
+      Given an 800 by 600 window, on Who's in, Pick a show with "The Race" chosen, or its Line-up
+      Then the header and the bottom bar are one row each
+      And short of room, the logo goes down to its star, a done step to its check, a step to come to its number, a status away and the way back to its arrow
+      And each still reads out in full
+
+    # Decision 0024.
+    Scenario: A big window shows the steps bigger
+      Given a window over about 1460 by 920, as at 1920 by 1080
+      Then everything on the steps before the show grows with the window, up to half as big again
+
   Rule: Moving on needs 2 to 12 ticked people
 
     Scenario Outline: Moving on with <ticked> ticked
@@ -33,6 +45,17 @@ Feature: Setting up a pick
         | 2      | allowed |
         | 12     | allowed |
         | 13     | blocked |
+
+    Scenario: A first visit is ready for names, and asks for two without scolding
+      Given a first visit
+      Then the add field has the keyboard focus
+      And beside the main button, a hint says "Add 2 or more. One gets lucky."
+      When I add "Anna"
+      Then the hint says "Anna can't win alone. Add one more."
+
+    Scenario: Ready says how many are in the running
+      Given 8 people are ticked
+      Then the bar says "8 in, 1 lucky winner."
 
     Scenario: Too few ticked says why
       Given 1 person is ticked
@@ -120,6 +143,53 @@ Feature: Setting up a pick
       When I move on to the shows
       Then every card is disabled
       And I'm told no show can run with 11 people
+
+  Rule: Surprise me lets the app draw the show
+
+    Scenario: Surprise me is a card after the shows
+      Given I played "Hot Potato" last time, and 8 people are ticked
+      When I move on to the shows
+      Then after the show cards comes a "Surprise me" card, with its own picture
+      And it says it draws "1 of 2 shows": those that take 8, but Hot Potato
+
+    Scenario: Choosing Surprise me
+      Given I played "Hot Potato" last time, and 8 people are ticked
+      And I moved on to the shows
+      When I click "Surprise me"
+      Then "Surprise me" is chosen, marked by a check mark, and no show is
+      And the panel says "One of 2 shows. Not Hot Potato again." and "The show stays a secret until the curtain rises."
+      And the main button reads "Start a surprise"
+
+    Scenario: A surprise is any show that can run, but last time's
+      Given I played "Hot Potato" last time, and 8 people are ticked
+      And "The Race" takes at most 6 people
+      When I start a surprise once for each draw the app can make
+      Then "Shark Bait" and "Snail Race" each start once
+      And the app picks the unlucky person as it does for any show
+
+    Scenario: A show with a line-up skips it
+      Given a surprise can only draw "The Race", whose Line-up was last left on "Autumn"
+      When I press "Start a surprise"
+      Then The Race starts at once, everyone in the look kept for them, on "Autumn"
+      And with no line-up kept, a surprise draws everyone's look afresh
+
+    Scenario: Surprise me needs two shows that can run
+      Given only 1 of the shows takes 9 people
+      When I move on to the shows
+      Then "Surprise me" is disabled
+      And it says "Only 1 show can run"
+
+    Scenario: A host who likes surprises gets one again
+      Given I started a surprise, and it drew "Shark Bait"
+      When I reload the page and move on to the shows
+      Then "Surprise me" is chosen again, and "Shark Bait" is marked "Last time"
+      When I start "Hot Potato" myself, reload and move on to the shows
+      Then "Hot Potato" is chosen
+
+    Scenario: Run again after a surprise plays the same show
+      Given I started a surprise, and it drew "Shark Bait"
+      When the show ends and I choose "Run again"
+      Then Shark Bait plays again
 
   Rule: Mute and fullscreen
 

@@ -2,9 +2,11 @@ import { loadFeature } from '@amiceli/vitest-cucumber';
 import { screen, within } from '@testing-library/react';
 import { expect } from 'vitest';
 import {
+  addField,
   addName,
   blockStorage,
   choose,
+  currentUser,
   fillStorage,
   listNames,
   quoted,
@@ -104,6 +106,81 @@ describeSpec(await loadFeature('./people.feature'), ({ Rule }) => {
       });
       Then('it is added, as 30 characters', () => {
         expect(listNames()).toEqual([name]);
+      });
+    });
+  });
+
+  Rule('A whole team can be added at once', ({ RuleScenario, RuleScenarioOutline }) => {
+    const SEPARATORS: Record<string, string> = {
+      commas: ', ',
+      semicolons: ';',
+      tabs: '\t',
+      'new lines': '\n',
+    };
+    const nothingRefused = () => {
+      expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    };
+
+    RuleScenarioOutline(
+      'Names separated by <separator> are added together',
+      ({ When, Then, And }, { separator }) => {
+        When('I add {any}, separated by <separator>', async (_, names: string) => {
+          renderApp();
+          await addName(quoted(names).join(SEPARATORS[separator]!));
+        });
+        Then('the list is {any}', (_, names: string) => {
+          expect(listNames()).toEqual(quoted(names));
+        });
+        And('nothing is refused', nothingRefused);
+      },
+    );
+
+    RuleScenario('Empty gaps between names are ignored', ({ When, Then, And }) => {
+      When('I add {string}', async (_, text: string) => {
+        renderApp();
+        await addName(text);
+      });
+      Then('the list is {any}', (_, names: string) => {
+        expect(listNames()).toEqual(quoted(names));
+      });
+      And('nothing is refused', nothingRefused);
+    });
+
+    RuleScenario('The add button counts the names it will add', ({ Given, When, Then }) => {
+      Given('the list has {string}', (_, name: string) => givenList(`"${name}"`));
+      When('I type {string}', async (_, text: string) => {
+        await currentUser().type(addField(), text);
+      });
+      Then('the add button reads {string}', (_, label: string) => {
+        expect(screen.getByRole('button', { name: label })).toBeInTheDocument();
+      });
+    });
+
+    RuleScenario("Names that can't join are skipped, in one line", ({ Given, When, Then, And }) => {
+      const long = 'n'.repeat(31);
+      Given('the list has {string}', (_, name: string) => givenList(`"${name}"`));
+      When('I add "Lena", "marco", a name of 31 characters and "Noor" at once', async () => {
+        await addName(`Lena, marco, ${long}, Noor`);
+      });
+      Then('the list is {any}', (_, names: string) => {
+        expect(listNames()).toEqual(quoted(names));
+      });
+      And("I'm told {string}", (_, message: string) => {
+        expect(refusal()).toBe(message);
+      });
+      And('{string} is highlighted on the list', (_, name: string) => {
+        expect(tickBox(name).closest('li')).toHaveAttribute('data-highlighted', 'true');
+      });
+      And('the add field keeps the name of 31 characters', () => {
+        expect(addField()).toHaveValue(long);
+      });
+    });
+
+    RuleScenario('Many names already on the list are summed up', ({ Given, When, Then }) => {
+      Given('the list has {any}', (_, names: string) => givenList(names));
+      When('I add {string}', async (_, text: string) => addName(text));
+      Then("I'm told {string}", (_, message: string) => {
+        expect(refusal()).toBe(message);
       });
     });
   });

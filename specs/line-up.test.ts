@@ -576,11 +576,11 @@ describeSpec(await loadFeature('./line-up.feature'), ({ Rule }) => {
       );
     });
 
-    RuleScenario('Everything in view at 1280 by 800', ({ Given, When, Then, And }) => {
+    RuleScenario('Everything in view at 1280 by 720', ({ Given, When, Then, And }) => {
       // jsdom has no layout: e2e/line-up.spec.ts measures The Race's Line-up
-      // in a real 1280 by 800 window. Here: what that measuring leans on.
+      // in real 1280 by 720 and 800 windows. Here: what that measuring leans on.
       const long = 'Maria-Elena Ros';
-      Given('8 people, a 15-character name among them, in a 1280 by 800 window', () => {
+      Given('8 people, a 15-character name among them, in a 1280 by 720 window', () => {
         expect(long).toHaveLength(15);
       });
       When('the Line-up opens', () => openLineUp([...TEAM.slice(0, 7), long], themedShow()));
@@ -603,6 +603,30 @@ describeSpec(await loadFeature('./line-up.feature'), ({ Rule }) => {
           expect(getComputedStyle(sheet('Ben')).bottom).toBe('0px');
         },
       );
+    });
+
+    RuleScenario('A smaller window scrolls the Line-up', ({ Given, When, Then, And }) => {
+      // jsdom has no layout: e2e/line-up.spec.ts measures The Race's Line-up
+      // in a real 800 by 600 window. Here: what that measuring leans on.
+      const long = 'Maria-Elena Ros';
+      Given('8 people, a 15-character name among them, in an 800 by 600 window', () => {
+        expect(long).toHaveLength(15);
+      });
+      When('the Line-up opens', () => openLineUp([...TEAM.slice(0, 7), long], themedShow()));
+      Then('the Line-up scrolls between the header and the bottom bar', () => {
+        const main = screen.getByRole('main');
+        expect(getComputedStyle(main).overflowY).toBe('auto');
+        expect(main.previousElementSibling).toBe(screen.getByRole('banner'));
+        expect(main.nextElementSibling).toBe(screen.getByRole('contentinfo'));
+      });
+      And('every card holds its name, die and pin, and no two cards overlap', () => {
+        for (const [index, place] of places().entries()) {
+          const name = [...TEAM.slice(0, 7), long][index]!;
+          expect(nameOf(place)).toBe(name);
+          expect(place).toContainElement(die(name));
+          expect(place).toContainElement(pin(name));
+        }
+      });
     });
   });
 
@@ -1478,7 +1502,10 @@ describeSpec(await loadFeature('./line-up.feature'), ({ Rule }) => {
           expect(dealFrom()).toHaveAccessibleName(label);
           expect(sides().map((side) => side.textContent)).toEqual([theirs, any]);
           expect(onSide()).toEqual([theirs]);
-          expect(dealFrom().nextElementSibling).toBe(screen.getByRole('button', { name: shuffle }));
+          // The switch and its label, together, then Shuffle.
+          expect(dealFrom().parentElement!.nextElementSibling).toBe(
+            screen.getByRole('button', { name: shuffle }),
+          );
           expect(getComputedStyle(sides()[0]!).backgroundColor).toBe('var(--color-marigold)');
           expect(getComputedStyle(sides()[1]!).backgroundColor).not.toContain('marigold');
         },

@@ -11,6 +11,33 @@ Feature: The result screen
       And below it says "Sorry for your win"
       And the heading has the keyboard focus
 
+  Rule: The news arrives one piece at a time
+
+    Scenario: The card comes in, then the name and the ribbon, then the buttons
+      When the show ends
+      Then the card, the name and the ribbon come in, in that order
+      And the buttons come in after the ribbon
+      And confetti falls behind the card
+
+    Scenario: With reduced motion, everything is simply there
+      Given the browser asks for reduced motion
+      When the show ends
+      Then every part is there from the start
+      And no confetti falls
+
+  Rule: A ta-da that deflates
+
+    Scenario: A ta-da turns into a sad trombone
+      Given the sound is on
+      When the show ends
+      Then a ta-da plays and deflates into a sad trombone
+      And it stops when I leave the result
+
+    Scenario: A muted run's result is silent
+      Given the sound is off
+      When the show ends
+      Then nothing is heard
+
   Rule: What happens next
 
     Scenario: Run again plays the same show for the same people

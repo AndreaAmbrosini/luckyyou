@@ -1,5 +1,6 @@
 import { useFullscreen } from '../ui/fullscreen';
 import { CheckIcon, FullscreenIcon, SoundIcon, SparkleIcon } from '../ui/icons';
+import { useFold } from '../ui/useFold';
 import styles from './Header.module.css';
 import { MusicControl, type MusicControlProps } from './MusicControl';
 
@@ -16,17 +17,21 @@ export interface HeaderProps extends MusicControlProps {
   onMutedChange(muted: boolean): void;
 }
 
+const FOLDS = ['tight', 'logo', 'chosen', 'done', 'later', 'wrap'];
+
 export function Header({ steps, current, onMutedChange, ...music }: HeaderProps) {
   const { muted } = music;
   const fullscreen = useFullscreen();
+  // One row: short of room, it folds (Header.module.css).
+  const header = useFold<HTMLElement>(FOLDS);
 
   return (
-    <header className={styles.header}>
+    <header ref={header} className={styles.header}>
       <span className={styles.logo}>
         <span className={styles.sparkle}>
           <SparkleIcon size={26} />
         </span>
-        <span>
+        <span className={styles.word}>
           Lucky<span className={styles.you}>You</span>
         </span>
       </span>
@@ -43,13 +48,15 @@ export function Header({ steps, current, onMutedChange, ...music }: HeaderProps)
               <span className={styles.mark} aria-hidden="true">
                 {done ? <CheckIcon size={20} /> : index + 1}
               </span>
-              {label}
-              {done && chosen !== undefined && (
-                <span className={styles.chosen}>
-                  {' · '}
-                  <span dir="auto">{chosen}</span>
-                </span>
-              )}
+              <span className={styles.label}>
+                {label}
+                {done && chosen !== undefined && (
+                  <span className={styles.chosen}>
+                    {' · '}
+                    <span dir="auto">{chosen}</span>
+                  </span>
+                )}
+              </span>
             </li>
           );
         })}

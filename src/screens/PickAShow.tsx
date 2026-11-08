@@ -3,6 +3,7 @@ import type { LineUp, Scenario } from '../scenario-kit/contract';
 import { Button } from '../ui/Button';
 import { ArrowRightIcon, CheckIcon, PeopleIcon, PlayIcon } from '../ui/icons';
 import { Bar } from './Bar';
+import { SurpriseStill } from './SurpriseStill';
 import layout from './layout.module.css';
 import styles from './PickAShow.module.css';
 
@@ -14,18 +15,27 @@ export interface PickAShowProps {
   lastScenario: string | null;
   /** The chosen show; none when no show can run with today's people. */
   chosen: Scenario | undefined;
+  /** Surprise me is chosen: the app draws the show as it starts. */
+  surprise: boolean;
   onChoose(scenario: Scenario): void;
+  onSurprise(): void;
   onBack(): void;
   /** Starts a show without a line-up, or opens a show's Line-up. */
   onNext(scenario: Scenario): void;
+  /** Draws a show and starts it, skipping any line-up. */
+  onStartSurprise(): void;
   /** Starts a show with a line-up on the looks and theme it was last left on. */
   onStartWithLastLineUp(scenario: Scenario): void;
 }
 
+/** Surprise me's name, as the card, the panel and the steps show it. */
+export const SURPRISE = 'Surprise me';
+const SURPRISE_ABOUT = 'Even you won’t know which show.';
+
 /** Step 2: clicking a show chooses it; the bar's main button starts it, or opens its Line-up. */
 export function PickAShow(props: PickAShowProps) {
-  const { names, scenarios, lastScenario, chosen, onChoose, onBack } = props;
-  const { onNext, onStartWithLastLineUp } = props;
+  const { names, scenarios, lastScenario, chosen, surprise, onChoose, onBack } = props;
+  const { onNext, onSurprise, onStartSurprise, onStartWithLastLineUp } = props;
   const id = useId();
   const main = useRef<HTMLButtonElement>(null);
   const noShow = useRef<HTMLParagraphElement>(null);
@@ -33,6 +43,10 @@ export function PickAShow(props: PickAShowProps) {
   const count = names.length;
   const canRun = (scenario: Scenario) =>
     count >= scenario.people.min && count <= scenario.people.max;
+  // What Surprise me draws from: the shows that can run, but last time's.
+  const runnable = scenarios.filter(canRun);
+  const last = runnable.find(({ id }) => id === lastScenario);
+  const pool = last && runnable.length > 1 ? runnable.length - 1 : runnable.length;
 
   // The chosen show is one key press away.
   useEffect(() => {
@@ -66,7 +80,7 @@ export function PickAShow(props: PickAShowProps) {
             const aboutId = `${id}-${scenario.id}-about`;
             const badgeId = `${id}-${scenario.id}-badge`;
             const last = runs && scenario.id === lastScenario;
-            const on = scenario === chosen;
+            const on = !surprise && scenario === chosen;
             const { min, max } = scenario.people;
             return (
               <li key={scenario.id} className={styles.slot}>
@@ -112,7 +126,7 @@ export function PickAShow(props: PickAShowProps) {
                     )}
                     <span className={styles.badge}>
                       <PeopleIcon size={18} />
-                      {min === max ? min : `${min}–${max}`}
+                      {peopleRange(scenario, '–')}
                     </span>
                     {scenario.lineUp && <span className={styles.badge}>+ Line-up</span>}
                   </span>
@@ -120,9 +134,40 @@ export function PickAShow(props: PickAShowProps) {
               </li>
             );
           })}
+          {scenarios.length > 1 && (
+            <SurpriseCard
+              id={`${id}-surprise`}
+              runnable={runnable.length}
+              pool={pool}
+              on={surprise}
+              onChoose={onSurprise}
+            />
+          )}
         </ul>
 
-        {chosen && <Chosen id={`${id}-chosen`} scenario={chosen} count={count} />}
+        {surprise ? (
+          <Chosen
+            id={`${id}-chosen`}
+            name={SURPRISE}
+            about={SURPRISE_ABOUT}
+            fits={`One of ${pool} shows.${last ? ` Not ${last.name} again.` : ''}`}
+            next="The show stays a secret until the curtain rises."
+          />
+        ) : (
+          chosen && (
+            <Chosen
+              id={`${id}-chosen`}
+              name={chosen.name}
+              about={chosen.description}
+              fits={`Takes ${peopleRange(chosen, ' to ')} people. You have ${count}.`}
+              next={
+                chosen.lineUp
+                  ? `Next you pick ${nextPicks(chosen.lineUp)}, or start with last time's.`
+                  : 'No line-up: it starts as soon as you press Start.'
+              }
+            />
+          )
+        )}
       </main>
 
       <Bar back={{ label: "Who's in", onClick: onBack }}>
@@ -132,7 +177,7 @@ export function PickAShow(props: PickAShowProps) {
               No show can run with {count} people.
             </p>
           )}
-          {chosen?.lineUp && (
+          {!surprise && chosen?.lineUp && (
             <Button variant="outline" onClick={() => onStartWithLastLineUp(chosen)}>
               Start with last line-up
             </Button>
@@ -143,10 +188,16 @@ export function PickAShow(props: PickAShowProps) {
             aria-disabled={chosen ? undefined : true}
             aria-describedby={chosen ? undefined : `${id}-reason`}
             onClick={() => {
-              if (chosen) onNext(chosen);
+              if (surprise) onStartSurprise();
+              else if (chosen) onNext(chosen);
             }}
           >
-            {chosen?.lineUp ? (
+            {surprise ? (
+              <>
+                Start a surprise
+                <PlayIcon size={26} />
+              </>
+            ) : chosen?.lineUp ? (
               <>
                 Next: {lowerFirst(chosen.lineUp.heading)}
                 <ArrowRightIcon size={26} />
@@ -164,36 +215,116 @@ export function PickAShow(props: PickAShowProps) {
   );
 }
 
-/** The panel under the shows: what the chosen show is, what it takes, and what comes next. */
-function Chosen({ id, scenario, count }: { id: string; scenario: Scenario; count: number }) {
-  const { min, max } = scenario.people;
+/**
+ * The panel under the shows: the chosen show, or Surprise me, and its line;
+ * why it can run, and what comes next. On a short screen, where the cards
+ * leave their descriptions out, why it can run goes too: the chips say it.
+ */
+function Chosen({
+  id,
+  name,
+  about,
+  fits,
+  next,
+}: {
+  id: string;
+  name: string;
+  about: string;
+  /** Why it can run today. */
+  fits: string;
+  /** What pressing the main button does. */
+  next: string;
+}) {
   return (
     <section className={styles.panel} aria-labelledby={id}>
-      <div className={styles.panelText}>
-        <h2 id={id} className={styles.panelName}>
-          {scenario.name}
-        </h2>
-        <p className={styles.panelAbout}>{scenario.description}</p>
-      </div>
+      <h2 id={id} className={styles.panelName}>
+        {name}
+      </h2>
+      <p className={styles.panelAbout}>{about}</p>
       <ul className={styles.facts}>
-        <li className={styles.fact}>
+        <li className={`${styles.fact} ${styles.factFits}`}>
           <span className={`${styles.factMark} ${styles.fine}`} aria-hidden="true">
             <CheckIcon size={22} />
           </span>
-          Takes {min === max ? min : `${min} to ${max}`} people. You have {count}.
+          {fits}
         </li>
         <li className={styles.fact}>
           <span className={styles.factMark} aria-hidden="true">
             <ArrowRightIcon size={22} />
           </span>
-          {scenario.lineUp
-            ? `Next you pick ${nextPicks(scenario.lineUp)}, or start with last time's.`
-            : 'No line-up: it starts as soon as you press Start.'}
+          {next}
         </li>
       </ul>
     </section>
   );
 }
+
+/**
+ * Surprise me, as a card after the shows': its own picture, and how many
+ * shows it draws from. It needs two shows that can run.
+ */
+function SurpriseCard({
+  id,
+  runnable,
+  pool,
+  on,
+  onChoose,
+}: {
+  id: string;
+  /** How many shows can run today. */
+  runnable: number;
+  /** How many of them it draws from. */
+  pool: number;
+  on: boolean;
+  onChoose(): void;
+}) {
+  const runs = runnable > 1;
+  return (
+    <li className={styles.slot} data-surprise>
+      <button
+        type="button"
+        className={styles.card}
+        aria-pressed={runs ? on : undefined}
+        aria-disabled={runs ? undefined : true}
+        aria-labelledby={`${id}-name`}
+        aria-describedby={runs ? `${id}-about` : `${id}-about ${id}-badge`}
+        onClick={() => {
+          if (runs) onChoose();
+        }}
+      >
+        {on && (
+          <span className={styles.check} data-check>
+            <CheckIcon size={26} />
+          </span>
+        )}
+        <span className={styles.still}>
+          <SurpriseStill chosen={on} />
+        </span>
+        <span className={styles.words}>
+          <span id={`${id}-name`} className={styles.name}>
+            {SURPRISE}
+          </span>
+          <span id={`${id}-about`} className={styles.about}>
+            {SURPRISE_ABOUT}
+          </span>
+        </span>
+        <span className={styles.tags}>
+          {runs ? (
+            <span className={styles.badge}>1 of {pool} shows</span>
+          ) : (
+            <span id={`${id}-badge`} className={`${styles.badge} ${styles.cannot}`}>
+              {runnable === 0 ? 'No show can run' : 'Only 1 show can run'}
+            </span>
+          )}
+        </span>
+      </button>
+    </li>
+  );
+}
+
+/** How many people a show takes: "2–12" on its card, "2 to 12" in the panel. */
+const peopleRange = ({ people: { min, max } }: Scenario, to: string) =>
+  min === max ? String(min) : `${min}${to}${max}`;
 
 const lowerFirst = (text: string) => text.charAt(0).toLowerCase() + text.slice(1);
 

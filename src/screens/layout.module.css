@@ -1,9 +1,17 @@
 /* The frame every step before the show shares: header, title row, a middle that grows, the bar. */
+
+/* Bigger in a big window (decision 0024): every size here is in rem. */
+:global(html):has(.page) {
+  font-size: var(--size-root);
+}
+
 .page {
+  --side: 3rem;
+
   display: flex;
   flex-direction: column;
   height: 100dvh;
-  padding: 0 3rem;
+  padding: 0 var(--side);
   background-color: var(--color-ground);
   color: var(--color-text);
   font-family: var(--font-text);
@@ -16,6 +24,13 @@
   gap: 1.5rem;
   min-height: 0;
   padding: 1.75rem 0 1.5rem;
+}
+
+/* Under 1120 px wide, as at 1024 × 640, narrower sides. */
+@media (width < 70rem) {
+  .page {
+    --side: 1.5rem;
+  }
 }
 
 /* Under 900px tall, as at 1280 × 800, a little less room between the parts. */
@@ -75,18 +90,91 @@
   background-color: var(--color-tomato);
 }
 
-/* A panel along the bottom, edge to edge: the way back on the left, the main button on the right. */
+/*
+ * A panel along the bottom, edge to edge: the way back on the left, the main
+ * button on the right, one row. Short of room, it folds (Bar.tsx).
+ */
 .bar {
   display: flex;
   flex-shrink: 0;
-  flex-wrap: wrap;
   align-items: center;
   gap: 0.75rem 1.25rem;
   min-height: 7rem;
-  margin: 0 -3rem;
-  padding: 1rem 3rem;
+  margin: 0 calc(-1 * var(--side));
+  padding: 1rem var(--side);
   border-top: var(--line-thin) solid var(--color-edge);
   background-color: var(--color-panel);
+}
+
+/* Pushed right by a margin, so what doesn't fit spills out on the right, where useFold sees it. */
+.bar .end {
+  flex-wrap: nowrap;
+  justify-content: normal;
+}
+
+.bar .end > :first-child,
+.bar > button:last-child {
+  margin-left: auto;
+}
+
+.bar[data-fold~='wrap'],
+.bar[data-fold~='wrap'] .end {
+  flex-wrap: wrap;
+}
+
+/* A line in the bar takes the room the buttons leave: a status in two lines at most, or it folds away. */
+.bar .say {
+  display: -webkit-box;
+  flex: 1 1 auto;
+  min-width: 18rem;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+/* A reason that blocks is never cut short. */
+.bar .note {
+  flex: 0 1 auto;
+  min-width: 12rem;
+}
+
+.bar .end .note {
+  text-align: right;
+}
+
+/* Folded away, and still read out. */
+.bar[data-fold~='say'] .say,
+.bar[data-fold~='back'] .backLabel {
+  position: absolute;
+  width: 1px;
+  min-width: 0;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+}
+
+.bar[data-fold~='back'] .back {
+  width: 3.75rem;
+  padding: 0;
+}
+
+.bar[data-fold~='small'] button {
+  padding-inline: 1.125rem;
+  font-size: var(--size-button);
+}
+
+.bar[data-fold~='small'] > button:last-child,
+.bar[data-fold~='small'] .end > button:last-child {
+  padding-inline: 1.5rem;
+  font-size: var(--size-lead);
+}
+
+/* Under 736 px tall, as at 1280 × 720, a lower bar. */
+@media (height < 46rem) {
+  .bar {
+    min-height: 5.75rem;
+    padding-block: 0.75rem;
+  }
 }
 
 .spacer {

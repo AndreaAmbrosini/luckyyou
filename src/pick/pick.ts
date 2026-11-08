@@ -27,6 +27,21 @@ export function pickUnlucky(names: readonly string[], fill: Fill = cryptoFill): 
   return names[randomIndex(names.length, fill)]!;
 }
 
+/**
+ * Surprise me: one of `shows`, each as likely, from the same source as the
+ * pick, but never the one played `last` while another can run. It is drawn
+ * apart from the pick, so the show drawn can't change who is picked.
+ */
+export function drawShow<Show extends { readonly id: string }>(
+  shows: readonly Show[],
+  last: string | null,
+  fill: Fill = cryptoFill,
+): Show {
+  const others = shows.filter(({ id }) => id !== last);
+  const pool = others.length > 0 ? others : shows;
+  return pool[randomIndex(pool.length, fill)]!;
+}
+
 /** A seed for a show's own random source, which only decides how the show looks. */
 export function newSeed(fill: Fill = cryptoFill): number {
   const draw = new Uint32Array(1);
