@@ -17,6 +17,8 @@ file says how they're used.
 - One main button per screen, in tomato.
 - Click targets are at least `--target-min`. Keyboard focus shows as
   `--focus`, offset 3px; on the white sheet, in grape.
+- Header and bar keep to one row; short of room, they fold
+  ([setup.feature](specs/setup.feature)).
 
 ## Type
 
@@ -59,9 +61,9 @@ file says how they're used.
   tomato ×.
 - **Add tile**: panel: a plus, the field and a white "Add".
 - **Count pill**: "8 of 10 in", mint from 2 to 12 ticked, tomato otherwise.
-- **Buttons**: main in tomato with `--shadow-press`; secondary on panel;
-  outline (the bar's others) unfilled; quiet as underlined text; "Done" in
-  mint; disabled unfilled and dashed, with its reason beside it.
+- **Buttons**: secondary on panel; outline (the bar's others) unfilled;
+  quiet as underlined text; "Done" in mint; disabled unfilled and dashed,
+  with its reason beside it.
 - **Bar**: a panel along the bottom of every step before the show: the way
   back left, the main button right, a status between, tomato-text when it
   blocks, marigold for a hint.
@@ -101,8 +103,6 @@ the name in grape, the marigold ribbon "Sorry for your win"; the buttons
 under it.
 
 ## Shows
-
-Every scenario follows these:
 
 - Each show is drawn first for the usual head count in
   [PRODUCT.md](PRODUCT.md), then checked at its smallest and largest.

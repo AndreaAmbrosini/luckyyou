@@ -1,4 +1,5 @@
 import { loadFeature } from '@amiceli/vitest-cucumber';
+import { readFileSync } from 'node:fs';
 import { fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { expect, vi } from 'vitest';
 import {
@@ -65,6 +66,26 @@ const theRace = () => {
     lineUp: { ...lineUp, heading: 'Line up the racers', themes: [...lineUp.themes!, autumn] },
   });
 };
+
+const css = (path: string) => readFileSync(new URL(path, import.meta.url), 'utf8');
+const header = () => screen.getByRole('banner');
+/** Whether `element` is folded away: out of the row, and still read out. */
+const foldedAway = (element: Element) => getComputedStyle(element).position === 'absolute';
+
+/**
+ * A stand-in for a small window, as jsdom has no layout: the header spills
+ * out until it has folded `header`, the bar until it has folded `bar`.
+ */
+function shortOfRoom(until: { header: string; bar: string }) {
+  const folded = (row: Element, fold: string) =>
+    (row as HTMLElement).dataset.fold?.split(' ').includes(fold) ?? false;
+  vi.spyOn(Element.prototype, 'clientWidth', 'get').mockReturnValue(800);
+  vi.spyOn(Element.prototype, 'scrollWidth', 'get').mockImplementation(function (this: Element) {
+    if (this.tagName === 'HEADER') return folded(this, until.header) ? 800 : 900;
+    if (this.tagName === 'FOOTER') return folded(this, until.bar) ? 800 : 900;
+    return 0;
+  });
+}
 
 /** The music's state as the open panel shows it. */
 const musicShown = () => ({
@@ -181,6 +202,94 @@ describeSpec(await loadFeature('./setup.feature'), ({ Rule }) => {
         );
       },
     );
+    RuleScenario(
+      'The header and the bar keep to one row in a small window',
+      ({ Given, Then, And }) => {
+        // jsdom has no layout: e2e/frame.spec.ts measures the steps in a real
+        // 800 by 600 window. Here: how the header and the bar fold.
+        const seen: {
+          header: string;
+          bar: string;
+          word: boolean;
+          labels: boolean[];
+          status: boolean | null;
+          back: boolean | null;
+        }[] = [];
+        const look = () => {
+          const backLabel = within(bar()).queryAllByRole('button')[0]?.querySelector('span');
+          const status = bar().querySelector('p');
+          seen.push({
+            header: header().dataset.fold!,
+            bar: bar().dataset.fold!,
+            word: foldedAway(within(header()).getByText('You').parentElement!),
+            labels: stepItems().map((step) => foldedAway(step.lastElementChild!)),
+            status: status && foldedAway(status),
+            back: backLabel ? foldedAway(backLabel) : null,
+          });
+        };
+        Given(
+          "an 800 by 600 window, on Who's in, Pick a show with {string} chosen, or its Line-up",
+          async (_, show: string) => {
+            shortOfRoom({ header: 'later', bar: 'back' });
+            storeTicked(['Anna', 'Ben', 'Carla']);
+            renderApp({ scenarios: [theRace(), fakeScenario({ name: 'Plain Show' })] });
+            look();
+            await moveOnToShows();
+            await currentUser().click(showCard(show));
+            look();
+            await choose('Next: line up the racers');
+            look();
+          },
+        );
+        Then('the header and the bottom bar are one row each', () => {
+          for (const { header, bar } of seen) {
+            expect(header).toBe('tight logo chosen done later');
+            expect(bar).toBe('say back');
+          }
+        });
+        And(
+          'short of room, the logo goes down to its star, a done step to its check, a step to come to its number, a status away and the way back to its arrow',
+          () => {
+            const [whosIn, shows, lineUp] = seen;
+            expect(seen.map(({ word }) => word)).toEqual([true, true, true]);
+            // Only the current step keeps its name in view.
+            expect(whosIn!.labels).toEqual([false, true, true]);
+            expect(shows!.labels).toEqual([true, false, true]);
+            expect(lineUp!.labels).toEqual([true, true, false]);
+            expect(whosIn!.status).toBe(true);
+            expect(lineUp!.status).toBe(true);
+            expect([shows!.back, lineUp!.back]).toEqual([true, true]);
+          },
+        );
+        And('each still reads out in full', () => {
+          expect(steps()).toEqual(["Who's in · 3", 'Show · The Race', 'Line-up']);
+          expect(within(bar()).getAllByRole('button')[0]).toHaveAccessibleName('Pick a show');
+          expect(bar().querySelector('p')).toHaveTextContent(
+            'Pin a look to keep it when you shuffle',
+          );
+        });
+      },
+    );
+
+    RuleScenario('A big window shows the steps bigger', ({ Given, Then }) => {
+      // jsdom has no layout: e2e/frame.spec.ts measures the steps in a real
+      // 1920 by 1080 window. Here: what that measuring leans on.
+      Given('a window over about 1460 by 920, as at 1920 by 1080', () => {
+        expect(Math.min(1920 * 0.011, 1080 * 0.0175)).toBeGreaterThan(16);
+        expect(Math.min(1460 * 0.011, 920 * 0.0175)).toBeCloseTo(16, 0);
+      });
+      Then(
+        'everything on the steps before the show grows with the window, up to half as big again',
+        () => {
+          expect(css('../src/styles/tokens.css')).toContain(
+            '--size-root: clamp(100%, min(1.1vw, 1.75vh), 150%);',
+          );
+          expect(css('../src/screens/layout.module.css')).toMatch(
+            /:global\(html\):has\(\.page\) \{\s+font-size: var\(--size-root\);/,
+          );
+        },
+      );
+    });
   });
 
   Rule('Moving on needs 2 to 12 ticked people', ({ RuleScenario, RuleScenarioOutline }) => {

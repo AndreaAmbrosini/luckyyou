@@ -218,7 +218,7 @@ export function LineUp({
             )}
             <span className={layout.spacer} />
             {themeSide && (
-              <>
+              <div className={styles.deal}>
                 <span id={`${id}-deal`} className={styles.dealLabel}>
                   Deal from
                 </span>
@@ -241,7 +241,7 @@ export function LineUp({
                     {anySide}
                   </button>
                 </div>
-              </>
+              </div>
             )}
             <Button className={styles.shuffle} onClick={shuffleEveryone}>
               <DieIcon five size={24} />
@@ -294,7 +294,7 @@ export function LineUp({
                           {each}
                         </span>
                         <span id={`${id}-${index}-look`} className={styles.lookWords}>
-                          {inWords(lineUp, look).slice(0, 2).join(' · ')}
+                          <LookWords words={inWords(lineUp, look)} />
                         </span>
                       </span>
                     </button>
@@ -331,7 +331,7 @@ export function LineUp({
       </main>
 
       <Bar back={{ label: 'Pick a show', onClick: onBack }} inert={open !== null}>
-        <p className={styles.status} role="status">
+        <p className={`${layout.say} ${styles.status}`} role="status">
           {words && themed ? `${words.theme}: ${themed.label} · ${pinNote}` : pinNote}
         </p>
         <Button ref={start} variant="primary" onClick={onStart}>
@@ -372,6 +372,21 @@ const inWords = (lineUp: LineUpOf, look: ChosenLook) =>
   lineUp.options.map(
     (option) => option.choices.find((choice) => choice.name === look[option.name])?.label ?? '',
   );
+
+/** The first two options' choices; in a low window, the second is only read out. */
+function LookWords({ words: [first, second] }: { words: readonly string[] }) {
+  return (
+    <>
+      {first}
+      {second !== undefined && (
+        <>
+          {' '}
+          <span className={styles.second}>· {second}</span>
+        </>
+      )}
+    </>
+  );
+}
 
 const upperFirst = (text: string) => text.charAt(0).toUpperCase() + text.slice(1);
 
