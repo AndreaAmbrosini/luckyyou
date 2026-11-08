@@ -550,6 +550,231 @@ describeSpec(await loadFeature('./setup.feature'), ({ Rule }) => {
     });
   });
 
+  Rule('Surprise me lets the app draw the show', ({ RuleScenario }) => {
+    const surpriseCard = () => showCard('Surprise me');
+    /** Four shows: The Race takes at most `raceMax`, the others anyone. */
+    const fourShows = (raceMax = 8) => [
+      fakeScenario({ name: 'The Race', people: { min: 2, max: raceMax } }),
+      fakeScenario({ name: 'Hot Potato' }),
+      fakeScenario({ name: 'Shark Bait' }),
+      fakeScenario({ name: 'Snail Race' }),
+    ];
+    /** Opens the shows with `count` ticked, after `last` was played. */
+    const openShows = async (
+      shows: readonly ReturnType<typeof fakeScenario>[],
+      count: number,
+      last: string | null,
+    ) => {
+      storeSettings({ lastScenario: last });
+      storeTicked(TEAM.slice(0, count), ['Zoe']);
+      renderApp({ scenarios: shows });
+      await moveOnToShows();
+    };
+    /** Chooses Surprise me and starts it. */
+    const startSurprise = async () => {
+      await currentUser().click(surpriseCard());
+      await currentUser().click(mainButton());
+    };
+
+    RuleScenario('Surprise me is a card after the shows', ({ Given, When, Then, And }) => {
+      Given(
+        'I played {string} last time, and {int} people are ticked',
+        (_, __: string, count: number) => {
+          storeSettings({ lastScenario: 'hot-potato' });
+          storeTicked(TEAM.slice(0, count), ['Zoe']);
+          renderApp({ scenarios: fourShows(6) });
+        },
+      );
+      When('I move on to the shows', moveOnToShows);
+      Then('after the show cards comes a "Surprise me" card, with its own picture', () => {
+        const cards = within(screen.getByRole('list', { name: 'Shows' })).getAllByRole('button');
+        expect(cards.at(-1)).toBe(surpriseCard());
+        const picture = surpriseCard().querySelector('svg')!;
+        expect(picture).not.toBeNull();
+        expect(getComputedStyle(picture.parentElement!).aspectRatio).toBe('16 / 9');
+      });
+      And('it says it draws {string}: those that take 8, but Hot Potato', (_, chip: string) => {
+        expect(surpriseCard()).toHaveTextContent(chip);
+      });
+    });
+
+    RuleScenario('Choosing Surprise me', ({ Given, And, When, Then }) => {
+      Given('I played {string} last time, and {int} people are ticked', (_, __, count: number) =>
+        openShows(fourShows(6), count, 'hot-potato'),
+      );
+      And('I moved on to the shows', () => {
+        expect(heading()).toBe('Pick a show');
+      });
+      When('I click {string}', (_, name: string) => currentUser().click(showCard(name)));
+      Then('"Surprise me" is chosen, marked by a check mark, and no show is', () => {
+        expect(surpriseCard()).toHaveAttribute('aria-pressed', 'true');
+        expect(surpriseCard().querySelector('[data-check] svg')).not.toBeNull();
+        for (const name of ['Hot Potato', 'Shark Bait', 'Snail Race']) {
+          expect(showCard(name)).toHaveAttribute('aria-pressed', 'false');
+        }
+      });
+      And('the panel says {any}', (_, lines: string) => {
+        for (const line of quoted(lines))
+          expect(chosenPanel('Surprise me')).toHaveTextContent(line);
+      });
+      And(
+        'the main button reads {string}, with the prize field still there',
+        (_, label: string) => {
+          expect(mainButton()).toHaveAccessibleName(label);
+          expect(chosenPanel('Surprise me')).toContainElement(prizeField());
+          expect(barButtons()).not.toContain('Start with last line-up');
+        },
+      );
+    });
+
+    RuleScenario(
+      "A surprise is any show that can run, but last time's",
+      ({ Given, And, When, Then }) => {
+        const shows = fourShows(6);
+        const runs = () => Object.fromEntries(shows.map(({ name, runs }) => [name, runs.length]));
+        Given('I played {string} last time, and {int} people are ticked', (_, __, count: number) =>
+          openShows(shows, count, 'hot-potato'),
+        );
+        And('{string} takes at most {int} people', () => {
+          expect(showCard('The Race')).toHaveAttribute('aria-disabled', 'true');
+        });
+        When('I start a surprise once for each draw the app can make', async () => {
+          for (const draw of [0, 1]) {
+            stubDraws(draw);
+            if (draw > 0) {
+              storeSettings({ lastScenario: 'hot-potato' });
+              reload();
+              await moveOnToShows();
+            }
+            await startSurprise();
+            await waitFor(() =>
+              expect(Object.values(runs()).reduce((a, b) => a + b)).toBe(draw + 1),
+            );
+          }
+        });
+        Then('{string} and {string} each start once', (_, first: string, second: string) => {
+          expect(runs()).toEqual({ 'The Race': 0, 'Hot Potato': 0, [first]: 1, [second]: 1 });
+        });
+        And('the app picks the unlucky person as it does for any show', () => {
+          const all = shows.flatMap((show) => show.runs);
+          // Each draw picks the person at its index, whichever show it drew.
+          expect(all.map(({ unlucky }) => unlucky).toSorted()).toEqual(TEAM.slice(0, 2));
+        });
+      },
+    );
+
+    RuleScenario('A show with a line-up skips it', ({ Given, When, Then, And }) => {
+      const race = theRace();
+      const names = ['Anna', 'Ben', 'Carla'];
+      const kept = Object.fromEntries(dealLooks(race.lineUp as LineUp, names, Math.random));
+      Given(
+        'a surprise can only draw {string}, whose Line-up was last left on {string}',
+        async (_, __: string, theme: string) => {
+          localStorage.setItem(looksKey(race.id), JSON.stringify(kept));
+          localStorage.setItem(themeKey(race.id), JSON.stringify(theme.toLowerCase()));
+          storeSettings({ lastScenario: 'plain-show', surprise: true });
+          storeTicked(names);
+          renderApp({ scenarios: [fakeScenario({ name: 'Plain Show' }), race] });
+          await moveOnToShows();
+        },
+      );
+      When('I press {string}', (_, label: string) => choose(label));
+      Then(
+        'The Race starts at once, everyone in the look kept for them, on {string}',
+        async (_, theme: string) => {
+          await waitFor(() => expect(race.runs).toHaveLength(1));
+          expect(Object.fromEntries(race.runs[0]!.looks)).toEqual(kept);
+          expect(race.runs[0]!.theme).toBe(theme.toLowerCase());
+        },
+      );
+      And("with no line-up kept, a surprise draws everyone's look afresh", async () => {
+        localStorage.removeItem(looksKey(race.id));
+        localStorage.removeItem(themeKey(race.id));
+        storeSettings({ lastScenario: 'plain-show', surprise: true });
+        reload();
+        await moveOnToShows();
+        vi.spyOn(Math, 'random').mockReturnValue(0);
+        await choose('Start a surprise');
+        await waitFor(() => expect(race.runs).toHaveLength(2));
+        const fresh = dealLooks(race.lineUp as LineUp, names, () => 0);
+        expect(Object.fromEntries(race.runs[1]!.looks)).toEqual(Object.fromEntries(fresh));
+        expect(race.runs[1]!.theme).toBe('beach');
+      });
+    });
+
+    RuleScenario('Surprise me needs two shows that can run', ({ Given, When, Then, And }) => {
+      Given('only {int} of the shows takes {int} people', (_, __, count: number) => {
+        storeTicked(TEAM.slice(0, count));
+        renderApp({
+          scenarios: [
+            fakeScenario({ name: 'The Race', people: { min: 2, max: 8 } }),
+            fakeScenario({ name: 'Hot Potato' }),
+          ],
+        });
+      });
+      When('I move on to the shows', moveOnToShows);
+      Then('"Surprise me" is disabled', async () => {
+        expect(surpriseCard()).toHaveAttribute('aria-disabled', 'true');
+        await currentUser().click(surpriseCard());
+        expect(surpriseCard()).not.toHaveAttribute('aria-pressed', 'true');
+        expect(mainButton()).toHaveAccessibleName('Start Hot Potato');
+      });
+      And('it says {string}', (_, reason: string) => {
+        expect(surpriseCard()).toHaveAccessibleDescription(expect.stringContaining(reason));
+      });
+    });
+
+    RuleScenario('A host who likes surprises gets one again', ({ Given, When, Then }) => {
+      const hotPotato = fakeScenario({ name: 'Hot Potato' });
+      const sharkBait = fakeScenario({ name: 'Shark Bait' });
+      Given('I started a surprise, and it drew {string}', async () => {
+        await openShows([hotPotato, sharkBait], 3, 'hot-potato');
+        await startSurprise();
+        await waitFor(() => expect(sharkBait.runs).toHaveLength(1));
+      });
+      When('I reload the page and move on to the shows', async () => {
+        reload();
+        await moveOnToShows();
+      });
+      Then(
+        '"Surprise me" is chosen again, and {string} is marked "Last time"',
+        (_, name: string) => {
+          expect(surpriseCard()).toHaveAttribute('aria-pressed', 'true');
+          expect(mainButton()).toHaveAccessibleName('Start a surprise');
+          expect(mainButton()).toHaveFocus();
+          expect(within(showCard(name)).getByText('Last time')).toBeInTheDocument();
+        },
+      );
+      When('I start {string} myself, reload and move on to the shows', async (_, name: string) => {
+        await currentUser().click(showCard(name));
+        await currentUser().click(mainButton());
+        await waitFor(() => expect(hotPotato.runs).toHaveLength(1));
+        reload();
+        await moveOnToShows();
+      });
+      Then('{string} is chosen', (_, name: string) => {
+        expect(showCard(name)).toHaveAttribute('aria-pressed', 'true');
+        expect(surpriseCard()).toHaveAttribute('aria-pressed', 'false');
+      });
+    });
+
+    RuleScenario('Run again after a surprise plays the same show', ({ Given, When, Then }) => {
+      const sharkBait = fakeScenario({ name: 'Shark Bait' });
+      Given('I started a surprise, and it drew {string}', async () => {
+        await openShows([fakeScenario({ name: 'Hot Potato' }), sharkBait], 3, 'hot-potato');
+        await startSurprise();
+        await waitFor(() => expect(sharkBait.runs).toHaveLength(1));
+      });
+      When('the show ends and I choose {string}', async (_, label: string) => {
+        await resultHeading();
+        await choose(label);
+      });
+      Then('Shark Bait plays again', async () => {
+        await waitFor(() => expect(sharkBait.runs).toHaveLength(2));
+      });
+    });
+  });
+
   Rule('The job is named on Pick a show, as the prize', ({ RuleScenario }) => {
     /** Ticks `names`, starts the app with one show, and moves on to it. */
     const openShows = async (names: readonly string[] = ['Anna', 'Ben', 'Carla']) => {

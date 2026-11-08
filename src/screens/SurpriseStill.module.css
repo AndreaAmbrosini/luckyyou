@@ -1,0 +1,124 @@
+/* Surprise me's picture, drawn as the shows are: flat fills and ink outlines in stage pixels. */
+.picture {
+  display: block;
+  width: 100%;
+  height: 100%;
+  background-color: var(--color-ink);
+}
+
+.floor {
+  fill: var(--color-bark);
+  stroke: var(--color-ink);
+  stroke-width: 6;
+}
+
+.plank {
+  fill: none;
+  stroke: var(--color-ink-soft);
+  stroke-width: 4;
+}
+
+.gap {
+  fill: var(--color-ink);
+}
+
+.white {
+  fill: var(--color-paper);
+  stroke: var(--color-ink);
+  stroke-width: 3;
+}
+
+.pupil {
+  fill: var(--color-ink);
+}
+
+.curtain {
+  fill: var(--color-tomato);
+}
+
+.fold {
+  fill: var(--color-tomato-deep);
+}
+
+.edge {
+  fill: none;
+  stroke: var(--color-ink);
+  stroke-width: 6;
+  stroke-linejoin: round;
+}
+
+.pelmet {
+  fill: var(--color-marigold);
+  stroke: var(--color-ink);
+  stroke-width: 6;
+  stroke-linejoin: round;
+}
+
+.rope {
+  fill: none;
+  stroke: var(--color-ink);
+  stroke-width: 5;
+  stroke-linecap: round;
+}
+
+.board {
+  fill: var(--color-paper);
+  stroke: var(--color-ink);
+  stroke-width: 6;
+}
+
+/* The "?", drawn rather than typed, so it's as bold as the outlines. */
+.hook {
+  fill: none;
+  stroke: var(--color-ink);
+  stroke-width: 22;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.dot {
+  fill: var(--color-ink);
+}
+
+/* The sign hangs from the pelmet; chosen, it swings to rest, and the eyes look out. */
+.sign {
+  transform-box: view-box;
+  transform-origin: 320px 60px;
+  rotate: -4deg;
+}
+
+.pupils {
+  transition: translate 0.4s ease-out;
+}
+
+.picture[data-chosen] .pupils {
+  translate: 3px -2px;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .picture[data-chosen] .sign {
+    animation: swing 1.6s ease-out;
+  }
+}
+
+@keyframes swing {
+  0% {
+    rotate: -4deg;
+  }
+
+  20% {
+    rotate: 7deg;
+  }
+
+  45% {
+    rotate: -7deg;
+  }
+
+  70% {
+    rotate: 2deg;
+  }
+
+  100% {
+    rotate: -4deg;
+  }
+}

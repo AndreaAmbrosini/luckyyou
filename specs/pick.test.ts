@@ -1,7 +1,7 @@
 import { loadFeature } from '@amiceli/vitest-cucumber';
 import { screen, waitFor, within } from '@testing-library/react';
 import { expect, vi } from 'vitest';
-import { pickUnlucky } from '../src/pick/pick';
+import { drawShow, pickUnlucky } from '../src/pick/pick';
 import {
   choose,
   currentUser,
@@ -71,6 +71,52 @@ describeSpec(await loadFeature('./pick.feature'), ({ Rule }) => {
       When('the app picks {int} times', () => undefined);
       Then('each of them is picked about a third of the time', () => {
         expectAboutAThirdEach(names);
+      });
+    });
+  });
+
+  Rule('A surprise show is drawn apart from the pick', ({ RuleScenario }) => {
+    RuleScenario("The show drawn doesn't change the chances", ({ Given, When, Then, And }) => {
+      const shows = ['Hot Potato', 'Shark Bait', 'Snail Race'].map((name) =>
+        fakeScenario({ name }),
+      );
+      const tally = new Map<string, number>();
+      let names: string[] = [];
+      Given(
+        '{any} are ticked, and Surprise me is chosen from {int} shows',
+        (_, ticked: string, count: number) => {
+          names = quoted(ticked);
+          expect(shows).toHaveLength(count);
+        },
+      );
+      When('the app draws a show and picks a person {int} times', (_, count: number) => {
+        for (let i = 0; i < count; i++) {
+          const pairing = `${drawShow(shows, null).name} ${pickUnlucky(names)}`;
+          tally.set(pairing, (tally.get(pairing) ?? 0) + 1);
+        }
+      });
+      Then('each pairing of show and person comes up about a ninth of the time', () => {
+        expect(tally.size).toBe(9);
+        for (const count of tally.values()) {
+          expect(count / 30_000).toBeGreaterThan(1 / 9 - 0.01);
+          expect(count / 30_000).toBeLessThan(1 / 9 + 0.01);
+        }
+      });
+      And('the show is drawn from the same source as the pick, before it', async () => {
+        storeTicked(names, ['Zoe']);
+        renderApp({ scenarios: shows });
+        await moveOnToShows();
+        await currentUser().click(screen.getByRole('button', { name: 'Surprise me' }));
+        // The browser's source hands out 1, then 2, then 0s: the first draw
+        // picks the show, the next one the person.
+        const queue = [1, 2];
+        vi.spyOn(crypto, 'getRandomValues').mockImplementation((array) => {
+          if (array instanceof Uint32Array) array.fill(queue.shift() ?? 0);
+          return array;
+        });
+        await choose('Start a surprise');
+        await waitFor(() => expect(shows[1]!.runs).toHaveLength(1));
+        expect(shows[1]!.runs[0]!.unlucky).toBe(names[2]);
       });
     });
   });

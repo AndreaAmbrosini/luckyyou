@@ -16,11 +16,11 @@
   vertical-align: middle;
 }
 
-/* One row of cards, with room around them for the check badge and the focus ring. */
+/* One row of cards, six across at 1280 wide, with room around them for the check badge and the focus ring. */
 .cards {
   display: grid;
   flex-shrink: 1;
-  grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(10.5rem, 1fr));
   align-content: start;
   gap: 1.25rem;
   min-height: 0;
@@ -308,6 +308,12 @@
   line-height: 1.25;
 }
 
+/* The chosen show's description: only on a short screen, where its card leaves it out. */
+.factAbout {
+  display: none;
+  color: var(--color-text-soft);
+}
+
 .factMark {
   display: inline-flex;
   flex-shrink: 0;
@@ -325,10 +331,33 @@
   color: var(--color-ground);
 }
 
-/* On a short screen, as at 1280 by 800, everything tightens so the cards and panel fit unscrolled. */
+/*
+ * On a short screen, as at 1280 by 720 or 800, everything tightens so the
+ * cards and panel fit unscrolled: the cards leave their descriptions to the
+ * panel, where the chosen one's stands in for what its chips say.
+ */
 @media (height < 56rem) {
   .heading {
     font-size: var(--size-heading-small);
+  }
+
+  .about,
+  .factFits {
+    display: none;
+  }
+
+  .factAbout {
+    display: flex;
+  }
+
+  /* A show that can't run keeps only its reason, which says what its count chip would. */
+  .card[aria-disabled='true'] .badge:not(.cannot) {
+    display: none;
+  }
+
+  .words,
+  .tags {
+    padding: 0 0.25rem;
   }
 
   .card {

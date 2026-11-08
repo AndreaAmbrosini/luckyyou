@@ -1,8 +1,8 @@
 # Design
 
-LuckyYou's look is **Backstage**: dark screens around a bright show. Flat
-panels with thin outlines, marigold for what's chosen, tomato for the button
-that goes on. Every value is in [tokens.css](src/styles/tokens.css).
+LuckyYou's look is **Backstage**: dark screens around a bright show,
+marigold for what's chosen, tomato for the button that goes on. Every value
+is in [tokens.css](src/styles/tokens.css).
 
 ## Every screen
 
@@ -10,7 +10,7 @@ that goes on. Every value is in [tokens.css](src/styles/tokens.css).
 - Text is text or text-soft on ground, panel or raised, and ground or ink
   on marigold, tomato, mint and white. Every pair is at least 4.5:1.
 - Flat fills only: no gradients, glows or blur. Panels have a `--line-thin`
-  edge and no shadow. The only shadow is the main button's `--shadow-press`.
+  edge; the only shadow is the main button's `--shadow-press`.
 - On and off differ without colour: ticked, done and chosen things have a
   check; anything off or disabled has a dashed outline.
 - One main button per screen, in tomato.
@@ -65,11 +65,12 @@ that goes on. Every value is in [tokens.css](src/styles/tokens.css).
   back left, the main button right, a status between, tomato-text when it
   blocks, marigold for a hint.
 - **Show card**: panel: a 16 : 9 still, `--radius-picture`,
-  "Last time" over its top left; the name, the description, chips for how
-  many it takes and "+ Line-up", or why it can't run. Chosen: a marigold ring
+  "Last time" over its top left; the name, the description, chips for its
+  head count and "+ Line-up", or why it can't run. Chosen: a marigold ring
   and check badge. Can't run: dashed, the still dimmed.
-- **Chosen-show panel**: the show's name over the prize, a ground well by a
-  raised die; what it takes and what comes next.
+- **Chosen-show panel**: the name over the prize, a ground well by a raised
+  die; what it takes (on a short screen, its description) and what comes
+  next.
 - **Sticker**: white on the ground, unoutlined. Its controls have an ink
   outline; pressed, marigold.
 
@@ -81,8 +82,8 @@ and scroll; the add tile is last. Remove mode puts its hint in the bar beside
 "Done". A first visit is one wide add field.
 
 **Pick a show.** The heading, a mint "3 in" pill and the names. Show cards
-in one row; under them, the chosen-show panel. A show with a line-up adds
-"Start with last line-up" to the bar.
+in one row, Surprise me's curtain last; under them, the chosen-show panel.
+A show with a line-up adds "Start with last line-up" to the bar.
 
 **Line-up.** A smaller heading; step names in text-soft, the theme in
 marigold. Postcards are stickers, the chosen one ringed. "Deal from" is a
