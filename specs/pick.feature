@@ -15,6 +15,14 @@ Feature: The pick
       When the app picks 30000 times
       Then each of them is picked about a third of the time
 
+  Rule: A surprise show is drawn apart from the pick
+
+    Scenario: The show drawn doesn't change the chances
+      Given "Anna", "Ben" and "Carla" are ticked, and Surprise me is chosen from 3 shows
+      When the app draws a show and picks a person 30000 times
+      Then each pairing of show and person comes up about a ninth of the time
+      And the show is drawn from the same source as the pick, before it
+
   Rule: The show cannot change the pick
 
     Scenario: The result names the app's pick, whatever the show did

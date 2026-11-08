@@ -132,6 +132,53 @@ Feature: Setting up a pick
       Then every card is disabled
       And I'm told no show can run with 11 people
 
+  Rule: Surprise me lets the app draw the show
+
+    Scenario: Surprise me is a card after the shows
+      Given I played "Hot Potato" last time, and 8 people are ticked
+      When I move on to the shows
+      Then after the show cards comes a "Surprise me" card, with its own picture
+      And it says it draws "1 of 2 shows": those that take 8, but Hot Potato
+
+    Scenario: Choosing Surprise me
+      Given I played "Hot Potato" last time, and 8 people are ticked
+      And I moved on to the shows
+      When I click "Surprise me"
+      Then "Surprise me" is chosen, marked by a check mark, and no show is
+      And the panel says "One of 2 shows. Not Hot Potato again." and "No line-up: the show stays a secret until it starts."
+      And the main button reads "Start a surprise", with the prize field still there
+
+    Scenario: A surprise is any show that can run, but last time's
+      Given I played "Hot Potato" last time, and 8 people are ticked
+      And "The Race" takes at most 6 people
+      When I start a surprise once for each draw the app can make
+      Then "Shark Bait" and "Snail Race" each start once
+      And the app picks the unlucky person as it does for any show
+
+    Scenario: A show with a line-up skips it
+      Given a surprise can only draw "The Race", whose Line-up was last left on "Autumn"
+      When I press "Start a surprise"
+      Then The Race starts at once, everyone in the look kept for them, on "Autumn"
+      And with no line-up kept, a surprise draws everyone's look afresh
+
+    Scenario: Surprise me needs two shows that can run
+      Given only 1 of the shows takes 9 people
+      When I move on to the shows
+      Then "Surprise me" is disabled
+      And it says "Only 1 show can run"
+
+    Scenario: A host who likes surprises gets one again
+      Given I started a surprise, and it drew "Shark Bait"
+      When I reload the page and move on to the shows
+      Then "Surprise me" is chosen again, and "Shark Bait" is marked "Last time"
+      When I start "Hot Potato" myself, reload and move on to the shows
+      Then "Hot Potato" is chosen
+
+    Scenario: Run again after a surprise plays the same show
+      Given I started a surprise, and it drew "Shark Bait"
+      When the show ends and I choose "Run again"
+      Then Shark Bait plays again
+
   Rule: The job is named on Pick a show, as the prize
 
     Scenario: The host names the job

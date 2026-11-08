@@ -146,10 +146,11 @@ export async function pickShow(name: string): Promise<void> {
   await user.click(mainButton());
 }
 
-/** The names of the show cards on the "Pick a show" step, in order. */
+/** The names of the show cards on the "Pick a show" step, in order; Surprise me isn't a show. */
 export function pickerNames(): string[] {
   return within(screen.getByRole('list', { name: 'Shows' }))
     .queryAllByRole('listitem')
+    .filter((item) => !item.hasAttribute('data-surprise'))
     .map((item) => computeName(within(item).getByRole('button')));
 }
 

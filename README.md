@@ -23,8 +23,8 @@ typed it ([0004](docs/decisions/0004-no-backend.md)).
 
 Built: the team list, setup in two steps (three for a show with a Line-up),
 the pick, five shows (Shark Bait, Hot Potato, Wobbly Tower, Don't Wake the
-Dog and The Race) and the result. A new show
-is a folder in [`src/scenarios/`](src/scenarios/), copied from
+Dog and The Race), "Surprise me" for the app to choose one, and the result.
+A new show is a folder in [`src/scenarios/`](src/scenarios/), copied from
 [`_template`](src/scenarios/_template/).
 
 ## How it's built
