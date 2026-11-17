@@ -47,7 +47,12 @@ export interface LineUp {
    */
   draw(
     look: ChosenLook,
-    person: { readonly name: string; readonly place: number; readonly theme?: string | null },
+    person: {
+      readonly name: string;
+      readonly place: number;
+      readonly theme?: string | null;
+      readonly photo?: string;
+    },
   ): Element;
   /** Where the whole show takes place, one for everyone, shown as postcards (decision 0017). */
   readonly themes?: readonly LineUpTheme[];
@@ -117,6 +122,8 @@ export interface Scenario extends ScenarioMeta {
 
 /** Everything a show gets. The app has already picked; the show only acts it out. */
 export interface Show {
+  /** Locally cropped faces for today's people; a read-only snapshot, separate from random looks. */
+  readonly photos: ReadonlyMap<string, string>;
   /** Where the show draws. */
   readonly stage: HTMLElement;
   /** Everyone in this pick, in the list's order. A frozen copy. */

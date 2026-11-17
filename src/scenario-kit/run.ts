@@ -1,6 +1,6 @@
 import { gsap } from 'gsap';
 import { SHOW_LENGTH, type ChosenLook, type Scenario, type Show } from './contract';
-import { dealLooks, drawTheme, freezeLooks, themeNamed } from './line-up';
+import { dealLooks, drawTheme, freezeLooks, freezePhotos, themeNamed } from './line-up';
 import { createRandom } from './random';
 import { createSound } from './sound';
 import { buildStage } from './stage';
@@ -14,6 +14,7 @@ export interface RunOptions {
   /** The element the show fills; the run adds its stage here and takes it away after. */
   readonly host: HTMLElement;
   readonly names: readonly string[];
+  readonly photos?: ReadonlyMap<string, string>;
   readonly unlucky: string;
   /**
    * Each person's look from the Line-up. For a show with a line-up that is
@@ -55,6 +56,14 @@ export async function runScenario(scenario: Scenario, options: RunOptions): Prom
   const show: Show = Object.freeze<Show>({
     stage: frame.stage,
     names: Object.freeze([...options.names]),
+    photos: freezePhotos(
+      new Map(
+        options.names.flatMap((name) => {
+          const photo = options.photos?.get(name);
+          return photo ? [[name, photo] as const] : [];
+        }),
+      ),
+    ),
     unlucky: options.unlucky,
     looks: freezeLooks(lookFor(scenario, options)),
     theme: themeFor(scenario, options),

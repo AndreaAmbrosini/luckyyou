@@ -11,6 +11,7 @@ export type Colour = 'tomato' | 'sun' | 'mint' | 'grape' | 'pink' | 'orange';
 
 /** How one person looks for a whole show. */
 export interface Look {
+  readonly photo?: string;
   readonly skin: 1 | 2 | 3 | 4 | 5 | 6;
   readonly accessory: Accessory;
   /** The cap's or the snorkel's colour. */
@@ -26,7 +27,11 @@ const COLOURS: readonly Colour[] = ['tomato', 'sun', 'mint', 'grape', 'pink', 'o
  * A look for each person, dealt from shuffled decks so skin tones,
  * accessories and colours vary as much as the head count allows.
  */
-export function handOutLooks(names: readonly string[], random: () => number): Map<string, Look> {
+export function handOutLooks(
+  names: readonly string[],
+  random: () => number,
+  photos?: ReadonlyMap<string, string>,
+): Map<string, Look> {
   const skins = shuffle(SKINS, random);
   const accessories = shuffle(ACCESSORIES, random);
   const colours = shuffle(COLOURS, random);
@@ -38,6 +43,7 @@ export function handOutLooks(names: readonly string[], random: () => number): Ma
         accessory: accessories[index % accessories.length]!,
         colour: colours[index % colours.length]!,
         ring: colours[(index + 3) % colours.length]!,
+        ...(photos?.has(name) ? { photo: photos.get(name)! } : {}),
       },
     ]),
   );
@@ -204,6 +210,51 @@ const PARTS: readonly Part[] = [
 ];
 
 const SVG = 'http://www.w3.org/2000/svg';
+let photoIds = 0;
+
+/** A cropped local picture, clipped independently from every other face on the page. */
+export function photoFace(
+  photo: string,
+  { cx, cy, r }: { cx: number; cy: number; r: number },
+): SVGGElement {
+  const group = document.createElementNS(SVG, 'g');
+  group.dataset.part = 'photo-face';
+  const clip = document.createElementNS(SVG, 'clipPath');
+  clip.id = `photo-face-${++photoIds}`;
+  const circle = document.createElementNS(SVG, 'circle');
+  circle.setAttribute('cx', String(cx));
+  circle.setAttribute('cy', String(cy));
+  circle.setAttribute('r', String(r));
+  clip.append(circle);
+  const defs = document.createElementNS(SVG, 'defs');
+  defs.append(clip);
+  group.append(defs);
+  const image = document.createElementNS(SVG, 'image');
+  image.setAttribute('href', photo);
+  image.setAttribute('x', String(cx - r));
+  image.setAttribute('y', String(cy - r));
+  image.setAttribute('width', String(r * 2));
+  image.setAttribute('height', String(r * 2));
+  image.setAttribute('preserveAspectRatio', 'xMidYMid slice');
+  image.setAttribute('clip-path', `url(#${clip.id})`);
+  group.append(image);
+  const outline = circle.cloneNode() as SVGCircleElement;
+  outline.setAttribute('class', styles.line);
+  outline.setAttribute('stroke-width', '3');
+  group.append(outline);
+  return group;
+}
+
+const FACIAL_FEATURES = new Set([
+  'eyes',
+  'wide-eyes',
+  'brows',
+  'sunglasses',
+  'smile',
+  'frown',
+  'scream',
+  'grin',
+]);
 
 export interface Head {
   /** Size it with width and height; it is drawn on a 100 by 100 grid. */
@@ -246,7 +297,9 @@ export function head(
   const body = land ? 'land' : 'water';
   const drawn = PARTS.filter(
     (part) =>
-      (!part.accessory || part.accessory === look.accessory) && (!part.body || part.body === body),
+      (!part.accessory || part.accessory === look.accessory) &&
+      (!part.body || part.body === body) &&
+      !(look.photo && FACIAL_FEATURES.has(part.name)),
   ).map((part) => {
     const group = el.appendChild(document.createElementNS(SVG, 'g'));
     group.dataset.part = part.name;
@@ -254,6 +307,9 @@ export function head(
       const shape = group.appendChild(document.createElementNS(SVG, tag));
       shape.setAttribute('class', className);
       for (const [key, value] of Object.entries(attributes)) shape.setAttribute(key, String(value));
+    }
+    if (part.name === 'face' && look.photo) {
+      group.append(photoFace(look.photo, { cx: 50, cy: 44, r: 29 }));
     }
     return { part, group };
   });

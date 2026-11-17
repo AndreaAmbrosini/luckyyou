@@ -200,11 +200,16 @@ function faceOf(name: string) {
  */
 function drawRacer(
   chosen: ChosenLook,
-  { name, place, theme }: { name: string; place: number; theme?: string | null },
+  {
+    name,
+    place,
+    theme,
+    photo,
+  }: { name: string; place: number; theme?: string | null; photo?: string },
 ) {
   const look = chosen as unknown as RacerLook;
   const dress = dressFor(COURSES.find((each) => each === theme) ?? null);
-  const drawn = { face: faceOf(name), number: place, dress };
+  const drawn = { face: { ...faceOf(name), photo }, number: place, dress };
   return isCreature(look.mount)
     ? creature(look as RacerLook & { mount: Creature }, drawn)
     : racer(look as RideLook, drawn);

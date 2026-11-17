@@ -19,10 +19,14 @@ export function readJson(key: string): unknown {
   }
 }
 
-export function writeJson(key: string, value: unknown): void {
+export function writeJson(key: string, value: unknown): boolean {
   try {
-    storage()?.setItem(key, JSON.stringify(value));
+    const target = storage();
+    if (!target) return false;
+    target.setItem(key, JSON.stringify(value));
+    return true;
   } catch {
     // Blocked or full: what the app holds in memory still counts for this visit.
+    return false;
   }
 }

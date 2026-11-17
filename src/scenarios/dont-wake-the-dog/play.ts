@@ -101,7 +101,7 @@ interface Person {
 
 export async function playDontWakeTheDog(show: Show): Promise<void> {
   const plan = planShow(show.names, show.unlucky, show.random);
-  const looks = handOutLooks(show.names, show.random);
+  const looks = handOutLooks(show.names, show.random, show.photos);
   const timeline = gsap.timeline({ paused: true });
   const at = (time: number, run: () => void) => void timeline.call(run, [], time);
 

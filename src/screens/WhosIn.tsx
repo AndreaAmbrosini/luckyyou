@@ -9,9 +9,10 @@ import {
 } from 'react';
 import { checkNewNames, sameName } from '../people/names';
 import type { People } from '../people/people';
+import { PhotoEditor } from '../people/PhotoEditor';
 import { HEAD_COUNT } from '../scenario-kit/contract';
 import { Button } from '../ui/Button';
-import { ArrowRightIcon, CheckIcon, CrossIcon, PlusIcon, TrashIcon } from '../ui/icons';
+import { ArrowRightIcon, CameraIcon, CheckIcon, CrossIcon, PlusIcon, TrashIcon } from '../ui/icons';
 import { Bar } from './Bar';
 import layout from './layout.module.css';
 import styles from './WhosIn.module.css';
@@ -29,6 +30,7 @@ export function WhosIn({ people, onNext }: { people: People; onNext(): void }) {
   // Names the last add put on the list: their tiles pop in.
   const [fresh, setFresh] = useState(NONE);
   const [removing, setRemoving] = useState(false);
+  const [editingPhoto, setEditingPhoto] = useState<string | null>(null);
   const fieldId = useId();
   const reasonId = useId();
   const sheet = useRef<HTMLElement>(null);
@@ -238,24 +240,39 @@ export function WhosIn({ people, onNext }: { people: People; onNext(): void }) {
                       </button>
                     </div>
                   ) : (
-                    <label className={`${styles.tile} ${person.ticked ? styles.ticked : ''}`}>
-                      <input
-                        type="checkbox"
-                        className="visually-hidden"
-                        checked={person.ticked}
-                        onChange={() => {
-                          people.toggle(person.name);
-                          setHighlight(NONE);
-                          setFresh(NONE);
-                        }}
-                      />
-                      <span className={styles.box} aria-hidden="true">
-                        {person.ticked && <CheckIcon size={24} />}
-                      </span>
-                      <span className={styles.name} dir="auto">
-                        {person.name}
-                      </span>
-                    </label>
+                    <div className={`${styles.tile} ${person.ticked ? styles.ticked : ''}`}>
+                      <label className={styles.selection}>
+                        <input
+                          type="checkbox"
+                          className="visually-hidden"
+                          checked={person.ticked}
+                          onChange={() => {
+                            people.toggle(person.name);
+                            setHighlight(NONE);
+                            setFresh(NONE);
+                          }}
+                        />
+                        <span className={styles.box} aria-hidden="true">
+                          {person.ticked && <CheckIcon size={24} />}
+                        </span>
+                        <span className={styles.name} dir="auto">
+                          {person.name}
+                        </span>
+                      </label>
+                      <button
+                        type="button"
+                        className={styles.photo}
+                        aria-label={`${person.photo ? 'Change' : 'Add'} photo for ${person.name}`}
+                        title={`${person.photo ? 'Change' : 'Add'} photo`}
+                        onClick={() => setEditingPhoto(person.name)}
+                      >
+                        {person.photo ? (
+                          <img src={person.photo} alt="" />
+                        ) : (
+                          <CameraIcon size={22} />
+                        )}
+                      </button>
+                    </div>
                   )}
                 </li>
               ))}
@@ -264,6 +281,22 @@ export function WhosIn({ people, onNext }: { people: People; onNext(): void }) {
           )}
         </section>
       </main>
+
+      {people.saveFailed && (
+        <p className={styles.saveWarning} role="status">
+          This browser couldn't save your changes. They last only for this visit.
+        </p>
+      )}
+      {editingPhoto !== null && (
+        <PhotoEditor
+          person={list.find((person) => person.name === editingPhoto)!}
+          onClose={() => setEditingPhoto(null)}
+          onSave={(photo) => {
+            people.setPhoto(editingPhoto, photo);
+            setEditingPhoto(null);
+          }}
+        />
+      )}
 
       <Bar>
         {inRemoveMode ? (

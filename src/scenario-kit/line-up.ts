@@ -118,3 +118,8 @@ export function freezeLooks(
     [...looks].map(([name, look]) => [name, Object.freeze({ ...look })] as const),
   );
 }
+
+/** A snapshot whose photos cannot be replaced or removed by a show. */
+export function freezePhotos(photos: ReadonlyMap<string, string>): ReadonlyMap<string, string> {
+  return new FrozenMap(photos);
+}

@@ -136,6 +136,45 @@
   overflow-wrap: anywhere;
 }
 
+.selection {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  align-self: stretch;
+  gap: 0.75rem;
+  min-width: 0;
+  cursor: pointer;
+}
+
+.photo {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  width: 2.75rem;
+  height: 2.75rem;
+  padding: 0;
+  overflow: hidden;
+  border: var(--line-thin) solid currentColor;
+  border-radius: 50%;
+  background-color: transparent;
+  color: inherit;
+  cursor: pointer;
+}
+
+.photo img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.saveWarning {
+  margin: 0;
+  padding-inline: 1rem;
+  color: var(--color-tomato-text);
+  font-size: var(--size-small);
+}
+
 .removable {
   justify-content: space-between;
   padding-right: 0.875rem;

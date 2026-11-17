@@ -29,6 +29,7 @@ export interface ShowRecord {
 
 export interface RunShowOptions {
   readonly names: readonly string[];
+  readonly photos?: ReadonlyMap<string, string>;
   readonly unlucky: string;
   /** Everyone's look from the Line-up; dealt from the seed unless given. */
   readonly looks?: ReadonlyMap<string, ChosenLook>;
@@ -95,6 +96,7 @@ export async function runShow(scenario: Scenario, options: RunShowOptions): Prom
     const running = runScenario(watched, {
       host,
       names: options.names,
+      photos: options.photos,
       unlucky: options.unlucky,
       looks: options.looks,
       theme: options.theme,
