@@ -1,0 +1,309 @@
+/* Hide and Seek's room, props, lens and light. Stage pixels throughout; every
+   colour comes from a token. */
+
+.scene {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+}
+
+.layer {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.room {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.art {
+  display: block;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+
+.room *,
+.art * {
+  stroke: var(--color-ink);
+  stroke-width: var(--line-bold);
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  vector-effect: non-scaling-stroke;
+}
+
+.stroke {
+  fill: none;
+}
+
+.wall {
+  fill: var(--color-mint-soft);
+}
+
+.floor {
+  fill: var(--color-tomato-soft);
+}
+
+.frame {
+  fill: var(--color-bark);
+}
+
+.hill {
+  fill: var(--color-mint);
+}
+
+.tomato {
+  fill: var(--color-tomato);
+}
+
+.sun {
+  fill: var(--color-sun);
+}
+
+.mint {
+  fill: var(--color-mint);
+}
+
+.grape {
+  fill: var(--color-grape);
+}
+
+.pink {
+  fill: var(--color-pink);
+}
+
+.orange {
+  fill: var(--color-orange);
+}
+
+.sky {
+  fill: var(--color-sky);
+}
+
+.paper {
+  fill: var(--color-paper);
+}
+
+.bark {
+  fill: var(--color-bark);
+}
+
+.dark {
+  fill: var(--color-ink-soft);
+}
+
+.sea {
+  fill: var(--color-sea);
+}
+
+.ink {
+  fill: var(--color-ink);
+}
+
+.soft {
+  fill: var(--color-ink-soft);
+}
+
+.person,
+.prop {
+  position: absolute;
+  aspect-ratio: 1;
+}
+
+.person {
+  translate: -50% -44%;
+}
+
+.prop {
+  translate: -50% 0;
+  transform-origin: 50% 100%;
+  rotate: var(--tilt, 0deg);
+}
+
+.tell {
+  fill: var(--accent);
+}
+
+.skin,
+.seekerSkin {
+  fill: var(--skin, var(--color-skin-3));
+}
+
+.sweat {
+  position: absolute;
+  display: none;
+  width: 14px;
+  height: 20px;
+  border: var(--line-bold) solid var(--color-ink);
+  border-radius: 50% 50% 50% 50% / 65% 65% 35% 35%;
+  background: var(--color-sea);
+  translate: -50% 0;
+}
+
+.rug {
+  fill: var(--color-orange);
+}
+
+.rugIn {
+  fill: var(--color-pink);
+}
+
+.seeker {
+  position: absolute;
+  height: 90px;
+  translate: -50% 0;
+  scale: var(--turn, 1) 1;
+  z-index: 2050;
+}
+
+.seeker svg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.seeker[data-pose='away'] .back,
+.seeker[data-pose='search'] .front {
+  display: none;
+}
+
+.person svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+
+.person {
+  rotate: var(--tilt, 0deg);
+  scale: var(--pop, 1);
+}
+
+.board {
+  position: absolute;
+  left: 60px;
+  right: 60px;
+  z-index: 2100;
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: var(--line-bold) solid var(--color-ink);
+  border-radius: var(--radius-pill);
+  background: var(--color-bark);
+  color: var(--color-paper);
+  font-family: var(--font-display);
+  font-size: var(--size-stage-tag-min);
+  letter-spacing: 0.2em;
+}
+
+.dim {
+  /* A flat ink ring around a clear circle that follows the lens. */
+  --hole: 190px;
+  --ring: 3000px;
+  position: absolute;
+  left: calc(var(--lx, 640px) - var(--hole) - var(--ring));
+  top: calc(var(--ly, 400px) - var(--hole) - var(--ring));
+  box-sizing: content-box;
+  width: calc(var(--hole) * 2);
+  height: calc(var(--hole) * 2);
+  border: var(--ring) solid var(--color-ink);
+  border-radius: 50%;
+  opacity: 0;
+}
+
+.holder {
+  position: absolute;
+  translate: -50% 0;
+}
+
+.lens {
+  position: absolute;
+  width: 160px;
+  height: 160px;
+  translate: -50% -50%;
+  rotate: var(--tilt, 0deg);
+  scale: var(--pop, 1);
+  opacity: 0;
+}
+
+.handle {
+  stroke: var(--color-bark);
+  stroke-width: calc(var(--line-bold) * 3);
+}
+
+.glass {
+  fill: var(--color-glass);
+  fill-opacity: 0.4;
+}
+
+.rim {
+  fill: none;
+  stroke: var(--color-sun);
+  stroke-width: calc(var(--line-bold) * 2);
+}
+
+.shine {
+  fill: none;
+  stroke: var(--color-paper);
+}
+
+.crown {
+  position: absolute;
+  width: 96px;
+  height: 67px;
+  translate: -50% -100%;
+  z-index: 2400;
+  opacity: 0;
+}
+
+.badge {
+  position: absolute;
+  padding: 4px 24px;
+  border: var(--line-bold) solid var(--color-ink);
+  border-radius: var(--radius-pill);
+  background: var(--color-sun);
+  color: var(--color-ink);
+  font-family: var(--font-display);
+  font-size: var(--size-stage-tag-min);
+  letter-spacing: 0.15em;
+  translate: -50% -50%;
+  opacity: 0;
+}
+
+.piece {
+  position: absolute;
+  width: 14px;
+  height: 22px;
+  border-radius: 3px;
+  opacity: 0;
+}
+
+.piece0 {
+  background: var(--color-tomato);
+}
+
+.piece1 {
+  background: var(--color-sun);
+}
+
+.piece2 {
+  background: var(--color-mint);
+}
+
+.piece3 {
+  background: var(--color-grape);
+}
+
+.piece4 {
+  background: var(--color-pink);
+}
+
+.piece5 {
+  background: var(--color-sea);
+}
