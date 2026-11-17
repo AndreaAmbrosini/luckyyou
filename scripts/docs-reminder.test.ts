@@ -41,6 +41,10 @@ describe('changedPaths', () => {
 });
 
 const script = join(dirname(fileURLToPath(import.meta.url)), 'docs-reminder.mjs');
+// A pre-push hook exports Git paths: fixture commands must use their own repository.
+const fixtureEnv = Object.fromEntries(
+  Object.entries(process.env).filter(([key]) => !key.startsWith('GIT_')),
+);
 
 // Each test runs git and node several times; process start-up on Windows is slow.
 describe('the hooks', { timeout: 30_000 }, () => {
@@ -54,7 +58,8 @@ describe('the hooks', { timeout: 30_000 }, () => {
     write('README.md');
     commit();
   }
-  const git = (...args: string[]) => execFileSync('git', args, { cwd: repo, encoding: 'utf8' });
+  const git = (...args: string[]) =>
+    execFileSync('git', args, { cwd: repo, encoding: 'utf8', env: fixtureEnv });
   const commit = () => {
     git('add', '-A');
     git('-c', 'user.name=t', '-c', 'user.email=t@example.com', 'commit', '-q', '-m', 'change');
@@ -67,7 +72,7 @@ describe('the hooks', { timeout: 30_000 }, () => {
     execFileSync(process.execPath, [script, ...args], {
       input: JSON.stringify({ session_id: session }),
       encoding: 'utf8',
-      env: { ...process.env, CLAUDE_PROJECT_DIR: repo },
+      env: { ...fixtureEnv, CLAUDE_PROJECT_DIR: repo },
     });
   const blocked = (output: string) => output.includes('"decision":"block"');
 
