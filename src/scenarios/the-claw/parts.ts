@@ -452,7 +452,13 @@ export function plush(look: Look): Plush {
     ],
   ]);
   const face = head(
-    { skin: look.skin, accessory: 'cap', colour, ring: colour },
+    {
+      skin: look.skin,
+      accessory: 'cap',
+      colour,
+      ring: colour,
+      ...(look.photo ? { photo: look.photo } : {}),
+    },
     { land: true, mood: 'worried' },
   );
   face.el.classList.add(styles.plushPart!);

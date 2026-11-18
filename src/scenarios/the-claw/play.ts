@@ -86,7 +86,7 @@ interface Person {
 export async function playTheClaw(show: Show): Promise<void> {
   // Drawn first from the show's random numbers, so a seed gives the same show.
   const plan = planShow(show.names, show.unlucky, show.random);
-  const looks = handOutLooks(show.names, show.random);
+  const looks = handOutLooks(show.names, show.random, show.photos);
   const calm = show.reducedMotion;
   const timeline = gsap.timeline({ paused: true });
   const at = (time: number, run: () => void) => void timeline.call(run, [], time);
