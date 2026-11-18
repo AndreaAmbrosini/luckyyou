@@ -105,6 +105,7 @@ Feature: Hide and Seek
       And the music stops before the fanfare and does not come back
       And Marco is crowned in the party mood with the caption "Marco wins Hide and Seek!"
       And Marco holds still on stage for the last 1.5 seconds
+      And Marco's name tag shows in front of Marco, not behind
 
   Rule: Small groups go straight to the showdown
 

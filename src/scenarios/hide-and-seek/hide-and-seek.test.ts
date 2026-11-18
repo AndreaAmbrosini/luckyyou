@@ -74,6 +74,8 @@ interface TagSnap {
   readonly name: string;
   readonly size: number;
   readonly box: Box;
+  /** The stacking order of the layer the tag is drawn in. */
+  readonly z: number;
 }
 
 interface Frame {
@@ -134,6 +136,7 @@ function estimateTagBox(name: string, wrapper: HTMLElement): TagSnap | null {
     name,
     size,
     box: { left: cx - width / 2, right: cx + width / 2, top, bottom: top + height },
+    z: px(wrapper.parentElement?.style.zIndex ?? ''),
   };
 }
 
@@ -888,6 +891,26 @@ describeSpec(await loadFeature('./hide-and-seek.feature'), ({ Rule }) => {
               expect(Math.hypot(person.x - anchor.x, person.y - anchor.y), ending).toBeLessThan(
                 0.5,
               );
+            }
+          }
+        });
+
+        And("Marco's name tag shows in front of Marco, not behind", () => {
+          const name = unlucky;
+          for (const [ending, run] of byEnding) {
+            const final = run.frames.at(-1)!;
+            const person = final.people.get(name)!;
+            // The head and the body below it.
+            const drawn: Box = {
+              left: person.x - person.size / 2,
+              right: person.x + person.size / 2,
+              top: person.y - person.size / 2,
+              bottom: person.y + person.size,
+            };
+            const tag = final.tags.find((each) => each.name === name);
+            expect(tag, ending).toBeDefined();
+            if (overlaps(tag!.box, drawn)) {
+              expect(tag!.z, `${ending}: tag layer above ${name}`).toBeGreaterThan(person.z);
             }
           }
         });

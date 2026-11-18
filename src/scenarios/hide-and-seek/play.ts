@@ -113,6 +113,8 @@ export async function playHideAndSeek(show: Show): Promise<void> {
   const lens = scene.appendChild(drawLens());
   const speech = layer(undefined, 2200);
   const effects = layer();
+  // Above the crowned winner (2300), whose tag sits across their body.
+  const winnerTagLayer = layer('tags', 2400);
 
   const props = places.map((place) => {
     const el = actors.appendChild(drawFurniture(place.furniture, 1, 'sea'));
@@ -131,8 +133,8 @@ export async function playHideAndSeek(show: Show): Promise<void> {
     maxWidth: balconyWidth,
     top: tiered && index % 2 === 1 ? 270 : BALCONY_TAG_TOP,
   });
-  const holder = (name: string, spec: TagSpec, x: number): HTMLElement => {
-    const el = tagLayer.appendChild(document.createElement('div'));
+  const holder = (name: string, spec: TagSpec, x: number, into = tagLayer): HTMLElement => {
+    const el = into.appendChild(document.createElement('div'));
     el.className = styles.holder!;
     el.dataset.tagOf = name;
     el.style.left = px(x);
@@ -166,7 +168,7 @@ export async function playHideAndSeek(show: Show): Promise<void> {
       tags: {
         home: holder(name, places[start]!.tag, places[start]!.x),
         balcony: pop ? holder(name, balconySpec(plan.pops.indexOf(pop)), pop.slot.x) : null,
-        winner: name === plan.unlucky ? holder(name, winnerTag(), WINNER.x) : null,
+        winner: name === plan.unlucky ? holder(name, winnerTag(), WINNER.x, winnerTagLayer) : null,
       },
     });
   });
