@@ -1,0 +1,234 @@
+/* The stall: glass over the whole stage. */
+.scene {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 1280px;
+  height: 720px;
+  overflow: hidden;
+  background-color: var(--color-glass);
+}
+
+/* A layer over the whole stage, in its stage pixels, its own stacking context. */
+.layer {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 1280px;
+  height: 720px;
+  overflow: visible;
+  isolation: isolate;
+}
+
+/*
+ * Display text the canvas sets smaller than the caption: set at the caption's
+ * size and scaled down from play, so every font size is a token.
+ */
+.display {
+  display: inline-block;
+  flex: none;
+  color: var(--color-ink);
+  font-family: var(--font-display);
+  font-size: var(--size-stage-caption);
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.sign {
+  position: absolute;
+  top: 132px;
+  left: 930px;
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 300px;
+  height: 52px;
+  border: var(--line-bold) solid var(--color-ink);
+  border-radius: 12px;
+  background-color: var(--color-paper);
+  box-shadow: 5px 5px 0 var(--color-ink);
+}
+
+.plate {
+  position: absolute;
+  top: 536px;
+  left: 684px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 92px;
+  height: 40px;
+}
+
+.plaque {
+  position: absolute;
+  top: 675px;
+  left: 40px;
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 250px;
+  height: 40px;
+  border: var(--line-bold) solid var(--color-ink);
+  border-radius: 12px;
+  background-color: var(--color-sun);
+  box-shadow: 4px 4px 0 var(--color-ink);
+}
+
+/*
+ * The logo's ink plate, drawn at the caption's size and scaled down from its
+ * top left by play to the canvas's 40 px high plate.
+ */
+.logo {
+  position: absolute;
+  top: 675px;
+  left: 330px;
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  height: 54px;
+  padding: 0 24px 0 16px;
+  border-radius: 16px;
+  background-color: var(--color-ink);
+  transform-origin: 0 0;
+}
+
+.star {
+  flex: none;
+  width: 43px;
+  height: 43px;
+  margin-right: 14px;
+}
+
+.lucky {
+  flex: none;
+  color: var(--color-paper);
+  font-family: var(--font-title);
+  font-size: var(--size-stage-caption);
+  font-stretch: 88%;
+  font-weight: 800;
+  letter-spacing: -1.35px;
+  line-height: 1.3;
+  white-space: nowrap;
+}
+
+.you {
+  color: var(--color-sun);
+}
+
+/* The claw's drawing, 260 by 140 round its hub's top centre. */
+.claw {
+  position: absolute;
+  width: 260px;
+  height: 140px;
+  overflow: visible;
+}
+
+/* A plush: a box the size of its head, its drawings overflowing to its feet. */
+.plush {
+  position: absolute;
+}
+
+.plushPart {
+  position: absolute;
+  top: 0;
+  left: 0;
+  display: block;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+
+/* A name tag's holder: a box the size and place of the head, upright. */
+.holder {
+  position: absolute;
+}
+
+.sparkle {
+  position: absolute;
+  overflow: visible;
+}
+
+/* Fills and lines, all with an ink outline unless they are the line. */
+.line {
+  fill: none;
+  stroke: var(--color-ink);
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.paperLine {
+  fill: none;
+  stroke: var(--color-paper);
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.ink {
+  fill: var(--color-ink);
+}
+
+.paper {
+  fill: var(--color-paper);
+  stroke: var(--color-ink);
+  stroke-linejoin: round;
+}
+
+.tint {
+  fill: var(--color-paper-tint);
+  stroke: var(--color-ink);
+  stroke-linejoin: round;
+}
+
+.tomato {
+  fill: var(--color-tomato);
+  stroke: var(--color-ink);
+  stroke-linejoin: round;
+}
+
+.sun {
+  fill: var(--color-sun);
+  stroke: var(--color-ink);
+  stroke-linejoin: round;
+}
+
+.sunFill {
+  fill: var(--color-sun);
+}
+
+.grape {
+  fill: var(--color-grape);
+  stroke: var(--color-ink);
+}
+
+.sky {
+  fill: var(--color-sky);
+  stroke: var(--color-ink);
+  stroke-linejoin: round;
+}
+
+.bark {
+  fill: var(--color-bark);
+  stroke: var(--color-ink);
+  stroke-linejoin: round;
+}
+
+.orange {
+  fill: var(--color-orange);
+  stroke: var(--color-ink);
+}
+
+/* A plush's own colour, set on the plush as --plush. */
+.fur {
+  fill: var(--plush);
+  stroke: var(--color-ink);
+  stroke-linejoin: round;
+}
+
+.furLine {
+  fill: none;
+  stroke: var(--plush);
+  stroke-linecap: round;
+}

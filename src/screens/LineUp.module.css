@@ -133,6 +133,11 @@
   font-weight: 900;
 }
 
+/* After a new theme that some don't suit: the hint of the moment, dealing from that theme. */
+.shuffle.offer {
+  background-color: var(--color-marigold);
+}
+
 /*
  * Everyone stands on the ground, sky over a floor with an ink line on top,
  * eight places wide or more, centred. The ground takes the height a 1280×800

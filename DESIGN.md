@@ -84,12 +84,12 @@ and scroll; the add tile is last. Remove mode puts its hint in the bar beside
 
 **Pick a show.** The heading, a mint "3 in" pill and the names. Show cards
 in one row, Surprise me's curtain last; under them, the chosen-show panel.
-A show with a line-up adds "Start with last line-up" to the bar.
+A show whose line-up is kept adds "Start with last line-up" to the bar.
 
 **Line-up.** A smaller heading; step names in text-soft, the theme in
 marigold. Postcards are stickers, the chosen one ringed. "Deal from" is a
-raised track, its side that's on marigold; "Shuffle everyone" a white pill.
-Everyone stands on the theme's ground over sticker cards.
+raised track, its side that's on marigold; "Shuffle everyone" a white pill,
+marigold while it offers a new theme's deal. Everyone stands on the theme's ground over sticker cards.
 
 **Sheet.** White from the right over the dimmed Line-up. An open view tab is
 ground, an open group marigold; chosen tiles marigold.

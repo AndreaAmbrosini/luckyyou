@@ -502,6 +502,14 @@ describeSpec(await loadFeature('./line-up.feature'), ({ Rule }) => {
           expect(sheet('Ben')).toContainElement(document.activeElement as HTMLElement);
         }
       });
+      And(`"Done" is mint, so the bar's start stays the one tomato button`, () => {
+        const done = within(sheet('Ben')).getByRole('button', { name: 'Done' });
+        expect(getComputedStyle(done).backgroundColor).toBe('var(--color-mint)');
+        const tomato = [...document.querySelectorAll('button')].filter(
+          (button) => getComputedStyle(button).backgroundColor === 'var(--color-tomato)',
+        );
+        expect(tomato.map((button) => button.textContent)).toEqual(['Start the hats']);
+      });
     });
 
     RuleScenario('A choice shows at once, in the sheet and in the row', ({ Given, When, Then }) => {
@@ -1597,10 +1605,74 @@ describeSpec(await loadFeature('./line-up.feature'), ({ Rule }) => {
         'the switch offers {string}, and deals from the choices that suit Moon',
         async (_, label: string) => {
           expect(onSide()).toEqual([label]);
-          await choose('Shuffle everyone');
+          // Some racers don't suit Moon yet, so Shuffle offers its deal.
+          await currentUser().click(
+            screen.getByRole('button', { name: /^(Shuffle everyone|Deal Moon)$/ }),
+          );
           const dealt = racersOf(team);
           for (const racer of dealt) expect(MOON).toContain(racer);
           expect(spread(dealt, MOON)).toBeLessThanOrEqual(1);
+        },
+      );
+    });
+
+    RuleScenario('A new theme turns Shuffle into its deal', ({ Given, When, Then, And }) => {
+      const MOON = ['rocket', 'robot', 'duck'];
+      const lineUp = trackLineUp();
+      const withMoon: LineUp = {
+        ...lineUp,
+        themes: lineUp.themes!.map((theme) =>
+          theme.name === 'moon' ? { ...theme, suits: MOON } : theme,
+        ),
+      };
+      const names = ['Anna', 'Ben', 'Carla'];
+      const shuffle = () => screen.getByRole('button', { name: /^(Shuffle everyone|Deal .*)$/ });
+      let before: ReturnType<typeof rowLooks>;
+      Given('the switch is on {string}, with Anna pinned', async (_, side: string) => {
+        localStorage.setItem(themeKey('track-show'), JSON.stringify('autumn'));
+        localStorage.setItem(pinsKey('track-show'), JSON.stringify(['Anna']));
+        // Anna and Ben in Moon racers; Carla in an Autumn one.
+        localStorage.setItem(
+          looksKey('track-show'),
+          JSON.stringify({
+            Anna: { racer: 'duck', colour: 'sun' },
+            Ben: { racer: 'rocket', colour: 'mint' },
+            Carla: { racer: 'squirrel', colour: 'sun' },
+          }),
+        );
+        await openLineUp(names, fakeScenario({ name: 'Track Show', lineUp: withMoon }));
+        expect(onSide()).toEqual([side]);
+        expect(shuffle()).toHaveAccessibleName('Shuffle everyone');
+        before = rowLooks();
+      });
+      When(
+        `I choose {string}, which some of today's racers don't suit`,
+        async (_, theme: string) => {
+          await currentUser().click(postcard(theme));
+        },
+      );
+      Then('everyone keeps their look', () => {
+        expect(rowLooks()).toEqual(before);
+      });
+      And('{string} turns marigold and reads {string}', (_, __: string, label: string) => {
+        expect(shuffle()).toHaveAccessibleName(label);
+        expect(getComputedStyle(shuffle()).backgroundColor).toBe('var(--color-marigold)');
+      });
+      When('I press it', () => currentUser().click(shuffle()));
+      Then('everyone but Anna gets a choice that suits Moon', () => {
+        expect(rowLooks().get('Anna')).toEqual(before.get('Anna'));
+        for (const racer of racersOf(names)) expect(MOON).toContain(racer);
+      });
+      And('it reads {string} again', (_, label: string) => {
+        expect(shuffle()).toHaveAccessibleName(label);
+        expect(getComputedStyle(shuffle()).backgroundColor).toBe('var(--color-paper)');
+      });
+      And(
+        'with the switch on {string}, a new theme leaves it as {string}',
+        async (_, side: string, label: string) => {
+          await choose(side);
+          await currentUser().click(postcard('Autumn'));
+          expect(shuffle()).toHaveAccessibleName(label);
         },
       );
     });

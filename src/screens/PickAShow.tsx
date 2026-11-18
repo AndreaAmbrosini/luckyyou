@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useId, useRef } from 'react';
+import { Fragment, useEffect, useId, useRef, type KeyboardEvent } from 'react';
 import type { LineUp, Scenario } from '../scenario-kit/contract';
 import { Button } from '../ui/Button';
 import { ArrowRightIcon, CheckIcon, PeopleIcon, PlayIcon } from '../ui/icons';
@@ -15,6 +15,8 @@ export interface PickAShowProps {
   lastScenario: string | null;
   /** The chosen show; none when no show can run with today's people. */
   chosen: Scenario | undefined;
+  /** The chosen show's Line-up was kept, so it can start on it. */
+  lastLineUp: boolean;
   /** Surprise me is chosen: the app draws the show as it starts. */
   surprise: boolean;
   onChoose(scenario: Scenario): void;
@@ -34,7 +36,7 @@ const SURPRISE_ABOUT = 'Even you won’t know which show.';
 
 /** Step 2: clicking a show chooses it; the bar's main button starts it, or opens its Line-up. */
 export function PickAShow(props: PickAShowProps) {
-  const { names, scenarios, lastScenario, chosen, surprise, onChoose, onBack } = props;
+  const { names, scenarios, lastScenario, chosen, lastLineUp, surprise, onChoose, onBack } = props;
   const { onNext, onSurprise, onStartSurprise, onStartWithLastLineUp } = props;
   const id = useId();
   const main = useRef<HTMLButtonElement>(null);
@@ -48,6 +50,35 @@ export function PickAShow(props: PickAShowProps) {
   const last = runnable.find(({ id }) => id === lastScenario);
   const pool = last && runnable.length > 1 ? runnable.length - 1 : runnable.length;
 
+  /** What the main button does: starts the chosen show or a surprise, or opens a Line-up. */
+  function go() {
+    if (surprise) onStartSurprise();
+    else if (chosen) onNext(chosen);
+  }
+
+  /**
+   * ← and → move between the cards, round from the last to the first, ones
+   * that can't run among them, so their reason is read out. Enter on the
+   * chosen card goes on, as the main button does; a click on it doesn't.
+   */
+  function onCardsKey(event: KeyboardEvent<HTMLUListElement>) {
+    const card = (event.target as HTMLElement).closest('button');
+    if (!card) return;
+    if (event.key === 'Enter' && card.getAttribute('aria-pressed') === 'true') {
+      event.preventDefault();
+      go();
+      return;
+    }
+    const step = { ArrowRight: 1, ArrowLeft: -1 }[event.key];
+    if (step === undefined) return;
+    event.preventDefault();
+    const cards = [
+      ...event.currentTarget.querySelectorAll<HTMLButtonElement>(':scope > li > button'),
+    ];
+    const at = cards.indexOf(card);
+    cards[(at + step + cards.length) % cards.length]?.focus();
+  }
+
   // The chosen show is one key press away.
   useEffect(() => {
     (chosen ? main.current : noShow.current)?.focus();
@@ -59,7 +90,7 @@ export function PickAShow(props: PickAShowProps) {
     <>
       <main className={layout.main}>
         <div className={layout.titleRow}>
-          <div className={layout.group}>
+          <div className={`${layout.group} ${styles.title}`}>
             <h1 className={`${layout.heading} ${styles.heading}`}>Pick a show</h1>
             <p className={styles.whoIsIn}>
               <span className={`${layout.pill} ${styles.count}`}>{count} in</span>{' '}
@@ -73,7 +104,7 @@ export function PickAShow(props: PickAShowProps) {
           </div>
         </div>
 
-        <ul className={styles.cards} aria-label="Shows">
+        <ul className={styles.cards} aria-label="Shows" onKeyDown={onCardsKey}>
           {scenarios.map((scenario) => {
             const runs = canRun(scenario);
             const nameId = `${id}-${scenario.id}-name`;
@@ -162,7 +193,7 @@ export function PickAShow(props: PickAShowProps) {
               fits={`Takes ${peopleRange(chosen, ' to ')} people. You have ${count}.`}
               next={
                 chosen.lineUp
-                  ? `Next you pick ${nextPicks(chosen.lineUp)}, or start with last time's.`
+                  ? `Next you pick ${nextPicks(chosen.lineUp)}${lastLineUp ? ", or start with last time's" : ''}.`
                   : 'No line-up: it starts as soon as you press Start.'
               }
             />
@@ -177,7 +208,7 @@ export function PickAShow(props: PickAShowProps) {
               No show can run with {count} people.
             </p>
           )}
-          {!surprise && chosen?.lineUp && (
+          {!surprise && chosen?.lineUp && lastLineUp && (
             <Button variant="outline" onClick={() => onStartWithLastLineUp(chosen)}>
               Start with last line-up
             </Button>
@@ -187,10 +218,7 @@ export function PickAShow(props: PickAShowProps) {
             variant="primary"
             aria-disabled={chosen ? undefined : true}
             aria-describedby={chosen ? undefined : `${id}-reason`}
-            onClick={() => {
-              if (surprise) onStartSurprise();
-              else if (chosen) onNext(chosen);
-            }}
+            onClick={go}
           >
             {surprise ? (
               <>

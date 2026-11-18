@@ -1,3 +1,8 @@
+/* The heading's group takes the row, so who is in has the room beside it however few they are. */
+.title {
+  flex-grow: 1;
+}
+
 .whoIsIn {
   flex: 1 1 20rem;
   min-width: 0;
@@ -16,11 +21,11 @@
   vertical-align: middle;
 }
 
-/* One row of cards, six across at 1280 wide, with room around them for the check badge and the focus ring. */
+/* One row of cards, seven across at 1280 wide, with room around them for the check badge and the focus ring. */
 .cards {
   display: grid;
   flex-shrink: 1;
-  grid-template-columns: repeat(auto-fit, minmax(10.5rem, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(9.25rem, 1fr));
   align-content: start;
   gap: 1.25rem;
   min-height: 0;

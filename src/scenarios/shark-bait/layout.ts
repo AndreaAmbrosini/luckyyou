@@ -181,8 +181,8 @@ function squeeze(row: readonly number[], width: (index: number) => number, needs
   return xs.map((x) => xs[0]! + ((x - xs[0]!) * room) / span);
 }
 
-/** A head's size while it hangs from the rope. */
-export const HANGING_SIZE = 52;
+/** A head's size while it hangs from the rope, alone or as one of two. */
+export const HANGING_SIZE = { alone: 92, pair: 80 } as const;
 
 /** Where the bottom of a person's name tag sits, above their head. */
 export const tagBottom = (size: number) => -0.65 * size - 6;

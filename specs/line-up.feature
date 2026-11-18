@@ -52,6 +52,7 @@ Feature: The Line-up
       Then a sheet opens over the Line-up with Ben drawn bigger, his name, "2 of 8", "Surprise me", his pin and the show's options
       And its arrows show the previous and the next person
       And "Done" or Esc closes it, and the focus goes back to Ben's card
+      And "Done" is mint, so the bar's start stays the one tomato button
 
     Scenario: A choice shows at once, in the sheet and in the row
       Given Ben's look is open in the sheet
@@ -245,6 +246,17 @@ Feature: The Line-up
     Scenario: A Surprise theme deals from the theme it drew
       Given "Surprise" drew "Moon"
       Then the switch offers "Moon racers", and deals from the choices that suit Moon
+
+    # Decision 0019: only Shuffle, a die and Surprise me deal, so a new theme keeps every look.
+    Scenario: A new theme turns Shuffle into its deal
+      Given the switch is on "Autumn racers", with Anna pinned
+      When I choose "Moon", which some of today's racers don't suit
+      Then everyone keeps their look
+      And "Shuffle everyone" turns marigold and reads "Deal Moon"
+      When I press it
+      Then everyone but Anna gets a choice that suits Moon
+      And it reads "Shuffle everyone" again
+      And with the switch on "Any racer", a new theme leaves it as "Shuffle everyone"
 
     Scenario: A theme that no choice suits has no switch
       Given a theme that names no choices is chosen

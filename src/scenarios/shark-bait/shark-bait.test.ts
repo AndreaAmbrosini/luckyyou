@@ -30,6 +30,8 @@ interface Frame {
   readonly time: number;
   /** The scene's beat. */
   readonly beat: string;
+  /** Which rescue is on, counting from 1; empty before the first and after the last. */
+  readonly rescue: string;
   /** Who is still in the water. */
   readonly inWater: readonly string[];
   /** Who the rope is heading for, if anyone. */
@@ -77,6 +79,23 @@ class Watched {
         (starts[index + 1]?.time ?? this.record.duration) - start.time,
       ]),
     );
+  }
+
+  /** Each rescue, in order: how long it lasted, and who left the water during it. */
+  get rescues(): { seconds: number; names: string[] }[] {
+    const rescues: { start: number; end: number; names: string[] }[] = [];
+    this.frames.forEach((frame, index) => {
+      const before = this.frames[index - 1];
+      if (frame.rescue !== (before?.rescue ?? '')) {
+        if (rescues.length > 0) rescues.at(-1)!.end = frame.time;
+        if (frame.rescue) rescues.push({ start: frame.time, end: Infinity, names: [] });
+      }
+      const left = (before?.inWater ?? frame.inWater).filter(
+        (name) => !frame.inWater.includes(name),
+      );
+      if (left.length > 0) rescues.at(-1)!.names.push(...left);
+    });
+    return rescues.map(({ start, end, names }) => ({ seconds: end - start, names }));
   }
 
   /** Who the rope headed for during `beat`, each change once. */
@@ -215,6 +234,7 @@ async function recordShow(
       frames.push({
         time,
         beat: scene.dataset.beat!,
+        rescue: scene.dataset.rescue ?? '',
         inWater: swimmers
           .filter((swimmer) => swimmer.dataset.inWater === 'true')
           .map((swimmer) => swimmer.dataset.person!),
@@ -339,13 +359,116 @@ function sharkPhase(frames: readonly EndFrame[], phase: string): EndFrame[] {
   return frames.slice(start, end < 0 ? undefined : end);
 }
 
+/** One person out of the water, in one frame. */
+interface OutFrame {
+  readonly time: number;
+  readonly name: string;
+  readonly x: number;
+  readonly y: number;
+  readonly shown: boolean;
+  /** Whether their name tag is shown, at full strength. */
+  readonly named: boolean;
+  /** The size their name is drawn at, in stage pixels. */
+  readonly size: number;
+  /** Which side of their face the tag is on: -1 left, 1 right, 0 above. */
+  readonly side: number;
+}
+
+/** Runs Shark Bait and notes, every frame, everyone who has left the water. */
+async function watchLifted(names: readonly string[], unlucky: string): Promise<OutFrame[]> {
+  const frames: OutFrame[] = [];
+  const record = await runShow(sharkBait, {
+    names,
+    unlucky,
+    onFrame(time, stage) {
+      for (const el of stage.querySelectorAll<HTMLElement>('[data-in-water="false"]')) {
+        const label = el.querySelector<HTMLElement>('[data-part="label"]')!;
+        const tag = label.querySelector<HTMLElement>('[style*="--tag-size"]');
+        frames.push({
+          time,
+          name: el.dataset.person!,
+          ...position(el),
+          shown: shown(el, stage),
+          named: !!tag && shown(tag, stage) && Number(gsap.getProperty(label, 'opacity')) === 1,
+          size:
+            parseFloat(tag?.style.getPropertyValue('--tag-size') ?? '0') *
+            Number(gsap.getProperty(label, 'scale')),
+          side: Number(gsap.getProperty(label, '--side')) || 0,
+        });
+      }
+    },
+  });
+  expect(record.outcome).toBe('finished');
+  return frames;
+}
+
+/** Whether a person's swim ring, at `x`, `y`, is off the stage. */
+const offStage = ({ x, y }: { x: number; y: number }) => x < 0 || x > 1280 || y < 0;
+
+/** What the fin and the water showed in one frame. */
+interface FinFrame {
+  readonly time: number;
+  readonly beat: string;
+  readonly phase: string;
+  /** Whether the fin is shown at all. */
+  readonly up: boolean;
+  readonly x: number;
+  readonly scale: number;
+  /** Whether everyone has popped up in the water. */
+  readonly allIn: boolean;
+}
+
+/** Runs Shark Bait and notes, every frame, where the fin is and how big. */
+async function watchFin(names: readonly string[], unlucky: string) {
+  const frames: FinFrame[] = [];
+  const record = await runShow(sharkBait, {
+    names,
+    unlucky,
+    onFrame(time, stage) {
+      const scene = stage.querySelector<HTMLElement>('[data-beat]');
+      const shark = stage.querySelector<HTMLElement>('[data-part="shark"]');
+      if (!scene || !shark) return;
+      const fin = shark.querySelector<HTMLElement>('[data-part="fin"]')!;
+      const swimmers = [...stage.querySelectorAll<HTMLElement>('[data-person]')];
+      frames.push({
+        time,
+        beat: scene.dataset.beat!,
+        phase: shark.dataset.phase!,
+        up: shown(fin, stage) && Number(gsap.getProperty(fin, 'opacity')) > 0,
+        x: Number(gsap.getProperty(fin, 'x')),
+        scale: Number(gsap.getProperty(fin, 'scale')),
+        allIn: swimmers.every((swimmer) => Number(gsap.getProperty(swimmer, 'opacity')) > 0),
+      });
+    },
+  });
+  expect(record.outcome).toBe('finished');
+  return { record, frames };
+}
+
+/** How long each crossing of the water took, from one turn to the next, and the beat it ended in. */
+function crossings(frames: readonly FinFrame[]): { seconds: number; beat: string }[] {
+  const circling = frames.filter((frame) => frame.up && frame.phase === 'circling');
+  const turns: FinFrame[] = [];
+  let direction = 0;
+  circling.forEach((frame, index) => {
+    if (index === 0) return;
+    const dx = frame.x - circling[index - 1]!.x;
+    if (Math.abs(dx) < 1e-6) return;
+    if (direction !== 0 && Math.sign(dx) !== direction) turns.push(circling[index - 1]!);
+    direction = Math.sign(dx);
+  });
+  return turns
+    .slice(1)
+    .map((turn, index) => ({ seconds: turn.time - turns[index]!.time, beat: turn.beat }));
+}
+
 /** The beats up to the end of the duel. */
-const BEATS_BEFORE_RUN = ['splash-in', 'group-rescues', 'four-left', 'fake-out', 'duel'] as const;
+const BEATS_BEFORE_RUN = ['splash-in', 'rescues', 'four-left', 'fake-out', 'duel'] as const;
 
 /** The beats as the feature's table names them. */
 const BEATS: Record<string, string> = {
   'splash-in': 'splash-in',
-  'group rescues': 'group-rescues',
+  'rescues before 4 left': 'rescues',
   '4 left, one lifted out': 'four-left',
   '3 left, a fake-out': 'fake-out',
   'the duel': 'duel',
@@ -500,289 +623,329 @@ describeSpec(await loadFeature('./shark-bait.feature'), ({ Rule }) => {
     },
   );
 
-  Rule('Rescues start fast and slow down from 4 left', ({ RuleScenario, RuleScenarioOutline }) => {
-    RuleScenarioOutline('<count> people', ({ Given, When, Then, And }, { count, fast, slow }) => {
-      let names: string[];
-      let show: Watched;
-      Given('<count> people', () => {
-        names = TEAM.slice(0, Number(count));
-      });
-      When('the show runs', async () => {
-        show = await watch(names, names[0]!);
-      });
-      Then('<fast> leave in quick group rescues', () => {
-        const groups = show.lifts.filter((lift) => lift.beat === 'group-rescues');
-        expect(groups.flatMap((lift) => lift.names)).toHaveLength(Number(fast));
-      });
-      And('<slow> leave one at a time, each rescue taking longer than the one before', () => {
-        const singles = show.lifts.filter((lift) => lift.beat !== 'group-rescues');
-        expect(singles).toHaveLength(Number(slow));
-        for (const lift of singles) expect(lift.names).toHaveLength(1);
-        const lengths = singles.map((lift) => show.beats.get(lift.beat)!);
-        // Each one-at-a-time rescue has a beat of its own.
-        expect(new Set(singles.map((lift) => lift.beat)).size).toBe(singles.length);
-        lengths.slice(1).forEach((length, index) => {
-          expect(length).toBeGreaterThan(lengths[index]!);
-        });
-      });
-    });
-
-    RuleScenario('Group rescues stay few and small', ({ Given, When, Then, And }) => {
-      let show: Watched;
-      Given('12 people', () => {});
-      When('the show runs', async () => {
-        show = await watch(TEAM, 'Marco');
-      });
-      Then('there are at most 2 group rescues', () => {
-        const groups = show.lifts.filter((lift) => lift.beat === 'group-rescues');
-        expect(groups.length).toBeGreaterThan(0);
-        expect(groups.length).toBeLessThanOrEqual(2);
-      });
-      And('none lifts more than 4 people', () => {
-        for (const lift of show.lifts) expect(lift.names.length).toBeLessThanOrEqual(4);
-      });
-    });
-
-    RuleScenario('A group rescue flies off slowly enough to follow', ({ Given, When, Then }) => {
-      let show: Watched;
-      Given('12 people', () => {});
-      When('the show runs', async () => {
-        show = await watch(TEAM, 'Marco');
-      });
-      Then(
-        'after each group rescue, the helicopter flies off for at least {number} seconds',
-        (_, seconds: number) => {
-          const groups = show.lifts.filter((lift) => lift.beat === 'group-rescues');
-          expect(groups.length).toBeGreaterThan(0);
-          const step = show.frames[1]!.time - show.frames[0]!.time;
-          for (const lift of groups) {
-            // It flies off upwards, and comes down again for whatever comes next.
-            const after = show.frames.filter((frame) => frame.time >= lift.time);
-            const firstUp = after.findIndex(
-              (frame, index) => index > 0 && frame.helicopter.y < after[index - 1]!.helicopter.y,
-            );
-            let up = 0;
-            for (let index = firstUp; index < after.length; index++) {
-              if (after[index]!.helicopter.y >= after[index - 1]!.helicopter.y) break;
-              up++;
-            }
-            expect(up * step, `the swoop at ${lift.time}`).toBeGreaterThanOrEqual(seconds - 1e-9);
-          }
-        },
-      );
-    });
-
-    RuleScenario('The last two get a duel', ({ Given, When, Then, And }) => {
-      let show: Watched | undefined;
-      Given(
-        'the last two in the water are {string}, the unlucky person, and {string}',
-        async (_, unlucky: string, other: string) => {
-          // With three people, a few seeds give a duel between these two.
-          for (let seed = 1; seed <= 10 && !show; seed++) {
-            const run = await watch(['Anna', other, unlucky], unlucky, { seed });
-            if (run.inWaterAt('duel').includes(other)) show = run;
-          }
-          expect(show).toBeDefined();
-        },
-      );
-      When('the rope comes down for them', () => {
-        expect(show!.inWaterAt('duel').toSorted()).toEqual(['Giulia', 'Marco']);
-      });
-      Then('it goes towards {string} first', (_, name: string) => {
-        expect(show!.aimsDuring('duel')[0]).toBe(name);
-      });
-      And('it swings to {string}, who is lifted out', (_, name: string) => {
-        expect(show!.aimsDuring('duel').at(-1)).toBe(name);
-        const lift = show!.lifts.find((each) => each.beat === 'duel');
-        expect(lift?.names).toEqual([name]);
-      });
-    });
-
-    RuleScenarioOutline(
-      'The duel swings back and forth, and hangs over the one it lifts',
-      ({ Given, When, Then, And }, variables) => {
+  Rule(
+    'Up to 8 people, everyone is lifted out on their own, each rescue slower than the last',
+    ({ RuleScenario, RuleScenarioOutline }) => {
+      RuleScenarioOutline('<count> people', ({ Given, When, Then, And }, { count, pairs }) => {
+        let names: string[];
         let show: Watched;
-        Given('<count> people', () => {});
+        Given('<count> people', () => {
+          names = TEAM.slice(0, Number(count));
+        });
         When('the show runs', async () => {
-          const names = TEAM.slice(-Number(variables.count));
-          show = await watch(names, 'Marco');
+          show = await watch(names, names[0]!);
         });
-        Then('the helicopter swings back and forth at least 3 times before it lifts one', () => {
-          expect(show.duelMoves.length).toBeGreaterThanOrEqual(3);
-          const lift = show.lifts.find((each) => each.beat === 'duel')!;
-          expect(show.aimsDuring('duel').at(-1)).toBe(lift.names[0]);
+        Then('<pairs> rescues lift two people, and the others lift one', () => {
+          const sizes = show.rescues.map((rescue) => rescue.names.length);
+          expect(sizes.filter((size) => size === 2)).toHaveLength(Number(pairs));
+          expect(sizes.filter((size) => size === 1)).toHaveLength(
+            names.length - 1 - 2 * Number(pairs),
+          );
         });
-        And(
-          'it holds still longest over the one it lifts, before the hook comes down, leaving out any slip',
-          () => {
-            const holds = show.duelHolds;
-            const last = holds.at(-1)!;
-            for (const hold of holds.slice(0, -1)) {
-              expect(last.seconds, `over ${hold.aim}`).toBeGreaterThan(hold.seconds);
-            }
-          },
-        );
-      },
-    );
+        And('each rescue takes longer than the one before', () => {
+          const lengths = show.rescues.map((rescue) => rescue.seconds);
+          lengths.slice(1).forEach((length, index) => {
+            expect(length, `rescue ${index + 2}`).toBeGreaterThan(lengths[index]!);
+          });
+        });
+      });
 
-    RuleScenarioOutline(
-      'Sometimes the unlucky person slips off the hook, with <count> people',
-      ({ Given, When, Then, And }, { count }) => {
-        let unlucky: string;
-        const runs: { slipped: string[]; captions: string[]; lifted: readonly string[] }[] = [];
-        Given('<count> people, and the unlucky person is {string}', (_, name: string) => {
-          unlucky = name;
-        });
-        When('the show runs with 20 different random seeds', async () => {
+      RuleScenarioOutline(
+        'Everyone lifted out is named until they leave the stage, with <count> people',
+        ({ Given, When, Then, And }, { count }) => {
           const names = TEAM.slice(-Number(count));
-          for (let seed = 1; seed <= 20; seed++) {
-            // Each show stops once the duel is over.
-            const { beats } = planShow(names, unlucky, createRandom(seed));
-            const until = BEATS_BEFORE_RUN.reduce((total, beat) => total + beats[beat], 0);
-            const show = await watch(names, unlucky, { seed, step: 0.05, until });
-            runs.push({
-              slipped: [...new Set(show.frames.flatMap((frame) => frame.slip ?? []))],
-              captions: show.record.captions.map(({ text }) => text),
-              lifted: show.lifts.find((each) => each.beat === 'duel')?.names ?? [],
-            });
-          }
-        });
-        Then(
-          'in some runs the hook catches {string} in the duel, and {string} slips off and falls back in',
-          (_, name: string) => {
-            const slips = runs.filter((run) => run.slipped.length > 0);
-            expect(slips.length).toBeGreaterThan(0);
-            for (const run of slips) expect(run.slipped).toEqual([name]);
-          },
-        );
-        And(
-          'in those runs it is captioned {string}, and the rope then lifts the other one',
-          (_, caption: string) => {
-            for (const run of runs.filter((each) => each.slipped.length > 0)) {
-              expect(run.captions).toContain(caption);
-              expect(run.lifted).toHaveLength(1);
-              expect(run.lifted).not.toContain(unlucky);
-            }
-          },
-        );
-        And('in some runs nobody slips', () => {
-          expect(runs.some((run) => run.slipped.length === 0)).toBe(true);
-        });
-      },
-    );
-
-    RuleScenarioOutline(
-      'Sometimes the helicopter changes its mind, with <count> people',
-      ({ Given, When, Then, And }, { count }) => {
-        /** For each run, whether the helicopter turned back halfway in the duel. */
-        const turned: boolean[] = [];
-        Given('<count> people', () => {});
-        When('the show runs with 20 different random seeds', async () => {
-          const names = TEAM.slice(-Number(count));
-          for (let seed = 1; seed <= 20; seed++) {
-            // Each show stops once the duel is over.
-            const { beats } = planShow(names, 'Marco', createRandom(seed));
-            const until = BEATS_BEFORE_RUN.reduce((total, beat) => total + beats[beat], 0);
-            const show = await watch(names, 'Marco', { seed, step: 0.05, until });
-            turned.push(show.duelMoves.some((move) => move.halfway));
-          }
-        });
-        Then(
-          'in some runs, during the duel, it sets off towards one of the two and turns back halfway',
-          () => {
-            expect(turned).toContain(true);
-          },
-        );
-        And('in some runs it never turns back halfway', () => {
-          expect(turned).toContain(false);
-        });
-      },
-    );
-
-    RuleScenario('Fake-outs go both ways', ({ Given, When, Then, And }) => {
-      /** For each run, the rope's aims in the rescue at 3 left, and who it lifted. */
-      const rescues: Rescued[] = [];
-      /** Whether a rescue swings away and back to the one it lifts. */
-      const awayAndBack = ({ aims, lifted }: Rescued) =>
-        aims.length >= 3 && aims[0] === lifted && aims.at(-1) === lifted;
-      /** Whether a rescue swings to the one it lifts from someone else. */
-      const elsewhere = ({ aims, lifted }: Rescued) =>
-        aims.length >= 2 && aims[0] !== lifted && aims.at(-1) === lifted;
-      Given('12 people', () => {});
-      When('the show runs with 20 different random seeds', async () => {
-        // Each show stops once the rescue at 3 left is over.
-        const { beats } = planShow(TEAM, 'Marco', Math.random);
-        const until =
-          beats['splash-in'] + beats['group-rescues'] + beats['four-left'] + beats['fake-out'];
-        // Once both kinds are seen, the rest of the 20 can't change the outcome.
-        for (
-          let seed = 1;
-          seed <= 20 && !(rescues.some(awayAndBack) && rescues.some(elsewhere));
-          seed++
-        ) {
-          // Five frames a second still sees every aim: each lasts 0.4 seconds or more.
-          const show = await watch(TEAM, 'Marco', { seed, step: 0.2, until });
-          const lift = show.lifts.find((each) => each.beat === 'fake-out')!;
-          rescues.push({ aims: show.aimsDuring('fake-out'), lifted: lift.names[0]! });
-        }
-      });
-      Then('in some runs a one-at-a-time rescue swings away and back to the same person', () => {
-        expect(rescues.filter(awayAndBack).length).toBeGreaterThan(0);
-      });
-      And('in some runs it swings to someone else', () => {
-        expect(rescues.filter(elsewhere).length).toBeGreaterThan(0);
-      });
-    });
-
-    RuleScenario('The rope stops over each person it heads for', ({ When, Then }) => {
-      const shows: { label: string; show: Watched }[] = [];
-      When(
-        'the show runs at every head count from 3 to 12, with both kinds of fake-out',
-        async () => {
-          for (let count = 3; count <= 12; count++) {
-            const names = TEAM.slice(0, count);
-            const unlucky = names[0]!;
-            for (const awayAndBack of [false, true]) {
-              // The first seed whose fake-out is of this kind.
-              let seed = 1;
-              let plan = planShow(names, unlucky, createRandom(seed));
-              const isKind = () =>
-                plan.rescues.some(
-                  (rescue) => rescue.kind === 'fake-out' && !!rescue.via === awayAndBack,
+          let frames: OutFrame[];
+          /** Each person's frames out of the water, from when they left it. */
+          const byName = () =>
+            names
+              .filter((name) => name !== 'Marco')
+              .map((name) => ({ name, frames: frames.filter((frame) => frame.name === name) }));
+          Given('<count> people', () => {});
+          When('the show runs', async () => {
+            frames = await watchLifted(names, 'Marco');
+          });
+          Then(
+            'everyone lifted out hangs from the rope with their name beside them, at {int} pixels or more',
+            (_, pixels: number) => {
+              for (const { name, frames: out } of byName()) {
+                expect(out.length, name).toBeGreaterThan(0);
+                // Once the rope has reeled them up, until they leave the stage.
+                const hanging = out.filter(
+                  (frame) => frame.time >= out[0]!.time + 0.35 && frame.shown && !offStage(frame),
                 );
-              while (!isKind()) plan = planShow(names, unlucky, createRandom(++seed));
-              const { beats } = plan;
-              const until =
-                beats['splash-in'] +
-                beats['group-rescues'] +
-                beats['four-left'] +
-                beats['fake-out'] +
-                beats.duel;
-              const label = `${count} people, ${awayAndBack ? 'away and back' : 'to someone else'}`;
-              shows.push({ label, show: await watch(names, unlucky, { seed, until }) });
+                expect(hanging.length, name).toBeGreaterThan(0);
+                for (const frame of hanging) {
+                  // GSAP keeps a scale to four decimals.
+                  expect(frame.size, `${name} at ${frame.time}`).toBeGreaterThanOrEqual(
+                    pixels - 0.01,
+                  );
+                  expect(Math.abs(frame.side), `${name} at ${frame.time}`).toBe(1);
+                }
+              }
+            },
+          );
+          And('their name stays shown until they are off the stage', () => {
+            for (const { name, frames: out } of byName()) {
+              for (const frame of out.filter((each) => each.shown)) {
+                expect(frame.named, `${name} at ${frame.time}`).toBe(true);
+              }
+              const gone = out.findIndex((frame) => !frame.shown);
+              expect(gone, name).toBeGreaterThan(0);
+              expect(offStage(out[gone - 1]!), `${name} at ${out[gone - 1]!.time}`).toBe(true);
             }
-          }
+          });
         },
       );
-      Then(
-        'the helicopter holds still over each person the rope heads for, for at least {number} seconds',
-        (_, seconds: number) => {
-          for (const { label, show } of shows) {
-            expect(show.rests.length, label).toBeGreaterThan(0);
-            for (const rest of show.rests) {
-              expect(rest.seconds, `${label}: ${rest.aim}`).toBeGreaterThanOrEqual(seconds - 1e-9);
-            }
-          }
-        },
-      );
-    });
-  });
 
-  Rule('The beats keep the show between 11 and 15 seconds', ({ RuleScenario }) => {
+      RuleScenario(
+        'The helicopter flies them off slowly enough to follow',
+        ({ Given, When, Then }) => {
+          let show: Watched;
+          Given('12 people', () => {});
+          When('the show runs', async () => {
+            show = await watch(TEAM, 'Marco');
+          });
+          Then(
+            'after each rescue, the helicopter flies off for at least {number} seconds',
+            (_, seconds: number) => {
+              const groups = show.lifts;
+              expect(groups.length).toBe(7);
+              const step = show.frames[1]!.time - show.frames[0]!.time;
+              for (const lift of groups) {
+                // It flies off upwards, and comes down again for whatever comes next.
+                const after = show.frames.filter((frame) => frame.time >= lift.time);
+                const firstUp = after.findIndex(
+                  (frame, index) =>
+                    index > 0 && frame.helicopter.y < after[index - 1]!.helicopter.y,
+                );
+                let up = 0;
+                for (let index = firstUp; index < after.length; index++) {
+                  if (after[index]!.helicopter.y >= after[index - 1]!.helicopter.y) break;
+                  up++;
+                }
+                expect(up * step, `the swoop at ${lift.time}`).toBeGreaterThanOrEqual(
+                  seconds - 1e-9,
+                );
+              }
+            },
+          );
+        },
+      );
+
+      RuleScenario('The last two get a duel', ({ Given, When, Then, And }) => {
+        let show: Watched | undefined;
+        Given(
+          'the last two in the water are {string}, the unlucky person, and {string}',
+          async (_, unlucky: string, other: string) => {
+            // With three people, a few seeds give a duel between these two.
+            for (let seed = 1; seed <= 10 && !show; seed++) {
+              const run = await watch(['Anna', other, unlucky], unlucky, { seed });
+              if (run.inWaterAt('duel').includes(other)) show = run;
+            }
+            expect(show).toBeDefined();
+          },
+        );
+        When('the rope comes down for them', () => {
+          expect(show!.inWaterAt('duel').toSorted()).toEqual(['Giulia', 'Marco']);
+        });
+        Then('it goes towards {string} first', (_, name: string) => {
+          expect(show!.aimsDuring('duel')[0]).toBe(name);
+        });
+        And('it swings to {string}, who is lifted out', (_, name: string) => {
+          expect(show!.aimsDuring('duel').at(-1)).toBe(name);
+          const lift = show!.lifts.find((each) => each.beat === 'duel');
+          expect(lift?.names).toEqual([name]);
+        });
+      });
+
+      RuleScenarioOutline(
+        'The duel swings back and forth, and hangs over the one it lifts',
+        ({ Given, When, Then, And }, variables) => {
+          let show: Watched;
+          Given('<count> people', () => {});
+          When('the show runs', async () => {
+            const names = TEAM.slice(-Number(variables.count));
+            show = await watch(names, 'Marco');
+          });
+          Then('the helicopter swings back and forth at least 3 times before it lifts one', () => {
+            expect(show.duelMoves.length).toBeGreaterThanOrEqual(3);
+            const lift = show.lifts.find((each) => each.beat === 'duel')!;
+            expect(show.aimsDuring('duel').at(-1)).toBe(lift.names[0]);
+          });
+          And(
+            'it holds still longest over the one it lifts, before the hook comes down, leaving out any slip',
+            () => {
+              const holds = show.duelHolds;
+              const last = holds.at(-1)!;
+              for (const hold of holds.slice(0, -1)) {
+                expect(last.seconds, `over ${hold.aim}`).toBeGreaterThan(hold.seconds);
+              }
+            },
+          );
+        },
+      );
+
+      RuleScenarioOutline(
+        'Sometimes the unlucky person slips off the hook, with <count> people',
+        ({ Given, When, Then, And }, { count }) => {
+          let unlucky: string;
+          const runs: { slipped: string[]; captions: string[]; lifted: readonly string[] }[] = [];
+          Given('<count> people, and the unlucky person is {string}', (_, name: string) => {
+            unlucky = name;
+          });
+          When('the show runs with 20 different random seeds', async () => {
+            const names = TEAM.slice(-Number(count));
+            for (let seed = 1; seed <= 20; seed++) {
+              // Each show stops once the duel is over.
+              const { beats } = planShow(names, unlucky, createRandom(seed));
+              const until = BEATS_BEFORE_RUN.reduce((total, beat) => total + beats[beat], 0);
+              const show = await watch(names, unlucky, { seed, step: 0.05, until });
+              runs.push({
+                slipped: [...new Set(show.frames.flatMap((frame) => frame.slip ?? []))],
+                captions: show.record.captions.map(({ text }) => text),
+                lifted: show.lifts.find((each) => each.beat === 'duel')?.names ?? [],
+              });
+            }
+          });
+          Then(
+            'in some runs the hook catches {string} in the duel, and {string} slips off and falls back in',
+            (_, name: string) => {
+              const slips = runs.filter((run) => run.slipped.length > 0);
+              expect(slips.length).toBeGreaterThan(0);
+              for (const run of slips) expect(run.slipped).toEqual([name]);
+            },
+          );
+          And(
+            'in those runs it is captioned {string}, and the rope then lifts the other one',
+            (_, caption: string) => {
+              for (const run of runs.filter((each) => each.slipped.length > 0)) {
+                expect(run.captions).toContain(caption);
+                expect(run.lifted).toHaveLength(1);
+                expect(run.lifted).not.toContain(unlucky);
+              }
+            },
+          );
+          And('in some runs nobody slips', () => {
+            expect(runs.some((run) => run.slipped.length === 0)).toBe(true);
+          });
+        },
+      );
+
+      RuleScenarioOutline(
+        'Sometimes the helicopter changes its mind, with <count> people',
+        ({ Given, When, Then, And }, { count }) => {
+          /** For each run, whether the helicopter turned back halfway in the duel. */
+          const turned: boolean[] = [];
+          Given('<count> people', () => {});
+          When('the show runs with 20 different random seeds', async () => {
+            const names = TEAM.slice(-Number(count));
+            for (let seed = 1; seed <= 20; seed++) {
+              // Each show stops once the duel is over.
+              const { beats } = planShow(names, 'Marco', createRandom(seed));
+              const until = BEATS_BEFORE_RUN.reduce((total, beat) => total + beats[beat], 0);
+              const show = await watch(names, 'Marco', { seed, step: 0.05, until });
+              turned.push(show.duelMoves.some((move) => move.halfway));
+            }
+          });
+          Then(
+            'in some runs, during the duel, it sets off towards one of the two and turns back halfway',
+            () => {
+              expect(turned).toContain(true);
+            },
+          );
+          And('in some runs it never turns back halfway', () => {
+            expect(turned).toContain(false);
+          });
+        },
+      );
+
+      RuleScenario('Fake-outs go both ways', ({ Given, When, Then, And }) => {
+        /** For each run, the rope's aims in the rescue at 3 left, and who it lifted. */
+        const rescues: Rescued[] = [];
+        /** Whether a rescue swings away and back to the one it lifts. */
+        const awayAndBack = ({ aims, lifted }: Rescued) =>
+          aims.length >= 3 && aims[0] === lifted && aims.at(-1) === lifted;
+        /** Whether a rescue swings to the one it lifts from someone else. */
+        const elsewhere = ({ aims, lifted }: Rescued) =>
+          aims.length >= 2 && aims[0] !== lifted && aims.at(-1) === lifted;
+        Given('12 people', () => {});
+        When('the show runs with 20 different random seeds', async () => {
+          // Once both kinds are seen, the rest of the 20 can't change the outcome.
+          for (
+            let seed = 1;
+            seed <= 20 && !(rescues.some(awayAndBack) && rescues.some(elsewhere));
+            seed++
+          ) {
+            // Each show stops once the rescue at 3 left is over.
+            const { beats } = planShow(TEAM, 'Marco', createRandom(seed));
+            const until =
+              beats['splash-in'] + beats.rescues + beats['four-left'] + beats['fake-out'];
+            // Five frames a second still sees every aim: each lasts 0.4 seconds or more.
+            const show = await watch(TEAM, 'Marco', { seed, step: 0.2, until });
+            const lift = show.lifts.find((each) => each.beat === 'fake-out')!;
+            rescues.push({ aims: show.aimsDuring('fake-out'), lifted: lift.names[0]! });
+          }
+        });
+        Then('in some runs a one-at-a-time rescue swings away and back to the same person', () => {
+          expect(rescues.filter(awayAndBack).length).toBeGreaterThan(0);
+        });
+        And('in some runs it swings to someone else', () => {
+          expect(rescues.filter(elsewhere).length).toBeGreaterThan(0);
+        });
+      });
+
+      RuleScenario('The rope stops over each person it heads for', ({ When, Then }) => {
+        const shows: { label: string; show: Watched }[] = [];
+        When(
+          'the show runs at every head count from 3 to 12, with both kinds of fake-out',
+          async () => {
+            for (let count = 3; count <= 12; count++) {
+              const names = TEAM.slice(0, count);
+              const unlucky = names[0]!;
+              for (const awayAndBack of [false, true]) {
+                // The first seed whose fake-out is of this kind.
+                let seed = 1;
+                let plan = planShow(names, unlucky, createRandom(seed));
+                const isKind = () =>
+                  plan.rescues.some(
+                    (rescue) => rescue.kind === 'fake-out' && !!rescue.via === awayAndBack,
+                  );
+                while (!isKind()) plan = planShow(names, unlucky, createRandom(++seed));
+                const { beats } = plan;
+                const until =
+                  beats['splash-in'] +
+                  beats.rescues +
+                  beats['four-left'] +
+                  beats['fake-out'] +
+                  beats.duel;
+                const label = `${count} people, ${awayAndBack ? 'away and back' : 'to someone else'}`;
+                shows.push({ label, show: await watch(names, unlucky, { seed, until }) });
+              }
+            }
+          },
+        );
+        Then(
+          'the helicopter holds still over each person the rope heads for, for at least {number} seconds',
+          (_, seconds: number) => {
+            for (const { label, show } of shows) {
+              expect(show.rests.length, label).toBeGreaterThan(0);
+              for (const rest of show.rests) {
+                expect(rest.seconds, `${label}: ${rest.aim}`).toBeGreaterThanOrEqual(
+                  seconds - 1e-9,
+                );
+              }
+            }
+          },
+        );
+      });
+    },
+  );
+
+  Rule('The show lasts about 25 seconds at 6 people', ({ RuleScenario }) => {
     RuleScenario('Each beat takes about this long', ({ When, Then }) => {
       const shows = new Map<number, Watched>();
-      When('the show runs at 12, 4 and 2 people', async () => {
-        for (const count of [12, 4, 2]) {
+      When('the show runs at 12, 6, 4 and 2 people', async () => {
+        for (const count of [12, 6, 4, 2]) {
           const names = TEAM.slice(0, count);
           shows.set(count, await watch(names, names[0]!));
         }
@@ -791,7 +954,7 @@ describeSpec(await loadFeature('./shark-bait.feature'), ({ Rule }) => {
         'its beats take these seconds, give or take 0.3:',
         (_, table: Record<string, string>[]) => {
           for (const row of table) {
-            for (const count of [12, 4, 2]) {
+            for (const count of [12, 6, 4, 2]) {
               const seconds = shows.get(count)!.beats.get(BEATS[row.beat!]!) ?? 0;
               const expected = Number(row[`${count} people`]);
               expect(Math.abs(seconds - expected), `${row.beat} at ${count}`).toBeLessThanOrEqual(
@@ -803,22 +966,89 @@ describeSpec(await loadFeature('./shark-bait.feature'), ({ Rule }) => {
       );
     });
 
-    RuleScenario('Every head count lands inside the time limit', ({ When, Then }) => {
-      const records: ShowRecord[] = [];
-      When('the show runs at every head count from 2 to 12', async () => {
-        for (let count = 2; count <= 12; count++) {
-          const names = TEAM.slice(0, count);
-          // Ten frames a second times a show to a tenth of a second.
-          records.push((await watch(names, names.at(-1)!, { step: 0.1 })).record);
-        }
+    RuleScenario('Each head count lasts this long, whoever is unlucky', ({ When, Then }) => {
+      const records = new Map<number, ShowRecord[]>();
+      When(
+        'the show runs at every head count from 2 to 12, with {int} different random seeds each',
+        async (_, seeds: number) => {
+          for (let count = 2; count <= 12; count++) {
+            const names = TEAM.slice(0, count);
+            const runs: ShowRecord[] = [];
+            for (let seed = 1; seed <= seeds; seed++) {
+              // Ten frames a second times a show to a tenth of a second.
+              runs.push((await watch(names, names[seed % count]!, { seed, step: 0.1 })).record);
+            }
+            records.set(count, runs);
+          }
+        },
+      );
+      Then(
+        'every run lasts these seconds, give or take 0.1:',
+        (_, table: { people: string; seconds: string }[]) => {
+          expect(table.map((row) => Number(row.people))).toEqual([...records.keys()]);
+          for (const row of table) {
+            for (const record of records.get(Number(row.people))!) {
+              expect(
+                Math.abs(record.duration - Number(row.seconds)),
+                `${row.people} people`,
+              ).toBeLessThanOrEqual(0.1 + 1e-9);
+            }
+          }
+        },
+      );
+    });
+  });
+
+  Rule('The shark gets bolder as the water empties', ({ RuleScenario, RuleScenarioOutline }) => {
+    RuleScenario('A fin comes up once everyone is in the water', ({ Given, When, Then, And }) => {
+      let show: Awaited<ReturnType<typeof watchFin>>;
+      Given('6 people', () => {});
+      When('the show runs', async () => {
+        show = await watchFin(TEAM.slice(0, 6), 'Anna');
       });
-      Then('each run lasts between 11 and 15 seconds', () => {
-        for (const record of records) {
-          expect(record.duration).toBeGreaterThanOrEqual(11);
-          expect(record.duration).toBeLessThanOrEqual(15);
-        }
+      Then('no fin shows until everyone has popped up in the water', () => {
+        const allIn = show.frames.find((frame) => frame.allIn)!;
+        const up = show.frames.find((frame) => frame.up)!;
+        expect(up.time).toBeGreaterThan(allIn.time);
+      });
+      And('then a fin comes up, captioned {string}', (_, text: string) => {
+        const up = show.frames.find((frame) => frame.up)!;
+        const caption = show.record.captions.find((each) => each.text === text);
+        expect(caption).toBeDefined();
+        expect(Math.abs(caption!.from - up.time)).toBeLessThanOrEqual(0.1);
       });
     });
+
+    RuleScenarioOutline(
+      'The fin grows and crosses quicker as people leave, with <count> people',
+      ({ Given, When, Then, And }, { count }) => {
+        let frames: FinFrame[];
+        Given('<count> people', () => {});
+        When('the show runs', async () => {
+          const names = TEAM.slice(-Number(count));
+          frames = (await watchFin(names, 'Marco')).frames;
+        });
+        Then('the fin never shrinks, and it is bigger in the duel than when it comes up', () => {
+          const circling = frames.filter((frame) => frame.up && frame.phase === 'circling');
+          circling.slice(1).forEach((frame, index) => {
+            expect(frame.scale, `at ${frame.time}`).toBeGreaterThanOrEqual(
+              circling[index]!.scale - 1e-9,
+            );
+          });
+          const duel = circling.filter((frame) => frame.beat === 'duel');
+          expect(duel.length).toBeGreaterThan(0);
+          expect(duel.at(-1)!.scale).toBeGreaterThan(circling[0]!.scale + 0.2);
+        });
+        And('it crosses the water quicker in the duel than when it comes up', () => {
+          const all = crossings(frames);
+          const duel = all.filter((crossing) => crossing.beat === 'duel');
+          expect(duel.length).toBeGreaterThan(0);
+          for (const crossing of duel) {
+            expect(crossing.seconds).toBeLessThan(all[0]!.seconds);
+          }
+        });
+      },
+    );
   });
 
   Rule('The ending is a victory lap', ({ RuleScenario }) => {
