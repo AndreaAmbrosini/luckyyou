@@ -52,6 +52,11 @@ Feature: Local photo faces
       When I open Anna's photo control
       Then I can choose a picture without changing who is ticked
 
+    Scenario: A saved photo can be tightened without choosing it again
+      Given Anna has a saved photo
+      When I zoom into Anna's saved photo and save it
+      Then Anna's photo is the middle of the old one
+
     Scenario: Cancelling leaves the saved photo alone
       Given Anna has a saved photo
       When I cancel Anna's photo editor

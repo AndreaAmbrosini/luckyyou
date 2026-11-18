@@ -1,6 +1,6 @@
 import { loadFeature } from '@amiceli/vitest-cucumber';
-import { screen } from '@testing-library/react';
-import { afterAll, beforeAll, expect } from 'vitest';
+import { fireEvent, screen } from '@testing-library/react';
+import { afterAll, beforeAll, expect, vi } from 'vitest';
 import { loadPeople } from '../src/people/people';
 import { catalogue } from '../src/catalogue/catalogue';
 import { handOutLooks, head } from '../src/scenario-kit/characters';
@@ -11,6 +11,7 @@ import { creature } from '../src/scenarios/the-race/creature';
 import { CREATURES } from '../src/scenarios/the-race/parts';
 import { addName, blockStorage, choose, renderApp, storePeople, tickBox } from './support/app';
 import { describeSpec } from './support/spec';
+import { onReset } from '../src/test/reset';
 
 const PHOTO = 'data:image/jpeg;base64,/9j/2Q==';
 const saved = () => storePeople([{ name: 'Anna', ticked: true, photo: PHOTO }]);
@@ -230,6 +231,55 @@ describeSpec(await loadFeature('./photos.feature'), ({ Rule }) => {
         expect(tickBox('Anna')).toBeChecked();
       });
     });
+    RuleScenario(
+      'A saved photo can be tightened without choosing it again',
+      ({ Given, When, Then }) => {
+        const TIGHTER = 'data:image/jpeg;base64,/9j/4A==';
+        const drawn: unknown[][] = [];
+        Given('Anna has a saved photo', () => {
+          // jsdom decodes no pictures and has no canvas; the browser spec checks the real pixels.
+          const src = Object.getOwnPropertyDescriptor(HTMLImageElement.prototype, 'src')!;
+          Object.defineProperty(HTMLImageElement.prototype, 'src', {
+            configurable: true,
+            get: src.get,
+            set(this: HTMLImageElement, value: string) {
+              src.set!.call(this, value);
+              queueMicrotask(() => this.onload?.(new Event('load')));
+            },
+          });
+          for (const side of ['naturalWidth', 'naturalHeight']) {
+            Object.defineProperty(HTMLImageElement.prototype, side, {
+              configurable: true,
+              get: () => 256,
+            });
+          }
+          onReset(() => {
+            Object.defineProperty(HTMLImageElement.prototype, 'src', src);
+            Reflect.deleteProperty(HTMLImageElement.prototype, 'naturalWidth');
+            Reflect.deleteProperty(HTMLImageElement.prototype, 'naturalHeight');
+          });
+          vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue({
+            clearRect() {},
+            drawImage: (...args: unknown[]) => drawn.push(args),
+          } as unknown as CanvasRenderingContext2D);
+          vi.spyOn(HTMLCanvasElement.prototype, 'toDataURL').mockReturnValue(TIGHTER);
+          saved();
+          renderApp();
+        });
+        When("I zoom into Anna's saved photo and save it", async () => {
+          await choose('Change photo for Anna');
+          const zoom = await screen.findByRole('slider', { name: 'Zoom' });
+          expect(zoom).toHaveAttribute('max', '2');
+          expect(screen.getByRole('button', { name: 'Save photo' })).toBeDisabled();
+          fireEvent.change(zoom, { target: { value: '2' } });
+          await choose('Save photo');
+        });
+        Then("Anna's photo is the middle of the old one", () => {
+          expect(drawn.at(-1)!.slice(1)).toEqual([64, 64, 128, 128, 0, 0, 256, 256]);
+          expect(loadPeople()[0]).toMatchObject({ name: 'Anna', ticked: true, photo: TIGHTER });
+        });
+      },
+    );
     RuleScenario('Cancelling leaves the saved photo alone', ({ Given, When, Then }) => {
       Given('Anna has a saved photo', () => {
         saved();
