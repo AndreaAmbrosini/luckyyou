@@ -59,7 +59,6 @@ export default function App({ scenarios = catalogue }: AppProps) {
 
   /** Picks the unlucky person, then hands the show the window (decision 0005). */
   function start(scenario: Scenario, names: readonly string[], looks?: Looks, theme?: string) {
-    changeSettings({ lastScenario: scenario.id });
     setScreen({
       name: 'show',
       run: {
@@ -115,7 +114,11 @@ export default function App({ scenarios = catalogue }: AppProps) {
     return (
       <ShowScreen
         run={run}
-        onFinish={() => setScreen({ name: 'result', run })}
+        onFinish={() => {
+          // Only a show that reached its result is last time's: Esc leaves it as it was.
+          changeSettings({ lastScenario: run.scenario.id });
+          setScreen({ name: 'result', run });
+        }}
         onCancel={() => setScreen({ name: 'shows' })}
         music={settings}
         onMusicChange={changeSettings}
@@ -187,6 +190,7 @@ export default function App({ scenarios = catalogue }: AppProps) {
           scenarios={scenarios}
           lastScenario={settings.lastScenario}
           chosen={chosen}
+          lastLineUp={chosen?.lineUp ? looks.isKept(chosen) : false}
           surprise={surprising}
           onChoose={(scenario) => {
             setPicked(scenario.id);

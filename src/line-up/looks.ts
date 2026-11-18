@@ -85,6 +85,13 @@ export function useLooks() {
     [kept, save],
   );
 
+  /** Whether a show's Line-up was ever kept in this browser, so it can start on it. */
+  const isKept = useCallback(
+    (scenario: Scenario): boolean =>
+      Object.keys(kept.get(scenario.id) ?? load(scenario.id)).length > 0,
+    [kept],
+  );
+
   /**
    * The theme a show's Line-up opens on: the one kept, while the show still
    * offers it, or else "Surprise", which draws one afresh. Null without themes.
@@ -163,6 +170,7 @@ export function useLooks() {
 
   return {
     open,
+    isKept,
     change: save,
     openTheme,
     changeTheme,

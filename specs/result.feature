@@ -17,12 +17,13 @@ Feature: The result screen
       When the show ends
       Then the card, the name and the ribbon come in, in that order
       And the buttons come in after the ribbon
+      And they can't take the focus or a press until they are in
       And confetti falls behind the card
 
     Scenario: With reduced motion, everything is simply there
       Given the browser asks for reduced motion
       When the show ends
-      Then every part is there from the start
+      Then every part is there from the start, the buttons ready to press
       And no confetti falls
 
   Rule: A ta-da that deflates

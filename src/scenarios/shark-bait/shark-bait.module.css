@@ -207,6 +207,8 @@
   bottom: 0;
   left: 0;
   transform: translateX(-50%);
+  /* Hanging from the rope, the tag moves beside the head: --side -1 or 1, centred down by --drop 1. */
+  translate: calc(var(--side, 0) * 50%) calc(var(--drop, 0) * 50%);
 }
 
 /* The fin is placed by the middle of its base, on the water. */

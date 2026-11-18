@@ -34,6 +34,7 @@ export function WhosIn({ people, onNext }: { people: People; onNext(): void }) {
   const sheet = useRef<HTMLElement>(null);
   const field = useRef<HTMLInputElement>(null);
   const removePeople = useRef<HTMLButtonElement>(null);
+  const main = useRef<HTMLButtonElement>(null);
   // Where the keyboard focus goes once the next render is on screen.
   const focusNext = useRef<(() => HTMLElement | null | undefined) | null>(null);
 
@@ -42,6 +43,13 @@ export function WhosIn({ people, onNext }: { people: People; onNext(): void }) {
   const inRemoveMode = removing && list.length > 0;
   const firstVisit = list.length === 0;
   const pending = checkNewNames(draft, names).add.length;
+
+  // As on every step, the main button has the focus on arrival; a first visit's add field has it instead.
+  useEffect(() => {
+    if (list.length > 0) main.current?.focus();
+    // Only on arrival: later, the focus goes where the user moves it.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => {
     const target = focusNext.current;
@@ -295,6 +303,7 @@ export function WhosIn({ people, onNext }: { people: People; onNext(): void }) {
                 </p>
               )}
               <Button
+                ref={main}
                 variant="primary"
                 aria-disabled={reason ? true : undefined}
                 aria-describedby={reason ? reasonId : undefined}

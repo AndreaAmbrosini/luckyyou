@@ -136,9 +136,21 @@ export function LineUp({
     onLooksChange(looks, next);
   }
 
+  /**
+   * A theme chosen since the last shuffle. Only Shuffle, a die and Surprise
+   * me deal (decision 0019), so everyone keeps their look; while some who
+   * aren't pinned don't suit the new theme, Shuffle offers to deal from it.
+   */
+  const [retracked, setRetracked] = useState(false);
+  const offerDeal =
+    retracked &&
+    dealing !== undefined &&
+    names.some((each) => !pinned.has(each) && !suits(looks.get(each)!));
+
   /** Deals everyone a look, but for the pinned ones. */
   function shuffleEveryone() {
     const who = names.filter((each) => !pinned.has(each));
+    setRetracked(false);
     setDealt({ round: dealt.round + 1, who });
     onLooksChange(new Map([...looks, ...dealLooks(lineUp, who, Math.random, dealing)]), pinned);
   }
@@ -193,7 +205,10 @@ export function LineUp({
               themes={lineUp.themes}
               theme={theme}
               surprise={() => drawTheme(lineUp, Math.random, theme.name)}
-              onChange={onThemeChange}
+              onChange={(next) => {
+                setRetracked(true);
+                onThemeChange(next);
+              }}
             />
           </section>
         )}
@@ -243,9 +258,12 @@ export function LineUp({
                 </div>
               </div>
             )}
-            <Button className={styles.shuffle} onClick={shuffleEveryone}>
+            <Button
+              className={`${styles.shuffle} ${offerDeal ? styles.offer : ''}`}
+              onClick={shuffleEveryone}
+            >
               <DieIcon five size={24} />
-              Shuffle everyone
+              {offerDeal ? `Deal ${suiting!.theme.label}` : 'Shuffle everyone'}
             </Button>
           </div>
 
@@ -564,7 +582,7 @@ function Sheet(props: SheetProps) {
 
         <div className={styles.sheetFoot}>
           <p className={styles.pinNote}>Changes show on the line-up at once.</p>
-          <Button variant="primary" onClick={onClose}>
+          <Button variant="done" onClick={onClose}>
             Done
           </Button>
         </div>

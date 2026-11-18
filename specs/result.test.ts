@@ -90,6 +90,14 @@ describeSpec(await loadFeature('./result.feature'), ({ Rule }) => {
           const [, , ribbon, buttons] = await parts();
           expect(comesIn(buttons!)).toBeGreaterThan(comesIn(ribbon!));
         });
+        And("they can't take the focus or a press until they are in", async () => {
+          const [, , , buttons] = await parts();
+          expect(buttons).toHaveAttribute('inert');
+          // Live once the last of them has risen: 0.4 s, a 0.2 s step behind the first.
+          await waitFor(() => expect(buttons).not.toHaveAttribute('inert'), {
+            timeout: (comesIn(buttons!) + 0.6) * 1000 + 2000,
+          });
+        });
         And('confetti falls behind the card', async () => {
           const [card] = await parts();
           expect(confetti()).toHaveAttribute('aria-hidden', 'true');
@@ -107,10 +115,11 @@ describeSpec(await loadFeature('./result.feature'), ({ Rule }) => {
           prefersReducedMotion(true);
         });
         When('the show ends', () => resultFor(ANNA_BEN_CARLA, 'Ben', fakeScenario()));
-        Then('every part is there from the start', async () => {
+        Then('every part is there from the start, the buttons ready to press', async () => {
           const all = await parts();
           expect(all).toHaveLength(4);
           expect(all.map(comesIn)).toEqual([0, 0, 0, 0]);
+          expect(all[3]).not.toHaveAttribute('inert');
         });
         And('no confetti falls', () => {
           expect(confetti()).toBeNull();
