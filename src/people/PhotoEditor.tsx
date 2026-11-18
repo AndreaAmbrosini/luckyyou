@@ -1,7 +1,15 @@
 import { useEffect, useId, useRef, useState, type PointerEvent } from 'react';
 import { Button } from '../ui/Button';
 import type { Person } from './people';
-import { cropArea, drawCrop, PHOTO_SIZE, readPicture, validPhoto, type Framing } from './photos';
+import {
+  cropArea,
+  drawCrop,
+  loadPhoto,
+  PHOTO_SIZE,
+  readPicture,
+  validPhoto,
+  type Framing,
+} from './photos';
 import styles from './PhotoEditor.module.css';
 
 const CENTRED: Framing = { zoom: 1, x: 50, y: 50 };
@@ -22,10 +30,13 @@ export function PhotoEditor({
   const selection = useRef(0);
   const drag = useRef<{ x: number; y: number; framing: Framing } | null>(null);
   const [image, setImage] = useState<HTMLImageElement | null>(null);
+  /** The saved crop is being tightened, rather than a newly chosen picture framed. */
+  const [tightening, setTightening] = useState(false);
   const [framing, setFraming] = useState(CENTRED);
   const [error, setError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(() => person.photo !== undefined);
   const [opener] = useState(() => document.activeElement);
+  const [savedPhoto] = useState(person.photo);
 
   useEffect(() => {
     const pending = selection;
@@ -35,6 +46,23 @@ export function PhotoEditor({
       if (opener instanceof HTMLElement) opener.focus();
     };
   }, [opener]);
+
+  useEffect(() => {
+    if (!savedPhoto) return;
+    const current = ++selection.current;
+    loadPhoto(savedPhoto)
+      .then((saved) => {
+        if (current !== selection.current) return;
+        setImage(saved);
+        setTightening(true);
+        setFraming(CENTRED);
+      })
+      // A saved photo that can't be decoded stays as a still preview; a new picture replaces it.
+      .catch(() => {})
+      .finally(() => {
+        if (current === selection.current) setLoading(false);
+      });
+  }, [savedPhoto]);
 
   useEffect(() => {
     if (!image || !canvas.current) return;
@@ -56,6 +84,7 @@ export function PhotoEditor({
       const next = await readPicture(file);
       if (current !== selection.current) return;
       setImage(next);
+      setTightening(false);
       setFraming(CENTRED);
     } catch (reason) {
       if (current === selection.current) {
@@ -145,7 +174,7 @@ export function PhotoEditor({
           <p className={styles.note}>Drag the picture or use the controls.</p>
           {(
             [
-              ['zoom', 'Zoom', 1, 4, 0.05],
+              ['zoom', 'Zoom', 1, tightening ? 2 : 4, 0.05],
               ['x', 'Horizontal position', 0, 100, 1],
               ['y', 'Vertical position', 0, 100, 1],
             ] as const
@@ -170,7 +199,13 @@ export function PhotoEditor({
       <div className={styles.actions}>
         {person.photo && <Button onClick={() => onSave()}>Remove photo</Button>}
         <Button onClick={onClose}>Cancel</Button>
-        <Button variant="primary" disabled={!image || loading || error !== null} onClick={save}>
+        <Button
+          variant="primary"
+          disabled={
+            !image || loading || error !== null || (tightening && framing.zoom === CENTRED.zoom)
+          }
+          onClick={save}
+        >
           Save photo
         </Button>
       </div>

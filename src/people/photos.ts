@@ -28,6 +28,17 @@ export function drawCrop(canvas: HTMLCanvasElement, image: HTMLImageElement, fra
   context.drawImage(image, area.x, area.y, area.size, area.size, 0, 0, PHOTO_SIZE, PHOTO_SIZE);
 }
 
+/** A saved photo as a picture to frame again; only the crop is kept, so framing can only tighten. */
+export function loadPhoto(photo: string): Promise<HTMLImageElement> {
+  if (!validPhoto(photo)) return Promise.reject(new Error('That photo is not a saved crop.'));
+  return new Promise((resolve, reject) => {
+    const image = new Image();
+    image.onload = () => resolve(image);
+    image.onerror = () => reject(new Error("The saved photo couldn't be read."));
+    image.src = photo;
+  });
+}
+
 export function readPicture(file: File): Promise<HTMLImageElement> {
   if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type)) {
     return Promise.reject(new Error('Choose a JPEG, PNG or WebP picture.'));

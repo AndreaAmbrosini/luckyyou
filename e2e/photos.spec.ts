@@ -1,4 +1,19 @@
-import { expect, test } from '@playwright/test';
+import { expect, test, type Page } from '@playwright/test';
+
+/** A stored photo's size and two of its pixels: the centre and the left edge. */
+function look(page: Page, photo: string) {
+  return page.evaluate(async (src) => {
+    const image = new Image();
+    image.src = src;
+    await image.decode();
+    const canvas = document.createElement('canvas');
+    canvas.width = canvas.height = 256;
+    const ctx = canvas.getContext('2d')!;
+    ctx.drawImage(image, 0, 0);
+    const at = (x: number) => [...ctx.getImageData(x, 128, 1, 1).data];
+    return { width: image.width, height: image.height, centre: at(128), edge: at(8) };
+  }, photo);
+}
 
 test('a local picture is framed, saved, replaced, cancelled and removed', async ({ page }) => {
   const outbound: string[] = [];
@@ -18,6 +33,9 @@ test('a local picture is framed, saved, replaced, cancelled and removed', async 
     context.fillRect(0, 0, 300, 300);
     context.fillStyle = 'blue';
     context.fillRect(300, 0, 300, 300);
+    // A stripe at the face's edge, which tightening the saved face crops away.
+    context.fillStyle = 'lime';
+    context.fillRect(0, 0, 30, 300);
     return canvas.toDataURL('image/png').split(',')[1]!;
   });
   await page.getByRole('textbox', { name: 'Add a name' }).fill('Anna, Ben');
@@ -45,26 +63,34 @@ test('a local picture is framed, saved, replaced, cancelled and removed', async 
     () => JSON.parse(localStorage.getItem('luckyyou:v1:people')!)[0].photo as string,
   );
   expect(kept).toMatch(/^data:image\/jpeg;base64,/);
-  const pixel = await page.evaluate(async (photo) => {
-    const image = new Image();
-    image.src = photo;
-    await image.decode();
-    const canvas = document.createElement('canvas');
-    canvas.width = canvas.height = 256;
-    const ctx = canvas.getContext('2d')!;
-    ctx.drawImage(image, 0, 0);
-    return {
-      width: image.width,
-      height: image.height,
-      pixel: [...ctx.getImageData(128, 128, 1, 1).data],
-    };
-  }, kept);
-  expect(pixel.width).toBe(256);
-  expect(pixel.height).toBe(256);
-  expect(pixel.pixel[0]).toBeGreaterThan(240);
-  expect(pixel.pixel[2]).toBeLessThan(15);
+  const saved = await look(page, kept);
+  expect(saved.width).toBe(256);
+  expect(saved.height).toBe(256);
+  expect(saved.centre[0]).toBeGreaterThan(240);
+  expect(saved.centre[2]).toBeLessThan(15);
+  expect(saved.edge[1]).toBeGreaterThan(200);
   await page.reload();
   await expect(page.getByRole('button', { name: 'Change photo for Anna' })).toBeVisible();
+
+  // The saved crop opens for tightening without choosing the picture again.
+  await page.getByRole('button', { name: 'Change photo for Anna' }).click();
+  const tighten = dialog.getByRole('slider', { name: 'Zoom' });
+  await expect(tighten).toHaveAttribute('max', '2');
+  await expect(dialog.getByRole('button', { name: 'Save photo' })).toBeDisabled();
+  await tighten.fill('2');
+  await dialog.getByRole('button', { name: 'Save photo' }).click();
+  await expect(dialog).not.toBeVisible();
+  const tightened = await page.evaluate(
+    () => JSON.parse(localStorage.getItem('luckyyou:v1:people')!)[0].photo as string,
+  );
+  expect(tightened).toMatch(/^data:image\/jpeg;base64,/);
+  expect(tightened).not.toBe(kept);
+  const tight = await look(page, tightened);
+  expect(tight.width).toBe(256);
+  expect(tight.centre[0]).toBeGreaterThan(240);
+  expect(tight.edge[0]).toBeGreaterThan(200);
+  expect(tight.edge[1]).toBeLessThan(60);
+
   await page.getByRole('button', { name: 'Change photo for Anna' }).click();
   await dialog.getByLabel('Choose picture').setInputFiles({
     name: 'new.png',
@@ -79,7 +105,7 @@ test('a local picture is framed, saved, replaced, cancelled and removed', async 
   await expect(page.getByRole('button', { name: 'Change photo for Anna' })).toBeFocused();
   expect(
     await page.evaluate(() => JSON.parse(localStorage.getItem('luckyyou:v1:people')!)[0].photo),
-  ).toBe(kept);
+  ).toBe(tightened);
 
   await page.getByRole('button', { name: 'Change photo for Anna' }).click();
   await dialog.getByLabel('Choose picture').setInputFiles({
@@ -97,7 +123,7 @@ test('a local picture is framed, saved, replaced, cancelled and removed', async 
   const replacement = await page.evaluate(
     () => JSON.parse(localStorage.getItem('luckyyou:v1:people')!)[0].photo as string,
   );
-  expect(replacement).not.toBe(kept);
+  expect(replacement).not.toBe(tightened);
 
   // The chosen face also reaches every line-up preview, including creatures.
   await page.getByRole('button', { name: 'Next: pick a show' }).click();
