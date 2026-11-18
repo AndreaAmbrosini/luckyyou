@@ -11,8 +11,10 @@ import {
   type Scenario,
 } from '../../scenario-kit';
 import { follow } from '../../scenario-kit/music';
+import { createRandom } from '../../scenario-kit/random';
 import { describeSpec, runShow, type ShowRecord } from '../../scenario-kit/testing';
 import updraft from './index';
+import { buildPlan } from './plan';
 
 const SHORT_NAMES = ['Anna', 'Ben', 'Carla', 'Dario', 'Elena', 'Fabio', 'Giulia', 'Hana'];
 
@@ -825,24 +827,25 @@ describeSpec(await loadFeature('./updraft.feature'), ({ Rule }) => {
   Rule('Three endings decide touchdown', ({ RuleScenario }) => {
     RuleScenario('All three endings appear across runs', ({ Given, When, Then }) => {
       let count = 6;
-      let runs: Watched[] = [];
+      let endings: string[] = [];
 
       Given('{int} people', (_, n: number) => {
         count = n;
       });
 
-      When('the show runs with {int} different random seeds', async (_, seeds: number) => {
+      // The plan decides the ending; "Each ending stalls…" plays every one in full.
+      When('the show is planned with {int} different random seeds', (_, seeds: number) => {
         const team = SHORT_NAMES.slice(0, count);
-        runs = [];
-        for (let i = 0; i < seeds; i++) {
-          runs.push(await watch(team, team[i % count]!, { seed: i + 1 }));
-        }
+        endings = Array.from(
+          { length: seeds },
+          (_, i) => buildPlan(team, team[i % count]!, createRandom(i + 1)).ending,
+        );
       });
 
       Then(
         'some runs end with {string}, some with {string} and some with {string}',
         (_, a: string, b: string, c: string) => {
-          const seen = new Set(runs.map((r) => r.frames.at(-1)?.ending));
+          const seen = new Set(endings);
           expect(seen.has(a)).toBe(true);
           expect(seen.has(b)).toBe(true);
           expect(seen.has(c)).toBe(true);

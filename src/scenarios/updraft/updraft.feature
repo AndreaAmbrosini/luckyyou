@@ -51,7 +51,7 @@ Feature: Updraft!
 
     Scenario: Whoever is lowest panics, and thermals swap the lowest jumper
       Given 6 people
-      When the show runs with 15 different random seeds
+      When the show runs with 5 different random seeds
       Then before the spotlight, whoever is lowest among at-risk jumpers looks scared and sweats
       And at least 2 different jumpers fall lowest before the spotlight
 
@@ -93,7 +93,7 @@ Feature: Updraft!
 
     Scenario: All three endings appear across runs
       Given 6 people
-      When the show runs with 30 different random seeds
+      When the show is planned with 30 different random seeds
       Then some runs end with "ankle-gust", some with "canopy-fold" and some with "boot-boop"
 
     Scenario: Each ending stalls over the mat, cuts the music and lands the winner

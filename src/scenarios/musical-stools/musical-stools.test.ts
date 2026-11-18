@@ -634,23 +634,25 @@ describeSpec(await loadFeature('./musical-stools.feature'), ({ Rule }) => {
   Rule('Three endings settle the last stool between the final two', ({ RuleScenario }) => {
     RuleScenario('All three endings appear across runs', ({ Given, When, Then }) => {
       let count = 6;
-      let runs: Watched[] = [];
+      let endings: string[] = [];
 
       Given('{int} people', (_, n: number) => {
         count = n;
       });
 
-      When('the show runs with {int} different random seeds', async (_, seeds: number) => {
+      // The plan draws the ending first; "Each ending freezes…" plays every one in full.
+      When('the show is planned with {int} different random seeds', (_, seeds: number) => {
         const team = SHORT_NAMES.slice(0, count);
-        // One after another: every show runs on GSAP's one global clock.
-        runs = [];
-        for (let i = 0; i < seeds; i++) runs.push(await watch(team, team[i % count]!, i + 1));
+        endings = Array.from(
+          { length: seeds },
+          (_, i) => planShow(team, team[i % count]!, createRandom(i + 1)).ending,
+        );
       });
 
       Then(
         'some runs end with {string}, some with {string} and some with {string}',
         (_, a: string, b: string, c: string) => {
-          const seen = new Set(runs.map((r) => r.frames.at(-1)?.ending));
+          const seen = new Set(endings);
           expect(seen.has(a)).toBe(true);
           expect(seen.has(b)).toBe(true);
           expect(seen.has(c)).toBe(true);

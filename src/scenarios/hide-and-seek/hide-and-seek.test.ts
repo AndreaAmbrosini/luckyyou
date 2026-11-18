@@ -767,19 +767,21 @@ describeSpec(await loadFeature('./hide-and-seek.feature'), ({ Rule }) => {
 
   Rule('Three endings decide the last two', ({ RuleScenario }) => {
     RuleScenario('All three endings appear across runs', ({ Given, When, Then }) => {
-      let runs: Watched[] = [];
+      let planned: string[] = [];
       Given('{int} people', () => undefined);
-      When('the show runs with {int} different random seeds', async (_, seeds: number) => {
+      // The plan decides the ending; "Each ending pauses…" plays every one in full.
+      When('the show is planned with {int} different random seeds', (_, seeds: number) => {
         const team = SHORT_NAMES.slice(0, 6);
-        runs = [];
-        for (let seed = 1; seed <= seeds; seed++) {
-          runs.push(await watch(team, team[seed % team.length]!, seed + 200));
-        }
+        planned = Array.from({ length: seeds }, (_, i) => {
+          const random = createRandom(i + 201);
+          handOutLooks(team, random);
+          return planShow(team, team[(i + 1) % team.length]!, random, layoutFor(team, 6)).ending;
+        });
       });
       Then(
         'some runs end with {string}, some with {string} and some with {string}',
         (_, first: string, second: string, third: string) => {
-          const endings = new Set(runs.map((run) => run.frames.at(-1)?.ending));
+          const endings = new Set(planned);
           expect(endings.has(first)).toBe(true);
           expect(endings.has(second)).toBe(true);
           expect(endings.has(third)).toBe(true);

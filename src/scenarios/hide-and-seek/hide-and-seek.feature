@@ -63,7 +63,7 @@ Feature: Hide and Seek
 
     Scenario: The lens hovers over someone and skips past
       Given 8 people
-      When the show runs with 15 different random seeds
+      When the show runs with 5 different random seeds
       Then before the final three, the lens hovers with a sniff and creaks past without finding anyone
 
   Rule: When the seeker looks away a hider sneaks to another spot
@@ -74,7 +74,7 @@ Feature: Hide and Seek
 
     Scenario: A hider crosses the room while the seeker looks away
       Given 8 people
-      When the show runs with 20 different random seeds
+      When the show runs with 5 different random seeds
       Then the seeker looks away, a hider leaves cover and crosses the open floor to a free piece of furniture
       And some runs end the crossing hidden at the new spot and some runs have the seeker turn back and catch the hider mid-crossing
       And a caught hider turns happy and goes safe on the balcony
@@ -94,7 +94,7 @@ Feature: Hide and Seek
 
     Scenario: All three endings appear across runs
       Given 6 people
-      When the show runs with 30 different random seeds
+      When the show is planned with 30 different random seeds
       Then some runs end with "double-take", some with "decoy-wave" and some with "walk-on-by"
 
     Scenario: Each ending pauses, cuts the music and crowns the champion

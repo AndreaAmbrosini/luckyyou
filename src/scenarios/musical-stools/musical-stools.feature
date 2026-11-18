@@ -91,7 +91,7 @@ Feature: Musical Stools
 
     Scenario: All three endings appear across runs
       Given 6 people
-      When the show runs with 30 different random seeds
+      When the show is planned with 30 different random seeds
       Then some runs end with "clean-beat", some with "encore-fakeout" and some with "hip-bump"
 
     Scenario: Each ending freezes, cuts the waltz and drops the Boss Throne
