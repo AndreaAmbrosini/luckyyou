@@ -40,7 +40,9 @@ export function loadSettings(): Settings {
 export function useSettings(): [Settings, (change: Partial<Settings>) => void] {
   const [settings, setSettings] = useState(loadSettings);
 
-  useEffect(() => writeJson(SETTINGS_KEY, settings), [settings]);
+  useEffect(() => {
+    writeJson(SETTINGS_KEY, settings);
+  }, [settings]);
 
   const change = useCallback(
     (change: Partial<Settings>) => setSettings((current) => ({ ...current, ...change })),

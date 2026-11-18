@@ -1,6 +1,7 @@
-import { useEffect, useMemo, useReducer } from 'react';
+import { useEffect, useMemo, useReducer, useState } from 'react';
 import { readJson, writeJson } from '../storage';
 import { checkNewName, compareNames, sameName } from './names';
+import { validPhoto } from './photos';
 
 export const PEOPLE_KEY = 'luckyyou:v1:people';
 
@@ -8,6 +9,7 @@ export interface Person {
   readonly name: string;
   /** In today's pick. */
   readonly ticked: boolean;
+  readonly photo?: string;
 }
 
 const byName = (a: Person, b: Person) => compareNames(a.name, b.name);
@@ -24,20 +26,24 @@ export function loadPeople(): Person[] {
   const people: Person[] = [];
   for (const entry of stored as unknown[]) {
     if (typeof entry !== 'object' || entry === null) continue;
-    const { name, ticked } = entry as { name?: unknown; ticked?: unknown };
+    const { name, ticked, photo } = entry as { name?: unknown; ticked?: unknown; photo?: unknown };
     if (typeof name !== 'string') continue;
     const check = checkNewName(
       name,
       people.map((person) => person.name),
     );
     if (!check.ok) continue;
-    people.push({ name: check.name, ticked: typeof ticked === 'boolean' ? ticked : true });
+    people.push({
+      name: check.name,
+      ticked: typeof ticked === 'boolean' ? ticked : true,
+      ...(validPhoto(photo) ? { photo } : {}),
+    });
   }
   return people.sort(byName);
 }
 
-export function savePeople(people: readonly Person[]): void {
-  writeJson(PEOPLE_KEY, people);
+export function savePeople(people: readonly Person[]): boolean {
+  return writeJson(PEOPLE_KEY, people);
 }
 
 type Action =
@@ -45,7 +51,8 @@ type Action =
   | { type: 'toggle'; name: string }
   | { type: 'untick'; name: string }
   | { type: 'tick-all'; ticked: boolean }
-  | { type: 'remove'; name: string };
+  | { type: 'remove'; name: string }
+  | { type: 'photo'; name: string; photo?: string };
 
 function reduce(people: readonly Person[], action: Action): readonly Person[] {
   switch (action.type) {
@@ -63,34 +70,47 @@ function reduce(people: readonly Person[], action: Action): readonly Person[] {
       return people.map((person) => ({ ...person, ticked: action.ticked }));
     case 'remove':
       return people.filter((person) => !sameName(person.name, action.name));
+    case 'photo':
+      return people.map((person) =>
+        sameName(person.name, action.name) ? { ...person, photo: action.photo } : person,
+      );
   }
 }
 
 export interface People {
   readonly list: readonly Person[];
+  readonly saveFailed: boolean;
   /** Adds a name that `checkNewName` accepted, ticked, in its place. */
   add(name: string): void;
   toggle(name: string): void;
   untick(name: string): void;
   tickAll(ticked: boolean): void;
   remove(name: string): void;
+  setPhoto(name: string, photo?: string): void;
 }
 
 /** The people list, kept in this browser as it changes. */
 export function usePeople(): People {
   const [list, dispatch] = useReducer(reduce, undefined, loadPeople);
+  const [saveFailed, setSaveFailed] = useState(false);
 
-  useEffect(() => savePeople(list), [list]);
+  useEffect(() => {
+    const saved = savePeople(list);
+    // The warning reflects the result of synchronizing with browser storage.
+    setSaveFailed(!saved);
+  }, [list]);
 
   return useMemo(
     () => ({
       list,
+      saveFailed,
       add: (name) => dispatch({ type: 'add', name }),
       toggle: (name) => dispatch({ type: 'toggle', name }),
       untick: (name) => dispatch({ type: 'untick', name }),
       tickAll: (ticked) => dispatch({ type: 'tick-all', ticked }),
       remove: (name) => dispatch({ type: 'remove', name }),
+      setPhoto: (name, photo) => dispatch({ type: 'photo', name, photo }),
     }),
-    [list],
+    [list, saveFailed],
   );
 }

@@ -668,7 +668,7 @@ export async function playTheRace(show: Show): Promise<void> {
     const { least, most } = reachOf(lookOf(name));
     return { least: least * k, most: most * k };
   });
-  const faces = handOutLooks(show.names, show.random);
+  const faces = handOutLooks(show.names, show.random, show.photos);
   const dress = dressFor(course);
   const { times } = plan;
 

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { catalogue } from './catalogue/catalogue';
 import { useLooks, type DealFrom, type ThemeChoice } from './line-up/looks';
 import { usePeople } from './people/people';
@@ -56,6 +56,20 @@ export default function App({ scenarios = catalogue }: AppProps) {
         runnable[0]);
   // A surprise needs two shows to draw from; with fewer, the chosen show stands.
   const surprising = surprise && screen.name !== 'line-up' && runnable.length >= 2;
+  const lineUp = chosen?.lineUp;
+  const photoLineUp = useMemo(
+    () =>
+      lineUp &&
+      ({
+        ...lineUp,
+        draw: (look, person) =>
+          lineUp.draw(look, {
+            ...person,
+            photo: people.list.find((each) => each.name === person.name)?.photo,
+          }),
+      } satisfies NonNullable<Scenario['lineUp']>),
+    [lineUp, people.list],
+  );
 
   /** Picks the unlucky person, then hands the show the window (decision 0005). */
   function start(scenario: Scenario, names: readonly string[], looks?: Looks, theme?: string) {
@@ -64,6 +78,13 @@ export default function App({ scenarios = catalogue }: AppProps) {
       run: {
         scenario,
         names,
+        photos: new Map(
+          people.list.flatMap((person) =>
+            person.photo && names.includes(person.name)
+              ? [[person.name, person.photo] as const]
+              : [],
+          ),
+        ),
         unlucky: pickUnlucky(names),
         looks,
         theme,
@@ -162,7 +183,7 @@ export default function App({ scenarios = catalogue }: AppProps) {
         <WhosIn people={people} onNext={() => setScreen({ name: 'shows' })} />
       ) : screen.name === 'line-up' ? (
         <LineUp
-          lineUp={screen.scenario.lineUp!}
+          lineUp={photoLineUp!}
           names={ticked}
           looks={screen.looks}
           theme={screen.theme}

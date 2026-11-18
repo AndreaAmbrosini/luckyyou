@@ -4,6 +4,7 @@
 export {
   handOutLooks,
   head,
+  photoFace,
   type Accessory,
   type Colour,
   type Head,

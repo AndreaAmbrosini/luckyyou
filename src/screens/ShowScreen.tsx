@@ -16,6 +16,7 @@ const VOLUME_STEP = 5;
 export interface Run {
   readonly scenario: Scenario;
   readonly names: readonly string[];
+  readonly photos?: ReadonlyMap<string, string>;
   readonly unlucky: string;
   /** Everyone's look from the Line-up; the lab leaves it out, and looks come from the seed. */
   readonly looks?: ReadonlyMap<string, ChosenLook>;
@@ -105,6 +106,7 @@ export function ShowScreen({ run, onFinish, onCancel, music, onMusicChange }: Sh
     void runScenario(run.scenario, {
       host: host.current!,
       names: run.names,
+      photos: run.photos,
       unlucky: run.unlucky,
       looks: run.looks,
       theme: run.theme,
