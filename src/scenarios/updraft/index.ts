@@ -87,9 +87,9 @@ function faceOf(name: string) {
 const pick = <T extends string>(all: readonly T[], name: string | undefined, fallback: T): T =>
   all.find((each) => each === name) ?? fallback;
 
-function drawJumper(chosen: ChosenLook, { name }: { name: string }) {
+function drawJumper(chosen: ChosenLook, { name, photo }: { name: string; photo?: string }) {
   return jumperPicture(
-    faceOf(name),
+    { ...faceOf(name), ...(photo ? { photo } : {}) },
     pick(CANOPIES, chosen.canopy, 'chute'),
     pick(COLOURS, chosen.colour, 'tomato'),
     pick(EXTRAS, chosen.extra, 'none'),

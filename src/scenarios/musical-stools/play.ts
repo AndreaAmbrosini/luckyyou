@@ -56,7 +56,7 @@ function put(el: HTMLElement | SVGElement, prop: string, value: string) {
 
 export async function playMusicalStools(show: Show): Promise<void> {
   const plan = planShow(show.names, show.unlucky, show.random);
-  const looks = handOutLooks(show.names, show.random);
+  const looks = handOutLooks(show.names, show.random, show.photos);
   const score = waltzMusic(plan);
   const music = show.sound.music(score.notes);
   const choreo = choreograph(plan, show.unlucky, score, show.reducedMotion);

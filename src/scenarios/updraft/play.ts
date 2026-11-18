@@ -99,7 +99,7 @@ export async function playUpdraft(show: Show): Promise<void> {
   const theme = THEMES.find((each) => each.name === show.theme) ?? THEMES[0]!;
   const zone = isDropZone(theme.name) ? theme.name : 'meadow';
   const plan = buildPlan(names, unlucky, show.random);
-  const faces = handOutLooks(names, show.random);
+  const faces = handOutLooks(names, show.random, show.photos);
   const night = zone === 'crater';
 
   stage.dataset.theme = zone;

@@ -82,7 +82,7 @@ export async function playHideAndSeek(show: Show): Promise<void> {
   const count = show.names.length;
   const layout = layoutFor(show.names, count + (count <= 3 ? 1 : 0));
   const { places } = layout;
-  const looks = handOutLooks(show.names, show.random);
+  const looks = handOutLooks(show.names, show.random, show.photos);
   const plan = planShow(show.names, show.unlucky, show.random, layout);
   const score = scoreFor(plan);
   const music = show.sound.music(score.notes);
