@@ -1,7 +1,7 @@
 Feature: Shark Bait
-  Everyone is in the water and a shark circles. A helicopter lifts people out,
-  fast in groups at first, then one at a time. The last one left in the water
-  gets the job, and rides off on the shark. The contract in
+  Everyone is in the water and a shark circles. A helicopter lifts people out
+  one at a time, slower and slower, as the shark gets bolder. The last one
+  left in the water gets the job, and rides off on the shark. The contract in
   specs/scenarios.feature applies as well.
 
   Rule: Its card
@@ -31,32 +31,41 @@ Feature: Shark Bait
       When the show runs with 20 different random seeds
       Then the unlucky person starts in at least 5 different places
 
-  Rule: Rescues start fast and slow down from 4 left
+  Rule: Up to 8 people, everyone is lifted out on their own, each rescue slower than the last
 
     Scenario Outline: <count> people
       Given <count> people
       When the show runs
-      Then <fast> leave in quick group rescues
-      And <slow> leave one at a time, each rescue taking longer than the one before
+      Then <pairs> rescues lift two people, and the others lift one
+      And each rescue takes longer than the one before
 
       Examples:
-        | count | fast | slow |
-        | 12    | 8    | 3    |
-        | 5     | 1    | 3    |
-        | 4     | 0    | 3    |
-        | 3     | 0    | 2    |
-        | 2     | 0    | 1    |
+        | count | pairs |
+        | 12    | 4     |
+        | 10    | 2     |
+        | 9     | 1     |
+        | 8     | 0     |
+        | 6     | 0     |
+        | 4     | 0     |
+        | 3     | 0     |
+        | 2     | 0     |
 
-    Scenario: Group rescues stay few and small
+    Scenario Outline: Everyone lifted out is named until they leave the stage, with <count> people
+      Given <count> people
+      When the show runs
+      Then everyone lifted out hangs from the rope with their name beside them, at 30 pixels or more
+      And their name stays shown until they are off the stage
+
+      Examples:
+        | count |
+        | 12    |
+        | 7     |
+        | 2     |
+
+    Scenario: The helicopter flies them off slowly enough to follow
       Given 12 people
       When the show runs
-      Then there are at most 2 group rescues
-      And none lifts more than 4 people
-
-    Scenario: A group rescue flies off slowly enough to follow
-      Given 12 people
-      When the show runs
-      Then after each group rescue, the helicopter flies off for at least 0.4 seconds
+      Then after each rescue, the helicopter flies off for at least 0.4 seconds
 
     Scenario: The last two get a duel
       Given the last two in the water are "Marco", the unlucky person, and "Giulia"
@@ -109,23 +118,57 @@ Feature: Shark Bait
       When the show runs at every head count from 3 to 12, with both kinds of fake-out
       Then the helicopter holds still over each person the rope heads for, for at least 0.15 seconds
 
-  Rule: The beats keep the show between 11 and 15 seconds
+  # The owner asked for about 25 seconds at 6 people on 2026-11-18, and no
+  # more than 28.5 at 12.
+  Rule: The show lasts about 25 seconds at 6 people
 
     Scenario: Each beat takes about this long
-      When the show runs at 12, 4 and 2 people
+      When the show runs at 12, 6, 4 and 2 people
       Then its beats take these seconds, give or take 0.3:
-        | beat                     | 12 people | 4 people | 2 people |
-        | splash-in                | 1.8       | 1.8      | 2.0      |
-        | group rescues            | 2.0       | 0        | 0        |
-        | 4 left, one lifted out   | 1.4       | 1.8      | 0        |
-        | 3 left, a fake-out       | 2.0       | 2.2      | 0        |
-        | the duel                 | 3.6       | 3.8      | 6.0      |
-        | the shark's run          | 1.4       | 1.4      | 1.5      |
-        | the victory lap          | 2.0       | 2.0      | 2.5      |
+        | beat                     | 12 people | 6 people | 4 people | 2 people |
+        | splash-in                | 3.0       | 3.0      | 3.0      | 3.0      |
+        | rescues before 4 left    | 10.0      | 4.6      | 0        | 0        |
+        | 4 left, one lifted out   | 3.0       | 3.5      | 3.3      | 0        |
+        | 3 left, a fake-out       | 3.7       | 4.4      | 4.0      | 0        |
+        | the duel                 | 4.7       | 5.6      | 5.1      | 6.2      |
+        | the shark's run          | 1.6       | 1.6      | 1.6      | 1.7      |
+        | the victory lap          | 2.2       | 2.2      | 2.2      | 2.5      |
 
-    Scenario: Every head count lands inside the time limit
-      When the show runs at every head count from 2 to 12
-      Then each run lasts between 11 and 15 seconds
+    Scenario: Each head count lasts this long, whoever is unlucky
+      When the show runs at every head count from 2 to 12, with 4 different random seeds each
+      Then every run lasts these seconds, give or take 0.1:
+        | people | seconds |
+        | 2      | 13.4    |
+        | 3      | 16.2    |
+        | 4      | 19.2    |
+        | 5      | 22.2    |
+        | 6      | 25.0    |
+        | 7      | 26.4    |
+        | 8      | 27.4    |
+        | 9      | 27.6    |
+        | 10     | 27.8    |
+        | 11     | 28.0    |
+        | 12     | 28.2    |
+
+  Rule: The shark gets bolder as the water empties
+
+    Scenario: A fin comes up once everyone is in the water
+      Given 6 people
+      When the show runs
+      Then no fin shows until everyone has popped up in the water
+      And then a fin comes up, captioned "Is that a fin?"
+
+    Scenario Outline: The fin grows and crosses quicker as people leave, with <count> people
+      Given <count> people
+      When the show runs
+      Then the fin never shrinks, and it is bigger in the duel than when it comes up
+      And it crosses the water quicker in the duel than when it comes up
+
+      Examples:
+        | count |
+        | 12    |
+        | 6     |
+        | 4     |
 
   Rule: The ending is a victory lap
 
@@ -183,7 +226,10 @@ Feature: Shark Bait
       Then the captions include, in this order:
         | caption                            |
         | Last one in the water gets the job |
+        | Is that a fin?                     |
+        | Whoosh! 10 left                    |
         | Whoosh! 8 left                     |
+        | Whoosh! 6 left                     |
         | 4 left…                            |
         | Uh-oh…                             |
         | Last one in the water!             |

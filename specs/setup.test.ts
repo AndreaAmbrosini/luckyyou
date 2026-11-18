@@ -138,7 +138,7 @@ describeSpec(await loadFeature('./setup.feature'), ({ Rule }) => {
               {
                 step: 'Pick a show',
                 status: null,
-                buttons: ["Who's in", 'Start with last line-up', 'Next: line up the hats'],
+                buttons: ["Who's in", 'Next: line up the hats'],
                 atTheBottom: true,
               },
               {
@@ -335,6 +335,35 @@ describeSpec(await loadFeature('./setup.feature'), ({ Rule }) => {
       },
     );
 
+    RuleScenario("Arriving at Who's in, Enter goes on", ({ Given, When, Then }) => {
+      const focused: boolean[] = [];
+      const look = () => focused.push(document.activeElement === nextButton());
+      Given('{int} people are ticked', (_, count: number) => storeTicked(TEAM.slice(0, count)));
+      When(
+        `I open the app, go back from the shows, or choose "Change who's in" on a result`,
+        async () => {
+          renderApp({ scenarios: [fakeScenario()] });
+          look();
+          await moveOnToShows();
+          await choose("Who's in");
+          look();
+          await moveOnToShows();
+          await choose('Start Fake Show');
+          await resultHeading();
+          await choose("Change who's in");
+          look();
+        },
+      );
+      Then(
+        'the main button has the keyboard focus each time, so Enter moves on to the shows',
+        async () => {
+          expect(focused).toEqual([true, true, true]);
+          await currentUser().keyboard('{Enter}');
+          expect(heading()).toBe('Pick a show');
+        },
+      );
+    });
+
     RuleScenario('Ready says how many are in the running', ({ Given, Then }) => {
       Given('{int} people are ticked', (_, count: number) => {
         storeTicked(TEAM.slice(0, count), ['Zoe']);
@@ -377,6 +406,28 @@ describeSpec(await loadFeature('./setup.feature'), ({ Rule }) => {
         const line = screen.getByText(`${count} in`).parentElement!;
         expect(line).toHaveTextContent(`${count} in ${quoted(names).join(', ')}`);
       });
+    });
+
+    RuleScenario('Who is in sits beside the heading, however few', ({ Given, When, Then }) => {
+      // jsdom has no layout: e2e/frame.spec.ts measures the heading row in
+      // real windows. Here: the heading's group takes the row, so who is in
+      // has the room beside "Pick a show" however short the names are.
+      Given(
+        '2, 3 or 7 people are ticked, in an 800 by 600, 1366 by 768 or 1920 by 1080 window',
+        () => {
+          storeTicked(TEAM.slice(0, 2));
+          renderApp({ scenarios: [fakeScenario()] });
+        },
+      );
+      When('I move on to the shows', moveOnToShows);
+      Then(
+        'who is in sits beside "Pick a show", and the shows start no lower than with more names',
+        () => {
+          const group = screen.getByRole('heading', { level: 1 }).parentElement!;
+          expect(getComputedStyle(group).flexGrow).toBe('1');
+          expect(getComputedStyle(screen.getByText('2 in').parentElement!).flexBasis).toBe('20rem');
+        },
+      );
     });
 
     RuleScenario(
@@ -457,6 +508,74 @@ describeSpec(await loadFeature('./setup.feature'), ({ Rule }) => {
       });
     });
 
+    RuleScenario(
+      'The keyboard moves between the shows, and Enter on the chosen one goes on',
+      ({ Given, When, Then }) => {
+        const hotPotato = fakeScenario({ name: 'Hot Potato' });
+        const sharkBait = fakeScenario({ name: 'Shark Bait' });
+        const focused = () =>
+          document.activeElement?.getAttribute('aria-labelledby') &&
+          document.getElementById(document.activeElement.getAttribute('aria-labelledby')!)!
+            .textContent;
+        Given(
+          "{int} people are ticked, and one of the shows can't run with 8",
+          async (_, count: number) => {
+            storeTicked(TEAM.slice(0, count));
+            renderApp({
+              scenarios: [
+                fakeScenario({ name: 'Ant Hill', people: { min: 2, max: 6 } }),
+                hotPotato,
+                sharkBait,
+              ],
+            });
+            await moveOnToShows();
+          },
+        );
+        When('the focus is on a card and I press the right or the left arrow', () => {
+          showCard('Hot Potato').focus();
+        });
+        Then(
+          'the focus moves to the next or the previous card, round from the last to the first, skipping none',
+          async () => {
+            const seen: (string | null | undefined)[] = [];
+            for (const key of ['Right', 'Right', 'Right', 'Left', 'Left', 'Left']) {
+              await currentUser().keyboard(`{Arrow${key}}`);
+              seen.push(focused());
+            }
+            expect(seen).toEqual([
+              'Shark Bait',
+              'Surprise me',
+              'Ant Hill',
+              'Surprise me',
+              'Shark Bait',
+              'Hot Potato',
+            ]);
+          },
+        );
+        When("I press Enter on a show's card", async () => {
+          showCard('Shark Bait').focus();
+          await currentUser().keyboard('{Enter}');
+        });
+        Then('it is chosen, and nothing starts', () => {
+          expect(showCard('Shark Bait')).toHaveAttribute('aria-pressed', 'true');
+          expect(sharkBait.runs).toEqual([]);
+        });
+        When('I click it again', () => currentUser().click(showCard('Shark Bait')));
+        Then('nothing starts', () => {
+          expect(sharkBait.runs).toEqual([]);
+          expect(heading()).toBe('Pick a show');
+        });
+        When('I press Enter on it again', async () => {
+          expect(showCard('Shark Bait')).toHaveFocus();
+          await currentUser().keyboard('{Enter}');
+        });
+        Then('it starts, as the main button would start it', async () => {
+          await waitFor(() => expect(sharkBait.runs).toHaveLength(1));
+          expect(hotPotato.runs).toEqual([]);
+        });
+      },
+    );
+
     RuleScenario('A show with a line-up leads to it', ({ When, Then, And }) => {
       When('I choose {string}', async (_, name: string) => {
         storeTicked(['Anna', 'Ben', 'Carla']);
@@ -466,7 +585,7 @@ describeSpec(await loadFeature('./setup.feature'), ({ Rule }) => {
       });
       Then('the panel says its Line-up comes next', () => {
         expect(chosenPanel('The Race')).toHaveTextContent(
-          "Next you pick the place and everyone's hat, or start with last time's.",
+          "Next you pick the place and everyone's hat.",
         );
       });
       And("the main button reads {string}, from the line-up's heading", (_, label: string) => {
@@ -510,6 +629,44 @@ describeSpec(await loadFeature('./setup.feature'), ({ Rule }) => {
         await waitFor(() => expect(race.runs).toHaveLength(2));
         expect(race.runs[1]!.theme).toBe('beach');
       });
+    });
+
+    RuleScenario('No last line-up until one is kept', ({ Given, When, Then, And }) => {
+      const race = theRace();
+      Given('no Line-up was ever kept for {string} in this browser', () => {
+        storeTicked(['Anna', 'Ben', 'Carla']);
+        renderApp({ scenarios: [fakeScenario({ name: 'Plain Show' }), race] });
+      });
+      When('I choose {string}', async (_, name: string) => {
+        await moveOnToShows();
+        await currentUser().click(showCard(name));
+      });
+      Then('the bar has no "Start with last line-up"', () => {
+        expect(barButtons()).toEqual(["Who's in", 'Next: line up the racers']);
+      });
+      And('the panel says what its Line-up has you pick, and stops there', () => {
+        expect(chosenPanel('The Race')).toHaveTextContent(
+          "Next you pick the place and everyone's hat.",
+        );
+        expect(chosenPanel('The Race')).not.toHaveTextContent('last time');
+      });
+      When('I open its Line-up, then go back to the shows', async () => {
+        await choose('Next: line up the racers');
+        await choose('Pick a show');
+      });
+      Then(
+        `the bar offers "Start with last line-up", and the panel adds "or start with last time's"`,
+        () => {
+          expect(barButtons()).toEqual([
+            "Who's in",
+            'Start with last line-up',
+            'Next: line up the racers',
+          ]);
+          expect(chosenPanel('The Race')).toHaveTextContent(
+            "Next you pick the place and everyone's hat, or start with last time's.",
+          );
+        },
+      );
     });
   });
 
@@ -627,6 +784,42 @@ describeSpec(await loadFeature('./setup.feature'), ({ Rule }) => {
         And('the main button has the keyboard focus', () => {
           expect(mainButton()).toHaveAccessibleName('Start Shark Bait');
           expect(mainButton()).toHaveFocus();
+        });
+      },
+    );
+
+    RuleScenario(
+      "A show stopped before its result isn't last time's",
+      ({ Given, When, Then, And }) => {
+        const sharkBait = fakeScenario({
+          name: 'Shark Bait',
+          play: () => new Promise(() => undefined),
+        });
+        Given('I played {string} on my last visit', () => {
+          storeSettings({ muted: false, lastScenario: 'hot-potato' });
+          storeTicked(TEAM.slice(0, 3));
+          renderApp({
+            scenarios: [
+              fakeScenario({ name: 'Ant Hill' }),
+              fakeScenario({ name: 'Hot Potato' }),
+              sharkBait,
+            ],
+          });
+        });
+        When('I start {string} and press Esc before its result', async (_, name: string) => {
+          await moveOnToShows();
+          await currentUser().click(showCard(name));
+          await currentUser().click(mainButton());
+          await waitFor(() => expect(sharkBait.runs).toHaveLength(1));
+          await currentUser().keyboard('{Escape}');
+          expect(heading()).toBe('Pick a show');
+        });
+        Then('{string} is still marked "Last time"', (_, name: string) => {
+          expect(within(showCard(name)).getByText('Last time')).toBeInTheDocument();
+          expect(within(showCard('Shark Bait')).queryByText('Last time')).toBeNull();
+        });
+        And('"Surprise me" still draws from every show but Hot Potato', () => {
+          expect(showCard('Surprise me')).toHaveTextContent('1 of 2 shows');
         });
       },
     );
@@ -827,10 +1020,11 @@ describeSpec(await loadFeature('./setup.feature'), ({ Rule }) => {
     RuleScenario('A host who likes surprises gets one again', ({ Given, When, Then }) => {
       const hotPotato = fakeScenario({ name: 'Hot Potato' });
       const sharkBait = fakeScenario({ name: 'Shark Bait' });
-      Given('I started a surprise, and it drew {string}', async () => {
+      Given('I started a surprise, and it drew {string} and played to the result', async () => {
         await openShows([hotPotato, sharkBait], 3, 'hot-potato');
         await startSurprise();
         await waitFor(() => expect(sharkBait.runs).toHaveLength(1));
+        await resultHeading();
       });
       When('I reload the page and move on to the shows', async () => {
         reload();
@@ -845,10 +1039,11 @@ describeSpec(await loadFeature('./setup.feature'), ({ Rule }) => {
           expect(within(showCard(name)).getByText('Last time')).toBeInTheDocument();
         },
       );
-      When('I start {string} myself, reload and move on to the shows', async (_, name: string) => {
+      When('I play {string} myself, reload and move on to the shows', async (_, name: string) => {
         await currentUser().click(showCard(name));
         await currentUser().click(mainButton());
         await waitFor(() => expect(hotPotato.runs).toHaveLength(1));
+        await resultHeading();
         reload();
         await moveOnToShows();
       });

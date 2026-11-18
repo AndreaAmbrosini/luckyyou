@@ -56,6 +56,15 @@ export function PlusIcon(props: IconProps) {
   );
 }
 
+export function CameraIcon(props: IconProps) {
+  return (
+    <Icon weight={2.6} {...props}>
+      <path d="M3 7h4l2-3h6l2 3h4v13H3z" />
+      <circle cx="12" cy="13" r="4" />
+    </Icon>
+  );
+}
+
 export function ArrowLeftIcon(props: IconProps) {
   return (
     <Icon weight={3.2} {...props}>

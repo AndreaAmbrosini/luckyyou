@@ -185,7 +185,7 @@ interface Span {
 
 export async function playWobblyTower(show: Show): Promise<void> {
   const plan = planShow(show.names, show.unlucky, show.random);
-  const looks = handOutLooks(show.names, show.random);
+  const looks = handOutLooks(show.names, show.random, show.photos);
   const timeline = gsap.timeline({ paused: true });
   const at = (time: number, run: () => void) => void timeline.call(run, [], time);
   const cue = (time: number, sound: Cue) => at(time, () => void show.sound.play(sound));

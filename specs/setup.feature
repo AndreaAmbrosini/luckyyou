@@ -53,6 +53,11 @@ Feature: Setting up a pick
       When I add "Anna"
       Then the hint says "Anna can't win alone. Add one more."
 
+    Scenario: Arriving at Who's in, Enter goes on
+      Given 3 people are ticked
+      When I open the app, go back from the shows, or choose "Change who's in" on a result
+      Then the main button has the keyboard focus each time, so Enter moves on to the shows
+
     Scenario: Ready says how many are in the running
       Given 8 people are ticked
       Then the bar says "8 in, 1 lucky winner."
@@ -71,6 +76,12 @@ Feature: Setting up a pick
       Given "Anna", "Ben" and "Carla" are ticked
       When I move on to the shows
       Then I see that 3 are in: "Anna", "Ben" and "Carla"
+
+    # Decision 0024.
+    Scenario: Who is in sits beside the heading, however few
+      Given 2, 3 or 7 people are ticked, in an 800 by 600, 1366 by 768 or 1920 by 1080 window
+      When I move on to the shows
+      Then who is in sits beside "Pick a show", and the shows start no lower than with more names
 
     Scenario: Each name in the list keeps its own reading direction
       Given "ليلى", "Anna" and "Ben" are ticked
@@ -98,6 +109,17 @@ Feature: Setting up a pick
       When I press "Start Shark Bait"
       Then Shark Bait starts with "Anna", "Ben" and "Carla"
 
+    Scenario: The keyboard moves between the shows, and Enter on the chosen one goes on
+      Given 8 people are ticked, and one of the shows can't run with 8
+      When the focus is on a card and I press the right or the left arrow
+      Then the focus moves to the next or the previous card, round from the last to the first, skipping none
+      When I press Enter on a show's card
+      Then it is chosen, and nothing starts
+      When I click it again
+      Then nothing starts
+      When I press Enter on it again
+      Then it starts, as the main button would start it
+
     Scenario: A show with a line-up leads to it
       When I choose "The Race"
       Then the panel says its Line-up comes next
@@ -108,6 +130,14 @@ Feature: Setting up a pick
       When I press "Start with last line-up"
       Then The Race starts at once, everyone in the look kept for them, on "Autumn"
       And a Line-up last left on "Surprise" draws its theme afresh
+
+    Scenario: No last line-up until one is kept
+      Given no Line-up was ever kept for "The Race" in this browser
+      When I choose "The Race"
+      Then the bar has no "Start with last line-up"
+      And the panel says what its Line-up has you pick, and stops there
+      When I open its Line-up, then go back to the shows
+      Then the bar offers "Start with last line-up", and the panel adds "or start with last time's"
 
   Rule: Scenario cards show whether they can run
 
@@ -136,6 +166,12 @@ Feature: Setting up a pick
       When I move on to the shows
       Then the first scenario that takes 8 people is chosen
       And the main button has the keyboard focus
+
+    Scenario: A show stopped before its result isn't last time's
+      Given I played "Hot Potato" on my last visit
+      When I start "Shark Bait" and press Esc before its result
+      Then "Hot Potato" is still marked "Last time"
+      And "Surprise me" still draws from every show but Hot Potato
 
     Scenario: If no show can run, the step says why
       Given no scenario takes 11 people
@@ -180,10 +216,10 @@ Feature: Setting up a pick
       And it says "Only 1 show can run"
 
     Scenario: A host who likes surprises gets one again
-      Given I started a surprise, and it drew "Shark Bait"
+      Given I started a surprise, and it drew "Shark Bait" and played to the result
       When I reload the page and move on to the shows
       Then "Surprise me" is chosen again, and "Shark Bait" is marked "Last time"
-      When I start "Hot Potato" myself, reload and move on to the shows
+      When I play "Hot Potato" myself, reload and move on to the shows
       Then "Hot Potato" is chosen
 
     Scenario: Run again after a surprise plays the same show

@@ -9,7 +9,7 @@ export interface Settings {
   readonly music: boolean;
   /** The music's volume in percent, 0 to 100, a whole number. */
   readonly musicVolume: number;
-  /** The id of the show played last, ready to play again. */
+  /** The id of the last show played to its result, ready to play again. */
   readonly lastScenario: string | null;
   /** The last show started from Pick a show was a surprise, so Surprise me is chosen again. */
   readonly surprise: boolean;
@@ -40,7 +40,9 @@ export function loadSettings(): Settings {
 export function useSettings(): [Settings, (change: Partial<Settings>) => void] {
   const [settings, setSettings] = useState(loadSettings);
 
-  useEffect(() => writeJson(SETTINGS_KEY, settings), [settings]);
+  useEffect(() => {
+    writeJson(SETTINGS_KEY, settings);
+  }, [settings]);
 
   const change = useCallback(
     (change: Partial<Settings>) => setSettings((current) => ({ ...current, ...change })),

@@ -1,0 +1,84 @@
+.dialog {
+  width: min(36rem, calc(100vw - 2rem));
+  max-height: calc(100dvh - 2rem);
+  padding: 1.5rem;
+  overflow: auto;
+  border: var(--line) solid var(--color-edge-strong);
+  border-radius: var(--radius-sheet);
+  background-color: var(--color-panel);
+  color: var(--color-text);
+  font-family: var(--font-text);
+  font-size: var(--size-body);
+}
+
+.dialog::backdrop {
+  background-color: var(--color-ground);
+  opacity: 0.8;
+}
+
+.dialog h2 {
+  margin: 0 0 0.75rem;
+  font-size: var(--size-card-title);
+  overflow-wrap: anywhere;
+}
+
+.note {
+  margin-block: 0.5rem;
+  color: var(--color-text-soft);
+  font-size: var(--size-small);
+}
+
+.file {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 0.5rem;
+  margin-block: 1rem;
+}
+
+.control {
+  display: grid;
+  grid-template-columns: 12rem minmax(0, 1fr);
+  align-items: center;
+  gap: 0.5rem;
+  margin-block: 0.25rem;
+  font-size: var(--size-small);
+}
+
+.file input {
+  min-width: 0;
+  max-width: 100%;
+  font: inherit;
+}
+
+.preview {
+  display: block;
+  width: min(12rem, 100%);
+  height: auto;
+  margin: 0.75rem auto;
+  border: var(--line) solid var(--color-marigold);
+  border-radius: 50%;
+  touch-action: none;
+  cursor: grab;
+}
+
+.control input {
+  width: 100%;
+  min-height: var(--target-min);
+  accent-color: var(--color-marigold);
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 0.75rem;
+  margin-top: 1rem;
+}
+
+@media (width < 36rem) {
+  .file,
+  .control {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

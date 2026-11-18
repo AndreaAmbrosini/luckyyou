@@ -40,6 +40,9 @@ function reveal() {
 
 type Reveal = ReturnType<typeof reveal>;
 
+/** How long the buttons take to rise in, the last one 0.2 s behind the first (Result.module.css). */
+const BUTTONS_RISE = 0.6;
+
 /** With reduced motion, everything is simply there. */
 const AT_ONCE: Reveal = {
   card: 0,
@@ -80,6 +83,14 @@ export function Result({ run, onRunAgain, onRunWithout, onChangeWhosIn }: Result
 
   const { scenario, unlucky } = run;
   const times = still ? AT_ONCE : reveal();
+
+  // The buttons can't be focused or pressed until the last of them has risen in.
+  const [ready, setReady] = useState(still);
+  useEffect(() => {
+    if (still) return;
+    const timer = window.setTimeout(() => setReady(true), (reveal().buttons + BUTTONS_RISE) * 1000);
+    return () => window.clearTimeout(timer);
+  }, [still]);
 
   useEffect(() => heading.current?.focus(), [run]);
 
@@ -153,7 +164,7 @@ export function Result({ run, onRunAgain, onRunWithout, onChangeWhosIn }: Result
         </p>
       </div>
 
-      <div className={styles.actions} style={at(times.buttons)}>
+      <div className={styles.actions} style={at(times.buttons)} inert={!ready}>
         <Button variant="primary" onClick={onRunAgain}>
           <RunAgainIcon />
           Run again

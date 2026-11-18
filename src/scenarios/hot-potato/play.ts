@@ -95,7 +95,7 @@ interface Person {
 
 export async function playHotPotato(show: Show): Promise<void> {
   const plan = planShow(show.names, show.unlucky, show.random);
-  const looks = handOutLooks(show.names, show.random);
+  const looks = handOutLooks(show.names, show.random, show.photos);
   // The music moves along with the show's time, as everything else does.
   const score = hotPotatoMusic(plan);
   const music = show.sound.music(score.notes);

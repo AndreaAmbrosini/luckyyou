@@ -8,7 +8,7 @@
 // colour as --racer, the contrast for its extras as --band, and a limb's as
 // --paint.
 
-import type { Look, Mood } from '../../scenario-kit';
+import { photoFace, type Look, type Mood } from '../../scenario-kit';
 import {
   acornCap,
   draw,
@@ -3356,6 +3356,20 @@ export function creature(
     ['path', styles.stripe!, { 'stroke-width': 3, 'data-part': 'glint' }],
     ['path', styles.glass!, { 'stroke-width': 3, 'data-part': 'sweat' }],
   ]) as SVGElement[];
+
+  if (faceLook.photo) {
+    face.setAttribute('display', 'none');
+    // Sweat still reacts with the body; only the drawn expression is replaced.
+    body.append(sweat!);
+    const eyeY = Math.min(...spec.eyes.map(([, y]) => y));
+    body.append(
+      photoFace(faceLook.photo, {
+        cx: spec.face,
+        cy: (eyeY + spec.mouth[1]) / 2,
+        r: Math.max(22, Math.min(34, (spec.mouth[1] - eyeY) / 2 + 16)),
+      }),
+    );
+  }
 
   const frontFoot = leg('front-leg', h2, false);
   const front = lean('front');

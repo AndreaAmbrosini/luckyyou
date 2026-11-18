@@ -98,6 +98,41 @@ test('a low window keeps every show card in reach on Pick a show', async ({ page
   }
 });
 
+// "Who is in sits beside the heading, however few" (specs/setup.feature).
+test('who is in sits beside "Pick a show" with 2, 3 or 7 people', async ({ page }) => {
+  for (const [width, height] of [
+    [800, 600],
+    [1366, 768],
+    [1920, 1080],
+  ] as const) {
+    await page.setViewportSize({ width, height });
+    const tops: number[] = [];
+    for (const count of [2, 3, 7]) {
+      await page.goto('./');
+      await page.evaluate(
+        (names) => {
+          const people = names.map((name) => ({ name, ticked: true }));
+          localStorage.setItem('luckyyou:v1:people', JSON.stringify(people));
+        },
+        team.slice(0, count),
+      );
+      await page.reload();
+      await page.getByRole('button', { name: 'Next: pick a show' }).click();
+      const heading = (await page.getByRole('heading', { level: 1 }).boundingBox())!;
+      const whoIsIn = (await page.getByText(`${count} in`, { exact: true }).boundingBox())!;
+      const where = `${count} at ${width}×${height}`;
+      expect(whoIsIn.x, where).toBeGreaterThan(heading.x + heading.width);
+      expect(whoIsIn.y, where).toBeLessThan(heading.y + heading.height);
+      tops.push((await page.getByRole('list', { name: 'Shows' }).boundingBox())!.y);
+    }
+    // Fewer names never push the shows down: 2 and 3 start as high as 7, or higher.
+    const [two, three, seven] = tops as [number, number, number];
+    expect(Math.max(two, three), `${width}×${height}: ${tops.join(', ')}`).toBeLessThanOrEqual(
+      seven + 0.5,
+    );
+  }
+});
+
 test('a big window shows the steps bigger', async ({ page }) => {
   const rem = () =>
     page.evaluate(() => parseFloat(getComputedStyle(document.documentElement).fontSize));
