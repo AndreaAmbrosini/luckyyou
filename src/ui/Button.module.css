@@ -64,10 +64,17 @@
   text-underline-offset: 0.375rem;
 }
 
-.button[aria-disabled='true'] {
+.button[aria-disabled='true'],
+.button:disabled {
   border: var(--line) dashed var(--color-edge-strong);
   background-color: transparent;
   color: var(--color-text-faint);
   box-shadow: none;
   cursor: not-allowed;
+}
+
+/* The disabled border takes its width from the padding, so turning on doesn't move the row. */
+.primary[aria-disabled='true'],
+.primary:disabled {
+  padding-inline: calc(2.125rem - var(--line));
 }
