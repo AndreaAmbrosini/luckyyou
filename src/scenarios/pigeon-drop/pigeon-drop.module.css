@@ -1,0 +1,90 @@
+.park {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  background-color: var(--color-sky);
+}
+
+.grass {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  height: 270px;
+  border-top: var(--line-bold) solid var(--color-ink);
+  background-color: var(--color-mint);
+}
+
+.person {
+  position: absolute;
+}
+
+.person > svg {
+  display: block;
+}
+
+.pigeon,
+.poo {
+  position: absolute;
+  top: 0;
+  left: 0;
+}
+
+.pigeon {
+  width: 160px;
+  height: 110px;
+}
+
+.pigeon > svg,
+.poo > svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+
+.poo {
+  width: 34px;
+  height: 34px;
+}
+
+.feather,
+.wing {
+  fill: var(--color-shark);
+  stroke: var(--color-ink);
+}
+
+.wing {
+  transform-box: fill-box;
+  transform-origin: 15% 85%;
+  rotate: var(--flap, 0deg);
+}
+
+.neck {
+  fill: var(--color-grape);
+  stroke: var(--color-ink);
+}
+
+.beak {
+  fill: var(--color-orange);
+  stroke: var(--color-ink);
+}
+
+.feet {
+  fill: none;
+  stroke: var(--color-orange);
+}
+
+.white {
+  fill: var(--color-paper);
+  stroke: var(--color-ink);
+}
+
+.ink {
+  fill: var(--color-ink);
+}
+
+.bar {
+  fill: none;
+  stroke: var(--color-ink);
+}

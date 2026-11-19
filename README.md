@@ -20,8 +20,9 @@ typed it ([0004](docs/decisions/0004-no-backend.md)).
 ## Status
 
 Built: the team list, setup in two steps (three for a show with a Line-up),
-the pick, nine shows (Shark Bait, Hot Potato, Wobbly Tower, Don't Wake the
-Dog, The Claw, The Race, Hide and Seek, Musical Stools and Updraft),
+the pick, ten shows (Shark Bait, Hot Potato, Wobbly Tower, Don't Wake the
+Dog, The Claw, The Race, Hide and Seek, Musical Stools, Updraft and Pigeon
+Drop),
 "Surprise me" for the app to choose one, and the result.
 A new show is a folder in [`src/scenarios/`](src/scenarios/), copied from
 [`_template`](src/scenarios/_template/).
